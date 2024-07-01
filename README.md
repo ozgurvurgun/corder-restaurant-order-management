@@ -5,7 +5,7 @@
 #### Siparişleri mutfağa gönderin
 - Müşterilerinizin siparişlerini kolayca sepete ekleyin, mutfağa gönderin ve yazdırın.
 <br />
-    <img src="readme-files/images/mobile/Galaxy-S21-Ultra-fikrininyeri.online.png" width="258" height="666">
+    <img src="readme-files/images/mobile/Galaxy-S21-Ultra-fikrininyeri.online.png" width="258" height="600">
 
 
 #### Ürün görsellerine dokunarak sipariş alın    
