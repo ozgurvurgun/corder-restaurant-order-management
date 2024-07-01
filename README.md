@@ -17,6 +17,8 @@
 
 <br />
     <img src="readme-files/images/mobile/Galaxy-S21-Ultra-fikrininyeri.online (1).png" width="258" height="600">
+<br />
+    <img src="readme-files/images/mobile/Galaxy-S21-Ultra-fikrininyeri.online (3).png" width="258" height="600">
 <hr />
 
 #### Masayı seçin ve kolayca sipariş alın
