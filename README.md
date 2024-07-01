@@ -1,5 +1,6 @@
 # Corder Restaurant Order Management
 - Corder ile akıllı telefonlar, tabletler, el terminallerinden masaları ve siparişleri yönetmek çok kolay.
+<br />
     <img src="readme-files/images/mobile/Galaxy-S21-Ultra-fikrininyeri.online (1).png" >
 
 - Müşterilerinizin siparişlerini kolayca sepete ekleyin, mutfağa gönderin ve yazdırın.
