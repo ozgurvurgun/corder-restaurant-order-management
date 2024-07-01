@@ -94,6 +94,9 @@
 
 <kbd><img src="readme-files/images/desktop/Ekran görüntüsü 2024-07-01 223244.png">
 </kbd>
+
+<br />
+<hr />
 <br />
 
 <kbd><img src="readme-files/images/desktop/Ekran görüntüsü 2024-07-01 223315.png">
