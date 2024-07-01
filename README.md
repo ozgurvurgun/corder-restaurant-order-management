@@ -60,5 +60,6 @@
 </kbd>
 <br />
 
-<img border="1px" src="readme-files/images/desktop/Ekran görüntüsü 2024-07-01 221954.png">
+<kbd><img border="1px" src="readme-files/images/desktop/Ekran görüntüsü 2024-07-01 221954.png">
+</kbd>
 <br />
