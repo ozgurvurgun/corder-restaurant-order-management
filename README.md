@@ -1,4 +1,7 @@
 # Corder Restaurant Order Management
+<p>
+    Corder, akıllı telefonlar, el terminalleri, bilgisayarlar ve tabletlerde çalışan sipariş el terminali ve yönetimi uygulamasıdır. Kasada kullanıma uygun olan Corder Panel programı ile el terminalinde ki bütün fonksiyonların yanı sıra sistem güncellemeleri yapabilir, istatistikleri görebilir, z raporu basabilir ve daha bir çok işlevi kullanabilirsiniz. Corder Terminal programı ise bir PWA' dir. Corder Terminal ile ios, android fark etmeksizin bütün cihazlara kurulum yapılabilir ve anında sipariş almaya başlayabilirsiniz.
+</p>
 
 ### Hemen sipariş almaya başlayın
 - Corder ile akıllı telefonlar, tabletler, el terminallerinden masaları ve siparişleri yönetmek çok kolay.
