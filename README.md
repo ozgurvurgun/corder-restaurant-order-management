@@ -6,6 +6,7 @@
 - Müşterilerinizin siparişlerini kolayca sepete ekleyin, mutfağa gönderin ve yazdırın.
 <br />
     <img src="readme-files/images/mobile/Galaxy-S21-Ultra-fikrininyeri.online.png" width="258" height="600">
+<hr />
 
 
 #### Ürün görsellerine dokunarak sipariş alın    
@@ -16,7 +17,7 @@
 
 <br />
     <img src="readme-files/images/mobile/Galaxy-S21-Ultra-fikrininyeri.online (1).png" width="258" height="600">
-
+<hr />
 
 #### Masayı seçin ve kolayca sipariş alın
 - Corder ile sipariş için doğru masayı kolayca bulun ve tek dokunuş ile sipariş alın.
@@ -27,7 +28,7 @@
 
 <br />
     <img src="readme-files/images/mobile/Galaxy-S21-Ultra-fikrininyeri.online (6).png" width="258" height="600">
-
+<hr />
 
 #### Siparişlerinizi gözden geçirin, düzenleyin
 - Ürünleri sepete ekledikten sonra kontrol edip düzenleyin ve tek dokunuşla siparişinizi gönderin.
@@ -38,6 +39,7 @@
 
 <br />
     <img src="readme-files/images/mobile/Galaxy-S21-Ultra-fikrininyeri.online (7).png" width="258" height="600">
+<hr />
 
 #### Geçmiş masa siparişlerini inceleyin
 - Corder ile açık masaların hesap özetlerini inceleyebilirsiniz. Masaya dokunarak geçmiş siparişlerini detaylı şekilde görebilirsiniz.
