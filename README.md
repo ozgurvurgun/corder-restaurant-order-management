@@ -15,7 +15,7 @@
 - Dilerseniz adet veya fiyat bazlı sipariş alabilir ve açıklama ekleyebilirsiniz.
 
 <br />
-    <img src="readme-files/images/mobile/Galaxy-S21-Ultra-fikrininyeri.online (1).png" width="258" height="666">
+    <img src="readme-files/images/mobile/Galaxy-S21-Ultra-fikrininyeri.online (1).png" width="258" height="600">
 
 - Corder ile sipariş için doğru masayı kolayca bulun ve tek dokunuş ile sipariş alın.
 
