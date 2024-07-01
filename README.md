@@ -60,6 +60,42 @@
 </kbd>
 <br />
 
-<kbd><img border="1px" src="readme-files/images/desktop/Ekran görüntüsü 2024-07-01 221954.png">
+<kbd><img src="readme-files/images/desktop/Ekran görüntüsü 2024-07-01 221954.png">
+</kbd>
+<br />
+
+<kbd><img src="readme-files/images/desktop/Ekran görüntüsü 2024-07-01 222043.png">
+</kbd>
+<br />
+
+<kbd><img src="readme-files/images/desktop/Ekran görüntüsü 2024-07-01 222131.png">
+</kbd>
+<br />
+
+<kbd><img src="readme-files/images/desktop/Ekran görüntüsü 2024-07-01 222702.png">
+</kbd>
+<br />
+
+<kbd><img src="readme-files/images/desktop/Ekran görüntüsü 2024-07-01 222744.png">
+</kbd>
+<br />
+
+<kbd><img src="readme-files/images/desktop/Ekran görüntüsü 2024-07-01 222823.png">
+</kbd>
+<br />
+
+<kbd><img src="readme-files/images/desktop/Ekran görüntüsü 2024-07-01 222903.png">
+</kbd>
+<br />
+
+<kbd><img src="readme-files/images/desktop/Ekran görüntüsü 2024-07-01 222952.png">
+</kbd>
+<br />
+
+<kbd><img src="readme-files/images/desktop/Ekran görüntüsü 2024-07-01 223244.png">
+</kbd>
+<br />
+
+<kbd><img src="readme-files/images/desktop/Ekran görüntüsü 2024-07-01 223315.png">
 </kbd>
 <br />
