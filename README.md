@@ -51,3 +51,13 @@
 
 <br />
     <img src="readme-files/images/mobile/Galaxy-S21-Ultra-fikrininyeri.online (4).png" width="258" height="600">
+
+<hr />
+
+## Kasa İçin Corder
+
+<img border="1px" src="readme-files/images/desktop/Ekran görüntüsü 2024-07-01 221910.png">
+<br />
+
+<img border="1px" src="readme-files/images/desktop/Ekran görüntüsü 2024-07-01 221954.png">
+<br />
