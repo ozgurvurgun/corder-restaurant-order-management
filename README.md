@@ -50,7 +50,9 @@
 - Corder El Terminali ile masadaki siparişleri adisyonlara bölebilir veya bölünmüş adisyonları birleştirebilirsiniz.
 
 <br />
-    <img src="readme-files/images/mobile/Galaxy-S21-Ultra-fikrininyeri.online (4).png" width="258" height="600">
+    <kbd>
+        <img src="readme-files/images/mobile/Galaxy-S21-Ultra-fikrininyeri.online (4).png" width="258" height="600">
+    </kbd>
 
 <hr />
 
