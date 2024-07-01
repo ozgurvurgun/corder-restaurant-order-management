@@ -6,6 +6,8 @@
 - Kurulumu yaparken .env-example dosyasını kaldırıp .env dosyasını oluşturun ve spesifikasyonları girin.
 - Bazı statik dosyalarda(serviceWorker.js, manifest.json) bulunan url'leri kendi url'iniz değiştiriniz.
 
+## Corder Terminal
+
 ### Hemen sipariş almaya başlayın
 - Corder ile akıllı telefonlar, tabletler, el terminallerinden masaları ve siparişleri yönetmek çok kolay.
 ### Siparişleri mutfağa gönderin
@@ -60,7 +62,7 @@
 
 <hr />
 
-## Kasa İçin Corder
+## Kasa İçin Corder Panel
 
 <kbd><img src="readme-files/images/desktop/Ekran görüntüsü 2024-07-01 221910.png">
 </kbd>
