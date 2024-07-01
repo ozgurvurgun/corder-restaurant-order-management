@@ -17,10 +17,18 @@
 <br />
     <img src="readme-files/images/mobile/Galaxy-S21-Ultra-fikrininyeri.online (1).png" width="258" height="600">
 
+
+#### Masayı seçin ve kolayca sipariş alın
 - Corder ile sipariş için doğru masayı kolayca bulun ve tek dokunuş ile sipariş alın.
 
 
-
+#### Masaları taşıyın veya birleştirin
 - Bir masayı tek dokunuşla başka masaya taşıyabilir veya bir başka masayla birleştirebilirsiniz.
+
+<br />
+    <img src="readme-files/images/mobile/Galaxy-S21-Ultra-fikrininyeri.online (6).png" width="258" height="600">
+
+
+
 - Ürünleri sepete ekledikten sonra kontrol edip düzenleyin ve tek dokunuşla siparişinizi gönderin.
 - Sepete eklediğiniz ürünleri anında mutfağa gönderin ve mutfaktaki sipariş yazıcısından yazdırın. Ürünleri ve yazıcılara gruplayarak yiyecek ve içecekleri farklı mutfaklardan ve yazıcılardan yazdırın.
