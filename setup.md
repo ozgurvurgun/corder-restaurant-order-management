@@ -21,7 +21,7 @@
 
 - Kısaca hikaye; garson masaya gider el terminalinden sipariş alır, aldığı sipariş admin paneline düşer ve aynı zamanda yazıcıdan sipariş basılır. 
 
-- Printer service dizini
+- printer-service dizininde ki ufak app corder apilerine istek atık yeni sipariş olup olmama veya fiş basım emri durumlarına göre yazıcıdan çıktı alınmasını sağlar.
 <br>
 
 - Projede çok fazla eksik bulunuyor. Başta ki motivasyonum çeşitli standartlara(PSR gibi), mimarilere uygun, genişletilebilir, modüler, side effect'i minimum seviyede olan bir proje yapmak idi. Ne yazık ki dikkatim çabuk dağılabiliyor ve çabuk sıkılıyorum. O yüzden bir çok noktayı sallamasyon geçebiliyorum.
