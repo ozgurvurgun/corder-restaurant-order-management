@@ -12,8 +12,8 @@
 
 - Proje PWA el terminali ve masaüstünde kullanılacak iki parça şeklinde dizayn edildi. http://localhost/corder/terminal-users bu linkten el terminalini kullanırsınız.
 
-- http://localhost/corder/admin/dashboard bu linkten admin paneline ulaşırsınız
-- http://localhost/corder/?table=2 QR menü (masadan sipariş alma işlevi mevcut ama pasif. Apisi yazılıp hemen işlevsel duruma gelebilir)
+- http://localhost/corder-restaurant-order-management/admin/dashboard bu linkten admin paneline ulaşırsınız
+- http://localhost/corder-restaurant-order-management/?table=2 QR menü (masadan sipariş alma işlevi mevcut ama pasif. Apisi yazılıp hemen işlevsel duruma gelebilir)
 - Terminal kullanıcı adı: a@a.com
 - Terminal parola: 12345
 
