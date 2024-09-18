@@ -1,35 +1,35 @@
-.switcher {
-  display: inline-block;
-  background-color: #d2d2d2;
-  width: 60px;
-  max-width: 60px;
-  height: 30px;
-  max-height: 30px;
-  border-radius: 50px;
-  cursor: pointer;
-  position: relative;
-  transition: 0.2s ease all;
-}
-
-.switcher::before {
-  position: absolute;
-  top: 50%;
-  left: 4px;
-  transform: translateY(-50%);
-  content: "";
-  background-color: #fff;
-  width: 25px;
-  max-width: 25px;
-  height: 25px;
-  max-height: 25px;
-  border-radius: 100%;
-  transition: 0.2s ease all;
-}
-
-input:checked + .switcher {
-  background-color: #355e3b;
-}
-
-input:checked + .switcher::before {
-  left: 31px;
-}
+.switcher {
+  display: inline-block;
+  background-color: #d2d2d2;
+  width: 60px;
+  max-width: 60px;
+  height: 30px;
+  max-height: 30px;
+  border-radius: 50px;
+  cursor: pointer;
+  position: relative;
+  transition: 0.2s ease all;
+}
+
+.switcher::before {
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  transform: translateY(-50%);
+  content: "";
+  background-color: #fff;
+  width: 25px;
+  max-width: 25px;
+  height: 25px;
+  max-height: 25px;
+  border-radius: 100%;
+  transition: 0.2s ease all;
+}
+
+input:checked + .switcher {
+  background-color: #355e3b;
+}
+
+input:checked + .switcher::before {
+  left: 31px;
+}

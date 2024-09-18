@@ -1,0 +1,26 @@
+- SIKILDIĞINDA YAZMAYI BIRAK, ÇABUK SIKILIYORSUN PROJE İYİCE LEGACY OLUYOR !!!!
+- SIKILDIĞINDA YAZMAYI BIRAK, ÇABUK SIKILIYORSUN PROJE İYİCE LEGACY OLUYOR !!!!
+- SIKILDIĞINDA YAZMAYI BIRAK, ÇABUK SIKILIYORSUN PROJE İYİCE LEGACY OLUYOR !!!!
+- SIKILDIĞINDA YAZMAYI BIRAK, ÇABUK SIKILIYORSUN PROJE İYİCE LEGACY OLUYOR !!!!
+- SIKILDIĞINDA YAZMAYI BIRAK, ÇABUK SIKILIYORSUN PROJE İYİCE LEGACY OLUYOR !!!!
+- SIKILDIĞINDA YAZMAYI BIRAK, ÇABUK SIKILIYORSUN PROJE İYİCE LEGACY OLUYOR !!!!
+- SIKILDIĞINDA YAZMAYI BIRAK, ÇABUK SIKILIYORSUN PROJE İYİCE LEGACY OLUYOR !!!!
+
+
+- Oturum işlemleri düzenlenmeli, örneğin token kontrolü yapılmıyor. (oturum sınıfında mantık hataları var).
+- Api ler güvenli değil.
+- Admin panele oturum eklenmeli.
+- Sıkıldığım zaman clean kodun içinden geçiyorum, saçma kodlar adam akıllı yazılmalı.
+- autolader işlemi composer autoload ile değiştirsek iyi olabilir.
+- paket yöneticisi eklenmeli (composer).
+- Routing sınıfı daha düzgün yazılabilir.
+- Javascript tarafında modüler yapıda olmayan sınıflar modül olarak nitelenmiş kontrol edilmeli.
+- Main js dosyalarında ki routing yönetimi çok çirkin. Switch case yapısı yerine düzgün bir sınıf yazıp
+  düzgün wrapper metodlar ile frontend routing yapılmalı.
+- frontend base url bilgisi, php sayfayı generate ederken doğrudan dökümana yazılıyor. Frontend ve backend
+  kodunu tamamen ayırmak bu proje özelinde yönetimi kolaylaştırır gibi ama performans sorunları da olabilir
+  bakıcaz. 
+- template engine ?
+- ürün silme işlevi eklenmeli.
+- Ürün adı değiştiğinde ürünün ilişkili olduğu resim dosyasının da adını güncellemeli,
+  şu hali ile ürün ismi değişince fotoğrafa erişimde sorun oluyor!!!

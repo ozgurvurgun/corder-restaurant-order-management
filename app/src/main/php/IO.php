@@ -2,7 +2,7 @@
 
 class IO
 {
-    public function fileRecord($file, string $fileName, string $targetDir, array $allowedTypes)
+    public function fileRecord($file, string $fileName, string $targetDir, array $allowedTypes): bool
     {
         $target_file = rtrim($targetDir, '/') . '/' . $fileName;
         $control_target_file = rtrim($targetDir, '/') . '/' . $file['name'];
@@ -15,7 +15,7 @@ class IO
         }
     }
 
-    public function checkFileType($fileType, $allowedTypes)
+    public function checkFileType($fileType, $allowedTypes): bool
     {
         return in_array($fileType, $allowedTypes);
     }

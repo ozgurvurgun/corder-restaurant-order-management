@@ -18,7 +18,7 @@ class Select
     {
         return $this->database->queryExec('SELECT * FROM orders ORDER BY order_time DESC')->fetchAll();
     }
-    
+
     public function getOrdersLog(): array
     {
         return $this->database->queryExec('SELECT * FROM orders_log ORDER BY order_closing_time DESC, table_opening_time DESC')->fetchAll();
@@ -42,6 +42,11 @@ class Select
     public function getTables(): array
     {
         return $this->database->queryExec('SELECT * FROM tables ORDER BY table_area ASC, table_number ASC')->fetchAll();
+    }
+
+    public function getTableNumbers(array $data): array
+    {
+        return $this->database->queryExec('SELECT * FROM tables WHERE table_area=? ORDER BY table_number ASC', $data)->fetchAll();
     }
 
     public function getReceipt(array $data): array
@@ -97,5 +102,10 @@ class Select
     public function productExists(string $name, string $category): int
     {
         return $this->database->queryExec('SELECT COUNT(*) FROM products WHERE name = ? AND category = ?', [$name, $category])->fetchColumn();
+    }
+
+    public function tableByNumber(array $data): array
+    {
+        return $this->database->queryExec('SELECT * FROM tables WHERE table_area = ? AND table_number = ?', $data)->fetch();
     }
 }

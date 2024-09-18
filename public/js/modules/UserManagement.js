@@ -1,22 +1,29 @@
 import RequestHandler from "../libs/RequestHandler.js";
 
+//!BU MODUL OLMAKTAN UZAK VIR YAPI BIR ARA DUZENLE
+
 export default class UserManagement {
   async getSubUsers() {
     const requestHandler = new RequestHandler();
+
     const response = await requestHandler.post(
-      "https://site.com/terminal-service/get-sub-users"
+      baseUrl + "terminal-service/get-sub-users"
     );
+
     return response;
   }
 
   async getSubUsersDisplay() {
     const subUserData = await this.getSubUsers();
+
     const subUserListElement = document.getElementById("sub-user-list");
+
     if (subUserData.status_code == "no_session") {
       alert("Oturum zaman aşımına uğramış.");
       localStorage.setItem("session", "false");
       window.location.href = baseUrl + "login";
     }
+
     let display = "";
     subUserData.forEach((element) => {
       display += `
@@ -36,12 +43,14 @@ export default class UserManagement {
         </li>
         `;
     });
+
     subUserListElement.innerHTML = display;
     this.userSelector();
   }
 
   userSelector() {
     const buttons = document.querySelectorAll(".sub-user-select-button");
+
     buttons.forEach((button) => {
       button.addEventListener("click", function () {
         const username = button.getAttribute("data-username");

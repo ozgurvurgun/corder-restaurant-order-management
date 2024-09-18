@@ -49,6 +49,11 @@ class Update
         return  $this->database->queryExec('UPDATE tables SET table_status = ? WHERE table_number = ? AND table_area = ?;', $data);
     }
 
+    public function orderTableNumberUpdate(array $data): PDOStatement
+    {
+        return  $this->database->queryExec('UPDATE orders SET table_number = ? WHERE table_number = ? AND table_area = ?;', $data);
+    }
+
     public function productStatusUpdate(array $data): PDOStatement
     {
         return  $this->database->queryExec('UPDATE products SET status = ? WHERE id = ?;', $data);
@@ -62,6 +67,16 @@ class Update
     public function firstWaiterRemoval(array $data): PDOStatement
     {
         return  $this->database->queryExec('UPDATE tables SET opening_time = CURRENT_TIMESTAMP, first_waiter = ? WHERE first_waiter != "@@@" AND table_number = ? AND table_area = ?;', $data);
+    }
+
+    public function firstWaiterMove(array $data): PDOStatement
+    {
+        return  $this->database->queryExec('UPDATE tables SET opening_time = CURRENT_TIMESTAMP, first_waiter = ? WHERE table_number = ? AND table_area = ?;', $data);
+    }
+
+    public function tableMove(array $data): PDOStatement
+    {
+        return  $this->database->queryExec('UPDATE orders SET table_area=?, table_number=? WHERE table_number = ? AND table_area = ?;', $data);
     }
 
     public function firstWaiterAssignment(array $data): PDOStatement

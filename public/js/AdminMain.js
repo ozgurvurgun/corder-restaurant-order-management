@@ -1,41 +1,32 @@
 class AdminMain {
   constructor() {
-    this.activePage =
-      window.location.origin + this.rtrimChar(window.location.pathname);
+    this.activePage = window.location.origin + this.rtrimChar(window.location.pathname);
     this.loadModule();
   }
 
   async loadModule() {
     switch (this.activePage) {
       case this.rtrimChar(baseUrl + "admin/dashboard"): {
-        const { default: Dashboard } = await import(
-          "./pages/admin/Dashboard.js"
-        );
-        const dashboard = new Dashboard();
+        const { default: Dashboard } = await import("./pages/admin/Dashboard.js");
+        new Dashboard();
         break;
       }
 
       case this.rtrimChar(baseUrl + "admin/tables"): {
-        // const { default: Tables } = await import(
-        //   "./pages/admin/Tables.js"
-        // );
-        // const tables = new Tables();
+        // const { default: Tables } = await import("./pages/admin/Tables.js");
+        // new Tables();
         break;
       }
 
       case this.rtrimChar(baseUrl + "admin/categories"): {
-        const { default: Categories } = await import(
-          "./pages/admin/Categories.js"
-        );
-        const categories = new Categories();
+        const { default: Categories } = await import("./pages/admin/Categories.js");
+        new Categories();
         break;
       }
 
       case this.rtrimChar(baseUrl + "admin/products"): {
-        const { default: Dashboard } = await import(
-          "./pages/admin/Products.js"
-        );
-        const dashboard = new Dashboard();
+        const { default: Dashboard } = await import("./pages/admin/Products.js");
+        new Dashboard();
         break;
       }
 
