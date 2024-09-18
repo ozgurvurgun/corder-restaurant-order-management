@@ -16,6 +16,7 @@
 - http://localhost/corder-restaurant-order-management/?table=2 QR menü (masadan sipariş alma işlevi mevcut ama pasif. Apisi yazılıp hemen işlevsel duruma gelebilir)
 - Terminal kullanıcı adı: a@a.com
 - Terminal parola: 12345
+- Masa üzerine tıklayınca masa ile ilgili yapabileceğiniz operasyonlar gelir. Bu sayfa da adisyon sayısının belirtildiği kısıma tıklarsanız açık masanın bütün sipariş geçmişi görebilirsiniz.
 
 <br>
 
