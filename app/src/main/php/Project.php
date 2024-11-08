@@ -2,11 +2,12 @@
 
 class Project
 {
-    private RequestHandler $request;
+    private Http $http;
     private Security $security;
     private SessionManager $sessionManager;
     private Router $router;
-    private $logicSessionResult;
+    private EnvLoader $envLoader;
+    private bool $logicSessionResult;
     private string $html = './app/src/main/web/';
 
     public function main(): void
@@ -21,34 +22,30 @@ class Project
 
     private function initializeDependencies(): void
     {
+        $this->envLoader = new EnvLoader();
+        $this->envLoader->trimKey('BASE_URL', '/', 'r');
         $this->sessionManager = new SessionManager();
         $this->router = new Router;
-        $this->request = new RequestHandler($_SERVER['REQUEST_METHOD'], $this->router);
+        $this->http = new Http($_SERVER['REQUEST_METHOD'], $this->router);
         $this->security = new Security();
         $this->logicSessionResult = $this->sessionManager->sessionControl('system-user', 'system-user-token');
     }
 
 
-
     function processOrders(array $data): array
     {
-        // İlk elemanın ortak değerlerini result dizisine yerleştir
         $result = $data[0];
-        // order_content dizilerini decode edip birleştir
         $orderContents = array_merge(...array_map(fn($order) => json_decode($order['order_content'], true), $data));
-        // result dizisini güncelle
         $result['order_content'] = json_encode($orderContents, JSON_UNESCAPED_UNICODE);
         $result['waiter_name'] = 'yazıcı servisi';
-        // Kullanılmayan order_total alanını kaldır
         unset($result['order_total']);
         return $result;
     }
 
 
-
     public function api(): void
     {
-        $this->request->post('/order-service/last-order', function () {
+        $this->http->post('/order-service/last-order', function () {
             header('Content-Type: application/json; charset=utf-8');
             $select = new Select();
             $data = $select->getOrders();
@@ -57,8 +54,7 @@ class Project
         });
 
 
-        /// BURAYA SONRA BAK
-        $this->request->post('/terminal-service/slip-printing', function () {
+        $this->http->post('/terminal-service/slip-printing', function () {
             header('Content-Type: application/json; charset=utf-8');
             $tableNumber =  $this->security->clientValidator($_POST['table-number']);
             $tableArea = $this->security->clientValidator($_POST['table-area']);
@@ -69,7 +65,7 @@ class Project
         });
 
 
-        $this->request->post('/order-service/printer-status-update', function () {
+        $this->http->post('/order-service/printer-status-update', function () {
             $update = new Update();
             $result =  $update->printerStatusUpdate();
             http_response_code($result ? 200 : 500);
@@ -77,7 +73,7 @@ class Project
         });
 
 
-        $this->request->post('/terminal-service/get-sub-users', function () {
+        $this->http->post('/terminal-service/get-sub-users', function () {
             $select = new Select();
             $data = $select->getSubUsers();
             http_response_code($data && $this->logicSessionResult ? 200 : 401);
@@ -85,7 +81,7 @@ class Project
         });
 
 
-        $this->request->post('/terminal-service/get-tables', function () {
+        $this->http->post('/terminal-service/get-tables', function () {
             $select = new Select();
             $data = $select->getTables();
             http_response_code($data && $this->logicSessionResult ? 200 : 401);
@@ -93,7 +89,7 @@ class Project
         });
 
 
-        $this->request->post('/terminal-service/get-tables-area', function () {
+        $this->http->post('/terminal-service/get-tables-area', function () {
             $select = new Select();
             $data = $select->getTablesArea();
             http_response_code($data && $this->logicSessionResult ? 200 : 401);
@@ -101,7 +97,7 @@ class Project
         });
 
 
-        $this->request->post('/terminal-service/get-table-numbers', function () {
+        $this->http->post('/terminal-service/get-table-numbers', function () {
             $select = new Select();
             $tableArea = $this->security->clientValidator($_POST['table-area']);
             $data = $select->getTableNumbers([$tableArea]);
@@ -110,7 +106,7 @@ class Project
         });
 
 
-        $this->request->post('/terminal-service/moving-table', function () {
+        $this->http->post('/terminal-service/moving-table', function () {
             if (!$this->logicSessionResult) {
                 http_response_code(401);
                 die(json_encode(['status_code' => 'no_session']));
@@ -155,7 +151,7 @@ class Project
         });
 
 
-        $this->request->post('/terminal-service/get-receipt', function () {
+        $this->http->post('/terminal-service/get-receipt', function () {
             $tableNumber =  $this->security->clientValidator($_POST['table-number']);
             $tableArea = $this->security->clientValidator($_POST['table-area']);
             $select = new Select();
@@ -169,7 +165,7 @@ class Project
         });
 
 
-        $this->request->post('/terminal-service/insert-category', function () {
+        $this->http->post('/terminal-service/insert-category', function () {
             $io = new IO();
             $insert = new Insert();
             $select = new Select();
@@ -199,7 +195,7 @@ class Project
         });
 
 
-        $this->request->post('/terminal-service/insert-product', function () {
+        $this->http->post('/terminal-service/insert-product', function () {
             $io = new IO();
             $insert = new Insert();
             $select = new Select();
@@ -231,7 +227,7 @@ class Project
 
 
 
-        $this->request->post('/terminal-service/close-table', function () {
+        $this->http->post('/terminal-service/close-table', function () {
             if (!$this->logicSessionResult) {
                 http_response_code(401);
                 die(json_encode(['status_code' => 'no_session']));
@@ -250,7 +246,7 @@ class Project
         });
 
 
-        $this->request->post('/terminal-service/order-registration', function () {
+        $this->http->post('/terminal-service/order-registration', function () {
             if (!$this->logicSessionResult) {
                 http_response_code(401);
                 die(json_encode(['status_code' => 'no_session']));
@@ -287,7 +283,7 @@ class Project
         });
 
 
-        $this->request->post('/terminal-service/get-products', function () {
+        $this->http->post('/terminal-service/get-products', function () {
             $select = new Select();
             $data = $select->getActiveProducts();
             http_response_code($data && $this->logicSessionResult ? 200 : 401);
@@ -295,7 +291,7 @@ class Project
         });
 
 
-        $this->request->post('/terminal-service/product-file-update', function () {
+        $this->http->post('/terminal-service/product-file-update', function () {
             $security = new Security();
             $id =  $security->clientValidator($_POST['product-id']);
             $productFile = $_FILES['product-file'];
@@ -318,7 +314,7 @@ class Project
         });
 
 
-        $this->request->post('/terminal-service/category-file-update', function () {
+        $this->http->post('/terminal-service/category-file-update', function () {
             $security = new Security();
             $id =  $security->clientValidator($_POST['category-id']);
             $categoryFile = $_FILES['category-file'];
@@ -338,7 +334,7 @@ class Project
         });
 
 
-        $this->request->post('/terminal-service/get-categories', function () {
+        $this->http->post('/terminal-service/get-categories', function () {
             $select = new Select();
             $data = $select->getActiveCategories();
             http_response_code($data && $this->logicSessionResult ? 200 : 401);
@@ -346,7 +342,7 @@ class Project
         });
 
 
-        $this->request->post('/terminal-service/update-product', function () {
+        $this->http->post('/terminal-service/update-product', function () {
             $update = new Update();
             $security = new Security();
             $id = $security->clientValidator($_POST['id']);
@@ -362,7 +358,7 @@ class Project
         });
 
 
-        $this->request->post('/terminal-service/update-category', function () {
+        $this->http->post('/terminal-service/update-category', function () {
             $update = new Update();
             $security = new Security();
             $select = new Select();
@@ -387,7 +383,7 @@ class Project
         });
 
 
-        $this->request->post('/terminal-service/product-status-update', function () {
+        $this->http->post('/terminal-service/product-status-update', function () {
             $update = new Update();
             $security = new Security();
             $id = $security->clientValidator($_POST['id']);
@@ -402,7 +398,7 @@ class Project
         });
 
 
-        $this->request->post('/terminal-service/category-status-update', function () {
+        $this->http->post('/terminal-service/category-status-update', function () {
             $update = new Update();
             $security = new Security();
             $id = $security->clientValidator($_POST['id']);
@@ -417,7 +413,7 @@ class Project
         });
 
 
-        $this->request->post('/system-user-control', function () {
+        $this->http->post('/system-user-control', function () {
             $userMail = $this->security->clientValidator($_POST['user-email']);
             $password = $this->security->clientValidator($_POST['password']);
             $user = (new Select())->getSystemUser([$userMail]);
@@ -433,7 +429,7 @@ class Project
         });
 
 
-        $this->request->post('/terminal-service/delete-receipt', function () {
+        $this->http->post('/terminal-service/delete-receipt', function () {
             $id = $this->security->clientValidator($_POST['id']);
             $delete = new Delete();
             $select = new Select();
@@ -466,8 +462,7 @@ class Project
         });
 
 
-
-        $this->request->post('/terminal-service/single-slip-printing', function () {
+        $this->http->post('/terminal-service/single-slip-printing', function () {
             header('Content-Type: application/json; charset=utf-8');
             $id =  $this->security->clientValidator($_POST['id']);
             $update = new Update();
@@ -479,13 +474,13 @@ class Project
 
     private function web(): void
     {
-        $this->request->getWithParams('/kategoriler/{url}/{id}', function ($category, $id) {
+        $this->http->getWithParams('/kategoriler/{url}/{id}', function ($category, $id) {
             echo "<h1>$category</h1>";
             echo "<h1>$id</h1>";
         });
 
 
-        $this->request->get('/', function () {
+        $this->http->get('/', function () {
             $select = new Select();
             $categoryData = $select->getActiveCategories();
             $productData = $select->getActiveProducts();
@@ -493,28 +488,28 @@ class Project
         });
 
 
-        $this->request->get('/admin/dashboard', function () {
+        $this->http->get('/admin/dashboard', function () {
             $select = new Select();
             $orders = $select->getActiveOrders();
             require_once $this->html . 'admin/activeOrders.php';
         });
 
 
-        $this->request->get('/admin/delivered', function () {
+        $this->http->get('/admin/delivered', function () {
             $select = new Select();
             $orders = $select->getOrdersLog();
             require_once $this->html . 'admin/delivered.php';
         });
 
 
-        $this->request->get('/admin/categories', function () {
+        $this->http->get('/admin/categories', function () {
             $select = new Select();
             $categoryData = $select->getAllCategories();
             require_once $this->html . 'admin/categories.php';
         });
 
 
-        $this->request->get('/admin/products', function () {
+        $this->http->get('/admin/products', function () {
             $select = new Select();
             $select = new Select();
             $categoryData = $select->getAllCategories();
@@ -523,66 +518,66 @@ class Project
         });
 
 
-        $this->request->get('/admin/tables', function () {
+        $this->http->get('/admin/tables', function () {
             require_once $this->html . 'admin/tables.php';
         });
 
 
-        $this->request->get('/admin/z-report', function () {
+        $this->http->get('/admin/z-report', function () {
             require_once $this->html . 'admin/zReport.php';
         });
 
 
-        $this->request->get('/login', function () {
+        $this->http->get('/login', function () {
             http_response_code(200);
             // if ($this->logicSessionResult) header('Location: /terminal-users');
             require_once $this->html . 'terminal-screens/login.php';
         });
 
 
-        $this->request->get('/terminal-users', function () {
+        $this->http->get('/terminal-users', function () {
             http_response_code(200);
             // if (!$this->logicSessionResult) header('Location: /logout');
             require_once $this->html . 'terminal-screens/terminalUsers.php';
         });
 
 
-        $this->request->get('/receipt', function () {
+        $this->http->get('/receipt', function () {
             http_response_code(200);
             // if (!$this->logicSessionResult) header('Location: /logout');
             require_once $this->html . 'terminal-screens/receipt.php';
         });
 
 
-        $this->request->get('/tables', function () {
+        $this->http->get('/tables', function () {
             http_response_code(200);
             // if (!$this->logicSessionResult) header('Location: /logout');
             require_once $this->html . 'terminal-screens/tables.php';
         });
 
 
-        $this->request->get('/table-operations', function () {
+        $this->http->get('/table-operations', function () {
             http_response_code(200);
             // if (!$this->logicSessionResult) header('Location: /logout');
             require_once $this->html . 'terminal-screens/tableOperations.php';
         });
 
 
-        $this->request->get('/terminal-menu', function () {
+        $this->http->get('/terminal-menu', function () {
             http_response_code(200);
             // if (!$this->logicSessionResult) header('Location: /logout');
             require_once $this->html . 'terminal-screens/terminalMenu.php';
         });
 
 
-        $this->request->get('/terminal-cart', function () {
+        $this->http->get('/terminal-cart', function () {
             http_response_code(200);
             // if (!$this->logicSessionResult) header('Location: /logout');
             require_once $this->html . 'terminal-screens/terminalCart.php';
         });
 
 
-        $this->request->get('/logout', function () {
+        $this->http->get('/logout', function () {
             http_response_code(200);
             $this->sessionManager->stop();
             // header('Location: /');

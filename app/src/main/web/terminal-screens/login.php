@@ -10,9 +10,9 @@
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 
-    <link rel="apple-touch-startup-image" href="<?= $_ENV['BASE_URL'] ?>public/images/pwa/96x96.png">
+    <link rel="apple-touch-startup-image" href="<?= $_ENV['BASE_URL'] ?>/public/images/pwa/96x96.png">
 
-    <link rel="manifest" href="<?= $_ENV['BASE_URL'] ?>manifest.json" />
+    <link rel="manifest" href="<?= $_ENV['BASE_URL'] ?>/manifest.json" />
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" />
 
@@ -23,7 +23,7 @@
     <script>
         if (localStorage.getItem("session") == "true") {
 
-            window.location.href = "<?= $_ENV['BASE_URL'] ?>terminal-users";
+            window.location.href = "<?= $_ENV['BASE_URL'] ?>/terminal-users";
 
         }
     </script>
@@ -339,7 +339,7 @@
 
                 navigator.serviceWorker
 
-                    .register("<?= $_ENV['BASE_URL'] ?>serviceWorker.js")
+                    .register("<?= $_ENV['BASE_URL'] ?>/serviceWorker.js")
 
                     .then((res) => console.log("service worker registered"))
 
@@ -365,10 +365,10 @@
 
         });
 
-        const baseUrl = "<?= $_ENV['BASE_URL'] ?>";
+        const baseUrl = "<?= $_ENV['BASE_URL'] ?>/";
     </script>
 
-    <script type="module" src="<?= $_ENV['BASE_URL'] ?>public/js/TerminalMain.js"></script>
+    <script type="module" src="<?= $_ENV['BASE_URL'] ?>/public/js/TerminalMain.js"></script>
 
 </body>
 

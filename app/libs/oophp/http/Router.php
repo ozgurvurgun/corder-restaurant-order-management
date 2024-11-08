@@ -30,7 +30,6 @@ class Router
         }
     }
 
-
     public function runWithParams(string $path, callable $func): void
     {
         $pattern = preg_replace('/\{url\}/', '([a-zA-Z0-9_]+)', $path);

@@ -58,7 +58,7 @@
 
                 <div class="category-item" data-category-name="<?= $value['name'] ?>">
 
-                    <img loading="lazy" class="category-image" src="<?= $_ENV['BASE_URL'] ?><?= $value['image_path'] ?>" />
+                    <img loading="lazy" class="category-image" src="<?= $_ENV['BASE_URL'] ?>/<?= $value['image_path'] ?>" />
 
                     <p><?= $value['name'] ?></p>
 
@@ -320,7 +320,7 @@
 
                 <div>
 
-                    <img src="<?= $_ENV['BASE_URL'] ?>public/images/ui/bira-patates.png">
+                    <img src="<?= $_ENV['BASE_URL'] ?>/public/images/ui/bira-patates.png">
 
                     <h2>Kampanya</h2>
 
@@ -374,7 +374,7 @@
 
             ?>
 
-            const base_url = "<?= $_ENV['BASE_URL'] ?>";
+            const base_url = "<?= $_ENV['BASE_URL'] ?>/";
 
         </script>
 

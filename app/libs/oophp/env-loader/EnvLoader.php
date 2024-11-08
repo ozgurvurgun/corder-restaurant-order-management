@@ -35,6 +35,18 @@ class EnvLoader
         }
     }
 
+    public function trimKey(string $key, string $char = '/', string $direction = 'r'): void
+    {
+        if (isset($_ENV[$key])) {
+            if ($direction === 'r') {
+                $_ENV[$key] = rtrim($_ENV[$key], $char);
+            } elseif ($direction === 'l') {
+                $_ENV[$key] = ltrim($_ENV[$key], $char);
+            }
+            putenv("{$key}={$_ENV[$key]}");
+        }
+    }
+
     private function load(): void
     {
         foreach ($this->tmp_env as $name => $value) {

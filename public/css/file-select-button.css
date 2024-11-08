@@ -1,38 +1,61 @@
-/* file-select-button-wrapper */
-.file-select-button-wrapper {
-  display: flex;
-  flex-direction: column;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-}
-
-.file-select-button {
-  position: relative;
-  padding: 11px 16px;
-  font-size: 14px;
-  line-height: 1.5;
-  border-radius: 5px;
-  color: #fff;
-  background-color: #17a2b8;
-  border: none;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.file-select-button input[type="file"] {
-  cursor: pointer;
-  position: absolute;
-  left: 0;
-  top: 0;
-  transform: scale(5);
-  opacity: 0;
-}
-
-.file-select-button-wrapper-filename p {
-  font-size: 14px;
-  color: #738191;
-}
+/* file-select-button-wrapper */
+
+.file-select-button-wrapper {
+  display: flex;
+
+  flex-direction: column;
+
+  flex-wrap: wrap;
+
+  align-items: center;
+
+  justify-content: center;
+
+  gap: 20px;
+}
+
+.file-select-button {
+  position: relative;
+
+  padding: 11px 16px;
+
+  font-size: 14px;
+
+  line-height: 1.5;
+
+  border-radius: 5px;
+
+  color: #fff;
+
+  background-color: #17a2b8;
+
+  border: none;
+
+  overflow: hidden;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+}
+
+.file-select-button input[type="file"] {
+  cursor: pointer;
+
+  position: absolute;
+
+  left: 0;
+
+  top: 0;
+
+  transform: scale(5);
+
+  opacity: 0;
+}
+
+.file-select-button-wrapper-filename p {
+  font-size: 14px;
+
+  color: #738191;
+}

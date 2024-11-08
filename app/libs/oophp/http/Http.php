@@ -1,6 +1,6 @@
 <?php
 
-class RequestHandler
+class Http
 {
     private string $requestMethod;
     private Router $router;

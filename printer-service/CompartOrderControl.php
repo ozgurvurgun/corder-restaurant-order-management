@@ -12,7 +12,7 @@ function compartOrderControlApi($url): array
     return post($url, $data);
 }
 
-//Bu kullanimda sideEffect olusuyor. compartOrderControlApi(), post() donus tipine bagimli oluyor!!!
+//sideEffect!!!
 function post(string $url, array $data): array
 {
     $ch = curl_init($url);
@@ -96,7 +96,7 @@ function editFileToPrint(array $data): void
             "_____________________________________\n" .
             "Toplam:  ₺$totalPrice.00\n" .
             "‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾\n\n" .
-            "            Fikrinin Yeri";
+            "            Özgür'ün Yeri";
 
         $file = fopen($fileName, 'w') or die("Unable to create file!");
         fwrite($file, $receiptContent);
