@@ -25,6 +25,8 @@
 - printer-service dizininde ki ufak app corder apilerine istek atık yeni sipariş olup olmama veya fiş basım emri durumlarına göre yazıcıdan çıktı alınmasını sağlar. Bu özelliği aktif etmek için bat dosyasında ki düzenlemeleri yapınız.
 <br>
 
+- Siparişleri alır almaz print etmek istiyorsanız ilk olarak bir varsayılan yazıcı tanımlayın windows pc de. ardından C dizini altında "compartPrinter" klasörü oluşturun. Ardından proje içinde ki printer-service klasörü altında ki .bat ve .php dosyasını  compartPrinter klasörü içine yerleştirin. Bat dosyanız için dilediğiniz bir yerde kısayol oluşturup dosyayı çalışıtırın. Sol üstte küçük bir console size yazdırma durumu ile ilgili bilgi verecektir.
+
 - Projede çok çok fazla eksik bulunuyor. Örneğin güvenlik namına hiçbir şey yok, sistemin bazı işlevleri eksik, başta ki temiz kod alayışı ilerleyen noktalarda makarna tadı vermeye başlıyor. Projenin başlarında motivasyonum çeşitli standartlara(PSR gibi), mimarilere uygun, genişletilebilir, modüler, side effect'i minimum seviyede olan pure teknolojilerin en efektif şekilde kullanıldığı öğretici bir proje yapmak idi. Ne yazık ki dikkatim çabuk dağılabiliyor ve çabuk sıkılıyorum. O yüzden bir çok noktayı sallamasyon geçtim diyebiliim.
 <br>
 <br>
