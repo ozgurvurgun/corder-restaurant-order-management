@@ -113,7 +113,7 @@ function printerExecute(int $count): void
     $data = [
         'api_key'     => $apiKey,
     ];
-    $response = post('https://site.com/order-service/printer-status-update', $data);
+    $response = post('http://localhost/corder-restaurant-order-management/order-service/printer-status-update', $data);
 
     if ($response['status_code'] == 'success') {
         for ($i = 0; $i < $count; $i++) {
@@ -127,4 +127,4 @@ function printerExecute(int $count): void
 }
 
 
-editFileToPrint(compartOrderControlApi('https://site.com/order-service/last-order'));
+editFileToPrint(compartOrderControlApi('http://localhost/corder-restaurant-order-management/order-service/last-order'));
