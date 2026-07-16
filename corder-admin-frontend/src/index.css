@@ -1,0 +1,26 @@
+@import 'tailwindcss';
+
+:root {
+  --bg: #0f0f0f;
+  --card: #1a1a1a;
+  --border: #2a2a2a;
+  --muted: #737373;
+  --accent: #3b82f6;
+}
+
+body {
+  background: var(--bg);
+  color: #e5e5e5;
+  font-family: system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+input, select, textarea {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: #e5e5e5;
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--muted);
+}

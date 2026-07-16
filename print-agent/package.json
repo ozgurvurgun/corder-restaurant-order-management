@@ -1,0 +1,22 @@
+{
+  "name": "corder-print-agent",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Windows print agent for Corder order events",
+  "engines": {
+    "node": ">=18"
+  },
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "mock:server": "node src/mock-ws-server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
+    "ws": "^8.18.3"
+  }
+}

@@ -1,0 +1,59 @@
+# Production: only the API is exposed. PostgreSQL stays on the Docker network only (no host port 5432).
+# To connect to the DB from the host locally: docker compose -f docker-compose.dev.yml up -d
+
+services:
+  api:
+    build: .
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USERNAME: ${DB_USERNAME:-corder}
+      DB_PASSWORD: ${DB_PASSWORD:-corder_secret}
+      DB_NAME: ${DB_NAME:-corder}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      PLATFORM_JWT_SECRET: ${PLATFORM_JWT_SECRET}
+      PLATFORM_ADMIN_EMAIL: ${PLATFORM_ADMIN_EMAIL}
+      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+      SKIP_MIGRATIONS_ON_START: ${SKIP_MIGRATIONS_ON_START:-}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME:-}
+      R2_PUBLIC_BASE_URL: ${R2_PUBLIC_BASE_URL:-}
+    volumes:
+      - api_uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-corder}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-corder_secret}
+      POSTGRES_DB: ${DB_NAME:-corder}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-corder} -d ${DB_NAME:-corder}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  api_uploads:

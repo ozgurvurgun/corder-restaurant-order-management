@@ -1,0 +1,7 @@
+node_modules
+.env
+data
+npm-debug.log*
+# Built once by send-raw-printer.ps1 (Add-Type cache); bump RawPrinterHelper.version in script to rebuild
+scripts/RawPrinterHelper.dll
+scripts/RawPrinterHelper.version
