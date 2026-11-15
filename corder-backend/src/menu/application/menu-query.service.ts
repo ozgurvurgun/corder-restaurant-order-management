@@ -63,11 +63,23 @@ export class MenuQueryService {
     private readonly campaignRepo: Repository<CampaignEntity>,
   ) {}
 
-  async getBusinessBySlug(slug: string | null, forTerminal = false): Promise<MenuBusinessDto> {
+  async getBusinessBySlug(slug: string | null): Promise<MenuBusinessDto> {
     if (!slug?.trim()) throw new NotFoundException('restaurant query is required');
     const restaurant = await this.restaurantRepo.findOne({ where: { slug: slug.trim(), status: 'active' } });
     if (!restaurant) throw new NotFoundException('Business not found');
+    return this.buildMenuDto(restaurant, false);
+  }
 
+  async getTerminalMenuByRestaurantId(restaurantId: string): Promise<MenuBusinessDto> {
+    const restaurant = await this.restaurantRepo.findOne({ where: { id: restaurantId, status: 'active' } });
+    if (!restaurant) throw new NotFoundException('Business not found');
+    return this.buildMenuDto(restaurant, true);
+  }
+
+  private async buildMenuDto(
+    restaurant: RestaurantEntity,
+    forTerminal: boolean,
+  ): Promise<MenuBusinessDto> {
     const allCats = await this.categoryRepo.find({
       where: { restaurantId: restaurant.id },
       order: { order: 'ASC', name: 'ASC' },

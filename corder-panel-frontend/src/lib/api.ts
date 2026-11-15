@@ -155,7 +155,7 @@ export const api = {
       token: string,
       body: {
         tableId: string
-        items: { productId: string; productName: string; price: number; quantity: number; note?: string }[]
+        items: { productId: string; quantity: number; note?: string }[]
       },
     ) =>
       request<OrderDto>("/restaurant/orders", {

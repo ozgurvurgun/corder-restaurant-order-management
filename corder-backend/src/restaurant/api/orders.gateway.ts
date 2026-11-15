@@ -8,13 +8,14 @@ import { Repository } from 'typeorm';
 import { RestaurantTokenPayload } from '../application/restaurant-auth.service';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 import { TableService } from '../application/table.service';
+import { buildCorsOptions } from '../../common/security/cors.config';
 
 function getRestaurantRoom(restaurantId: string) {
   return `restaurant:${restaurantId}`;
 }
 
 @WebSocketGateway({
-  cors: { origin: true },
+  cors: buildCorsOptions(),
   path: '/ws',
 })
 @Injectable()

@@ -175,35 +175,64 @@ export class OrderService {
     dto: CreateOrderDto,
     actor?: { staffId?: string | null; displayName?: string | null },
   ): Promise<Record<string, unknown>> {
+    if (!dto.items?.length) {
+      throw new BadRequestException('Siparis en az bir kalem icermeli');
+    }
     const table = await this.tableRepo.findOne({ where: { id: dto.tableId, restaurantId } });
     if (!table) throw new NotFoundException('Table not found');
     const staffId = actor?.staffId ?? null;
     this.tableService.assertStaffMayUseTable(table, staffId);
     await this.cashShiftService.requireCurrent(restaurantId);
+
+    const uniqueProductIds = [...new Set(dto.items.map((i) => i.productId))];
+    const products = await this.productRepo.find({
+      where: { id: In(uniqueProductIds) },
+      relations: ['category'],
+    });
+    const productById = new Map<string, ProductEntity>();
+    for (const product of products) {
+      if (product.category?.restaurantId === restaurantId) {
+        productById.set(product.id, product);
+      }
+    }
+    for (const line of dto.items) {
+      if (!productById.has(line.productId)) {
+        throw new BadRequestException('Urun bulunamadi veya bu restorana ait degil');
+      }
+    }
+
     const waiter = staffId
       ? await this.staffRepo.findOne({ where: { id: staffId, restaurantId } })
       : null;
-    const order = this.orderRepo.create({
-      restaurantId,
-      tableId: dto.tableId,
-      userId: waiter ? waiter.id : null,
-      userDisplayName: waiter?.name?.trim() || actor?.displayName?.trim() || null,
-      status: 'active',
+
+    const savedId = await this.orderRepo.manager.transaction(async (em) => {
+      const txOrderRepo = em.getRepository(OrderEntity);
+      const txItemRepo = em.getRepository(OrderItemEntity);
+      const order = txOrderRepo.create({
+        restaurantId,
+        tableId: dto.tableId,
+        userId: waiter ? waiter.id : null,
+        userDisplayName: waiter?.name?.trim() || actor?.displayName?.trim() || null,
+        status: 'active',
+      });
+      const saved = await txOrderRepo.save(order);
+      const items = dto.items.map((i) => {
+        const product = productById.get(i.productId)!;
+        return txItemRepo.create({
+          orderId: saved.id,
+          productId: product.id,
+          productName: product.name,
+          price: Number(product.price),
+          quantity: i.quantity,
+          note: i.note?.trim() || undefined,
+          status: 'sent',
+        });
+      });
+      await txItemRepo.save(items);
+      return saved.id;
     });
-    const saved = await this.orderRepo.save(order) as OrderEntity;
-    const items = dto.items.map((i) =>
-      this.itemRepo.create({
-        orderId: saved.id,
-        productId: i.productId,
-        productName: i.productName,
-        price: i.price,
-        quantity: i.quantity,
-        note: i.note,
-        status: 'sent',
-      }),
-    );
-    await this.itemRepo.save(items);
-    const createdEntity = await this.loadOrderEntity(saved.id, restaurantId);
+
+    const createdEntity = await this.loadOrderEntity(savedId, restaurantId);
     if (!createdEntity) throw new NotFoundException('Order not found');
     const map = await this.staffNameMap(restaurantId, [createdEntity.userId]);
     const serialized = this.serializeOrderEntity(createdEntity, map);
@@ -215,7 +244,13 @@ export class OrderService {
     } as Record<string, unknown>;
     const pItems = payload.items as Array<{ productId?: string } & Record<string, unknown>> | undefined;
     if (pItems?.length) {
-      await this.attachCategoryIdsToItems(pItems, restaurantId);
+      for (const item of pItems) {
+        const pid = item.productId;
+        const prod = pid ? productById.get(pid) : undefined;
+        if (prod) {
+          item.categoryId = prod.categoryId;
+        }
+      }
     }
     this.ordersGateway.emitOrderCreated(restaurantId, payload);
     return serialized;

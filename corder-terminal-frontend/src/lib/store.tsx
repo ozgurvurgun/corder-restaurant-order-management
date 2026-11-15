@@ -485,8 +485,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           tableId,
           items: cart.map((i) => ({
             productId: i.productId,
-            productName: i.productName,
-            price: i.price,
             quantity: i.quantity,
             note: i.note,
           })),

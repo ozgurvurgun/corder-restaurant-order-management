@@ -1,23 +1,27 @@
-import { IsString, IsUUID, IsArray, ValidateNested, IsOptional, IsNumber, Min } from 'class-validator';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateOrderItemDto {
-  @IsString()
+  @IsUUID()
   productId: string;
 
-  @IsString()
-  productName: string;
-
-  @IsNumber()
-  @Min(0)
-  price: number;
-
-  @IsNumber()
+  @IsInt()
   @Min(1)
   quantity: number;
 
   @IsOptional()
   @IsString()
+  @MaxLength(500)
   note?: string;
 }
 
@@ -26,6 +30,7 @@ export class CreateOrderDto {
   tableId: string;
 
   @IsArray()
+  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => CreateOrderItemDto)
   items: CreateOrderItemDto[];

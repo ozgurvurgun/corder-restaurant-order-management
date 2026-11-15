@@ -3,11 +3,11 @@ import { ChevronLeft, ShoppingCart, Search, X, Utensils, AlertTriangle } from "l
 import { useApp } from "@/lib/store"
 import { formatCurrency } from "@/lib/services"
 import { useToast } from "@/components/ios-toast"
-import { api } from "@/lib/api"
+import { api, getToken } from "@/lib/api"
 import type { MenuBusinessDto, MenuCategoryTree } from "@/lib/api"
 
 /** Shows the same data without waiting for refetch when switching cart ↔ menu (reduces header jump). */
-const menuBusinessBySlug: Partial<Record<string, MenuBusinessDto>> = {}
+const menuBusinessByRestaurantId: Partial<Record<string, MenuBusinessDto>> = {}
 
 /** Avoid a one-frame "Menu" flash when `tables` lags; keep the last known table name. */
 const tableTitleByTableId: Record<string, string> = {}
@@ -165,8 +165,8 @@ export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreen
   const { restaurant, tables, cart, addToCart } = useApp()
   const { showToast } = useToast()
   const [menu, setMenu] = useState<MenuBusinessDto | null>(() => {
-    const s = restaurant?.slug
-    return s && menuBusinessBySlug[s] ? menuBusinessBySlug[s]! : null
+    const rid = restaurant?.id
+    return rid && menuBusinessByRestaurantId[rid] ? menuBusinessByRestaurantId[rid]! : null
   })
   const [menuLoadError, setMenuLoadError] = useState<string | null>(null)
   const [activeCategory, setActiveCategory] = useState("")
@@ -174,18 +174,19 @@ export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreen
   const [showSearch, setShowSearch] = useState(false)
 
   useEffect(() => {
-    if (!restaurant?.slug) return
-    const slug = restaurant.slug
-    const cached = menuBusinessBySlug[slug] ?? null
+    const rid = restaurant?.id
+    const token = getToken()
+    if (!rid || !token) return
+    const cached = menuBusinessByRestaurantId[rid] ?? null
     setMenu(cached)
     setMenuLoadError(null)
     const hadCache = !!cached
     let cancelled = false
     api.menu
-      .business(slug)
+      .terminal(token)
       .then((m) => {
         if (cancelled) return
-        menuBusinessBySlug[slug] = m
+        menuBusinessByRestaurantId[rid] = m
         setMenu(m)
       })
       .catch((e) => {
@@ -195,7 +196,7 @@ export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreen
     return () => {
       cancelled = true
     }
-  }, [restaurant?.slug])
+  }, [restaurant?.id])
 
   const roots = useMemo(() => menu?.categories ?? [], [menu])
 

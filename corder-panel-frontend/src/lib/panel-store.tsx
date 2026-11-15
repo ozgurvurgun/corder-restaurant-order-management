@@ -145,7 +145,7 @@ interface PanelContextType {
   /** Creates a new active check on the table (same API as terminal). */
   createTableOrder: (
     tableId: string,
-    items: { productId: string; productName: string; price: number; quantity: number; note?: string }[],
+    items: { productId: string; quantity: number; note?: string }[],
   ) => Promise<{ ok: boolean; error?: string }>
 
   // Cancel
@@ -1519,7 +1519,7 @@ export function PanelProvider({ children }: { children: ReactNode }) {
   const createTableOrder = useCallback(
     async (
       tableId: string,
-      items: { productId: string; productName: string; price: number; quantity: number; note?: string }[],
+      items: { productId: string; quantity: number; note?: string }[],
     ): Promise<{ ok: boolean; error?: string }> => {
       if (!token) return { ok: false, error: "Oturum gerekli" }
       if (!currentShift) return { ok: false, error: "Once kasayi acin" }

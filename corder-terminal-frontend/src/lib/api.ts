@@ -229,7 +229,7 @@ export const api = {
       token: string,
       body: {
         tableId: string
-        items: { productId: string; productName: string; price: number; quantity: number; note?: string }[]
+        items: { productId: string; quantity: number; note?: string }[]
       },
     ) =>
       request<OrderDto>("/restaurant/orders", { method: "POST", token, body: JSON.stringify(body) }),
@@ -270,8 +270,8 @@ export const api = {
       }),
   },
   menu: {
-    business: (slug: string) =>
-      request<MenuBusinessDto>(`/menu/business/${encodeURIComponent(slug)}?terminal=1`),
+    terminal: (token: string) =>
+      request<MenuBusinessDto>("/restaurant/menu", { token }),
   },
   staff: {
     verifyPin: (token: string, pin: string) =>

@@ -191,8 +191,6 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
       tableId,
       cart.map((i) => ({
         productId: i.productId,
-        productName: i.productName,
-        price: i.price,
         quantity: i.quantity,
         note: i.note,
       })),

@@ -4,6 +4,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import { AppModule } from './app.module';
+import { buildCorsOptions } from './common/security/cors.config';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -27,13 +28,7 @@ async function bootstrap() {
       transformOptions: { enableImplicitConversion: true },
     }),
   );
-  const corsOrigin = process.env.CORS_ORIGIN?.trim();
-  app.enableCors({
-    origin: corsOrigin
-      ? corsOrigin.split(',').map((o) => o.trim()).filter(Boolean)
-      : true,
-    credentials: true,
-  });
+  app.enableCors(buildCorsOptions());
   const uploadsPath = join(process.cwd(), 'uploads');
   if (!existsSync(uploadsPath)) mkdirSync(uploadsPath, { recursive: true });
   app.useStaticAssets(uploadsPath, { prefix: '/uploads' });

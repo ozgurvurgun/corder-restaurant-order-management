@@ -66,8 +66,10 @@ import { CampaignsController } from './api/campaigns.controller';
 import { StockController } from './api/stock.controller';
 import { TechnicalController } from './api/technical.controller';
 import { RestaurantSettingsController } from './api/restaurant-settings.controller';
+import { RestaurantMenuController } from './api/restaurant-menu.controller';
 import { OrdersGateway } from './api/orders.gateway';
 import { PrintAgentController } from './api/print-agent.controller';
+import { MenuModule } from '../menu/menu.module';
 import { PrintAgentGuard } from './infrastructure/print-agent.guard';
 import { PanelRootGuard } from './infrastructure/panel-root.guard';
 import { RestaurantJwtStrategy } from './infrastructure/restaurant-jwt.strategy';
@@ -106,6 +108,7 @@ import {
       AuditLogEntity,
       BackupRecordEntity,
     ]),
+    MenuModule,
     PassportModule.register({ defaultStrategy: 'restaurant-jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -133,6 +136,7 @@ import {
     StockController,
     TechnicalController,
     RestaurantSettingsController,
+    RestaurantMenuController,
     PrintAgentController,
   ],
   providers: [
