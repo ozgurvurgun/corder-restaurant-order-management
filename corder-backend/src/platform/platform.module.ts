@@ -15,6 +15,10 @@ import { RootAdminsController } from './api/root-admins.controller';
 import { PlatformJwtStrategy } from './infrastructure/platform-jwt.strategy';
 import { PlatformAdminSeed } from './infrastructure/platform-admin.seed';
 import { RestaurantModule } from '../restaurant/restaurant.module';
+import {
+  DEFAULT_JWT_EXPIRES_IN,
+  requireConfigSecret,
+} from '../common/security/env.validation';
 
 @Module({
   imports: [
@@ -25,8 +29,8 @@ import { RestaurantModule } from '../restaurant/restaurant.module';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('PLATFORM_JWT_SECRET', 'platform-secret'),
-        signOptions: { expiresIn: config.get('JWT_EXPIRES_IN', '7d') },
+        secret: requireConfigSecret(config, 'PLATFORM_JWT_SECRET'),
+        signOptions: { expiresIn: config.get('JWT_EXPIRES_IN', DEFAULT_JWT_EXPIRES_IN) },
       }),
     }),
   ],

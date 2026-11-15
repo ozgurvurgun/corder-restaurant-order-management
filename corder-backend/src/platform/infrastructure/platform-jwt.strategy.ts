@@ -6,6 +6,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PlatformAdminEntity } from '../domain/platform-admin.entity';
 import { PlatformTokenPayload } from '../application/platform-auth.service';
+import { requireConfigSecret } from '../../common/security/env.validation';
 
 @Injectable()
 export class PlatformJwtStrategy extends PassportStrategy(Strategy, 'platform-jwt') {
@@ -17,7 +18,7 @@ export class PlatformJwtStrategy extends PassportStrategy(Strategy, 'platform-jw
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: config.get<string>('PLATFORM_JWT_SECRET', 'platform-secret'),
+      secretOrKey: requireConfigSecret(config, 'PLATFORM_JWT_SECRET'),
     });
   }
 

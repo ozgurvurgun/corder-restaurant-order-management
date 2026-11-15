@@ -56,10 +56,10 @@ export function PanelAuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     try {
       const res = await api.restaurant.login(email, password)
-      if (res.user.role === "garson") {
+      if (res.user.role !== "root") {
         return {
           success: false,
-          error: "Garson hesabı ile panele giriş yapılamaz. Sadece terminale giriş yapabilirsiniz.",
+          error: "Bu hesap ile yonetim paneline giris yapilamaz. Yalniz yonetici (root) hesabi kabul edilir.",
         }
       }
       setToken(res.accessToken)

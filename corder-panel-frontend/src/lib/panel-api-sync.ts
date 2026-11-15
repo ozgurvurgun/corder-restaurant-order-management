@@ -309,14 +309,13 @@ export function deriveSectionsFromTables(
 }
 
 function mapApiStaffToPanelUser(
-  s: { id: string; name: string; email: string | null; pin: string | null; role: string; phone?: string; isActive: boolean; createdAt: string }
+  s: { id: string; name: string; email: string | null; role: string; phone?: string; isActive: boolean; createdAt: string }
 ): PanelUser {
   return {
     id: s.id,
     name: s.name,
     email: s.email ?? undefined,
     phone: s.phone,
-    pin: s.pin ?? undefined,
     role: s.role as "garson" | "mudur" | "kasiyer",
     active: s.isActive,
     createdAt: new Date(s.createdAt),

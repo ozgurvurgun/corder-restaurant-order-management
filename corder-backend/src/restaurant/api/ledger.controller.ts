@@ -1,11 +1,12 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { LedgerService } from '../application/ledger.service';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
+import { PanelRootGuard } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
 
 @Controller('restaurant/ledger-customers')
-@UseGuards(RestaurantJwtGuard)
+@UseGuards(RestaurantJwtGuard, PanelRootGuard)
 export class LedgerController {
   constructor(private readonly ledger: LedgerService) {}
 

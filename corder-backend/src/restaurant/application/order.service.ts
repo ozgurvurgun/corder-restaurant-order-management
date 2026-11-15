@@ -170,19 +170,24 @@ export class OrderService {
     return this.serializeOrderEntity(o, map);
   }
 
-  async create(restaurantId: string, dto: CreateOrderDto): Promise<Record<string, unknown>> {
+  async create(
+    restaurantId: string,
+    dto: CreateOrderDto,
+    actor?: { staffId?: string | null; displayName?: string | null },
+  ): Promise<Record<string, unknown>> {
     const table = await this.tableRepo.findOne({ where: { id: dto.tableId, restaurantId } });
     if (!table) throw new NotFoundException('Table not found');
-    this.tableService.assertStaffMayUseTable(table, dto.userId ?? null);
+    const staffId = actor?.staffId ?? null;
+    this.tableService.assertStaffMayUseTable(table, staffId);
     await this.cashShiftService.requireCurrent(restaurantId);
-    const waiter = dto.userId
-      ? await this.staffRepo.findOne({ where: { id: dto.userId, restaurantId } })
+    const waiter = staffId
+      ? await this.staffRepo.findOne({ where: { id: staffId, restaurantId } })
       : null;
     const order = this.orderRepo.create({
       restaurantId,
       tableId: dto.tableId,
-      userId: dto.userId ?? null,
-      userDisplayName: waiter?.name?.trim() ?? null,
+      userId: waiter ? waiter.id : null,
+      userDisplayName: waiter?.name?.trim() || actor?.displayName?.trim() || null,
       status: 'active',
     });
     const saved = await this.orderRepo.save(order) as OrderEntity;

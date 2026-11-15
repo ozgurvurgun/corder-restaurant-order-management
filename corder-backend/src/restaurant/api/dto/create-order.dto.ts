@@ -25,10 +25,6 @@ export class CreateOrderDto {
   @IsUUID()
   tableId: string;
 
-  @IsOptional()
-  @IsString()
-  userId?: string;
-
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateOrderItemDto)

@@ -13,7 +13,6 @@ export type StaffRole = 'mudur' | 'kasiyer' | 'garson';
 
 @Entity('restaurant_staff')
 @Index(['restaurantId'])
-@Index(['restaurantId', 'pin'])
 export class RestaurantStaffEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -31,9 +30,8 @@ export class RestaurantStaffEntity {
   @Column({ name: 'password_hash', type: 'varchar', nullable: true })
   passwordHash: string | null;
 
-  /** Numeric user code (4–8 digits) for terminal “next step” login; assigned only from Panel. */
-  @Column({ type: 'varchar', length: 20, nullable: true })
-  pin: string | null;
+  @Column({ name: 'pin_hash', type: 'varchar', length: 120 })
+  pinHash: string;
 
   @Column()
   name: string;

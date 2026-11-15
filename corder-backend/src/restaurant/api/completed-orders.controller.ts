@@ -10,7 +10,7 @@ import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
 import { UpdateCompletedOrderDto } from './dto/update-completed-order.dto';
 
 @Controller('restaurant/completed-orders')
-@UseGuards(RestaurantJwtGuard)
+@UseGuards(RestaurantJwtGuard, PanelRootGuard)
 export class CompletedOrdersController {
   constructor(private readonly service: CompletedOrdersService) {}
 

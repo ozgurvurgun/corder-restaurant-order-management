@@ -40,7 +40,19 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const secret = this.config.get<string>('JWT_SECRET');
       const payload = this.jwt.verify<RestaurantTokenPayload>(token, { secret });
-      if (payload.type !== 'restaurant' || !payload.restaurantId) {
+      if (
+        payload.type !== 'restaurant' ||
+        !payload.restaurantId ||
+        (payload.role !== 'root' && payload.role !== 'terminal')
+      ) {
+        client.disconnect(true);
+        return;
+      }
+      const activeRestaurant = await this.restaurantRepo.findOne({
+        where: { id: payload.restaurantId },
+        select: { id: true, status: true },
+      });
+      if (!activeRestaurant || activeRestaurant.status !== 'active') {
         client.disconnect(true);
         return;
       }
@@ -55,7 +67,7 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     const restaurant = await this.restaurantRepo.findOne({ where: { printAgentToken: token } });
-    if (!restaurant) {
+    if (!restaurant || restaurant.status !== 'active') {
       client.disconnect(true);
       return;
     }

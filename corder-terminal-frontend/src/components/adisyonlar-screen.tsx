@@ -10,11 +10,6 @@ interface AdisyonlarScreenProps {
   onMoveItem?: (itemId: string, productName: string) => void
 }
 
-function getUserName(users: { id: string; name: string }[], userId: string): string {
-  const user = users.find((u) => u.id === userId)
-  return user ? user.name : "—"
-}
-
 function formatTime(date: Date): string {
   return new Date(date).toLocaleTimeString("tr-TR", {
     hour: "2-digit",
@@ -29,7 +24,7 @@ export function AdisyonlarScreen({
   onNewOrder,
   onMoveItem,
 }: AdisyonlarScreenProps) {
-  const { tables, users, getTableOrders } = useApp()
+  const { tables, getTableOrders } = useApp()
   const table = tables.find((t) => t.id === tableId)
   const tableOrders = getTableOrders(tableId)
   const [activeTab, setActiveTab] = useState(0)
@@ -127,7 +122,7 @@ export function AdisyonlarScreen({
                 <div className="flex items-center gap-1.5 text-muted-foreground">
                   <User className="h-3.5 w-3.5" />
                   <span className="text-[13px] font-medium capitalize">
-                    {activeOrder.userName?.trim() || getUserName(users, activeOrder.userId)}
+                    {activeOrder.userName?.trim() || "—"}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 text-muted-foreground">

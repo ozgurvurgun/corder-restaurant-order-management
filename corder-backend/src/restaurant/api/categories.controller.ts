@@ -4,10 +4,11 @@ import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { ReorderCategoriesDto } from './dto/reorder-categories.dto';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
+import { PanelRootGuard } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 
 @Controller('restaurant/categories')
-@UseGuards(RestaurantJwtGuard)
+@UseGuards(RestaurantJwtGuard, PanelRootGuard)
 export class CategoriesController {
   constructor(private readonly service: CategoryService) {}
 

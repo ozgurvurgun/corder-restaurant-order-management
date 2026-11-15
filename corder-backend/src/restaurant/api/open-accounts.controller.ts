@@ -1,11 +1,12 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { OpenAccountsService } from '../application/open-accounts.service';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
+import { PanelRootGuard } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
 
 @Controller('restaurant/open-accounts')
-@UseGuards(RestaurantJwtGuard)
+@UseGuards(RestaurantJwtGuard, PanelRootGuard)
 export class OpenAccountsController {
   constructor(private readonly service: OpenAccountsService) {}
 

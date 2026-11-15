@@ -18,6 +18,7 @@ import { mkdir, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import type { Request } from 'express';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
+import { PanelRootGuard } from '../infrastructure/panel-root.guard';
 import { R2UploadService } from '../infrastructure/r2-upload.service';
 
 const uploadsDir = () => join(process.cwd(), 'uploads');
@@ -46,7 +47,7 @@ function buildObjectKey(tenant: string, originalName: string): string {
 }
 
 @Controller('restaurant/upload')
-@UseGuards(RestaurantJwtGuard)
+@UseGuards(RestaurantJwtGuard, PanelRootGuard)
 export class UploadController {
   private readonly logger = new Logger(UploadController.name);
 

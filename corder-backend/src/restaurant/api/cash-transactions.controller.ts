@@ -6,11 +6,12 @@ import {
 import { serializeCashShift } from '../application/cash-shift.service';
 import { CreateCashTransactionDto } from './dto/create-cash-transaction.dto';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
+import { PanelRootGuard } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
 
 @Controller('restaurant/cash-transactions')
-@UseGuards(RestaurantJwtGuard)
+@UseGuards(RestaurantJwtGuard, PanelRootGuard)
 export class CashTransactionsController {
   constructor(private readonly service: CashTransactionsService) {}
 

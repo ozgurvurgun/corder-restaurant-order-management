@@ -7,7 +7,6 @@ export interface User {
   name: string
   avatar?: string
   role: "garson" | "mudur" | "kasiyer"
-  password?: string
 }
 
 export interface Category {

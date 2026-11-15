@@ -34,6 +34,7 @@ import { CashTransactionsService } from './application/cash-transactions.service
 import { OpenAccountsService } from './application/open-accounts.service';
 import { LedgerService } from './application/ledger.service';
 import { StaffService } from './application/staff.service';
+import { StaffSessionService } from './application/staff-session.service';
 import { TableService } from './application/table.service';
 import { OrderService } from './application/order.service';
 import { CategoryService } from './application/category.service';
@@ -71,6 +72,10 @@ import { PrintAgentGuard } from './infrastructure/print-agent.guard';
 import { PanelRootGuard } from './infrastructure/panel-root.guard';
 import { RestaurantJwtStrategy } from './infrastructure/restaurant-jwt.strategy';
 import { R2UploadService } from './infrastructure/r2-upload.service';
+import {
+  DEFAULT_JWT_EXPIRES_IN,
+  requireConfigSecret,
+} from '../common/security/env.validation';
 
 @Module({
   imports: [
@@ -106,8 +111,8 @@ import { R2UploadService } from './infrastructure/r2-upload.service';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET'),
-        signOptions: { expiresIn: config.get('JWT_EXPIRES_IN', '7d') },
+        secret: requireConfigSecret(config, 'JWT_SECRET'),
+        signOptions: { expiresIn: config.get('JWT_EXPIRES_IN', DEFAULT_JWT_EXPIRES_IN) },
       }),
     }),
   ],
@@ -133,6 +138,7 @@ import { R2UploadService } from './infrastructure/r2-upload.service';
   providers: [
     RestaurantAuthService,
     StaffService,
+    StaffSessionService,
     TableService,
     OrderService,
     CategoryService,

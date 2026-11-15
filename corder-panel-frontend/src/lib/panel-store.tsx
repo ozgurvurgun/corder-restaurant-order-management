@@ -744,8 +744,6 @@ export function PanelProvider({ children }: { children: ReactNode }) {
           fromTableId,
           toTableId,
           itemIds,
-          userId: currentUser?.id,
-          actorDisplayName: currentUser?.name?.trim() || undefined,
         })
         logActivity({
           action: "order_items_moved",
@@ -758,7 +756,7 @@ export function PanelProvider({ children }: { children: ReactNode }) {
         return false
       }
     },
-    [token, currentUser?.id, currentUser?.name, logActivity],
+    [token, logActivity],
   )
 
   const openShift = useCallback(async (openingBalance: number) => {
@@ -1177,7 +1175,7 @@ export function PanelProvider({ children }: { children: ReactNode }) {
     if (!pin) return
     api.staff.create(token, { name: u.name, pin, role, phone: u.phone })
       .then((created) => {
-        setUsers((prev) => [...prev, { id: created.id, name: created.name, phone: created.phone, pin: created.pin ?? undefined, role: created.role as PanelUser["role"], active: created.isActive, createdAt: new Date(created.createdAt) }])
+        setUsers((prev) => [...prev, { id: created.id, name: created.name, phone: created.phone, role: created.role as PanelUser["role"], active: created.isActive, createdAt: new Date(created.createdAt) }])
         logActivity({
           action: "staff_created",
           category: "user",
@@ -1197,7 +1195,7 @@ export function PanelProvider({ children }: { children: ReactNode }) {
     if (data.active !== undefined) payload.isActive = data.active
     api.staff.update(token, id, payload)
       .then((updated) => {
-        setUsers((prev) => prev.map((u) => u.id === id ? { ...u, name: updated.name, phone: updated.phone, pin: updated.pin ?? undefined, role: updated.role as PanelUser["role"], active: updated.isActive } : u))
+        setUsers((prev) => prev.map((u) => u.id === id ? { ...u, name: updated.name, phone: updated.phone, role: updated.role as PanelUser["role"], active: updated.isActive } : u))
         logActivity({
           action: "staff_updated",
           category: "user",
@@ -1533,7 +1531,6 @@ export function PanelProvider({ children }: { children: ReactNode }) {
       try {
         await api.orders.create(token, {
           tableId,
-          userId: currentUser?.id,
           items,
         })
         logActivity({
@@ -1547,7 +1544,7 @@ export function PanelProvider({ children }: { children: ReactNode }) {
         return { ok: false, error: e instanceof Error ? e.message : "Siparis gonderilemedi" }
       }
     },
-    [token, currentShift, currentUser?.id, tables, logActivity],
+    [token, currentShift, tables, logActivity],
   )
   
   const addSupplier = useCallback((s: Omit<Supplier, "id">): Promise<boolean> => {

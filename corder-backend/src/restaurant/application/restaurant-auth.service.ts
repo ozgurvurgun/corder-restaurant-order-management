@@ -6,24 +6,26 @@ import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { RootAdminEntity } from '../../platform/domain/root-admin.entity';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
+import {
+  DEFAULT_JWT_EXPIRES_IN,
+  requireConfigSecret,
+} from '../../common/security/env.validation';
 
 export interface RestaurantLoginDto {
   email: string;
   password: string;
 }
 
-export type RestaurantUserRole = 'root' | 'mudur' | 'kasiyer' | 'garson';
+export type RestaurantJwtRole = 'root' | 'terminal';
 
 export interface RestaurantTokenPayload {
   sub: string;
   restaurantId: string;
-  /** URL-safe; used for R2 /uploads paths. May be missing on older tokens. */
-  slug?: string;
+  slug: string;
   email: string;
   name: string;
   type: 'restaurant';
-  /** `root` = panel admin; `terminal` on terminal login. Missing on older JWTs. */
-  role?: RestaurantUserRole | 'terminal';
+  role: RestaurantJwtRole;
 }
 
 @Injectable()
@@ -40,14 +42,22 @@ export class RestaurantAuthService {
   async login(dto: RestaurantLoginDto): Promise<{
     accessToken: string;
     restaurant: { id: string; name: string; slug: string };
-    user: { id: string; email: string; name: string; role: RestaurantUserRole };
+    user: { id: string; email: string; name: string; role: RestaurantJwtRole };
   }> {
     const email = dto.email.toLowerCase().trim();
+    const jwtSecret = requireConfigSecret(this.config, 'JWT_SECRET');
+    const expiresIn = this.config.get('JWT_EXPIRES_IN', DEFAULT_JWT_EXPIRES_IN);
 
     // Panel: root admin (email + password)
-    const admin = await this.rootAdminRepo.findOne({ where: { email }, relations: ['restaurant'] });
+    const admin = await this.rootAdminRepo.findOne({
+      where: { email },
+      relations: ['restaurant'],
+    });
     if (admin?.restaurant) {
       if (await bcrypt.compare(dto.password, admin.passwordHash)) {
+        if (admin.restaurant.status !== 'active') {
+          throw new UnauthorizedException('Restoran aktif degil');
+        }
         const payload: RestaurantTokenPayload = {
           sub: admin.id,
           restaurantId: admin.restaurant.id,
@@ -58,20 +68,37 @@ export class RestaurantAuthService {
           role: 'root',
         };
         const accessToken = this.jwt.sign(payload, {
-          secret: this.config.get('JWT_SECRET'),
-          expiresIn: this.config.get('JWT_EXPIRES_IN', '7d'),
+          secret: jwtSecret,
+          expiresIn,
         });
         return {
           accessToken,
-          restaurant: { id: admin.restaurant.id, name: admin.restaurant.name, slug: admin.restaurant.slug },
-          user: { id: admin.id, email: admin.email, name: admin.name, role: 'root' },
+          restaurant: {
+            id: admin.restaurant.id,
+            name: admin.restaurant.name,
+            slug: admin.restaurant.slug,
+          },
+          user: {
+            id: admin.id,
+            email: admin.email,
+            name: admin.name,
+            role: 'root',
+          },
         };
       }
     }
 
-    // Terminal: restaurant's own login (unrelated to root admin)
-    const restaurant = await this.restaurantRepo.findOne({ where: { terminalEmail: email } });
-    if (restaurant?.terminalPasswordHash && (await bcrypt.compare(dto.password, restaurant.terminalPasswordHash))) {
+    // Terminal: restaurant's own login (role: 'terminal' in both JWT and response)
+    const restaurant = await this.restaurantRepo.findOne({
+      where: { terminalEmail: email },
+    });
+    if (
+      restaurant?.terminalPasswordHash &&
+      (await bcrypt.compare(dto.password, restaurant.terminalPasswordHash))
+    ) {
+      if (restaurant.status !== 'active') {
+        throw new UnauthorizedException('Restoran aktif degil');
+      }
       const payload: RestaurantTokenPayload = {
         sub: restaurant.id,
         restaurantId: restaurant.id,
@@ -82,17 +109,25 @@ export class RestaurantAuthService {
         role: 'terminal',
       };
       const accessToken = this.jwt.sign(payload, {
-        secret: this.config.get('JWT_SECRET'),
-        expiresIn: this.config.get('JWT_EXPIRES_IN', '7d'),
+        secret: jwtSecret,
+        expiresIn,
       });
       return {
         accessToken,
-        restaurant: { id: restaurant.id, name: restaurant.name, slug: restaurant.slug },
-        user: { id: restaurant.id, email: restaurant.terminalEmail!, name: 'Terminal', role: 'root' },
+        restaurant: {
+          id: restaurant.id,
+          name: restaurant.name,
+          slug: restaurant.slug,
+        },
+        user: {
+          id: restaurant.id,
+          email: restaurant.terminalEmail!,
+          name: 'Terminal',
+          role: 'terminal',
+        },
       };
     }
 
     throw new UnauthorizedException('Invalid email or password');
   }
-
 }

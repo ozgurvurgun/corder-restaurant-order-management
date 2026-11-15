@@ -25,7 +25,7 @@ export class PrintAgentGuard implements CanActivate {
     const restaurant = await this.restaurantRepo.findOne({
       where: { printAgentToken: token },
     });
-    if (!restaurant) {
+    if (!restaurant || restaurant.status !== 'active') {
       throw new UnauthorizedException();
     }
     request.printAgentRestaurantId = restaurant.id;

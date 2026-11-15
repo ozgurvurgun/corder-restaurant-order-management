@@ -32,7 +32,7 @@ export default function UserManagement() {
     const u = users.find((x) => x.id === id)
     if (!u) return
     setEditingId(id); setFormName(u.name); setFormRole(u.role === "root" ? "mudur" : u.role)
-    setFormPhone(u.phone || ""); setFormPin(u.pin || "")
+    setFormPhone(u.phone || ""); setFormPin("")
   }
 
   const handleUpdate = () => {
@@ -81,7 +81,7 @@ export default function UserManagement() {
                 </select>
                 <input type="tel" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} placeholder="Telefon"
                   className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
-                <input type="text" inputMode="numeric" pattern="[0-9]*" value={formPin} onChange={(e) => setFormPin(e.target.value.replace(/\D/g, "").slice(0, 8))} placeholder="Kullanici kodu / PIN (4-8 rakam)"
+                <input type="text" inputMode="numeric" pattern="[0-9]*" value={formPin} onChange={(e) => setFormPin(e.target.value.replace(/\D/g, "").slice(0, 8))} placeholder={editingId ? "Yeni PIN (degistirmek icin 4-8 rakam girin)" : "Kullanici kodu / PIN (4-8 rakam)"}
                   className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 font-mono tracking-widest col-span-2" />
               </div>
               <div className="flex justify-end gap-2 mt-3">
@@ -128,8 +128,8 @@ export default function UserManagement() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`text-[12px] font-mono tracking-wider ${user.pin ? "text-[#1d1d1f]" : "text-[#d1d1d6]"}`}>
-                        {user.pin ? "****" : "Yok"}
+                      <span className={`text-[12px] font-mono tracking-wider ${user.isRoot ? "text-[#d1d1d6]" : "text-[#1d1d1f]"}`}>
+                        {user.isRoot ? "-" : "****"}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center">

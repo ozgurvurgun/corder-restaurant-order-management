@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
+import { PanelRootGuard } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
 import { PrintersService, CreatePrinterDto, UpdatePrinterDto } from '../application/printers.service';
@@ -8,7 +9,7 @@ import { BackupsService, CreateBackupDto } from '../application/backups.service'
 import { AuditCategory } from '../domain/audit-log.entity';
 
 @Controller('restaurant')
-@UseGuards(RestaurantJwtGuard)
+@UseGuards(RestaurantJwtGuard, PanelRootGuard)
 export class TechnicalController {
   constructor(
     private readonly printers: PrintersService,

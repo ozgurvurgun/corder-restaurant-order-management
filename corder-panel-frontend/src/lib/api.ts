@@ -94,7 +94,7 @@ export const api = {
       request<{
         accessToken: string
         restaurant: { id: string; name: string; slug: string }
-        user: { id: string; email: string; name: string; role: "root" | "mudur" | "kasiyer" | "garson" }
+        user: { id: string; email: string; name: string; role: "root" | "terminal" }
       }>("/restaurant/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
@@ -110,17 +110,17 @@ export const api = {
   },
   staff: {
     list: (token: string) =>
-      request<{ id: string; name: string; email: string | null; pin: string | null; role: string; phone?: string; isActive: boolean; createdAt: string }[]>(
+      request<{ id: string; name: string; email: string | null; role: string; phone?: string; isActive: boolean; createdAt: string }[]>(
         "/restaurant/staff",
         { token }
       ),
     create: (token: string, body: { name: string; pin: string; role: "mudur" | "kasiyer" | "garson"; phone?: string }) =>
-      request<{ id: string; name: string; email: string | null; pin: string | null; role: string; phone?: string; isActive: boolean; createdAt: string }>(
+      request<{ id: string; name: string; email: string | null; role: string; phone?: string; isActive: boolean; createdAt: string }>(
         "/restaurant/staff",
         { method: "POST", token, body: JSON.stringify(body) }
       ),
     update: (token: string, id: string, body: { name?: string; pin?: string; role?: "mudur" | "kasiyer" | "garson"; phone?: string; isActive?: boolean }) =>
-      request<{ id: string; name: string; email: string | null; pin: string | null; role: string; phone?: string; isActive: boolean; createdAt: string }>(
+      request<{ id: string; name: string; email: string | null; role: string; phone?: string; isActive: boolean; createdAt: string }>(
         `/restaurant/staff/${id}`,
         { method: "PUT", token, body: JSON.stringify(body) }
       ),
@@ -155,7 +155,6 @@ export const api = {
       token: string,
       body: {
         tableId: string
-        userId?: string
         items: { productId: string; productName: string; price: number; quantity: number; note?: string }[]
       },
     ) =>
@@ -176,8 +175,6 @@ export const api = {
         fromTableId: string
         toTableId: string
         itemIds: string[]
-        userId?: string
-        actorDisplayName?: string
       },
     ) =>
       request<OrderDto>("/restaurant/orders/move-items", {

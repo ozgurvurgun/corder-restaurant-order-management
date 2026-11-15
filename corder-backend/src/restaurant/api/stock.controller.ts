@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
+import { PanelRootGuard } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
 import { StockMaterialsService } from '../application/stock-materials.service';
@@ -11,7 +12,7 @@ import { PurchaseOrdersService } from '../application/purchase-orders.service';
 import { InventoryCountsService } from '../application/inventory-counts.service';
 
 @Controller('restaurant')
-@UseGuards(RestaurantJwtGuard)
+@UseGuards(RestaurantJwtGuard, PanelRootGuard)
 export class StockController {
   constructor(
     private readonly materials: StockMaterialsService,

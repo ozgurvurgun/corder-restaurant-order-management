@@ -2,7 +2,20 @@ import { createContext, useContext, useState, useCallback, useMemo, useEffect, u
 import type { Socket } from "socket.io-client"
 import type { User, Table, Order, OrderItem, CartItem } from "./types"
 import { KitchenService, PrinterService } from "./services"
-import { api, getToken, setToken, clearToken, getRestaurant, setRestaurant, getStaffSession, setStaffSession, clearStaffSession, getBase, setAuthExpiredHandler } from "./api"
+import {
+  api,
+  getToken,
+  setToken,
+  clearToken,
+  getRestaurant,
+  setRestaurant,
+  getStaffSession,
+  setStaffSession,
+  clearStaffSession,
+  getBase,
+  setAuthExpiredHandler,
+  setStaffExpiredHandler,
+} from "./api"
 import type { OrderDto } from "./api"
 
 interface RawTable {
@@ -41,7 +54,7 @@ function orderDtoToOrder(d: OrderDto): Order {
   }
 }
 
-function deriveTables(rawTables: RawTable[], orders: Order[], staffUsers: User[]): Table[] {
+function deriveTables(rawTables: RawTable[], orders: Order[]): Table[] {
   const activeOrders = orders.filter((o) => o.status === "active")
   return rawTables.map((t) => {
     const tableOrders = activeOrders.filter((o) => o.tableId === t.id)
@@ -53,10 +66,7 @@ function deriveTables(rawTables: RawTable[], orders: Order[], staffUsers: User[]
     const lastOrder = [...tableOrders].sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     )[0]
-    const uid = lastOrder?.userId?.trim()
-    const waiter =
-      lastOrder?.userName?.trim() ||
-      (uid ? staffUsers.find((u) => u.id === uid)?.name : undefined)
+    const waiter = lastOrder?.userName?.trim() || undefined
     const sid = t.sessionStaffId?.trim()
     const lockedAt = t.sessionLockedAt ? new Date(t.sessionLockedAt) : null
     const isStale = !lockedAt || Date.now() - lockedAt.getTime() > SESSION_LOCK_STALE_MS
@@ -83,7 +93,6 @@ function deriveTables(rawTables: RawTable[], orders: Order[], staffUsers: User[]
 
 interface AppState {
   currentUser: User | null
-  users: User[]
   isLoggedIn: boolean
   isOffline: boolean
   restaurant: { id: string; name: string; slug: string } | null
@@ -96,7 +105,7 @@ interface AppState {
 
 interface AppContextType extends AppState {
   login: (email: string, password: string) => Promise<boolean>
-  selectUser: (userId: string) => void
+  verifyStaffPin: (pin: string) => Promise<{ ok: boolean; error?: string }>
   logout: () => void
   staffLogout: () => void
   toggleOffline: () => void
@@ -126,8 +135,10 @@ interface AppContextType extends AppState {
 const AppContext = createContext<AppContextType | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(null)
-  const [users, setUsers] = useState<User[]>([])
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const session = getStaffSession()
+    return session ? { id: session.staffId, name: session.name, role: session.role } : null
+  })
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isOffline, setIsOffline] = useState(false)
   const [restaurant, setRestaurantState] = useState<{ id: string; name: string; slug: string } | null>(null)
@@ -143,12 +154,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const focusTableIdRef = useRef<string | null>(null)
   // Kept until unlock succeeds — back button still uses this even if the API errors
   const pendingUnlockTableIdRef = useRef<string | null>(null)
-  const currentUserRef = useRef<User | null>(null)
+  const currentUserRef = useRef<User | null>(currentUser)
   useEffect(() => {
     currentUserRef.current = currentUser
   }, [currentUser])
 
-  const tables = useMemo(() => deriveTables(rawTables, orders, users), [rawTables, orders, users])
+  const tables = useMemo(() => deriveTables(rawTables, orders), [rawTables, orders])
 
   const pullTables = useCallback(async () => {
     const token = getToken()
@@ -166,21 +177,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!token) return
     setLoadError(null)
     try {
-      const [tablesRes, ordersRes, staffRes] = await Promise.all([
+      const [tablesRes, ordersRes] = await Promise.all([
         api.tables.list(token),
         api.orders.list(token),
-        api.staff.list(token).catch(() => []),
       ])
       setRawTables(tablesRes)
       setOrders(ordersRes.map(orderDtoToOrder))
-      const staffUsers = staffRes
-        .filter((s) => s.isActive)
-        .map((s) => ({ id: s.id, name: s.name, role: s.role as User["role"], password: s.pin ?? undefined }))
-      setUsers(staffUsers)
       const session = getStaffSession()
-      if (session && session.expiresAt > Date.now()) {
-        const restored = staffUsers.find((u) => u.id === session.userId)
-        if (restored) setCurrentUser(restored)
+      if (session) {
+        setCurrentUser({ id: session.staffId, name: session.name, role: session.role })
+      } else {
+        setCurrentUser(null)
       }
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Veri yuklenemedi")
@@ -193,7 +200,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (token && rest) {
       setIsLoggedIn(true)
       setRestaurantState(rest)
-      refreshData()
+      void refreshData()
     }
   }, [refreshData])
 
@@ -261,6 +268,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLoadError(null)
     try {
       const res = await api.restaurant.login(email, password)
+      clearStaffSession()
+      setCurrentUser(null)
       setToken(res.accessToken)
       setRestaurant(res.restaurant)
       setRestaurantState(res.restaurant)
@@ -273,18 +282,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [refreshData])
 
-  const selectUser = useCallback((userId: string) => {
-    if (userId === "") {
-      clearStaffSession()
-      setCurrentUser(null)
-      return
-    }
-    const user = users.find((u) => u.id === userId)
-    if (user) {
-      setCurrentUser(user)
-      setStaffSession(userId)
-    }
-  }, [users])
+  const verifyStaffPin = useCallback(
+    async (pin: string): Promise<{ ok: boolean; error?: string }> => {
+      const token = getToken()
+      if (!token) return { ok: false, error: "Restoran oturumu gerekli" }
+      try {
+        const res = await api.staff.verifyPin(token, pin)
+        setStaffSession({
+          staffId: res.staffId,
+          name: res.name,
+          role: res.role,
+          staffToken: res.staffToken,
+        })
+        setCurrentUser({
+          id: res.staffId,
+          name: res.name,
+          role: res.role,
+        })
+        return { ok: true }
+      } catch (e) {
+        return {
+          ok: false,
+          error: e instanceof Error ? e.message : "Gecersiz PIN",
+        }
+      }
+    },
+    [],
+  )
 
   const releaseTableFocus = useCallback(() => {
     const tid = focusTableIdRef.current ?? pendingUnlockTableIdRef.current
@@ -293,7 +317,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     focusTableIdRef.current = null
     if (!tid || !u || !token) return
     void api.tables
-      .sessionUnlock(token, tid, { staffId: u.id })
+      .sessionUnlock(token, tid)
       .then(() => {
         pendingUnlockTableIdRef.current = null
         void pullTables()
@@ -302,6 +326,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // pendingUnlockTableIdRef is kept — will retry on the next logout attempt
       })
   }, [pullTables])
+
+  const staffLogout = useCallback(() => {
+    releaseTableFocus()
+    clearStaffSession()
+    setCurrentUser(null)
+    setActiveTableId(null)
+  }, [releaseTableFocus])
 
   const logout = useCallback(() => {
     releaseTableFocus()
@@ -321,7 +352,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAuthExpiredHandler(() => {
       logout()
     })
-    return () => setAuthExpiredHandler(null)
+    setStaffExpiredHandler(() => {
+      clearStaffSession()
+      setCurrentUser(null)
+      setActiveTableId(null)
+      focusTableIdRef.current = null
+      pendingUnlockTableIdRef.current = null
+    })
+    return () => {
+      setAuthExpiredHandler(null)
+      setStaffExpiredHandler(null)
+    }
   }, [logout])
 
   const requestTableFocus = useCallback(async (tableId: string): Promise<{ ok: boolean; holderName?: string }> => {
@@ -334,7 +375,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const token = getToken()
     if (!token) return { ok: false, holderName: "Baglanti yok" }
     try {
-      const r = await api.tables.sessionLock(token, tableId, { staffId: u.id, staffName: u.name })
+      const r = await api.tables.sessionLock(token, tableId)
       if (!r.ok) {
         return { ok: false, holderName: r.holderName }
       }
@@ -342,21 +383,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       pendingUnlockTableIdRef.current = tableId
       void pullTables()
       return { ok: true }
-    } catch {
-      return { ok: false, holderName: "Baglanti yok" }
+    } catch (e) {
+      return {
+        ok: false,
+        holderName: e instanceof Error && e.message ? e.message : "Baglanti yok",
+      }
     }
   }, [isOffline, pullTables])
 
   const toggleOffline = useCallback(() => {
     setIsOffline((prev) => !prev)
   }, [])
-
-  const staffLogout = useCallback(() => {
-    releaseTableFocus()
-    clearStaffSession()
-    setCurrentUser(null)
-    setActiveTableId(null)
-  }, [releaseTableFocus])
 
   const selectTable = useCallback((tableId: string) => {
     setActiveTableId(tableId)
@@ -386,8 +423,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           fromTableId,
           toTableId,
           itemIds,
-          userId: currentUser?.id,
-          actorDisplayName: currentUser?.name?.trim() || undefined,
         })
         await refreshData()
         return true
@@ -395,7 +430,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return false
       }
     },
-    [refreshData, currentUser?.id, currentUser?.name],
+    [refreshData],
   )
 
   const addToCart = useCallback((item: CartItem) => {
@@ -448,7 +483,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await api.orders.create(token, {
           tableId,
-          userId: currentUser?.id,
           items: cart.map((i) => ({
             productId: i.productId,
             productName: i.productName,
@@ -477,7 +511,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sendOrderFlightRef.current = false
       }
     },
-    [cart, currentUser, tables, refreshData]
+    [cart, tables, refreshData]
   )
 
   const getTableOrders = useCallback(
@@ -530,7 +564,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AppContextType>(
     () => ({
       currentUser,
-      users,
       isLoggedIn,
       isOffline,
       restaurant,
@@ -540,7 +573,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       activeTableId,
       loadError,
       login,
-      selectUser,
+      verifyStaffPin,
       logout,
       staffLogout,
       toggleOffline,
@@ -566,7 +599,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }),
     [
       currentUser,
-      users,
       isLoggedIn,
       isOffline,
       restaurant,
@@ -576,7 +608,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       activeTableId,
       loadError,
       login,
-      selectUser,
+      verifyStaffPin,
       logout,
       staffLogout,
       toggleOffline,
