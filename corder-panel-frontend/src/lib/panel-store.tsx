@@ -26,7 +26,6 @@ import {
   type AuditLog,
   type Branch,
   type PrinterConfig,
-  type BackupRecord,
   type PeriodReport,
   type ProductTrend,
   type HourlyDensity,
@@ -49,7 +48,6 @@ import {
   type CloseCheckResponseDto,
   type CompletedOrderUpdateBody,
   type AuditLogDto,
-  type BackupRecordDto,
   type PrinterConfigDto,
 } from "./api"
 
@@ -104,7 +102,6 @@ interface PanelContextType {
   // Multi-branch & Printers
   branches: Branch[]
   printers: PrinterConfig[]
-  backups: BackupRecord[]
 
   // Advanced Reports
   periodReports: PeriodReport[]
@@ -273,9 +270,6 @@ interface PanelContextType {
   updatePrinterDepartment: (id: string, data: Partial<PrinterDepartment>) => void
   deletePrinterDepartment: (id: string) => void
 
-  // Backups
-  createBackup: () => void
-  
   // Discount
   applyDiscount: (tableId: string, discount: { type: "percent" | "amount" | "ikram"; value: number; reason: string }) => void
   clearDiscount: (tableId: string) => void
@@ -341,7 +335,6 @@ export function PanelProvider({ children }: { children: ReactNode }) {
   const [branches, setBranches] = useState<Branch[]>([])
   const [printers, setPrinters] = useState<PrinterConfig[]>([])
   const [printerDepartments, setPrinterDepartments] = useState<PrinterDepartment[]>([])
-  const [backups, setBackups] = useState<BackupRecord[]>([])
 
   // ---- Advanced Reports ----
   const [periodReports] = useState<PeriodReport[]>([])
@@ -432,8 +425,6 @@ export function PanelProvider({ children }: { children: ReactNode }) {
       category: log.category,
       details: log.details,
       metadata: log.metadata,
-      userId: log.userId,
-      userName: log.userName,
     }).catch(console.error)
   }, [token])
 
@@ -457,9 +448,8 @@ export function PanelProvider({ children }: { children: ReactNode }) {
     if (!token) return
     void Promise.all([
       api.technical.listAuditLogs(token, { limit: 1000 }).catch(() => [] as AuditLogDto[]),
-      api.technical.listBackups(token).catch(() => [] as BackupRecordDto[]),
       api.technical.listPrinters(token).catch(() => [] as PrinterConfigDto[]),
-    ]).then(([logs, bks, prs]) => {
+    ]).then(([logs, prs]) => {
       setAuditLogs(
         logs.map((l) => ({
           id: l.id,
@@ -470,16 +460,6 @@ export function PanelProvider({ children }: { children: ReactNode }) {
           details: l.details,
           metadata: l.metadata ?? undefined,
           createdAt: new Date(l.createdAt),
-        })),
-      )
-      setBackups(
-        bks.map((b) => ({
-          id: b.id,
-          type: b.type,
-          size: b.size,
-          createdAt: new Date(b.createdAt),
-          status: b.status,
-          notes: b.notes ?? undefined,
         })),
       )
       setPrinters(
@@ -1644,7 +1624,7 @@ export function PanelProvider({ children }: { children: ReactNode }) {
         supplierName: po.supplierName,
         items: po.items,
         notes: po.notes,
-        status: po.status,
+        status: po.status === "draft" ? "draft" : "ordered",
       })
       .then((created) => {
         setPurchaseOrders((prev) => [
@@ -1935,7 +1915,7 @@ export function PanelProvider({ children }: { children: ReactNode }) {
           port: created.port ?? undefined,
           department: created.department ?? undefined,
           status: created.status,
-          paperWidth: created.paperWidth,
+          paperWidth: created.paperWidth === 58 ? 58 : 80,
           autoCut: created.autoCut,
         },
       ])
@@ -1995,33 +1975,6 @@ export function PanelProvider({ children }: { children: ReactNode }) {
   const deletePrinterDepartment = useCallback((id: string) => { 
     setPrinterDepartments((prev) => prev.filter((pd) => pd.id !== id)) 
   }, [])
-  
-  // ========== BACKUPS ==========
-  const createBackup = useCallback(() => {
-    if (!token) return
-    api.technical.createBackup(token, {
-      type: "manual",
-      notes: "Manuel yedekleme",
-    }).then((b) => {
-      setBackups((prev) => [
-        {
-          id: b.id,
-          type: b.type,
-          size: b.size,
-          createdAt: new Date(b.createdAt),
-          status: b.status,
-          notes: b.notes ?? undefined,
-        },
-        ...prev,
-      ])
-      logActivity({
-        action: "backup_created",
-        category: "settings",
-        details: `Manuel yedek alindi (${b.size})`,
-        metadata: { backupId: b.id, status: b.status, size: b.size },
-      })
-    }).catch(console.error)
-  }, [token, logActivity])
 
   // ========== DISCOUNT ==========
   const applyDiscount = useCallback((tableId: string, discount: { type: "percent" | "amount" | "ikram"; value: number; reason: string }) => {
@@ -2236,7 +2189,7 @@ export function PanelProvider({ children }: { children: ReactNode }) {
       closedTables, cancelledItems, dailyReport, settings,
       stockMaterials, suppliers, stockMovements, purchaseOrders, inventoryCounts,
       cashShifts, cashTransactions, openAccounts, ledgerCustomers, currentShift,
-      notifications, auditLogs, branches, printers, backups,
+      notifications, auditLogs, branches, printers,
       periodReports, productTrends, hourlyDensity, campaigns,
       setCurrentUser, getTableOrders, getTableTotal, moveTable, moveOrderItems,
       closeTableWithPayment, addQuickSale, createTableOrder, cancelOrderItem, assignItemsToLedger, revertLedgerOrderItem,
@@ -2256,7 +2209,6 @@ export function PanelProvider({ children }: { children: ReactNode }) {
       addAuditLog, switchBranch, addBranch, updateBranch,
   addPrinter, updatePrinter, deletePrinter, testPrinter,
   printerDepartments, addPrinterDepartment, updatePrinterDepartment, deletePrinterDepartment,
-  createBackup,
       applyDiscount, clearDiscount, splitBillByPerson, splitBillByItems, clearAllNotifications,
       addCampaign, updateCampaign, deleteCampaign, reorderCampaigns, reorderCategories, reorderProducts,
     }}>

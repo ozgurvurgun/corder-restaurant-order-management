@@ -27,7 +27,7 @@ import { PurchaseOrderEntity } from './domain/purchase-order.entity';
 import { InventoryCountEntity } from './domain/inventory-count.entity';
 import { PrinterConfigEntity } from './domain/printer-config.entity';
 import { AuditLogEntity } from './domain/audit-log.entity';
-import { BackupRecordEntity } from './domain/backup-record.entity';
+import { PrintJobEntity } from './domain/print-job.entity';
 import { RestaurantAuthService } from './application/restaurant-auth.service';
 import { CashShiftService } from './application/cash-shift.service';
 import { CashTransactionsService } from './application/cash-transactions.service';
@@ -49,7 +49,6 @@ import { InventoryCountsService } from './application/inventory-counts.service';
 import { RestaurantSettingsService } from './application/restaurant-settings.service';
 import { PrintersService } from './application/printers.service';
 import { AuditLogsService } from './application/audit-logs.service';
-import { BackupsService } from './application/backups.service';
 import { RestaurantAuthController } from './api/restaurant-auth.controller';
 import { TablesController } from './api/tables.controller';
 import { OrdersController } from './api/orders.controller';
@@ -106,7 +105,7 @@ import {
       InventoryCountEntity,
       PrinterConfigEntity,
       AuditLogEntity,
-      BackupRecordEntity,
+      PrintJobEntity,
     ]),
     MenuModule,
     PassportModule.register({ defaultStrategy: 'restaurant-jwt' }),
@@ -163,7 +162,6 @@ import {
     RestaurantSettingsService,
     PrintersService,
     AuditLogsService,
-    BackupsService,
     R2UploadService,
     PrintAgentGuard,
     PanelRootGuard,

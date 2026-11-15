@@ -12,16 +12,19 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
-import { extname } from 'path';
-import { randomBytes } from 'crypto';
+import { randomUUID } from 'crypto';
 import { mkdir, writeFile } from 'fs/promises';
-import { dirname, join } from 'path';
+import { dirname, resolve, sep } from 'path';
 import type { Request } from 'express';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
 import { PanelRootGuard } from '../infrastructure/panel-root.guard';
 import { R2UploadService } from '../infrastructure/r2-upload.service';
+import {
+  detectImageMimeFromMagicBytes,
+  validateOriginalImageFilename,
+} from '../../common/security/image-upload';
 
-const uploadsDir = () => join(process.cwd(), 'uploads');
+const uploadsDir = () => resolve(process.cwd(), 'uploads');
 
 type RestaurantUser = { restaurantId: string; slug?: string };
 
@@ -37,13 +40,7 @@ function sanitizeTenantSegment(slug: string): string {
 
 function tenantPrefix(user: RestaurantUser): string {
   if (user.slug?.trim()) return sanitizeTenantSegment(user.slug);
-  return user.restaurantId;
-}
-
-function buildObjectKey(tenant: string, originalName: string): string {
-  const ext = extname(originalName) || '.bin';
-  const suffix = `${Date.now()}-${randomBytes(4).toString('hex')}${ext}`;
-  return `${tenant}/menu/${suffix}`;
+  return sanitizeTenantSegment(user.restaurantId);
 }
 
 @Controller('restaurant/upload')
@@ -59,21 +56,46 @@ export class UploadController {
       storage: memoryStorage(),
       limits: { fileSize: 5 * 1024 * 1024 },
       fileFilter: (_req, file, cb) => {
-        const allowed = /^image\/(jpeg|png|gif|webp)$/i.test(file.mimetype);
-        if (allowed) cb(null, true);
-        else cb(new BadRequestException('Only images (jpeg, png, gif, webp) allowed'), false);
+        const parsed = validateOriginalImageFilename(file.originalname);
+        if (!parsed) {
+          cb(
+            new BadRequestException(
+              'Gecersiz dosya adi veya uzantisi (yalnizca jpg, jpeg, png, gif, webp)',
+            ),
+            false,
+          );
+          return;
+        }
+        cb(null, true);
       },
     }),
   )
-  async upload(@Req() req: Request & { user: RestaurantUser }, @UploadedFile() file: Express.Multer.File) {
-    if (!file?.buffer?.length) throw new BadRequestException('No file uploaded');
+  async upload(
+    @Req() req: Request & { user: RestaurantUser },
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('Dosya yuklenmedi');
+    }
+
+    const parsed = validateOriginalImageFilename(file.originalname);
+    if (!parsed) {
+      throw new BadRequestException(
+        'Gecersiz dosya adi veya uzantisi (yalnizca jpg, jpeg, png, gif, webp)',
+      );
+    }
+
+    const detectedMime = detectImageMimeFromMagicBytes(file.buffer);
+    if (!detectedMime || detectedMime !== parsed.expectedMime) {
+      throw new BadRequestException('Dosya icerigi uzantisi ile uyusmuyor veya gecerli bir gorsel degil');
+    }
 
     const tenant = tenantPrefix(req.user);
-    const key = buildObjectKey(tenant, file.originalname);
+    const key = `${tenant}/menu/${randomUUID()}${parsed.ext}`;
 
     if (this.r2.isConfigured()) {
       try {
-        const url = await this.r2.putObject(key, file.buffer, file.mimetype);
+        const url = await this.r2.putObject(key, file.buffer, detectedMime);
         return { url };
       } catch (err: unknown) {
         this.logger.error('R2 upload failed', err instanceof Error ? err.stack : err);
@@ -86,10 +108,14 @@ export class UploadController {
           );
         }
         if (name === 'InvalidAccessKeyId' || name === 'SignatureDoesNotMatch') {
-          throw new BadRequestException('R2 anahtarlari gecersiz veya yanlis; ACCESS_KEY / SECRET kontrol edin.');
+          throw new BadRequestException(
+            'R2 anahtarlari gecersiz veya yanlis; ACCESS_KEY / SECRET kontrol edin.',
+          );
         }
         if (name === 'NoSuchBucket' || /no such bucket/i.test(msg)) {
-          throw new BadRequestException('R2 bucket bulunamadi: R2_BUCKET_NAME ve hesap eslesiyor mu?');
+          throw new BadRequestException(
+            'R2 bucket bulunamadi: R2_BUCKET_NAME ve hesap eslesiyor mu?',
+          );
         }
         if (process.env.UPLOAD_DEBUG === 'true') {
           throw new InternalServerErrorException(`${name}: ${msg}`);
@@ -98,7 +124,11 @@ export class UploadController {
       }
     }
 
-    const dest = join(uploadsDir(), key);
+    const rootDir = uploadsDir();
+    const dest = resolve(rootDir, key);
+    if (!dest.startsWith(`${rootDir}${sep}`)) {
+      throw new BadRequestException('Gecersiz yukleme hedefi');
+    }
     try {
       await mkdir(dirname(dest), { recursive: true });
       await writeFile(dest, file.buffer);

@@ -12,14 +12,7 @@ function httpBaseUrl(config) {
   }
 }
 
-/**
- * Acknowledges to the server that the kitchen ticket was printed (clears the queue even if WS drops).
- * Retries a few times.
- */
-async function ackKitchenPrinted(config, orderId) {
-  const base = httpBaseUrl(config)
-  if (!base || !orderId) return false
-  const url = `${base}/restaurant/print-agent/orders/${encodeURIComponent(orderId)}/kitchen-printed`
+async function patchWithRetry(config, url, logLabel, meta) {
   let lastErr = ""
   for (let i = 0; i < 6; i++) {
     try {
@@ -31,7 +24,7 @@ async function ackKitchenPrinted(config, orderId) {
         },
       })
       if (res.ok) {
-        if (i > 0) info("Kitchen ack succeeded after retry", { orderId, attempt: i + 1 })
+        if (i > 0) info(`${logLabel} ack succeeded after retry`, { ...meta, attempt: i + 1 })
         return true
       }
       lastErr = await res.text()
@@ -40,8 +33,28 @@ async function ackKitchenPrinted(config, orderId) {
     }
     await new Promise((r) => setTimeout(r, 350 * (i + 1)))
   }
-  warn("Kitchen ack failed after retries", { orderId, lastErr: lastErr?.slice?.(0, 200) })
+  warn(`${logLabel} ack failed after retries`, { ...meta, lastErr: lastErr?.slice?.(0, 200) })
   return false
+}
+
+/**
+ * Acknowledges to the server that the kitchen ticket was printed (clears the queue even if WS drops).
+ */
+async function ackKitchenPrinted(config, orderId) {
+  const base = httpBaseUrl(config)
+  if (!base || !orderId) return false
+  const url = `${base}/restaurant/print-agent/orders/${encodeURIComponent(orderId)}/kitchen-printed`
+  return patchWithRetry(config, url, "Kitchen", { orderId })
+}
+
+/**
+ * Acknowledges to the server that a receipt or kitchen_cancel print job was printed.
+ */
+async function ackPrintJobPrinted(config, jobId) {
+  const base = httpBaseUrl(config)
+  if (!base || !jobId) return false
+  const url = `${base}/restaurant/print-agent/print-jobs/${encodeURIComponent(jobId)}/printed`
+  return patchWithRetry(config, url, "PrintJob", { jobId })
 }
 
 async function fetchPendingKitchenOrders(config) {
@@ -64,4 +77,30 @@ async function fetchPendingKitchenOrders(config) {
   }
 }
 
-module.exports = { httpBaseUrl, ackKitchenPrinted, fetchPendingKitchenOrders }
+async function fetchPendingPrintJobs(config) {
+  const base = httpBaseUrl(config)
+  if (!base) return []
+  const url = `${base}/restaurant/print-agent/pending-print-jobs`
+  try {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${config.agentToken}` },
+    })
+    if (!res.ok) {
+      warn("pending-print-jobs HTTP failed", { status: res.status })
+      return []
+    }
+    const data = await res.json()
+    return Array.isArray(data) ? data : []
+  } catch (e) {
+    warn("pending-print-jobs HTTP error", { error: e instanceof Error ? e.message : String(e) })
+    return []
+  }
+}
+
+module.exports = {
+  httpBaseUrl,
+  ackKitchenPrinted,
+  ackPrintJobPrinted,
+  fetchPendingKitchenOrders,
+  fetchPendingPrintJobs,
+}

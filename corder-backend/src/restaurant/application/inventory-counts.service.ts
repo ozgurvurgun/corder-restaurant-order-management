@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { InventoryCountEntity } from '../domain/inventory-count.entity';
@@ -51,14 +51,21 @@ export class InventoryCountsService {
     materialId: string,
     actual: number,
   ) {
+    const actualNum = Number(actual);
+    if (!Number.isFinite(actualNum)) {
+      throw new BadRequestException('Sayim miktari gecersiz.');
+    }
     const count = await this.repo.findOne({ where: { id: countId, restaurantId } });
     if (!count) throw new NotFoundException('Sayım kaydı bulunamadı.');
+    if (count.status === 'completed') {
+      throw new BadRequestException('Tamamlanmis sayim guncellenemez.');
+    }
     const items = count.items.map((it) =>
       it.materialId === materialId
         ? {
             ...it,
-            actualStock: actual,
-            difference: actual - it.expectedStock,
+            actualStock: actualNum,
+            difference: Number((actualNum - Number(it.expectedStock)).toFixed(3)),
           }
         : it,
     );
@@ -67,25 +74,35 @@ export class InventoryCountsService {
   }
 
   async complete(restaurantId: string, countId: string, userName: string) {
-    const count = await this.repo.findOne({ where: { id: countId, restaurantId } });
-    if (!count) throw new NotFoundException('Sayım kaydı bulunamadı.');
-    if (count.status === 'completed') return count;
-
-    for (const item of count.items) {
-      if (item.difference === 0) continue;
-      const diff = item.difference;
-      await this.stockMovements.create(restaurantId, {
-        materialId: item.materialId,
-        materialName: item.materialName,
-        type: 'count-adjustment',
-        quantity: Math.abs(diff),
-        createdBy: userName,
-        reason: `Sayım farkı: ${diff > 0 ? '+' : ''}${diff}`,
+    return this.repo.manager.transaction(async (em) => {
+      const count = await em.findOne(InventoryCountEntity, {
+        where: { id: countId, restaurantId },
+        lock: { mode: 'pessimistic_write' },
       });
-    }
+      if (!count) throw new NotFoundException('Sayım kaydı bulunamadı.');
+      if (count.status === 'completed') return count;
 
-    count.status = 'completed';
-    return this.repo.save(count);
+      const updatedItems = [];
+      for (const item of count.items) {
+        const diff = Number(
+          (Number(item.actualStock) - Number(item.expectedStock)).toFixed(3),
+        );
+        updatedItems.push({ ...item, difference: diff });
+        if (diff === 0) continue;
+
+        await this.stockMovements.applyMovement(em, restaurantId, {
+          materialId: item.materialId,
+          materialName: item.materialName,
+          type: 'count-adjustment',
+          quantity: diff,
+          createdBy: userName,
+          reason: `Sayım farkı: ${diff > 0 ? '+' : ''}${diff}`,
+        });
+      }
+
+      count.items = updatedItems;
+      count.status = 'completed';
+      return em.save(InventoryCountEntity, count);
+    });
   }
 }
-

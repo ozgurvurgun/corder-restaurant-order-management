@@ -5,6 +5,7 @@ import * as bcrypt from 'bcryptjs';
 import { RestaurantEntity } from '../domain/restaurant.entity';
 import { CreateRestaurantDto } from '../api/dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from '../api/dto/update-restaurant.dto';
+import { hashPrintAgentToken } from '../../common/security/print-agent-token';
 
 @Injectable()
 export class RestaurantService {
@@ -31,15 +32,17 @@ export class RestaurantService {
     const slug = dto.slug.toLowerCase().trim();
     const existing = await this.repo.findOne({ where: { slug } });
     if (existing) throw new ConflictException('Slug already in use');
-    const printAgentToken = dto.printAgentToken?.trim() || null;
-    if (printAgentToken) {
-      const tokenOwner = await this.repo.findOne({ where: { printAgentToken } });
+    const { printAgentToken: rawPrintAgentToken, ...restDto } = dto;
+    const rawToken = rawPrintAgentToken?.trim() || null;
+    const printAgentTokenHash = rawToken ? hashPrintAgentToken(rawToken) : null;
+    if (printAgentTokenHash) {
+      const tokenOwner = await this.repo.findOne({ where: { printAgentTokenHash } });
       if (tokenOwner) throw new ConflictException('Print agent token already in use');
     }
     const entity = this.repo.create({
-      ...dto,
+      ...restDto,
       slug,
-      printAgentToken,
+      printAgentTokenHash,
     });
     return this.repo.save(entity);
   }
@@ -70,14 +73,15 @@ export class RestaurantService {
       entity.terminalPasswordHash = await bcrypt.hash(dto.terminalPassword, 10);
     }
     if (dto.printAgentToken !== undefined) {
-      const token = dto.printAgentToken?.trim() || null;
-      if (token && token !== entity.printAgentToken) {
-        const tokenOwner = await this.repo.findOne({ where: { printAgentToken: token } });
+      const rawToken = dto.printAgentToken?.trim() || null;
+      const nextHash = rawToken ? hashPrintAgentToken(rawToken) : null;
+      if (nextHash && nextHash !== entity.printAgentTokenHash) {
+        const tokenOwner = await this.repo.findOne({ where: { printAgentTokenHash: nextHash } });
         if (tokenOwner && tokenOwner.id !== entity.id) {
           throw new ConflictException('Print agent token already in use');
         }
       }
-      entity.printAgentToken = token;
+      entity.printAgentTokenHash = nextHash;
     }
     return this.repo.save(entity);
   }

@@ -54,27 +54,33 @@ export class PurchaseOrdersService {
   }
 
   async markReceived(restaurantId: string, id: string, userName: string) {
-    const po = await this.repo.findOne({ where: { id, restaurantId } });
-    if (!po) throw new NotFoundException('Satın alma kaydı bulunamadı.');
-    if (po.status === 'received') return po;
-
-    for (const item of po.items) {
-      await this.stockMovements.create(restaurantId, {
-        materialId: item.materialId,
-        materialName: item.materialName,
-        type: 'in',
-        quantity: item.quantity,
-        unitCost: item.unitCost,
-        totalCost: item.quantity * item.unitCost,
-        supplierId: po.supplierId,
-        createdBy: userName,
-        reason: `Satın alma: ${po.supplierName}`,
+    return this.repo.manager.transaction(async (em) => {
+      const po = await em.findOne(PurchaseOrderEntity, {
+        where: { id, restaurantId },
+        lock: { mode: 'pessimistic_write' },
       });
-    }
+      if (!po) throw new NotFoundException('Satın alma kaydı bulunamadı.');
+      if (po.status === 'received') return po;
 
-    po.status = 'received';
-    po.receivedAt = new Date();
-    return this.repo.save(po);
+      for (const item of po.items) {
+        const qty = Number(item.quantity);
+        const unitCost = Number(item.unitCost);
+        await this.stockMovements.applyMovement(em, restaurantId, {
+          materialId: item.materialId,
+          materialName: item.materialName,
+          type: 'in',
+          quantity: qty,
+          unitCost,
+          totalCost: qty * unitCost,
+          supplierId: po.supplierId,
+          createdBy: userName,
+          reason: `Satın alma: ${po.supplierName}`,
+        });
+      }
+
+      po.status = 'received';
+      po.receivedAt = new Date();
+      return em.save(PurchaseOrderEntity, po);
+    });
   }
 }
-

@@ -8,7 +8,7 @@ import {
   ChevronRight,
 } from "lucide-react"
 import { useApp } from "@/lib/store"
-import { formatCurrency } from "@/lib/services"
+import { formatCurrency } from "@/lib/format"
 import { useToast } from "@/components/ios-toast"
 import { ConfirmDialog } from "./confirm-dialog"
 

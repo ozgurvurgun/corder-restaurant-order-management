@@ -5,6 +5,7 @@ import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import { AppModule } from './app.module';
 import { buildCorsOptions } from './common/security/cors.config';
+import { contentTypeForUploadPath } from './common/security/image-upload';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -31,7 +32,13 @@ async function bootstrap() {
   app.enableCors(buildCorsOptions());
   const uploadsPath = join(process.cwd(), 'uploads');
   if (!existsSync(uploadsPath)) mkdirSync(uploadsPath, { recursive: true });
-  app.useStaticAssets(uploadsPath, { prefix: '/uploads' });
+  app.useStaticAssets(uploadsPath, {
+    prefix: '/uploads',
+    setHeaders: (res, filePath) => {
+      res.setHeader('Content-Type', contentTypeForUploadPath(filePath));
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+    },
+  });
   const port = process.env.PORT ?? 4000;
   await app.listen(port);
 }

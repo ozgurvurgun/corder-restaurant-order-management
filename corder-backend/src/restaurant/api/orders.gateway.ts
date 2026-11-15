@@ -9,6 +9,7 @@ import { RestaurantTokenPayload } from '../application/restaurant-auth.service';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 import { TableService } from '../application/table.service';
 import { buildCorsOptions } from '../../common/security/cors.config';
+import { hashPrintAgentToken } from '../../common/security/print-agent-token';
 
 function getRestaurantRoom(restaurantId: string) {
   return `restaurant:${restaurantId}`;
@@ -67,7 +68,8 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // If not a JWT, fall through to static print-agent token check.
     }
 
-    const restaurant = await this.restaurantRepo.findOne({ where: { printAgentToken: token } });
+    const tokenHash = hashPrintAgentToken(token);
+    const restaurant = await this.restaurantRepo.findOne({ where: { printAgentTokenHash: tokenHash } });
     if (!restaurant || restaurant.status !== 'active') {
       client.disconnect(true);
       return;

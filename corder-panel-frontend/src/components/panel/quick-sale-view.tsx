@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react"
 import { usePanelStore } from "@/lib/panel-store"
-import { formatCurrency } from "@/lib/services"
+import { formatCurrency } from "@/lib/format"
 import { Search, X, ShoppingBag, Banknote, CreditCard, UtensilsCrossed, Smartphone, Minus, Plus, Trash2, Printer } from "lucide-react"
 import type { PaymentMethod, PanelCategory, PanelProduct } from "@/lib/panel-types"
 

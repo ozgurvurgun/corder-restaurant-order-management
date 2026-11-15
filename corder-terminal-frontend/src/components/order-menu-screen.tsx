@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react"
 import { ChevronLeft, ShoppingCart, Search, X, Utensils, AlertTriangle } from "lucide-react"
 import { useApp } from "@/lib/store"
-import { formatCurrency } from "@/lib/services"
+import { formatCurrency } from "@/lib/format"
 import { useToast } from "@/components/ios-toast"
 import { api, getToken } from "@/lib/api"
 import type { MenuBusinessDto, MenuCategoryTree } from "@/lib/api"

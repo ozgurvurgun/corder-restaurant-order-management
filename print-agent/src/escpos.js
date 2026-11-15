@@ -53,6 +53,19 @@ function kvLine(label, value, width) {
   return line.length > width ? `${line.slice(0, width)}\n` : `${line}\n`
 }
 
+function kvWrappedLines(label, value, width) {
+  const leftPart = `${trSafe(label)}:`.padEnd(14, " ")
+  const indent = leftPart.length + 1
+  const maxValWidth = Math.max(8, width - indent)
+  const lines = wrapWords(value || "-", maxValWidth)
+  if (!lines.length) {
+    return `${leftPart} -\n`
+  }
+  return lines
+    .map((seg, idx) => (idx === 0 ? `${leftPart} ${seg}\n` : `${" ".repeat(indent)}${seg}\n`))
+    .join("")
+}
+
 function hrLine(char, width) {
   const c = char && char.length ? char[0] : "-"
   return `${c.repeat(width)}\n`
@@ -168,6 +181,34 @@ function tableHeaderRow(width) {
   return `${hQty}${hPrice}${COL_GAP}${hName}\n`
 }
 
+function cancelItemRows(qty, name, width) {
+  const qtyW = 8
+  const gapLen = COL_GAP.length
+  const nameW = Math.max(1, width - qtyW - gapLen)
+  const qStr = colQty(String(Number(qty) || 0), qtyW)
+  const nm = trSafe(name).trim()
+  let nameLines = nm ? wrapWords(nm, nameW) : [""]
+  if (!nameLines.length) nameLines = [""]
+
+  const contPrefix = " ".repeat(qtyW) + COL_GAP
+  const lines = []
+  for (let i = 0; i < nameLines.length; i++) {
+    const seg = nameLines[i].slice(0, nameW).padEnd(nameW, " ")
+    if (i === 0) lines.push(`${qStr}${COL_GAP}${seg}`)
+    else lines.push(`${contPrefix}${seg}`)
+  }
+  return `${lines.join("\n")}\n`
+}
+
+function cancelHeaderRow(width) {
+  const qtyW = 8
+  const gapLen = COL_GAP.length
+  const nameW = Math.max(1, width - qtyW - gapLen)
+  const hQty = colQty("Adet", qtyW)
+  const hName = trSafe("Urun").slice(0, nameW).padEnd(nameW, " ")
+  return `${hQty}${COL_GAP}${hName}\n`
+}
+
 function textBuf(s) {
   return Buffer.from(String(s), "ascii")
 }
@@ -199,7 +240,7 @@ function escposBytes(bodyBuffer, feedLinesBeforeCut = 6) {
   return Buffer.concat([init, bodyBuffer, tailLf, feed, cut])
 }
 
-function buildOrderTicket(payload, options = {}) {
+function buildStandardTicket(payload, options = {}, heading = "SIPARIS") {
   const width = clampWidth(options.charsPerLine)
   const footerLine = String(options.footerLine || "").trim()
   const feedBeforeCut = Math.min(255, Math.max(0, Number(options.feedLinesBeforeCut) || 6))
@@ -221,7 +262,7 @@ function buildOrderTicket(payload, options = {}) {
 
   chunks.push(BOLD_ON)
   chunks.push(SIZE_DOUBLE_HEIGHT)
-  push("SIPARIS\n")
+  push(`${trSafe(heading)}\n`)
   chunks.push(SIZE_NORMAL)
   chunks.push(BOLD_OFF)
   push("\n")
@@ -262,11 +303,67 @@ function buildOrderTicket(payload, options = {}) {
 }
 
 function buildKitchenTicket(payload, options) {
-  return buildOrderTicket(payload, options || {})
+  return buildStandardTicket(payload, options || {}, "SIPARIS")
 }
 
 function buildReceipt(payload, options) {
-  return buildOrderTicket(payload, options || {})
+  return buildStandardTicket(payload, options || {}, "HESAP FISI")
 }
 
-module.exports = { buildKitchenTicket, buildReceipt }
+function buildKitchenCancelTicket(payload, options = {}) {
+  const width = clampWidth(options.charsPerLine)
+  const footerLine = String(options.footerLine || "").trim()
+  const feedBeforeCut = Math.min(255, Math.max(0, Number(options.feedLinesBeforeCut) || 6))
+
+  const chunks = []
+  const push = (s) => chunks.push(textBuf(s))
+
+  const stamp = String(options.ticketStamp || "").trim()
+  if (stamp) {
+    push(centerLine(stamp, width))
+    push("\n")
+  }
+
+  chunks.push(BOLD_ON)
+  chunks.push(SIZE_DOUBLE_HEIGHT)
+  push("IPTAL\n")
+  chunks.push(SIZE_NORMAL)
+  chunks.push(BOLD_OFF)
+  push("\n")
+
+  push(kvLine("Tarih/Saat", formatTicketDate(payload.createdAt), width))
+  push(kvLine("Masa", payload.tableName || "-", width))
+  push(kvLine("Iptal Eden", payload.cancelledBy || payload.waiterName || "-", width))
+  push(kvWrappedLines("Sebep", payload.cancelReason || "-", width))
+  push("\n")
+
+  push(hrLine("=", width))
+  chunks.push(BOLD_ON)
+  push(cancelHeaderRow(width))
+  chunks.push(BOLD_OFF)
+  push(hrLine("=", width))
+
+  const nameColumnIndent = 8 + COL_GAP.length
+  const showLineNotes = options.includeLineNotes !== false
+
+  for (const item of payload.items || []) {
+    const qty = Number(item.quantity || 0)
+    const name = item.productName || item.name || "Urun"
+    push(cancelItemRows(qty, name, width))
+    if (showLineNotes) {
+      const nb = noteBlock(item.note, width, nameColumnIndent)
+      if (nb) push(nb)
+    }
+  }
+
+  push(hrLine("=", width))
+
+  if (footerLine) {
+    push("\n")
+    push(centerLine(footerLine, width))
+  }
+
+  return escposBytes(Buffer.concat(chunks), feedBeforeCut)
+}
+
+module.exports = { buildKitchenTicket, buildReceipt, buildKitchenCancelTicket }

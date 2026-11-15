@@ -3,7 +3,7 @@ import { ChevronLeft, UtensilsCrossed, Wine, Hash, Merge } from "lucide-react"
 import { useApp } from "@/lib/store"
 import { useToast } from "@/components/ios-toast"
 import { ConfirmDialog } from "./confirm-dialog"
-import { formatCurrency } from "@/lib/services"
+import { formatCurrency } from "@/lib/format"
 import type { Table } from "@/lib/types"
 
 interface MoveOrderItemScreenProps {

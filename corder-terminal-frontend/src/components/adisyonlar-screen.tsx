@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react"
 import { ChevronLeft, ShoppingCart, ListOrdered, User, Clock, ArrowRightLeft, CornerUpRight } from "lucide-react"
 import { useApp } from "@/lib/store"
-import { formatCurrency } from "@/lib/services"
+import { formatCurrency } from "@/lib/format"
 interface AdisyonlarScreenProps {
   tableId: string
   onBack: () => void

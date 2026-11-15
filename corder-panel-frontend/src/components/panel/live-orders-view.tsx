@@ -12,7 +12,6 @@ function formatCurrency(n: number) { return n.toLocaleString("tr-TR", { minimumF
 function formatTime(d: Date) { return new Date(d).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) }
 function formatDate(d: Date) { return new Date(d).toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" }) }
 function formatDateTime(d: Date) { return `${formatDate(d)} ${formatTime(d)}` }
-function formatDateForInput(d: Date) { return d.toISOString().split("T")[0] }
 
 function orderWaiterLabel(
   order: PanelOrder,
@@ -27,7 +26,7 @@ const ITEMS_PER_PAGE = 10
 
 export default function CompletedOrdersView() {
   const { closedTables, reprintReceipt, users, ledgerCustomers } = usePanelStore()
-  const { locale, t } = usePanelI18n()
+  const { locale } = usePanelI18n()
   const { showToast } = usePanelToast()
   const [filterWaiter, setFilterWaiter] = useState("Tumu")
   const [filterTable, setFilterTable] = useState("Tumu")

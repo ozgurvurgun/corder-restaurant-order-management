@@ -4,7 +4,7 @@ import { usePanelI18n } from "@/lib/panel-i18n"
 import { usePanelAuth } from "@/lib/panel-auth"
 import { api } from "@/lib/api"
 import { usePanelToast } from "./panel-toast"
-import { Plus, Pencil, Trash2, X, Image as ImageIcon, Megaphone, Eye, EyeOff, GripVertical } from "lucide-react"
+import { Plus, Pencil, Trash2, X, Megaphone, Eye, EyeOff } from "lucide-react"
 import ImageUpload from "./image-upload"
 import type { Campaign } from "@/lib/panel-types"
 

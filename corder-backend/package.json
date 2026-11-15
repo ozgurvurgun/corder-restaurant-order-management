@@ -7,7 +7,9 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/main"
+    "start:prod": "node dist/main",
+    "migration:run": "node ./node_modules/typeorm/cli.js migration:run -d dist/data-source.js",
+    "migration:revert": "node ./node_modules/typeorm/cli.js migration:revert -d dist/data-source.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1030.0",

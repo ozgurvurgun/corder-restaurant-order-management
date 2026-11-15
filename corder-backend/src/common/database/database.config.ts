@@ -10,8 +10,6 @@ export class DatabaseConfig implements TypeOrmOptionsFactory {
 
   createTypeOrmOptions(): TypeOrmModuleOptions {
     const isProd = this.config.get('NODE_ENV') === 'production';
-    const skipMigrations = this.config.get<string>('SKIP_MIGRATIONS_ON_START') === 'true';
-    const runMigrations = isProd && !skipMigrations;
     const password = isProd
       ? requireConfigSecret(this.config, 'DB_PASSWORD')
       : (this.config.get<string>('DB_PASSWORD') ?? '');
@@ -24,10 +22,10 @@ export class DatabaseConfig implements TypeOrmOptionsFactory {
       password,
       database: this.config.get('DB_NAME', 'corder'),
       autoLoadEntities: true,
-      synchronize: !isProd,
+      synchronize: this.config.get('DB_SYNCHRONIZE') === 'true',
       logging: this.config.get('NODE_ENV') === 'development',
       migrations: [join(__dirname, '..', '..', 'migrations', '*.js')],
-      migrationsRun: runMigrations,
+      migrationsRun: false,
     };
   }
 }

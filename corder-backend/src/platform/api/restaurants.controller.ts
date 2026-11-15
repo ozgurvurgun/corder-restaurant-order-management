@@ -5,6 +5,13 @@ import { UpdateRestaurantDto } from './dto/update-restaurant.dto';
 import { PlatformJwtGuard } from '../infrastructure/platform-jwt.guard';
 import { CategoryService } from '../../restaurant/application/category.service';
 
+function sanitizeRestaurant<
+  T extends { terminalPasswordHash?: unknown; printAgentTokenHash?: unknown },
+>(r: T) {
+  const { terminalPasswordHash, printAgentTokenHash, ...rest } = r;
+  return rest;
+}
+
 @Controller('platform/restaurants')
 @UseGuards(PlatformJwtGuard)
 export class RestaurantsController {
@@ -16,10 +23,7 @@ export class RestaurantsController {
   @Get()
   async findAll() {
     const list = await this.service.findAll();
-    return list.map((r) => {
-      const { terminalPasswordHash, ...rest } = r;
-      return rest;
-    });
+    return list.map(sanitizeRestaurant);
   }
 
   /** Product categories defined in the panel (IDs for printer mapping, etc.). */
@@ -32,18 +36,19 @@ export class RestaurantsController {
   @Get(':id')
   async findOne(@Param('id') id: string) {
     const r = await this.service.findOne(id);
-    const { terminalPasswordHash, ...rest } = r;
-    return rest;
+    return sanitizeRestaurant(r);
   }
 
   @Post()
-  create(@Body() dto: CreateRestaurantDto) {
-    return this.service.create(dto);
+  async create(@Body() dto: CreateRestaurantDto) {
+    const created = await this.service.create(dto);
+    return sanitizeRestaurant(created);
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateRestaurantDto) {
-    return this.service.update(id, dto);
+  async update(@Param('id') id: string, @Body() dto: UpdateRestaurantDto) {
+    const updated = await this.service.update(id, dto);
+    return sanitizeRestaurant(updated);
   }
 
   @Delete(':id')

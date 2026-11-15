@@ -24,7 +24,7 @@ export interface PanelCategory {
   slug: string
   order: number
   /** Empty or missing = root category */
-  parentId?: string
+  parentId?: string | null
   showInTerminal: boolean // Show in terminal?
   showInMenu: boolean     // Show in menu?
   showInQuickSale: boolean // Show in quick sale?
@@ -44,6 +44,7 @@ export interface PanelProduct {
   categoryId: string
   image?: string
   inStock: boolean
+  order?: number
   description?: string
   costPrice?: number // cost price
   ingredients?: ProductIngredient[] // linked stock materials
@@ -92,7 +93,7 @@ export function itemIsLedgerLike(i: PanelOrderItem): boolean {
 }
 
 // ---- TABLES ----
-export type PanelTableStatus = "empty" | "occupied" | "ordering"
+export type PanelTableStatus = "empty" | "occupied" | "ordering" | "checkout"
 
 export interface PanelTable {
   id: string
@@ -455,16 +456,6 @@ export interface RestaurantSettings {
   showProductImages?: boolean
   sidebarCollapsed?: boolean
   quickActionsEnabled?: boolean
-}
-
-// ---- BACKUP ----
-export interface BackupRecord {
-  id: string
-  type: "auto" | "manual"
-  size: string
-  createdAt: Date
-  status: "success" | "failed"
-  notes?: string
 }
 
 // ---- CAMPAIGNS ----

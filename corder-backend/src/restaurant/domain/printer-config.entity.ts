@@ -1,32 +1,41 @@
-import { Column, Entity, Index, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 
 export type PrinterConnection = 'usb' | 'network' | 'bluetooth';
 export type PrinterStatus = 'online' | 'offline' | 'error';
 
 @Entity('restaurant_printer_configs')
+@Index(['restaurantId'])
 export class PrinterConfigEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Index()
-  @Column()
+  @Column({ name: 'restaurant_id' })
   restaurantId!: string;
 
   @ManyToOne(() => RestaurantEntity, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'restaurant_id' })
   restaurant!: RestaurantEntity;
 
   @Column({ length: 100 })
   name!: string;
 
-  // e.g. "thermal", "kitchen", "bar"
   @Column({ length: 50 })
   type!: string;
 
-  @Column({ type: 'enum', enum: ['usb', 'network', 'bluetooth'], default: 'network' })
+  @Column({ type: 'varchar', length: 20, default: 'network' })
   connection!: PrinterConnection;
 
-  @Column({ type: 'varchar', length: 100, nullable: true })
+  @Column({ name: 'ip_address', type: 'varchar', length: 100, nullable: true })
   ipAddress: string | null;
 
   @Column({ type: 'int', nullable: true })
@@ -35,19 +44,18 @@ export class PrinterConfigEntity {
   @Column({ type: 'varchar', length: 100, nullable: true })
   department: string | null;
 
-  @Column({ type: 'enum', enum: ['online', 'offline', 'error'], default: 'offline' })
+  @Column({ type: 'varchar', length: 20, default: 'offline' })
   status!: PrinterStatus;
 
-  @Column({ type: 'int', default: 80 })
+  @Column({ name: 'paper_width', type: 'int', default: 80 })
   paperWidth!: number;
 
-  @Column({ type: 'boolean', default: true })
+  @Column({ name: 'auto_cut', type: 'boolean', default: true })
   autoCut!: boolean;
 
-  @Column({ type: 'timestamptz', default: () => 'now()' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 
-  @Column({ type: 'timestamptz', default: () => 'now()' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt!: Date;
 }
-

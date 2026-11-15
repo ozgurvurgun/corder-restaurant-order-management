@@ -4,9 +4,9 @@ import { PanelRootGuard } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
 import { PrintersService, CreatePrinterDto, UpdatePrinterDto } from '../application/printers.service';
-import { AuditLogsService, CreateAuditLogDto } from '../application/audit-logs.service';
-import { BackupsService, CreateBackupDto } from '../application/backups.service';
+import { AuditLogsService } from '../application/audit-logs.service';
 import { AuditCategory } from '../domain/audit-log.entity';
+import { CreateAuditLogBodyDto } from './dto/create-audit-log.dto';
 
 @Controller('restaurant')
 @UseGuards(RestaurantJwtGuard, PanelRootGuard)
@@ -14,7 +14,6 @@ export class TechnicalController {
   constructor(
     private readonly printers: PrintersService,
     private readonly audits: AuditLogsService,
-    private readonly backups: BackupsService,
   ) {}
 
   // ----- Printers -----
@@ -68,29 +67,15 @@ export class TechnicalController {
   createAuditLog(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { id: string; name: string },
-    @Body() body: Omit<CreateAuditLogDto, 'userId' | 'userName'> & { userId?: string; userName?: string },
+    @Body() body: CreateAuditLogBodyDto,
   ) {
     return this.audits.create(restaurantId, {
-      userId: body.userId ?? user.id,
-      userName: body.userName ?? user.name,
+      userId: user.id,
+      userName: user.name,
       action: body.action,
       category: body.category,
       details: body.details,
       metadata: body.metadata,
     });
   }
-
-  // ----- Backups -----
-
-  @Get('backups')
-  listBackups(@RestaurantId() restaurantId: string) {
-    return this.backups.list(restaurantId);
-  }
-
-  @Post('backups')
-  createBackup(@RestaurantId() restaurantId: string, @Body() body: CreateBackupDto) {
-    return this.backups.create(restaurantId, body);
-  }
-
 }
-

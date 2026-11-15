@@ -592,18 +592,8 @@ export const api = {
       category: string
       details: string
       metadata?: Record<string, unknown>
-      userId?: string
-      userName?: string
     }) =>
       request<AuditLogDto>('/restaurant/audit-logs', {
-        method: 'POST',
-        token,
-        body: JSON.stringify(body),
-      }),
-    listBackups: (token: string) =>
-      request<BackupRecordDto[]>('/restaurant/backups', { token }),
-    createBackup: (token: string, body: { type: 'auto' | 'manual'; size?: string; status?: 'success' | 'failed'; notes?: string }) =>
-      request<BackupRecordDto>('/restaurant/backups', {
         method: 'POST',
         token,
         body: JSON.stringify(body),
@@ -974,17 +964,6 @@ export interface AuditLogDto {
   category: string
   details: string
   metadata?: Record<string, unknown> | null
-  createdAt: string
-}
-
-export interface BackupRecordDto {
-  id: string
-  restaurantId: string
-  type: 'auto' | 'manual'
-  size: string
-  status: 'success' | 'failed'
-  notes?: string | null
-  filePath?: string | null
   createdAt: string
 }
 

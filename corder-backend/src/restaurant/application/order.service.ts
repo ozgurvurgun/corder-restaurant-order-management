@@ -13,6 +13,7 @@ import { CompletedOrderEntity } from '../domain/completed-order.entity';
 import { LedgerCustomerEntity } from '../domain/ledger-customer.entity';
 import { StockMaterialEntity } from '../domain/stock-material.entity';
 import { StockMovementEntity } from '../domain/stock-movement.entity';
+import { PrintJobEntity } from '../domain/print-job.entity';
 import { CreateOrderDto } from '../api/dto/create-order.dto';
 import { CloseCheckDto } from '../api/dto/close-check.dto';
 import { PrintReceiptDto } from '../api/dto/print-receipt.dto';
@@ -37,6 +38,8 @@ export class OrderService {
     private readonly staffRepo: Repository<RestaurantStaffEntity>,
     @InjectRepository(ProductEntity)
     private readonly productRepo: Repository<ProductEntity>,
+    @InjectRepository(PrintJobEntity)
+    private readonly printJobRepo: Repository<PrintJobEntity>,
     private readonly ordersGateway: OrdersGateway,
     private readonly cashShiftService: CashShiftService,
     private readonly tableService: TableService,
@@ -377,6 +380,7 @@ export class OrderService {
         userDisplayName: moverName,
         status: 'active',
         mergedFrom: fromTableLabel,
+        kitchenTicketPrintedAt: new Date(),
       });
       const saved = await em.save(ord);
       const newRows = items.map((src) =>
@@ -398,22 +402,7 @@ export class OrderService {
     if (!createdEntity) throw new NotFoundException('Order not found');
     const map = await this.staffNameMap(restaurantId, [createdEntity.userId]);
     const serialized = this.serializeOrderEntity(createdEntity, map);
-    const waiter = newUserId
-      ? await this.staffRepo.findOne({ where: { id: newUserId, restaurantId } })
-      : null;
-    const payload = {
-      ...serialized,
-      restaurantId,
-      tableName: toTable.name ?? null,
-      waiterName:
-        (serialized.userName as string | null) ?? (waiter?.name ?? null),
-    } as Record<string, unknown>;
-    const pItems = payload.items as Array<{ productId?: string } & Record<string, unknown>> | undefined;
-    if (pItems?.length) {
-      await this.attachCategoryIdsToItems(pItems, restaurantId);
-    }
     this.ordersGateway.emitOrdersUpdated(restaurantId);
-    this.ordersGateway.emitOrderCreated(restaurantId, payload);
     return serialized;
   }
 
@@ -989,11 +978,11 @@ export class OrderService {
       },
     ];
     await this.attachCategoryIdsToItems(printItems, restaurantId);
-    this.ordersGateway.emitPrintJob(restaurantId, {
-      type: 'order.print_job',
+    const cancelPayload = {
+      type: 'order.print_job' as const,
       jobId: cancelJobId,
       restaurantId,
-      printType: 'kitchen_cancel',
+      printType: 'kitchen_cancel' as const,
       createdAt,
       includeLineNotes: true,
       order: {
@@ -1004,7 +993,17 @@ export class OrderService {
         items: printItems,
         total: Number(item.price) * item.quantity,
       },
-    });
+    };
+    await this.printJobRepo.save(
+      this.printJobRepo.create({
+        id: cancelJobId,
+        restaurantId,
+        printType: 'kitchen_cancel',
+        payload: cancelPayload as unknown as Record<string, unknown>,
+        printedAt: null,
+      }),
+    );
+    this.ordersGateway.emitPrintJob(restaurantId, cancelPayload);
 
     return { ok: true };
   }
@@ -1152,12 +1151,11 @@ export class OrderService {
     }
 
     const includeLineNotes = receiptMode === 'split' || Boolean(dto.orderId);
-
-    this.ordersGateway.emitPrintJob(restaurantId, {
-      type: 'order.print_job',
+    const receiptPayload = {
+      type: 'order.print_job' as const,
       jobId,
       restaurantId,
-      printType: 'receipt',
+      printType: 'receipt' as const,
       createdAt,
       receiptMode,
       includeLineNotes,
@@ -1167,7 +1165,17 @@ export class OrderService {
         items,
         total,
       },
-    });
+    };
+    await this.printJobRepo.save(
+      this.printJobRepo.create({
+        id: jobId,
+        restaurantId,
+        printType: 'receipt',
+        payload: receiptPayload as unknown as Record<string, unknown>,
+        printedAt: null,
+      }),
+    );
+    this.ordersGateway.emitPrintJob(restaurantId, receiptPayload);
 
     return { ok: true, jobId };
   }
@@ -1457,6 +1465,36 @@ export class OrderService {
     );
     if (!res.affected) {
       throw new NotFoundException('Sipariş bulunamadı veya kapatılmış');
+    }
+    return { ok: true };
+  }
+
+  /** Print-agent HTTP fallback for receipt and kitchen_cancel print jobs. */
+  async findPendingPrintJobs(restaurantId: string): Promise<Record<string, unknown>[]> {
+    const jobs = await this.printJobRepo.find({
+      where: {
+        restaurantId,
+        printedAt: IsNull(),
+      },
+      order: { createdAt: 'ASC' },
+      take: 100,
+    });
+    return jobs.map((j) => ({
+      ...j.payload,
+      type: 'order.print_job',
+      jobId: j.id,
+      restaurantId: j.restaurantId,
+      printType: j.printType,
+    }));
+  }
+
+  async markPrintJobPrinted(restaurantId: string, jobId: string): Promise<{ ok: true }> {
+    const res = await this.printJobRepo.update(
+      { id: jobId, restaurantId },
+      { printedAt: new Date() },
+    );
+    if (!res.affected) {
+      throw new NotFoundException('Yazdirma isi bulunamadi');
     }
     return { ok: true };
   }

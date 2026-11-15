@@ -3,15 +3,14 @@ import { usePanelStore } from "@/lib/panel-store"
 import { itemCountsTowardBill, itemIsLedgerLike } from "@/lib/panel-types"
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts"
 import {
   TrendingUp, ShoppingCart, Ban, Percent, Clock, Receipt, ChevronDown, ChevronUp,
-  Calendar, Download, Filter, ArrowUpRight, ArrowDownRight, Minus,
+  Download, Filter, ArrowUpRight, ArrowDownRight, Minus,
 } from "lucide-react"
 
 function formatCurrency(n: number) { return n.toLocaleString("tr-TR", { minimumFractionDigits: 2 }) }
-function formatFullDate(d: Date) { return new Date(d).toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" }) }
 
 const PIE_COLORS = ["#e63462", "#34c759", "#007aff", "#ff9500", "#af52de"]
 const HEATMAP_COLORS = ["#f5f5f7", "#fce4ec", "#f8bbd0", "#f06292", "#e63462", "#c62828"]

@@ -1,8 +1,8 @@
 import { useState, useMemo } from "react"
 import { usePanelStore } from "@/lib/panel-store"
 import {
-  Search, Plus, Pencil, Trash2, X, Package, AlertTriangle, ArrowDown, ArrowUp, RotateCcw,
-  Truck, ClipboardList, TrendingUp, Filter, Link2, Check,
+  Search, Plus, Trash2, X, Package, AlertTriangle, ArrowDown, ArrowUp, RotateCcw,
+  Truck, ClipboardList, TrendingUp, Link2, Check,
 } from "lucide-react"
 import type { PanelProduct } from "@/lib/panel-types"
 
@@ -12,7 +12,7 @@ function formatDate(d: Date) { return new Date(d).toLocaleDateString("tr-TR", { 
 export default function StockView() {
   const {
     stockMaterials, suppliers, stockMovements, inventoryCounts,
-    addMaterial, updateMaterial, deleteMaterial, addStockMovement, setProductIngredients,
+    addMaterial, deleteMaterial, addStockMovement, setProductIngredients,
     addSupplier, updateSupplier, deleteSupplier,
     startInventoryCount, updateInventoryItem, completeInventoryCount,
     currentUser, products, categories,
@@ -41,7 +41,7 @@ export default function StockView() {
   const [matMin, setMatMin] = useState("")
   const [matCost, setMatCost] = useState("")
   const [matCategory, setMatCategory] = useState("")
-  const [matSupplier, setMatSupplier] = useState("")
+  const [matSupplier] = useState("")
 
   const [mvMatId, setMvMatId] = useState("")
   const [mvType, setMvType] = useState<"in" | "out" | "waste">("in")
@@ -60,8 +60,6 @@ export default function StockView() {
     if (!search.trim()) return stockMaterials
     return stockMaterials.filter((m) => m.name.toLowerCase().includes(search.toLowerCase()) || m.category.toLowerCase().includes(search.toLowerCase()))
   }, [stockMaterials, search])
-
-  const materialCategories = useMemo(() => [...new Set(stockMaterials.map((m) => m.category))], [stockMaterials])
 
   /** Uses manual costPrice if set; otherwise Product Match recipe × material unit cost. */
   const costAnalysis = useMemo(() => {
@@ -369,8 +367,14 @@ export default function StockView() {
                             {mv.type === "in" ? <><ArrowDown className="w-2.5 h-2.5" /> Giris</> : mv.type === "out" ? <><ArrowUp className="w-2.5 h-2.5" /> Cikis</> : mv.type === "waste" ? "Fire" : "Sayim"}
                           </span>
                         </td>
-                        <td className={`px-4 py-2 text-[12px] text-right font-semibold ${mv.type === "in" ? "text-green-600" : "text-red-500"}`}>
-                          {mv.type === "in" ? "+" : "-"}{mv.quantity}
+                        <td className={`px-4 py-2 text-[12px] text-right font-semibold ${
+                          mv.type === "in" || (mv.type === "count-adjustment" && mv.quantity > 0)
+                            ? "text-green-600"
+                            : "text-red-500"
+                        }`}>
+                          {mv.type === "count-adjustment"
+                            ? `${mv.quantity > 0 ? "+" : ""}${mv.quantity}`
+                            : `${mv.type === "in" ? "+" : "-"}${mv.quantity}`}
                         </td>
                         <td className="px-4 py-2 text-[12px] text-right text-[#86868b]">{mv.previousStock} {"->"} {mv.newStock}</td>
                         <td className="px-4 py-2 text-[12px] text-[#86868b]">{mv.reason || "-"}</td>

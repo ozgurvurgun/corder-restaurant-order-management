@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react"
 import { usePanelStore } from "@/lib/panel-store"
-import { itemCountsTowardBill } from "@/lib/panel-types"
 import { usePanelI18n } from "@/lib/panel-i18n"
 import {
   TrendingUp, TrendingDown, DollarSign, ShoppingCart, LayoutGrid,
-  Ban, Clock, Users, ArrowUpRight, CreditCard, Banknote, UtensilsCrossed,
+  Ban, Users,
 } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from "recharts"
 import type { PanelScreen } from "./sidebar"
@@ -22,8 +21,8 @@ function formatTime(d: Date) {
 
 const PIE_COLORS = ["#34c759", "#007aff", "#ff9500", "#e63462"]
 
-export default function DashboardView({ onNavigate }: DashboardViewProps) {
-  const { tables, orders, dailyReport, closedTables, cancelledItems, cashShifts, currentShift, auditLogs, notifications } = usePanelStore()
+export default function DashboardView(_props: DashboardViewProps) {
+  const { tables, dailyReport, cancelledItems, currentShift, auditLogs, notifications } = usePanelStore()
   const { t } = usePanelI18n()
   const [mounted, setMounted] = useState(false)
   
@@ -33,8 +32,6 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
 
   const occupiedCount = tables.filter((t) => t.status === "occupied").length
   const emptyCount = tables.filter((t) => t.status === "empty").length
-  const activeOrders = orders.filter((o) => o.status === "active")
-  const totalActiveItems = activeOrders.reduce((sum, o) => sum + o.items.filter(itemCountsTowardBill).length, 0)
   const recentAuditLogs = auditLogs.slice(0, 8)
   const unreadNotifications = notifications.filter((n) => !n.read)
 

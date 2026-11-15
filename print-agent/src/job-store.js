@@ -1,6 +1,9 @@
 const fs = require("fs")
 const path = require("path")
 
+const MAX_PRINTED_ENTRIES = 2000
+const MAX_PRINTED_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
 function ensureDir(filePath) {
   const dir = path.dirname(filePath)
   try {
@@ -25,7 +28,47 @@ class JobStore {
   constructor(filePath) {
     this.filePath = filePath
     ensureDir(filePath)
-    this.state = readJson(filePath, { printed: {}, queue: [] })
+    const loaded = readJson(filePath, { printed: {}, queue: [] })
+    this.state = {
+      printed: loaded && typeof loaded.printed === "object" && loaded.printed ? loaded.printed : {},
+      queue: Array.isArray(loaded?.queue) ? loaded.queue : [],
+    }
+    if (this.prunePrinted()) {
+      this.save()
+    }
+  }
+
+  prunePrinted() {
+    const entries = Object.entries(this.state.printed)
+    if (!entries.length) return false
+
+    const cutoff = Date.now() - MAX_PRINTED_AGE_MS
+    let changed = false
+    const valid = []
+
+    for (const [key, meta] of entries) {
+      const ts = meta?.printedAt ? Date.parse(meta.printedAt) : NaN
+      if (!Number.isFinite(ts) || ts < cutoff) {
+        changed = true
+        continue
+      }
+      valid.push([key, meta, ts])
+    }
+
+    if (valid.length > MAX_PRINTED_ENTRIES) {
+      valid.sort((a, b) => a[2] - b[2])
+      valid.splice(0, valid.length - MAX_PRINTED_ENTRIES)
+      changed = true
+    }
+
+    if (changed) {
+      const nextPrinted = {}
+      for (const [key, meta] of valid) {
+        nextPrinted[key] = meta
+      }
+      this.state.printed = nextPrinted
+    }
+    return changed
   }
 
   save() {
@@ -49,14 +92,21 @@ class JobStore {
     return Boolean(this.state.printed[jobKey])
   }
 
+  /**
+   * Marks a job as printed ONLY after the printer succeeded, removing it from the queue
+   * and pruning the bounded `printed` history.
+   */
   markPrinted(jobKey) {
     this.state.printed[jobKey] = {
       printedAt: new Date().toISOString(),
     }
+    this.state.queue = this.state.queue.filter((item) => item.jobKey !== jobKey)
+    this.prunePrinted()
     this.save()
   }
 
   enqueue(job) {
+    if (this.hasPrinted(job.jobKey)) return
     if (this.state.queue.some((item) => item.jobKey === job.jobKey)) return
     this.state.queue.push({
       ...job,
@@ -67,27 +117,32 @@ class JobStore {
     this.save()
   }
 
-  dequeueReady(limit = 10) {
+  /**
+   * Returns ready jobs WITHOUT deleting them from the queue before printing.
+   * Jobs are removed from `queue` only in `markPrinted` once printing succeeds.
+   */
+  peekReady(limit = 10) {
     const now = Date.now()
-    const snapshot = [...this.state.queue]
-    const ready = snapshot.filter((item) => item.nextAttemptAt <= now).slice(0, limit)
-
-    // Remove only the jobs we are about to attempt in this drain cycle.
-    const readyKeys = new Set(ready.map((j) => j.jobKey))
-    this.state.queue = snapshot.filter((item) => !readyKeys.has(item.jobKey))
-    this.save()
-    return ready
+    return this.state.queue.filter((item) => item.nextAttemptAt <= now).slice(0, limit)
   }
 
   requeue(job, errorText) {
-    const retryCount = (job.retryCount || 0) + 1
+    const idx = this.state.queue.findIndex((item) => item.jobKey === job.jobKey)
+    const prevRetry = idx >= 0 ? this.state.queue[idx].retryCount || 0 : job.retryCount || 0
+    const retryCount = prevRetry + 1
     const delay = Math.min(15000, 400 * retryCount)
-    this.enqueue({
+    const updated = {
       ...job,
       retryCount,
       lastError: errorText || "",
       nextAttemptAt: Date.now() + delay,
-    })
+    }
+    if (idx >= 0) {
+      this.state.queue[idx] = updated
+    } else {
+      this.state.queue.push(updated)
+    }
+    this.save()
   }
 
   getQueueSize() {

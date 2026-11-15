@@ -2,7 +2,7 @@ import { useState } from "react"
 import { X, ArrowRightLeft, Merge, Loader2 } from "lucide-react"
 import { usePanelStore } from "@/lib/panel-store"
 import { usePanelToast } from "./panel-toast"
-import { formatCurrency } from "@/lib/services"
+import { formatCurrency } from "@/lib/format"
 
 interface Props {
   sourceTableId: string

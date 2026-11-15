@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { OpenAccountEntity } from '../domain/open-account.entity';
 import { OpenAccountItemEntity } from '../domain/open-account-item.entity';
 import { OpenAccountPaymentEntity } from '../domain/open-account-payment.entity';
+import { fromKurus, toKurus } from '../../common/money/kurus';
 
 export interface CreateOpenAccountItemDto {
   productName: string;
@@ -158,35 +159,48 @@ export class OpenAccountsService {
     if (!Number.isFinite(payAmt) || payAmt <= 0) {
       throw new BadRequestException('Odeme tutari gecersiz');
     }
-
-    const acc = await this.repo.findOne({ where: { id, restaurantId } });
-    if (!acc) throw new NotFoundException('Acik hesap bulunamadi');
-
-    const paid = Number(acc.paidAmount ?? 0) + payAmt;
-    if (paid > Number(acc.amount) + 0.0001) {
-      throw new BadRequestException('Odeme toplam borcu asamaz');
+    const payKurus = toKurus(payAmt);
+    if (payKurus <= 0) {
+      throw new BadRequestException('Odeme tutari gecersiz');
     }
 
-    acc.paidAmount = paid;
-    if (paid >= Number(acc.amount)) {
-      acc.status = 'paid';
-      acc.paidAt = new Date();
-    } else {
-      acc.status = 'partial';
-    }
-    await this.repo.save(acc);
+    return this.repo.manager.transaction(async (em) => {
+      const acc = await em.findOne(OpenAccountEntity, {
+        where: { id, restaurantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!acc) throw new NotFoundException('Acik hesap bulunamadi');
 
-    const row = this.paymentRepo.create({
-      openAccountId: acc.id,
-      amount: payAmt,
-      receivedBy: receivedBy.trim() || 'Bilinmiyor',
-      receivedByUserId: receivedByUserId?.trim() || null,
-      note: null,
+      const totalKurus = toKurus(acc.amount);
+      const currentPaidKurus = toKurus(acc.paidAmount ?? 0);
+      const nextPaidKurus = currentPaidKurus + payKurus;
+      if (nextPaidKurus > totalKurus) {
+        throw new BadRequestException('Odeme toplam borcu asamaz');
+      }
+
+      acc.paidAmount = fromKurus(nextPaidKurus);
+      if (nextPaidKurus === totalKurus) {
+        acc.status = 'paid';
+        acc.paidAt = new Date();
+      } else {
+        acc.status = 'partial';
+      }
+      await em.save(OpenAccountEntity, acc);
+
+      const row = em.create(OpenAccountPaymentEntity, {
+        openAccountId: acc.id,
+        amount: fromKurus(payKurus),
+        receivedBy: receivedBy.trim() || 'Bilinmiyor',
+        receivedByUserId: receivedByUserId?.trim() || null,
+        note: null,
+      });
+      await em.save(OpenAccountPaymentEntity, row);
+
+      const [items, payments] = await Promise.all([
+        em.find(OpenAccountItemEntity, { where: { openAccountId: acc.id } }),
+        em.find(OpenAccountPaymentEntity, { where: { openAccountId: acc.id } }),
+      ]);
+      return this.serialize(acc, items, payments);
     });
-    await this.paymentRepo.save(row);
-
-    const items = await this.itemRepo.find({ where: { openAccountId: acc.id } });
-    const payments = await this.paymentRepo.find({ where: { openAccountId: acc.id } });
-    return this.serialize(acc, items, payments);
   }
 }

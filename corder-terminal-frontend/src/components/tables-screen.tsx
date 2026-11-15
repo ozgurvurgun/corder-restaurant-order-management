@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Menu, UtensilsCrossed, Wine, Hash, Wifi, WifiOff, LogOut } from "lucide-react"
 import { useApp } from "@/lib/store"
-import { formatCurrency } from "@/lib/services"
+import { formatCurrency } from "@/lib/format"
 import type { Table } from "@/lib/types"
 
 /** On the tables grid, show only the first word of the name (e.g. "Selma Elden" → "Selma"). */

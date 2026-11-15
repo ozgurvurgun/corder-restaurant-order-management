@@ -1,19 +1,18 @@
 import { useState, useMemo } from "react"
 import { usePanelStore } from "@/lib/panel-store"
 import {
-  Bell, Shield, HardDrive,
-  CheckCircle2, XCircle, AlertTriangle, Download,
+  Bell, Shield,
+  CheckCircle2, XCircle, AlertTriangle,
 } from "lucide-react"
 
 function formatDate(d: Date) { return new Date(d).toLocaleDateString("tr-TR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) }
 
-type TeknikTab = "notifications" | "audit" | "backup"
+type TeknikTab = "notifications" | "audit"
 
 export default function TeknikView() {
   const {
     notifications, markNotificationRead, markAllNotificationsRead,
     auditLogs,
-    backups, createBackup,
   } = usePanelStore()
 
   const [activeTab, setActiveTab] = useState<TeknikTab>("notifications")
@@ -34,7 +33,6 @@ export default function TeknikView() {
     if (action.startsWith("ledger_") || action.startsWith("open_account_")) return "cari"
     if (action.startsWith("shift_") || action.startsWith("cash_")) return "kasa"
     if (action.startsWith("printer_")) return "yazici"
-    if (action.startsWith("backup_")) return "yedek"
     if (action.startsWith("campaign_")) return "kampanya"
     if (action.startsWith("settings_")) return "ayar"
     if (action.startsWith("branch_")) return "sube"
@@ -77,7 +75,6 @@ export default function TeknikView() {
   const TABS = [
     { id: "notifications" as const, label: `Bildirimler${unreadCount > 0 ? ` (${unreadCount})` : ""}`, icon: Bell },
     { id: "audit" as const, label: "Aktivite Loglari", icon: Shield },
-    { id: "backup" as const, label: "Yedekleme", icon: HardDrive },
   ]
 
   const AUDIT_CATEGORIES = ["all", "auth", "order", "payment", "product", "user", "settings", "stock", "kasa", "table"]
@@ -232,57 +229,6 @@ export default function TeknikView() {
                         </td>
                       </tr>
                     )}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-
-          {activeTab === "backup" && (
-            <>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-[13px] font-semibold text-[#1d1d1f]">Veri Yedekleme</h3>
-                  <p className="text-[12px] text-[#86868b] mt-0.5">Sistem verilerinizi duzenli olarak yedekleyin</p>
-                </div>
-                <button onClick={createBackup} className="h-[30px] px-3 flex items-center gap-1.5 bg-[#e63462] text-white rounded-lg text-[12px] font-medium hover:bg-[#d42d56]">
-                  <HardDrive className="w-3.5 h-3.5" /> Manuel Yedekle
-                </button>
-              </div>
-
-              <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-[#f9f9f9] border-b border-[#f0f0f0]">
-                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Tarih</th>
-                      <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Tur</th>
-                      <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Boyut</th>
-                      <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Durum</th>
-                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Not</th>
-                      <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Islem</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {backups.map((b, idx) => (
-                      <tr key={b.id} className={`border-b border-[#f0f0f0] ${idx % 2 === 1 ? "bg-[#fafafa]" : ""}`}>
-                        <td className="px-4 py-2.5 text-[12px] text-[#86868b]">{formatDate(b.createdAt)}</td>
-                        <td className="px-4 py-2.5 text-center">
-                          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${b.type === "auto" ? "bg-blue-50 text-blue-600" : "bg-[#e63462]/10 text-[#e63462]"}`}>
-                            {b.type === "auto" ? "Otomatik" : "Manuel"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5 text-[12px] text-right text-[#1d1d1f]">{b.size}</td>
-                        <td className="px-4 py-2.5 text-center">
-                          {b.status === "success" ? <CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /> : <XCircle className="w-4 h-4 text-red-500 mx-auto" />}
-                        </td>
-                        <td className="px-4 py-2.5 text-[12px] text-[#86868b]">{b.notes || "-"}</td>
-                        <td className="px-4 py-2.5 text-right">
-                          <button type="button" className="h-[26px] px-2.5 text-[11px] font-medium text-[#86868b] bg-[#f5f5f7] rounded-md hover:bg-[#e8e8ed] inline-flex items-center gap-1">
-                            <Download className="w-3 h-3" /> Indir
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
                   </tbody>
                 </table>
               </div>

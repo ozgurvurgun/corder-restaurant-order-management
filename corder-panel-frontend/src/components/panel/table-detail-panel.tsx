@@ -161,7 +161,7 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f5f5f7] rounded-lg text-[12px] font-medium hover:bg-[#e8e8ed] transition-colors"
                     >
                       <span className="w-5 h-5 rounded-full bg-[#007aff] text-white text-[10px] flex items-center justify-center">{idx + 1}</span>
-                      <span className="text-[#1d1d1f]">{formatCurrency(table.splitInfo.perPersonAmount || 0)} TL</span>
+                      <span className="text-[#1d1d1f]">{formatCurrency(table.splitInfo?.perPersonAmount || 0)} TL</span>
                     </button>
                   ))}
                 </div>

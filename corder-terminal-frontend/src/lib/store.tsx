@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef, type ReactNode } from "react"
 import type { Socket } from "socket.io-client"
 import type { User, Table, Order, OrderItem, CartItem } from "./types"
-import { KitchenService, PrinterService } from "./services"
 import {
   api,
   getToken,
@@ -490,16 +489,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           })),
         })
         await refreshData()
-        const tableName = tables.find((t) => t.id === tableId)?.name ?? tableId
-        const itemsForPrint = cart.map((i) => ({
-          productId: i.productId,
-          productName: i.productName,
-          price: i.price,
-          quantity: i.quantity,
-          note: i.note,
-        }))
-        await KitchenService.sendOrder(tableId, itemsForPrint)
-        await PrinterService.printKitchenTicket(tableName, itemsForPrint)
         setCart([])
         return true
       } catch (e) {
@@ -556,7 +545,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [lastAction])
 
   const printReceipt = useCallback(async (tableId: string) => {
-    await PrinterService.printReceipt(tableId)
+    const token = getToken()
+    if (!token) throw new Error("Oturum yok")
+    await api.orders.printReceipt(token, { tableId })
   }, [])
 
   const value = useMemo<AppContextType>(

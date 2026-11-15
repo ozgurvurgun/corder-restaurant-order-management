@@ -2,6 +2,7 @@ import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
+import { hashPrintAgentToken } from '../../common/security/print-agent-token';
 
 export type PrintAgentRequest = {
   printAgentRestaurantId: string;
@@ -22,8 +23,9 @@ export class PrintAgentGuard implements CanActivate {
     if (!token) {
       throw new UnauthorizedException();
     }
+    const tokenHash = hashPrintAgentToken(token);
     const restaurant = await this.restaurantRepo.findOne({
-      where: { printAgentToken: token },
+      where: { printAgentTokenHash: tokenHash },
     });
     if (!restaurant || restaurant.status !== 'active') {
       throw new UnauthorizedException();

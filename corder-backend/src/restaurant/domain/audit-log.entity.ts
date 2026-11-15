@@ -1,4 +1,12 @@
-import { Column, Entity, Index, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 
 export type AuditCategory =
@@ -13,27 +21,28 @@ export type AuditCategory =
   | 'table';
 
 @Entity('restaurant_audit_logs')
+@Index(['restaurantId', 'createdAt'])
 export class AuditLogEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Index()
-  @Column()
+  @Column({ name: 'restaurant_id' })
   restaurantId!: string;
 
   @ManyToOne(() => RestaurantEntity, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'restaurant_id' })
   restaurant!: RestaurantEntity;
 
-  @Column({ length: 64 })
+  @Column({ name: 'user_id', length: 64 })
   userId!: string;
 
-  @Column({ length: 120 })
+  @Column({ name: 'user_name', length: 120 })
   userName!: string;
 
   @Column({ length: 120 })
   action!: string;
 
-  @Column({ type: 'enum', enum: ['auth', 'order', 'payment', 'product', 'user', 'settings', 'stock', 'kasa', 'table'] })
+  @Column({ type: 'varchar', length: 32 })
   category!: AuditCategory;
 
   @Column({ type: 'text' })
@@ -42,7 +51,6 @@ export class AuditLogEntity {
   @Column({ type: 'jsonb', nullable: true })
   metadata: Record<string, unknown> | null;
 
-  @Column({ type: 'timestamptz', default: () => 'now()' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 }
-
