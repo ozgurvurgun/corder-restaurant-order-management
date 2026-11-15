@@ -96,6 +96,8 @@ export default function QuickSaleView() {
   const [cartItems, setCartItems] = useState<{ productId: string; name: string; price: number; quantity: number; image?: string }[]>([])
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("nakit")
   const [showSuccess, setShowSuccess] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
   /** Receipt lines for the last completed sale (for walk-in sale receipt API) */
   const [lastSaleForPrint, setLastSaleForPrint] = useState<{
     items: { productName: string; quantity: number; price: number; productId?: string; categoryId?: string }[]
@@ -168,26 +170,36 @@ export default function QuickSaleView() {
     setCartItems([])
   }
 
-  const completeSale = () => {
-    if (cartItems.length === 0 || !currentShift) return
-    const totalAmount = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  const completeSale = async () => {
+    if (cartItems.length === 0 || !currentShift || submitting) return
+    setSubmitting(true)
+    setErrorMsg(null)
+    const res = await addQuickSale(
+      cartItems.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+      paymentMethod,
+    )
+    setSubmitting(false)
+    if (!res.ok || !res.completedOrder) {
+      setErrorMsg(res.error || "Satis tamamlanamadi")
+      return
+    }
+    const serverItems = res.completedOrder.orders[0]?.items ?? []
     setLastSaleForPrint({
-      items: cartItems.map((i) => {
+      items: serverItems.map((i) => {
         const p = products.find((x) => x.id === i.productId)
         return {
-          productName: i.name,
+          productName: i.productName,
           quantity: i.quantity,
           price: i.price,
           productId: i.productId,
           categoryId: p?.categoryId,
         }
       }),
-      total: totalAmount,
+      total: res.completedOrder.netAmount,
     })
-    addQuickSale(cartItems, paymentMethod)
     setCartItems([])
     setShowSuccess(true)
-    setTimeout(() => setShowSuccess(false), 5000) // Keep success longer to allow printing
+    setTimeout(() => setShowSuccess(false), 5000)
   }
 
   const handlePrintReceipt = () => {
@@ -431,13 +443,17 @@ export default function QuickSaleView() {
 
           {/* Complete sale button */}
           <button
-            onClick={completeSale}
-            disabled={cartItems.length === 0 || !currentShift}
+            onClick={() => void completeSale()}
+            disabled={cartItems.length === 0 || !currentShift || submitting}
             className="w-full h-[52px] bg-[#34c759] text-white rounded-2xl text-[15px] font-semibold hover:bg-[#2db84e] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
           >
             <ShoppingBag className="w-5 h-5" />
-            Satisi Tamamla
+            {submitting ? "Isleniyor..." : "Satisi Tamamla"}
           </button>
+
+          {errorMsg && (
+            <p className="text-[11px] text-red-500 text-center mt-3">{errorMsg}</p>
+          )}
 
           {!currentShift && (
             <p className="text-[11px] text-red-500 text-center mt-3">

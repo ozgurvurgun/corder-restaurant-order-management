@@ -454,7 +454,7 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
         />
       )}
       {showPayment && (
-        <PaymentModal tableId={tableId} total={total} onClose={() => setShowPayment(false)} />
+        <PaymentModal tableId={tableId} total={rawTotal} onClose={() => setShowPayment(false)} />
       )}
       {showSplitBill && (
         <SplitBillModal tableId={tableId} total={total} onClose={() => setShowSplitBill(false)} />

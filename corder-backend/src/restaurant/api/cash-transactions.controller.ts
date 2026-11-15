@@ -1,5 +1,10 @@
 import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
-import { CashTransactionsService } from '../application/cash-transactions.service';
+import {
+  CashTransactionsService,
+  serializeCashTransaction,
+} from '../application/cash-transactions.service';
+import { serializeCashShift } from '../application/cash-shift.service';
+import { CreateCashTransactionDto } from './dto/create-cash-transaction.dto';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
@@ -13,43 +18,16 @@ export class CashTransactionsController {
   async create(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { id: string; name: string },
-    @Body()
-    body: {
-      type: 'sale' | 'expense' | 'cash-in' | 'cash-out' | 'refund';
-      amount: number;
-      description: string;
-      reference?: string;
-      createdBy?: string;
-    },
+    @Body() dto: CreateCashTransactionDto,
   ) {
-    const { transaction, shift } = await this.service.create(restaurantId, {
-      type: body.type,
-      amount: body.amount,
-      description: body.description,
-      reference: body.reference,
-      createdBy: body.createdBy ?? user.name,
-    });
+    const { transaction, shift } = await this.service.create(
+      restaurantId,
+      dto,
+      user.name,
+    );
     return {
-      transaction,
-      shift: {
-        id: shift.id,
-        openedBy: shift.openedBy,
-        openedAt: shift.openedAt,
-        closedAt: shift.closedAt,
-        closedBy: shift.closedBy,
-        status: shift.status,
-        openingBalance: Number(shift.openingBalance),
-        closingBalance: shift.closingBalance != null ? Number(shift.closingBalance) : null,
-        notes: shift.notes,
-        cashIn: Number(shift.cashIn),
-        cashOut: Number(shift.cashOut),
-        totalRevenue: Number(shift.totalRevenue ?? 0),
-        totalNakit: Number(shift.totalNakit ?? 0),
-        totalKart: Number(shift.totalKart ?? 0),
-        totalYemekKarti: Number(shift.totalYemekKarti ?? 0),
-        totalMultinet: Number(shift.totalMultinet ?? 0),
-        transactionCount: shift.transactionCount ?? 0,
-      },
+      transaction: serializeCashTransaction(transaction),
+      shift: serializeCashShift(shift),
     };
   }
 
@@ -64,4 +42,3 @@ export class CashTransactionsController {
     return this.service.listForCurrentShift(restaurantId);
   }
 }
-

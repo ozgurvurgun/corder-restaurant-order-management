@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef, type ReactNode } from "react"
+import { createContext, useContext, useState, useCallback, useMemo, useEffect, type ReactNode } from "react"
 import {
   itemCountsTowardBill,
   type PanelUser,
@@ -7,7 +7,6 @@ import {
   type PanelTable,
   type PanelSection,
   type PanelOrder,
-  type Payment,
   type ClosedTable,
   type CancelledItem,
   type DailyReport,
@@ -47,6 +46,7 @@ import {
 import {
   api,
   getSessionUser,
+  type CloseCheckResponseDto,
   type CompletedOrderUpdateBody,
   type AuditLogDto,
   type BackupRecordDto,
@@ -57,60 +57,6 @@ let _idCounter = 200
 function genId(prefix: string) { return `${prefix}-${++_idCounter}` }
 
 type StockMovementInput = Omit<StockMovement, "id" | "createdAt" | "previousStock" | "newStock">
-
-/** Stock deduction by product recipe; same materials aggregated into one line; API awaited in sequence (prevents races). */
-async function runDeductStockForOrder(
-  orderItems: { productId: string; quantity: number }[],
-  products: PanelProduct[],
-  stockMaterials: StockMaterial[],
-  addStockMovement: (m: StockMovementInput) => Promise<void>,
-) {
-  const byMaterial = new Map<
-    string,
-    { materialId: string; materialName: string; quantity: number; labels: string[] }
-  >()
-  for (const item of orderItems) {
-    const product = products.find((p) => p.id === item.productId)
-    if (!product?.ingredients?.length) continue
-    const ings = product.ingredients
-    for (const ing of ings) {
-      const totalDeduct = ing.quantity * item.quantity
-      if (totalDeduct <= 0) continue
-      const material = stockMaterials.find((m) => m.id === ing.materialId)
-      if (!material) continue
-      const name = ing.materialName || material.name
-      const prev = byMaterial.get(ing.materialId)
-      const label = `${product.name} x${item.quantity}`
-      if (prev) {
-        prev.quantity += totalDeduct
-        prev.labels.push(label)
-      } else {
-        byMaterial.set(ing.materialId, {
-          materialId: ing.materialId,
-          materialName: name,
-          quantity: totalDeduct,
-          labels: [label],
-        })
-      }
-    }
-  }
-  for (const row of byMaterial.values()) {
-    const uniq = [...new Set(row.labels)]
-    const reason =
-      uniq.length === 1 ? `Siparis: ${uniq[0]}` : `Siparis: ${uniq.join(", ")}`
-    await addStockMovement({
-      materialId: row.materialId,
-      materialName: row.materialName,
-      type: "out",
-      quantity: row.quantity,
-      unitCost: undefined,
-      totalCost: undefined,
-      supplierId: undefined,
-      reason,
-      createdBy: "Sistem",
-    })
-  }
-}
 
 const DEFAULT_SETTINGS: RestaurantSettings = {
   name: "",
@@ -183,12 +129,18 @@ interface PanelContextType {
     tableId: string,
     method: PaymentMethod,
     discount?: { type: "percent" | "amount"; value: number; reason: string },
-    splitDetails?: { method: string; amount: number }[],
-    opts?: { ledgerCustomerId?: string; ledgerDebtAmount?: number },
-  ) => Promise<boolean>
-  
+    splitDetails?: {
+      method: "nakit" | "kredi-karti" | "yemek-karti" | "multinet" | "cari"
+      amount: number
+    }[],
+    opts?: { ledgerCustomerId?: string; ledgerDebtAmount?: number; tip?: number },
+  ) => Promise<{ ok: boolean; completedOrder?: ClosedTable; error?: string }>
+
   // Quick Sale (Walk-in)
-  addQuickSale: (items: { productId: string; name: string; price: number; quantity: number }[], paymentMethod: PaymentMethod) => string | null
+  addQuickSale: (
+    items: { productId: string; quantity: number; note?: string }[],
+    paymentMethod: PaymentMethod,
+  ) => Promise<{ ok: boolean; completedOrder?: ClosedTable; error?: string }>
 
   /** Creates a new active check on the table (same API as terminal). */
   createTableOrder: (
@@ -251,11 +203,10 @@ interface PanelContextType {
         },
   ) => Promise<void>
 
-  /** Completed check correction (API + register cash delta). Root JWT only. */
+  /** Completed check correction (server recalculates totals + shift/cash delta). Root JWT only. */
   updateCompletedOrder: (
     completedId: string,
     body: CompletedOrderUpdateBody,
-    meta: { previousNet: number; previousMethod: PaymentMethod },
   ) => Promise<ClosedTable | null>
 
   // Stock actions
@@ -264,7 +215,6 @@ interface PanelContextType {
   deleteMaterial: (id: string) => void
   addStockMovement: (m: StockMovementInput) => Promise<void>
   setProductIngredients: (productId: string, ingredients: { materialId: string; quantity: number }[]) => void
-  deductStockForOrder: (orderItems: { productId: string; quantity: number }[]) => Promise<void>
   addSupplier: (s: Omit<Supplier, "id">) => Promise<boolean>
   updateSupplier: (id: string, data: Partial<Supplier>) => void
   deleteSupplier: (id: string) => void
@@ -278,7 +228,15 @@ interface PanelContextType {
   // Cash register actions
   openShift: (openingBalance: number) => void | Promise<void>
   closeShift: (closingBalance: number, notes?: string) => void | Promise<void>
-  addCashTransaction: (t: Omit<CashTransaction, "id" | "createdAt" | "shiftId">) => Promise<void> | void
+  addCashTransaction: (
+    t: {
+      type: "expense" | "cash-in" | "cash-out" | "refund"
+      amount: number
+      description: string
+      reference?: string
+      createdBy?: string
+    },
+  ) => Promise<void> | void
 
   // Open Accounts
   addOpenAccount: (
@@ -365,7 +323,6 @@ export function PanelProvider({ children }: { children: ReactNode }) {
 
   // ---- Stock ----
   const [stockMaterials, setStockMaterials] = useState<StockMaterial[]>([])
-  const addStockMovementRef = useRef<((m: StockMovementInput) => Promise<void>) | null>(null)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [stockMovements, setStockMovements] = useState<StockMovement[]>([])
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([])
@@ -564,19 +521,7 @@ export function PanelProvider({ children }: { children: ReactNode }) {
   const createLedgerCustomer = useCallback(
     async (body: { name: string; phone?: string; notes?: string }): Promise<LedgerCustomer | null> => {
       const name = body.name.trim()
-      if (!name) return null
-      if (!token) {
-        const local: LedgerCustomer = {
-          id: genId("lc"),
-          name,
-          phone: body.phone?.trim() || undefined,
-          notes: body.notes?.trim() || undefined,
-          balance: 0,
-          createdAt: new Date(),
-        }
-        setLedgerCustomers((prev) => [...prev, local].sort((a, b) => a.name.localeCompare(b.name, "tr")))
-        return local
-      }
+      if (!name || !token) return null
       try {
         const c = await api.ledgerCustomers.create(token, {
           name,
@@ -840,275 +785,196 @@ export function PanelProvider({ children }: { children: ReactNode }) {
     })
   }, [token, currentShift, logActivity])
 
-  const addCashTransaction = useCallback(async (t: Omit<CashTransaction, "id" | "createdAt" | "shiftId">) => {
-    if (!currentShift) return
-    if (token) {
+  const applyCloseCheckResult = useCallback((res: CloseCheckResponseDto): ClosedTable => {
+    const mapped = mapCompletedOrderDtoToClosedTable(res.completedOrder)
+    setClosedTables((prev) => [mapped, ...prev.filter((x) => x.id !== mapped.id)])
+    const nextShift = mapShiftDtoToPanel(res.shift)
+    setCashShifts((prev) =>
+      prev.some((s) => s.id === nextShift.id)
+        ? prev.map((s) => (s.id === nextShift.id ? nextShift : s))
+        : [nextShift, ...prev],
+    )
+    if (res.cashTransaction) {
+      const dto = res.cashTransaction
+      const tx: CashTransaction = {
+        id: dto.id,
+        shiftId: dto.shiftId,
+        type: dto.type,
+        amount: Number(dto.amount),
+        description: dto.description,
+        reference: dto.reference ?? undefined,
+        createdBy: dto.createdBy,
+        createdAt: new Date(dto.createdAt),
+      }
+      setCashTransactions((prev) => [tx, ...prev.filter((x) => x.id !== tx.id)])
+    }
+    if (res.stockMovements.length > 0) {
+      const mappedMvs: StockMovement[] = res.stockMovements.map((mv) => ({
+        id: mv.id,
+        materialId: mv.materialId,
+        materialName: mv.materialName,
+        type: mv.type,
+        quantity: Number(mv.quantity),
+        previousStock: Number(mv.previousStock),
+        newStock: Number(mv.newStock),
+        unitCost: mv.unitCost != null ? Number(mv.unitCost) : undefined,
+        totalCost: mv.totalCost != null ? Number(mv.totalCost) : undefined,
+        supplierId: mv.supplierId ?? undefined,
+        reason: mv.reason ?? undefined,
+        createdBy: mv.createdBy,
+        createdAt: new Date(mv.createdAt),
+      }))
+      setStockMovements((prev) => [...mappedMvs, ...prev])
+      const stockByMaterial = new Map(
+        res.stockMovements.map((mv) => [
+          mv.materialId,
+          { newStock: Number(mv.newStock), createdAt: new Date(mv.createdAt) },
+        ]),
+      )
+      setStockMaterials((prev) =>
+        prev.map((sm) => {
+          const hit = stockByMaterial.get(sm.id)
+          if (!hit) return sm
+          return { ...sm, currentStock: hit.newStock, lastUpdated: hit.createdAt }
+        }),
+      )
+    }
+    return mapped
+  }, [])
+
+  const addCashTransaction = useCallback(
+    async (t: {
+      type: "expense" | "cash-in" | "cash-out" | "refund"
+      amount: number
+      description: string
+      reference?: string
+      createdBy?: string
+    }) => {
+      if (!currentShift || !token) return
       try {
         const res = await api.cashTransactions.create(token, {
           type: t.type,
           amount: t.amount,
           description: t.description,
           reference: t.reference,
-          createdBy: t.createdBy,
         })
         const dto = res.transaction
         const tx: CashTransaction = {
           id: dto.id,
           shiftId: dto.shiftId,
           type: dto.type,
-          amount: dto.amount,
+          amount: Number(dto.amount),
           description: dto.description,
           reference: dto.reference ?? undefined,
           createdBy: dto.createdBy,
           createdAt: new Date(dto.createdAt),
         }
-        setCashTransactions((prev) => [...prev, tx])
-        setCashShifts((prev) => prev.map((s) => (s.id === res.shift.id ? mapShiftDtoToPanel(res.shift) : s)))
+        setCashTransactions((prev) => [tx, ...prev.filter((x) => x.id !== tx.id)])
+        setCashShifts((prev) =>
+          prev.map((s) => (s.id === res.shift.id ? mapShiftDtoToPanel(res.shift) : s)),
+        )
         logActivity({
           action: "cash_transaction_created",
           category: "kasa",
           details: `${t.type} islemi: ${t.amount} - ${t.description}`,
           metadata: { shiftId: res.shift.id, type: t.type, amount: t.amount, reference: t.reference },
         })
-        return
       } catch (e) {
         console.error(e)
       }
-    }
-    const fallback: CashTransaction = { ...t, id: genId("ctx"), shiftId: currentShift.id, createdAt: new Date() }
-    setCashTransactions((prev) => [...prev, fallback])
-    if (t.type === "cash-in" || t.type === "sale") {
-      setCashShifts((prev) =>
-        prev.map((s) =>
-          s.id === currentShift.id
-            ? { ...s, cashIn: s.cashIn + t.amount, transactionCount: s.transactionCount + 1 }
-            : s,
-        ),
-      )
-    } else if (t.type === "expense" || t.type === "cash-out" || t.type === "refund") {
-      setCashShifts((prev) =>
-        prev.map((s) =>
-          s.id === currentShift.id
-            ? { ...s, cashOut: s.cashOut + t.amount, transactionCount: s.transactionCount + 1 }
-            : s,
-        ),
-      )
-    }
-  }, [currentShift, token, logActivity])
+    },
+    [currentShift, token, logActivity],
+  )
 
   // ========== PAYMENT ==========
-  const closeTableWithPayment = useCallback(async (
-    tableId: string, method: PaymentMethod,
-    discount?: { type: "percent" | "amount"; value: number; reason: string },
-    splitDetails?: { method: string; amount: number }[],
-    opts?: { ledgerCustomerId?: string; ledgerDebtAmount?: number },
-  ): Promise<boolean> => {
-    const table = tables.find((t) => t.id === tableId)
-    if (!table) return false
-    const tableOrders = orders.filter((o) => o.tableId === tableId && o.status === "active")
-    if (tableOrders.length === 0) return false
-    if (method === "cari" && !opts?.ledgerCustomerId) return false
-    const now = new Date()
-    const rawTotal = tableOrders.reduce((s, o) => s + o.items.filter(itemCountsTowardBill).reduce((a, i) => a + i.price * i.quantity, 0), 0)
-
-    /** Prefer discount from Close Check modal if present; otherwise the table discount from the Discount modal (reflected in the API snapshot). */
-    let discountAmount = 0
-    let effectiveDiscount: { type: "percent" | "amount"; value: number; reason: string } | undefined
-    if (discount) {
-      discountAmount = discount.type === "percent" ? Math.round(rawTotal * discount.value / 100) : discount.value
-      effectiveDiscount = discount
-    } else if (table.discount) {
-      const td = table.discount
-      if (td.type === "ikram") {
-        discountAmount = rawTotal
-        effectiveDiscount = { type: "percent", value: 100, reason: td.reason }
-      } else if (td.type === "percent") {
-        discountAmount = Math.round(rawTotal * td.value / 100)
-        effectiveDiscount = { type: "percent", value: td.value, reason: td.reason }
-      } else {
-        discountAmount = Math.min(td.value, rawTotal)
-        effectiveDiscount = { type: "amount", value: td.value, reason: td.reason }
+  const closeTableWithPayment = useCallback(
+    async (
+      tableId: string,
+      method: PaymentMethod,
+      discount?: { type: "percent" | "amount"; value: number; reason: string },
+      splitDetails?: {
+        method: "nakit" | "kredi-karti" | "yemek-karti" | "multinet" | "cari"
+        amount: number
+      }[],
+      opts?: { ledgerCustomerId?: string; ledgerDebtAmount?: number; tip?: number },
+    ): Promise<{ ok: boolean; completedOrder?: ClosedTable; error?: string }> => {
+      if (!token) return { ok: false, error: "Oturum gerekli" }
+      const table = tables.find((t) => t.id === tableId)
+      if (!table) return { ok: false, error: "Masa bulunamadi" }
+      if (method === "cari" && !opts?.ledgerCustomerId) {
+        return { ok: false, error: "Cari musteri secilmelidir" }
       }
-    }
-    const netAmount = Math.max(0, rawTotal - discountAmount)
 
-    const waiterLabel =
-      table.waiter ||
-      resolveStaffNameForTable(tableId, tableOrders, users) ||
-      "Bilinmiyor"
+      const effectiveDiscount =
+        discount && discount.value > 0 ? discount : undefined
 
-    const ledgerPaymentSnap =
-      method === "cari" && opts?.ledgerCustomerId
-        ? {
-            ledgerCustomerId: opts.ledgerCustomerId,
-            ledgerCustomerName:
-              ledgerCustomers.find((c) => c.id === opts.ledgerCustomerId)?.name?.trim() || undefined,
-          }
-        : {}
-
-    const payment: Payment = {
-      id: genId("pay"), tableId, tableName: table.name,
-      orderIds: tableOrders.map((o) => o.id), amount: netAmount,
-      method, discount: effectiveDiscount, splitDetails,
-      processedBy: currentUser?.id || "pu1", createdAt: now,
-      ...ledgerPaymentSnap,
-    }
-
-    const billLines = tableOrders.flatMap((o) => o.items.filter(itemCountsTowardBill))
-    const qtyByProduct = new Map<string, number>()
-    for (const it of billLines) {
-      qtyByProduct.set(it.productId, (qtyByProduct.get(it.productId) ?? 0) + it.quantity)
-    }
-    const stockDeductionPayload = [...qtyByProduct.entries()].map(([productId, quantity]) => ({ productId, quantity }))
-
-    if (token) {
       try {
-        const body = {
-          tableName: table.name,
-          section: table.section,
-          waiter: waiterLabel,
-          orders: tableOrders.map((o) => ({
-            id: o.id,
-            tableId: o.tableId,
-            userId: o.userId,
-            userName: o.userName?.trim() || users.find((u) => u.id === o.userId)?.name,
-            mergedFrom: o.mergedFrom,
-            items: o.items.map((i) => ({
-              id: i.id,
-              productId: i.productId,
-              productName: i.productName,
-              price: i.price,
-              quantity: i.quantity,
-              note: i.note,
-              status: i.status,
-              createdAt: i.createdAt.toISOString(),
-              ...(i.status === "cancelled"
-                ? {
-                    cancelReason: i.cancelReason,
-                    cancelledBy: i.cancelledBy,
-                    cancelledAt: i.cancelledAt?.toISOString(),
-                  }
-                : {}),
-            })),
-            status: o.status,
-            createdAt: o.createdAt.toISOString(),
-            updatedAt: o.updatedAt.toISOString(),
-          })),
-          payment: {
-            id: payment.id,
-            tableId: payment.tableId,
-            tableName: payment.tableName,
-            orderIds: payment.orderIds,
-            amount: payment.amount,
-            method: payment.method,
-            splitDetails: payment.splitDetails,
-            discount: effectiveDiscount
-              ? {
-                  type: effectiveDiscount.type,
-                  value: effectiveDiscount.value,
-                  reason: effectiveDiscount.reason,
-                }
-              : undefined,
-            tip: payment.tip,
-            processedBy: payment.processedBy,
-            createdAt: now.toISOString(),
-            ...ledgerPaymentSnap,
-          },
-          totalAmount: rawTotal,
-          discountAmount,
-          netAmount,
-          closedBy: currentUser?.name || "Sistem",
-          openedAt: (tableOrders[0]?.createdAt || now).toISOString(),
-          closedAt: now.toISOString(),
+        const res = await api.orders.closeCheck(token, {
+          tableId,
+          method,
+          ...(effectiveDiscount ? { discount: effectiveDiscount } : {}),
+          ...(splitDetails?.length ? { splitDetails } : {}),
           ...(opts?.ledgerCustomerId ? { ledgerCustomerId: opts.ledgerCustomerId } : {}),
           ...(opts?.ledgerDebtAmount != null && Number.isFinite(opts.ledgerDebtAmount)
             ? { ledgerDebtAmount: opts.ledgerDebtAmount }
             : {}),
-        }
-        const created = await api.completedOrders.create(token, body)
-        const mapped = mapCompletedOrderDtoToClosedTable(created)
-        setClosedTables((prev) => [mapped, ...prev])
-        await api.orders.close(token, tableId)
-        if (opts?.ledgerCustomerId) void ledgerRefresh()
-      } catch {
-        return false
-      }
-    } else {
-      const closed: ClosedTable = {
-        id: genId("ct"), tableName: table.name, section: table.section,
-        waiter: waiterLabel, orders: tableOrders, payment,
-        totalAmount: rawTotal, discountAmount, netAmount,
-        closedBy: currentUser?.name || "Sistem",
-        openedAt: tableOrders[0]?.createdAt || now, closedAt: now,
-      }
-      setClosedTables((prev) => [closed, ...prev])
-    }
-    setOrders((prev) => prev.map((o) => o.tableId === tableId && o.status === "active" ? { ...o, status: "closed" as const } : o))
-    setTables((prev) => prev.map((t) => t.id === tableId ? { ...t, status: "empty" as const, waiter: undefined, totalAmount: 0, orderCount: 0, lastUpdated: undefined, activeOrderId: undefined, discount: undefined, splitInfo: undefined } : t))
-
-    // Add cash transaction (for reporting & expected cash)
-    if (currentShift && method === "nakit") {
-      await addCashTransaction({
-        type: "sale",
-        amount: netAmount,
-        description: `${table.name} - Hesap`,
-        reference: table.name,
-        createdBy: currentUser?.name || "Sistem",
-      })
-    } else if (currentShift && method === "coklu" && splitDetails?.length) {
-      const nakitPart = splitDetails
-        .filter((s) => s.method === "nakit")
-        .reduce((s, x) => s + (Number(x.amount) || 0), 0)
-      if (nakitPart > 0) {
-        await addCashTransaction({
-          type: "sale",
-          amount: nakitPart,
-          description: `${table.name} - Hesap (karma nakit)`,
-          reference: table.name,
-          createdBy: currentUser?.name || "Sistem",
+          ...(opts?.tip != null && Number.isFinite(opts.tip) && opts.tip > 0
+            ? { tip: opts.tip }
+            : {}),
         })
-      }
-    }
-    if (stockDeductionPayload.length > 0) {
-      const mv = addStockMovementRef.current
-      if (mv) {
-        try {
-          await runDeductStockForOrder(stockDeductionPayload, products, stockMaterials, mv)
-        } catch (e) {
-          console.error("Stok dusumu basarisiz (hesap kapatildi):", e)
+
+        const mapped = applyCloseCheckResult(res)
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.tableId === tableId && o.status === "active"
+              ? { ...o, status: "closed" as const }
+              : o,
+          ),
+        )
+        setTables((prev) =>
+          prev.map((t) =>
+            t.id === tableId
+              ? {
+                  ...t,
+                  status: "empty" as const,
+                  waiter: undefined,
+                  totalAmount: 0,
+                  orderCount: 0,
+                  lastUpdated: undefined,
+                  activeOrderId: undefined,
+                  discount: undefined,
+                  splitInfo: undefined,
+                }
+              : t,
+          ),
+        )
+        if (opts?.ledgerCustomerId) void ledgerRefresh()
+
+        logActivity({
+          action: "table_closed_with_payment",
+          category: "payment",
+          details: `${mapped.tableName} kapatildi. Yontem: ${method}, Net: ${mapped.netAmount}`,
+          metadata: {
+            tableId,
+            tableName: mapped.tableName,
+            method,
+            rawTotal: mapped.totalAmount,
+            discountAmount: mapped.discountAmount,
+            netAmount: mapped.netAmount,
+            orderCount: mapped.orders.length,
+          },
+        })
+
+        return { ok: true, completedOrder: mapped }
+      } catch (e) {
+        return {
+          ok: false,
+          error: e instanceof Error ? e.message : "Hesap kapatilamadi",
         }
       }
-    }
-    logActivity({
-      action: "table_closed_with_payment",
-      category: "payment",
-      details: `${table.name} kapatildi. Yontem: ${method}, Net: ${netAmount}`,
-      metadata: {
-        tableId,
-        tableName: table.name,
-        method,
-        rawTotal,
-        discountAmount,
-        netAmount,
-        orderCount: tableOrders.length,
-      },
-    })
-    return true
-  }, [
-    token,
-    tables,
-    orders,
-    users,
-    currentUser,
-    settings,
-    currentShift,
-    ledgerRefresh,
-    addCashTransaction,
-    logActivity,
-    ledgerCustomers,
-    products,
-    stockMaterials,
-  ])
+    },
+    [token, tables, applyCloseCheckResult, ledgerRefresh, logActivity],
+  )
 
   // ========== CANCEL ==========
   const cancelOrderItem = useCallback((orderId: string, itemId: string, reason: string) => {
@@ -1185,177 +1051,122 @@ export function PanelProvider({ children }: { children: ReactNode }) {
 
   // ========== PRODUCTS CRUD ==========
   const addProduct = useCallback((p: Omit<PanelProduct, "id">) => {
-    if (token) {
-      api.products
-        .create(token, {
-          categoryId: p.categoryId,
-          name: p.name,
-          price: p.price,
-          description: p.description,
-          imageUrl: p.image,
-          inStock: p.inStock ?? true,
-          ingredients:
-            p.ingredients?.map((i) => ({ materialId: i.materialId, quantity: i.quantity })) ?? undefined,
-        })
-        .then((created) => {
-          setProducts((prev) => [...prev, mapApiProductsToPanel([created], stockMaterials)[0]])
-          logActivity({
-            action: "product_created",
-            category: "product",
-            details: `Urun eklendi: ${created.name}`,
-            metadata: { productId: created.id, categoryId: created.categoryId, price: created.price },
-          })
-        })
-        .catch(console.error)
-    } else {
-      setProducts((prev) => [...prev, { ...p, id: genId("pp") }])
-      logActivity({
-        action: "product_created",
-        category: "product",
-        details: `Urun eklendi: ${p.name}`,
-        metadata: { categoryId: p.categoryId, price: p.price },
+    if (!token) return
+    api.products
+      .create(token, {
+        categoryId: p.categoryId,
+        name: p.name,
+        price: p.price,
+        description: p.description,
+        imageUrl: p.image,
+        inStock: p.inStock ?? true,
+        ingredients:
+          p.ingredients?.map((i) => ({ materialId: i.materialId, quantity: i.quantity })) ?? undefined,
       })
-    }
+      .then((created) => {
+        setProducts((prev) => [...prev, mapApiProductsToPanel([created], stockMaterials)[0]])
+        logActivity({
+          action: "product_created",
+          category: "product",
+          details: `Urun eklendi: ${created.name}`,
+          metadata: { productId: created.id, categoryId: created.categoryId, price: created.price },
+        })
+      })
+      .catch(console.error)
   }, [token, stockMaterials, logActivity])
   const updateProduct = useCallback((id: string, data: Partial<PanelProduct>) => {
-    if (token) {
-      const body: Parameters<typeof api.products.update>[2] = {}
-      if (data.name !== undefined) body.name = data.name
-      if (data.description !== undefined) body.description = data.description
-      if (data.price !== undefined) body.price = data.price
-      if (data.image !== undefined) body.imageUrl = data.image
-      if (data.inStock !== undefined) body.inStock = data.inStock
-      if (data.ingredients !== undefined) {
-        body.ingredients =
-          data.ingredients.length > 0
-            ? data.ingredients.map((i) => ({ materialId: i.materialId, quantity: i.quantity }))
-            : []
-      }
-      if (Object.keys(body).length === 0) return
-      api.products
-        .update(token, id, body)
-        .then((updated) => {
-          setProducts((prev) => prev.map((p) => (p.id === id ? mapApiProductsToPanel([updated], stockMaterials)[0] : p)))
-          logActivity({
-            action: "product_updated",
-            category: "product",
-            details: `Urun guncellendi: ${updated.name}`,
-            metadata: { productId: id, fields: Object.keys(body) },
-          })
-        })
-        .catch(console.error)
-    } else {
-      setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p)))
-      logActivity({
-        action: "product_updated",
-        category: "product",
-        details: `Urun guncellendi: ${id}`,
-        metadata: { productId: id, fields: Object.keys(data) },
-      })
+    if (!token) return
+    const body: Parameters<typeof api.products.update>[2] = {}
+    if (data.name !== undefined) body.name = data.name
+    if (data.description !== undefined) body.description = data.description
+    if (data.price !== undefined) body.price = data.price
+    if (data.image !== undefined) body.imageUrl = data.image
+    if (data.inStock !== undefined) body.inStock = data.inStock
+    if (data.ingredients !== undefined) {
+      body.ingredients =
+        data.ingredients.length > 0
+          ? data.ingredients.map((i) => ({ materialId: i.materialId, quantity: i.quantity }))
+          : []
     }
+    if (Object.keys(body).length === 0) return
+    api.products
+      .update(token, id, body)
+      .then((updated) => {
+        setProducts((prev) => prev.map((p) => (p.id === id ? mapApiProductsToPanel([updated], stockMaterials)[0] : p)))
+        logActivity({
+          action: "product_updated",
+          category: "product",
+          details: `Urun guncellendi: ${updated.name}`,
+          metadata: { productId: id, fields: Object.keys(body) },
+        })
+      })
+      .catch(console.error)
   }, [token, stockMaterials, logActivity])
   const deleteProduct = useCallback((id: string) => {
-    if (token) {
-      api.products.delete(token, id).then(() => {
-        setProducts((prev) => prev.filter((p) => p.id !== id))
-        logActivity({ action: "product_deleted", category: "product", details: `Urun silindi: ${id}`, metadata: { productId: id } })
-      }).catch(console.error)
-    } else {
+    if (!token) return
+    api.products.delete(token, id).then(() => {
       setProducts((prev) => prev.filter((p) => p.id !== id))
       logActivity({ action: "product_deleted", category: "product", details: `Urun silindi: ${id}`, metadata: { productId: id } })
-    }
+    }).catch(console.error)
   }, [token, logActivity])
 
   // ========== CATEGORY CRUD ==========
   const addCategory = useCallback(
     (name: string, opts?: { showInTerminal?: boolean; showInMenu?: boolean; parentId?: string | null }) => {
+      if (!token) return
       const showInTerminal = opts?.showInTerminal ?? true
       const showInMenu = opts?.showInMenu ?? true
       const parentId = opts?.parentId?.trim() || undefined
-      if (token) {
-        api.categories.create(token, {
-          name,
-          showInTerminal,
-          showInMenu,
-          ...(parentId ? { parentId } : {}),
-        })
-          .then((created) => {
-            setCategories((prev) => [...prev, mapApiCategoriesToPanel([created])[0]])
-            logActivity({
-              action: "category_created",
-              category: "product",
-              details: `Kategori eklendi: ${created.name}`,
-              metadata: { categoryId: created.id, parentId: created.parentId ?? undefined },
-            })
+      api.categories.create(token, {
+        name,
+        showInTerminal,
+        showInMenu,
+        ...(parentId ? { parentId } : {}),
+      })
+        .then((created) => {
+          setCategories((prev) => [...prev, mapApiCategoriesToPanel([created])[0]])
+          logActivity({
+            action: "category_created",
+            category: "product",
+            details: `Kategori eklendi: ${created.name}`,
+            metadata: { categoryId: created.id, parentId: created.parentId ?? undefined },
           })
-          .catch(console.error)
-      } else {
-        setCategories((prev) => [
-          ...prev,
-          {
-            id: genId("pc"),
-            name,
-            slug: name.toLowerCase().replace(/\s+/g, "-"),
-            order: prev.length + 1,
-            parentId,
-            showInTerminal,
-            showInMenu,
-            showInQuickSale: true,
-          },
-        ])
-      }
+        })
+        .catch(console.error)
     },
     [token, logActivity],
   )
   const updateCategory = useCallback((id: string, data: Partial<PanelCategory>) => {
-    if (token) {
-      const payload: {
-        name?: string
-        showInTerminal?: boolean
-        showInMenu?: boolean
-        parentId?: string | null
-      } = {}
-      if (data.name !== undefined) payload.name = data.name
-      if (data.showInTerminal !== undefined) payload.showInTerminal = data.showInTerminal
-      if (data.showInMenu !== undefined) payload.showInMenu = data.showInMenu
-      if (data.parentId !== undefined) payload.parentId = data.parentId?.trim() || null
-      api.categories
-        .update(token, id, payload)
-        .then((updated) => {
-          setCategories((prev) => prev.map((c) => (c.id === id ? mapApiCategoriesToPanel([updated])[0] : c)))
-          logActivity({
-            action: "category_updated",
-            category: "product",
-            details: `Kategori guncellendi: ${updated.name}`,
-            metadata: { categoryId: id, fields: Object.keys(payload) },
-          })
+    if (!token) return
+    const payload: {
+      name?: string
+      showInTerminal?: boolean
+      showInMenu?: boolean
+      parentId?: string | null
+    } = {}
+    if (data.name !== undefined) payload.name = data.name
+    if (data.showInTerminal !== undefined) payload.showInTerminal = data.showInTerminal
+    if (data.showInMenu !== undefined) payload.showInMenu = data.showInMenu
+    if (data.parentId !== undefined) payload.parentId = data.parentId?.trim() || null
+    api.categories
+      .update(token, id, payload)
+      .then((updated) => {
+        setCategories((prev) => prev.map((c) => (c.id === id ? mapApiCategoriesToPanel([updated])[0] : c)))
+        logActivity({
+          action: "category_updated",
+          category: "product",
+          details: `Kategori guncellendi: ${updated.name}`,
+          metadata: { categoryId: id, fields: Object.keys(payload) },
         })
-        .catch(console.error)
-    } else {
-      setCategories((prev) =>
-        prev.map((c) =>
-          c.id === id
-            ? {
-                ...c,
-                ...data,
-                slug: data.name ? data.name.toLowerCase().replace(/\s+/g, "-") : c.slug,
-                parentId: data.parentId !== undefined ? data.parentId?.trim() || undefined : c.parentId,
-              }
-            : c,
-        ),
-      )
-    }
+      })
+      .catch(console.error)
   }, [token, logActivity])
   const deleteCategory = useCallback((id: string) => {
-    if (token) {
-      api.categories.delete(token, id).then(() => {
-        setCategories((prev) => prev.filter((c) => c.id !== id))
-        logActivity({ action: "category_deleted", category: "product", details: `Kategori silindi: ${id}`, metadata: { categoryId: id } })
-      }).catch(console.error)
-    } else {
+    if (!token) return
+    api.categories.delete(token, id).then(() => {
       setCategories((prev) => prev.filter((c) => c.id !== id))
       logActivity({ action: "category_deleted", category: "product", details: `Kategori silindi: ${id}`, metadata: { categoryId: id } })
-    }
+    }).catch(console.error)
   }, [token, logActivity])
 
   // ========== USERS CRUD (staff API) ==========
@@ -1411,27 +1222,19 @@ export function PanelProvider({ children }: { children: ReactNode }) {
 
   // ========== TABLE CRUD ==========
   const addTable = useCallback((name: string, section: string) => {
-    if (token) {
-      api.tables.create(token, { name, section })
-        .then((created) => {
-          setTables((prev) => [...prev, { id: created.id, name: created.name, section: created.section, status: "empty", totalAmount: 0, orderCount: 0 }])
-          logActivity({ action: "table_created", category: "table", details: `Masa eklendi: ${created.name}`, metadata: { tableId: created.id, section: created.section } })
-        }).catch(console.error)
-    } else {
-      setTables((prev) => [...prev, { id: genId("pt"), name, section, status: "empty" as const, totalAmount: 0, orderCount: 0 }])
-      logActivity({ action: "table_created", category: "table", details: `Masa eklendi: ${name}`, metadata: { section } })
-    }
+    if (!token) return
+    api.tables.create(token, { name, section })
+      .then((created) => {
+        setTables((prev) => [...prev, { id: created.id, name: created.name, section: created.section, status: "empty", totalAmount: 0, orderCount: 0 }])
+        logActivity({ action: "table_created", category: "table", details: `Masa eklendi: ${created.name}`, metadata: { tableId: created.id, section: created.section } })
+      }).catch(console.error)
   }, [token, logActivity])
   const deleteTable = useCallback((id: string) => {
-    if (token) {
-      api.tables.delete(token, id).then(() => {
-        setTables((prev) => prev.filter((t) => t.id !== id))
-        logActivity({ action: "table_deleted", category: "table", details: `Masa silindi: ${id}`, metadata: { tableId: id } })
-      }).catch(console.error)
-    } else {
+    if (!token) return
+    api.tables.delete(token, id).then(() => {
       setTables((prev) => prev.filter((t) => t.id !== id))
       logActivity({ action: "table_deleted", category: "table", details: `Masa silindi: ${id}`, metadata: { tableId: id } })
-    }
+    }).catch(console.error)
   }, [token, logActivity])
 
   // ========== SETTINGS ==========
@@ -1487,390 +1290,233 @@ export function PanelProvider({ children }: { children: ReactNode }) {
 
   // ========== STOCK ==========
   const addMaterial = useCallback((m: Omit<StockMaterial, "id" | "lastUpdated">) => {
-    if (token) {
-      api.stock.materials
-        .create(token, {
-          name: m.name,
-          unit: m.unit,
-          currentStock: m.currentStock,
-          minStock: m.minStock,
-          costPerUnit: m.costPerUnit,
-          supplierId: m.supplierId,
-          category: m.category,
-        })
-        .then((created) => {
-          setStockMaterials((prev) => [
-            ...prev,
-            {
-              id: created.id,
-              name: created.name,
-              unit: created.unit as StockMaterial["unit"],
-              currentStock: created.currentStock,
-              minStock: created.minStock,
-              costPerUnit: created.costPerUnit,
-              supplierId: created.supplierId ?? undefined,
-              category: created.category,
-              lastUpdated: new Date(created.updatedAt),
-            },
-          ])
-          logActivity({
-            action: "material_created",
-            category: "stock",
-            details: `Malzeme eklendi: ${created.name}`,
-            metadata: { materialId: created.id, stock: created.currentStock, unit: created.unit },
-          })
-        })
-        .catch(console.error)
-    } else {
-      setStockMaterials((prev) => [
-        ...prev,
-        { ...m, id: genId("sm"), lastUpdated: new Date() },
-      ])
-      logActivity({
-        action: "material_created",
-        category: "stock",
-        details: `Malzeme eklendi: ${m.name}`,
-        metadata: { stock: m.currentStock, unit: m.unit },
+    if (!token) return
+    api.stock.materials
+      .create(token, {
+        name: m.name,
+        unit: m.unit,
+        currentStock: m.currentStock,
+        minStock: m.minStock,
+        costPerUnit: m.costPerUnit,
+        supplierId: m.supplierId,
+        category: m.category,
       })
-    }
+      .then((created) => {
+        setStockMaterials((prev) => [
+          ...prev,
+          {
+            id: created.id,
+            name: created.name,
+            unit: created.unit as StockMaterial["unit"],
+            currentStock: created.currentStock,
+            minStock: created.minStock,
+            costPerUnit: created.costPerUnit,
+            supplierId: created.supplierId ?? undefined,
+            category: created.category,
+            lastUpdated: new Date(created.updatedAt),
+          },
+        ])
+        logActivity({
+          action: "material_created",
+          category: "stock",
+          details: `Malzeme eklendi: ${created.name}`,
+          metadata: { materialId: created.id, stock: created.currentStock, unit: created.unit },
+        })
+      })
+      .catch(console.error)
   }, [token, logActivity])
 
   const updateMaterial = useCallback((id: string, data: Partial<StockMaterial>) => {
-    if (token) {
-      const body: {
-        name?: string
-        unit?: string
-        currentStock?: number
-        minStock?: number
-        costPerUnit?: number
-        supplierId?: string | null
-        category?: string
-      } = {
-        name: data.name,
-        unit: data.unit,
-        currentStock: data.currentStock,
-        minStock: data.minStock,
-        costPerUnit: data.costPerUnit,
-        supplierId: data.supplierId,
-        category: data.category,
-      }
-      api.stock.materials
-        .update(token, id, body)
-        .then((updated) => {
-          setStockMaterials((prev) =>
-            prev.map((m) =>
-              m.id === id
-                ? {
-                    id: updated.id,
-                    name: updated.name,
-                    unit: updated.unit as StockMaterial["unit"],
-                    currentStock: updated.currentStock,
-                    minStock: updated.minStock,
-                    costPerUnit: updated.costPerUnit,
-                    supplierId: updated.supplierId ?? undefined,
-                    category: updated.category,
-                    lastUpdated: new Date(updated.updatedAt),
-                  }
-                : m,
-            ),
-          )
-          logActivity({
-            action: "material_updated",
-            category: "stock",
-            details: `Malzeme guncellendi: ${updated.name}`,
-            metadata: { materialId: id, fields: Object.keys(body) },
-          })
-        })
-        .catch(console.error)
-    } else {
-      setStockMaterials((prev) =>
-        prev.map((m) =>
-          m.id === id ? { ...m, ...data, lastUpdated: new Date() } : m,
-        ),
-      )
-      logActivity({
-        action: "material_updated",
-        category: "stock",
-        details: `Malzeme guncellendi: ${id}`,
-        metadata: { materialId: id, fields: Object.keys(data) },
-      })
+    if (!token) return
+    const body: {
+      name?: string
+      unit?: string
+      currentStock?: number
+      minStock?: number
+      costPerUnit?: number
+      supplierId?: string | null
+      category?: string
+    } = {
+      name: data.name,
+      unit: data.unit,
+      currentStock: data.currentStock,
+      minStock: data.minStock,
+      costPerUnit: data.costPerUnit,
+      supplierId: data.supplierId,
+      category: data.category,
     }
+    api.stock.materials
+      .update(token, id, body)
+      .then((updated) => {
+        setStockMaterials((prev) =>
+          prev.map((m) =>
+            m.id === id
+              ? {
+                  id: updated.id,
+                  name: updated.name,
+                  unit: updated.unit as StockMaterial["unit"],
+                  currentStock: updated.currentStock,
+                  minStock: updated.minStock,
+                  costPerUnit: updated.costPerUnit,
+                  supplierId: updated.supplierId ?? undefined,
+                  category: updated.category,
+                  lastUpdated: new Date(updated.updatedAt),
+                }
+              : m,
+          ),
+        )
+        logActivity({
+          action: "material_updated",
+          category: "stock",
+          details: `Malzeme guncellendi: ${updated.name}`,
+          metadata: { materialId: id, fields: Object.keys(body) },
+        })
+      })
+      .catch(console.error)
   }, [token, logActivity])
 
   const deleteMaterial = useCallback((id: string) => {
-    if (token) {
-      api.stock.materials
-        .delete(token, id)
-        .then(() => {
-          setStockMaterials((prev) => prev.filter((m) => m.id !== id))
-          logActivity({ action: "material_deleted", category: "stock", details: `Malzeme silindi: ${id}`, metadata: { materialId: id } })
-        })
-        .catch(console.error)
-    } else {
-      setStockMaterials((prev) => prev.filter((m) => m.id !== id))
-      logActivity({ action: "material_deleted", category: "stock", details: `Malzeme silindi: ${id}`, metadata: { materialId: id } })
-    }
+    if (!token) return
+    api.stock.materials
+      .delete(token, id)
+      .then(() => {
+        setStockMaterials((prev) => prev.filter((m) => m.id !== id))
+        logActivity({ action: "material_deleted", category: "stock", details: `Malzeme silindi: ${id}`, metadata: { materialId: id } })
+      })
+      .catch(console.error)
   }, [token, logActivity])
 
   const addStockMovement = useCallback(
     (m: StockMovementInput): Promise<void> => {
+      if (!token) return Promise.resolve()
       const material = stockMaterials.find((sm) => sm.id === m.materialId)
       if (!material) return Promise.resolve()
-      if (token) {
-        return api.stock.movements
-          .create(token, {
-            materialId: m.materialId,
-            materialName: m.materialName,
-            type: m.type,
-            quantity: m.quantity,
-            unitCost: m.unitCost,
-            totalCost: m.totalCost,
-            supplierId: m.supplierId,
-            reason: m.reason,
-            createdBy: m.createdBy,
+      return api.stock.movements
+        .create(token, {
+          materialId: m.materialId,
+          materialName: m.materialName,
+          type: m.type,
+          quantity: m.quantity,
+          unitCost: m.unitCost,
+          totalCost: m.totalCost,
+          supplierId: m.supplierId,
+          reason: m.reason,
+          createdBy: m.createdBy,
+        })
+        .then((created) => {
+          setStockMovements((prev) => [
+            {
+              id: created.id,
+              materialId: created.materialId,
+              materialName: created.materialName,
+              type: created.type,
+              quantity: created.quantity,
+              previousStock: created.previousStock,
+              newStock: created.newStock,
+              unitCost: created.unitCost ?? undefined,
+              totalCost: created.totalCost ?? undefined,
+              supplierId: created.supplierId ?? undefined,
+              reason: created.reason ?? undefined,
+              createdBy: created.createdBy,
+              createdAt: new Date(created.createdAt),
+            },
+            ...prev,
+          ])
+          setStockMaterials((mats) =>
+            mats.map((sm) =>
+              sm.id === created.materialId
+                ? {
+                    ...sm,
+                    currentStock: created.newStock,
+                    lastUpdated: new Date(created.createdAt),
+                  }
+                : sm,
+            ),
+          )
+          logActivity({
+            action: "stock_movement_created",
+            category: "stock",
+            details: `${created.materialName} icin ${created.type} hareketi (${created.quantity})`,
+            metadata: { movementId: created.id, materialId: created.materialId, type: created.type, quantity: created.quantity },
           })
-          .then((created) => {
-            setStockMovements((prev) => [
-              {
-                id: created.id,
-                materialId: created.materialId,
-                materialName: created.materialName,
-                type: created.type,
-                quantity: created.quantity,
-                previousStock: created.previousStock,
-                newStock: created.newStock,
-                unitCost: created.unitCost ?? undefined,
-                totalCost: created.totalCost ?? undefined,
-                supplierId: created.supplierId ?? undefined,
-                reason: created.reason ?? undefined,
-                createdBy: created.createdBy,
-                createdAt: new Date(created.createdAt),
-              },
-              ...prev,
-            ])
-            setStockMaterials((mats) =>
-              mats.map((sm) =>
-                sm.id === created.materialId
-                  ? {
-                      ...sm,
-                      currentStock: created.newStock,
-                      lastUpdated: new Date(created.createdAt),
-                    }
-                  : sm,
-              ),
-            )
-            logActivity({
-              action: "stock_movement_created",
-              category: "stock",
-              details: `${created.materialName} icin ${created.type} hareketi (${created.quantity})`,
-              metadata: { movementId: created.id, materialId: created.materialId, type: created.type, quantity: created.quantity },
-            })
-          })
-          .catch((e) => {
-            console.error(e)
-            throw e
-          })
-      }
-      const prev = material.currentStock
-      const next = m.type === "in" ? prev + m.quantity : Math.max(0, prev - m.quantity)
-      setStockMaterials((mats) =>
-        mats.map((sm) =>
-          sm.id === m.materialId
-            ? { ...sm, currentStock: next, lastUpdated: new Date() }
-            : sm,
-        ),
-      )
-      setStockMovements((mvs) => [
-        {
-          ...m,
-          id: genId("smv"),
-          previousStock: prev,
-          newStock: next,
-          createdAt: new Date(),
-        },
-        ...mvs,
-      ])
-      logActivity({
-        action: "stock_movement_created",
-        category: "stock",
-        details: `${m.materialName} icin ${m.type} hareketi (${m.quantity})`,
-        metadata: { materialId: m.materialId, type: m.type, quantity: m.quantity, reason: m.reason },
-      })
-      return Promise.resolve()
+        })
+        .catch((e) => {
+          console.error(e)
+          throw e
+        })
     },
     [stockMaterials, token, logActivity],
-  )
-  addStockMovementRef.current = addStockMovement
-
-  const deductStockForOrder = useCallback(
-    (orderItems: { productId: string; quantity: number }[]) =>
-      runDeductStockForOrder(orderItems, products, stockMaterials, addStockMovement),
-    [products, stockMaterials, addStockMovement],
   )
 
   // Set ingredients for a product (permanent: API + product snapshot for stock deduction)
   const setProductIngredients = useCallback(
     (productId: string, ingredients: { materialId: string; quantity: number }[]) => {
+      if (!token) return
       const payload = ingredients.filter((i) => i.materialId && i.quantity > 0)
-      if (token) {
-        void api.products
-          .update(token, productId, {
-            ingredients: payload.map((i) => ({ materialId: i.materialId, quantity: i.quantity })),
-          })
-          .then((updated) =>
-            setProducts((prev) =>
-              prev.map((p) => (p.id === productId ? mapApiProductsToPanel([updated], stockMaterials)[0] : p)),
-            ),
-          )
-          .then(() => {
-            logActivity({
-              action: "product_ingredients_updated",
-              category: "stock",
-              details: `Urun-malzeme eslestirmesi guncellendi`,
-              metadata: { productId, ingredientCount: payload.length },
-            })
-          })
-          .catch(console.error)
-      } else {
-        setProducts((prev) =>
-          prev.map((p) => {
-            if (p.id !== productId) return p
-            const newIngredients = payload.map((ing) => {
-              const material = stockMaterials.find((m) => m.id === ing.materialId)
-              return {
-                materialId: ing.materialId,
-                materialName: material?.name || "",
-                quantity: ing.quantity,
-                unit: material?.unit || "adet",
-              }
-            })
-            return { ...p, ingredients: newIngredients }
-          }),
+      void api.products
+        .update(token, productId, {
+          ingredients: payload.map((i) => ({ materialId: i.materialId, quantity: i.quantity })),
+        })
+        .then((updated) =>
+          setProducts((prev) =>
+            prev.map((p) => (p.id === productId ? mapApiProductsToPanel([updated], stockMaterials)[0] : p)),
+          ),
         )
-      }
+        .then(() => {
+          logActivity({
+            action: "product_ingredients_updated",
+            category: "stock",
+            details: `Urun-malzeme eslestirmesi guncellendi`,
+            metadata: { productId, ingredientCount: payload.length },
+          })
+        })
+        .catch(console.error)
     },
     [stockMaterials, token, logActivity],
   )
 
   // ========== QUICK SALE (Walk-in) ==========
-  const addQuickSale = useCallback((
-    items: { productId: string; name: string; price: number; quantity: number }[],
-    method: PaymentMethod
-  ): string | null => {
-    if (!currentShift || items.length === 0) return null
-    
-    const totalAmount = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
-    const saleId = genId("qs")
-    const now = new Date()
-    
-    const orderItems = items.map((item, idx) => ({
-      id: `${saleId}-item-${idx}`,
-      productId: item.productId,
-      productName: item.name,
-      price: item.price,
-      quantity: item.quantity,
-      status: "served" as const,
-      createdAt: now,
-    }))
-    
-    const quickOrder: PanelOrder = {
-      id: `${saleId}-order`,
-      tableId: "quick-sale",
-      userId: currentUser?.id || "system",
-      userName: currentUser?.name || "Kasa",
-      items: orderItems,
-      status: "closed",
-      createdAt: now,
-      updatedAt: now,
-    }
-    
-    const payment: Payment = {
-      id: genId("pay"), tableId: "quick-sale", tableName: "Elden Satis",
-      orderIds: [quickOrder.id], amount: totalAmount,
-      method, processedBy: currentUser?.id || "pu1", createdAt: now,
-    }
+  const addQuickSale = useCallback(
+    async (
+      items: { productId: string; quantity: number; note?: string }[],
+      method: PaymentMethod,
+    ): Promise<{ ok: boolean; completedOrder?: ClosedTable; error?: string }> => {
+      if (!token) return { ok: false, error: "Oturum gerekli" }
+      if (!currentShift || items.length === 0) {
+        return { ok: false, error: "Kasa acik degil veya sepet bos" }
+      }
 
-    if (token) {
-      const body = {
-        tableName: "Elden Satis",
-        section: "Kasa",
-        waiter: currentUser?.name || "Kasa",
-        orders: [{
-          id: quickOrder.id,
-          tableId: quickOrder.tableId,
-          userId: quickOrder.userId,
-          userName: quickOrder.userName,
-          items: quickOrder.items.map((i) => ({
-            id: i.id,
+      try {
+        const res = await api.orders.closeCheck(token, {
+          items: items.map((i) => ({
             productId: i.productId,
-            productName: i.productName,
-            price: i.price,
             quantity: i.quantity,
-            note: i.note,
-            status: i.status,
-            createdAt: i.createdAt.toISOString(),
+            ...(i.note?.trim() ? { note: i.note.trim() } : {}),
           })),
-          status: quickOrder.status,
-          createdAt: quickOrder.createdAt.toISOString(),
-          updatedAt: quickOrder.updatedAt.toISOString(),
-        }],
-        payment: {
-          id: payment.id,
-          tableId: payment.tableId,
-          tableName: payment.tableName,
-          orderIds: payment.orderIds,
-          amount: payment.amount,
-          method: payment.method,
-          splitDetails: payment.splitDetails,
-          discount: payment.discount
-            ? {
-                type: payment.discount.type,
-                value: payment.discount.value,
-                reason: payment.discount.reason,
-              }
-            : undefined,
-          tip: payment.tip,
-          processedBy: payment.processedBy,
-          createdAt: now.toISOString(),
-        },
-        totalAmount,
-        discountAmount: 0,
-        netAmount: totalAmount,
-        closedBy: currentUser?.name || "Sistem",
-        openedAt: now.toISOString(),
-        closedAt: now.toISOString(),
-      }
-      api.completedOrders.create(token, body)
-        .then((created) => {
-          const mapped = mapCompletedOrderDtoToClosedTable(created)
-          setClosedTables((prev) => [mapped, ...prev])
+          method,
         })
-        .catch(console.error)
-    } else {
-      const closed: ClosedTable = {
-        id: saleId, tableName: "Elden Satis", section: "Kasa",
-        waiter: currentUser?.name || "Kasa", orders: [quickOrder], payment,
-        totalAmount, discountAmount: 0, netAmount: totalAmount,
-        closedBy: currentUser?.name || "Sistem",
-        openedAt: now, closedAt: now,
+        const mapped = applyCloseCheckResult(res)
+        logActivity({
+          action: "quick_sale_completed",
+          category: "payment",
+          details: `Elden Satis tamamlandi. Yontem: ${method}, Net: ${mapped.netAmount}`,
+          metadata: {
+            completedOrderId: mapped.id,
+            method,
+            netAmount: mapped.netAmount,
+            itemCount: items.length,
+          },
+        })
+        return { ok: true, completedOrder: mapped }
+      } catch (e) {
+        return {
+          ok: false,
+          error: e instanceof Error ? e.message : "Satis tamamlanamadi",
+        }
       }
-      setClosedTables((prev) => [closed, ...prev])
-    }
-    
-    if (method === "nakit") {
-      void addCashTransaction({
-        type: "sale",
-        amount: totalAmount,
-        description: `Elden Satis - ${items.length} urun`,
-        reference: "Elden Satis",
-        createdBy: currentUser?.name || "Sistem",
-      })
-    }
-    
-    void deductStockForOrder(items.map((item) => ({ productId: item.productId, quantity: item.quantity })))
-
-    return saleId
-  }, [currentShift, currentUser, token, deductStockForOrder, addCashTransaction])
+    },
+    [token, currentShift, applyCloseCheckResult, logActivity],
+  )
 
   const createTableOrder = useCallback(
     async (
@@ -1905,429 +1551,273 @@ export function PanelProvider({ children }: { children: ReactNode }) {
   )
   
   const addSupplier = useCallback((s: Omit<Supplier, "id">): Promise<boolean> => {
-    if (token) {
-      return api.stock.suppliers
-        .create(token, {
-          name: s.name,
-          contactPerson: s.contactPerson,
-          phone: s.phone,
-          email: s.email,
-          address: s.address,
-          notes: s.notes,
+    if (!token) return Promise.resolve(false)
+    return api.stock.suppliers
+      .create(token, {
+        name: s.name,
+        contactPerson: s.contactPerson,
+        phone: s.phone,
+        email: s.email,
+        address: s.address,
+        notes: s.notes,
+      })
+      .then((created) => {
+        setSuppliers((prev) => [
+          ...prev,
+          {
+            id: created.id,
+            name: created.name,
+            contactPerson: created.contactPerson ?? undefined,
+            phone: created.phone ?? undefined,
+            email: created.email ?? undefined,
+            address: created.address ?? undefined,
+            notes: created.notes ?? undefined,
+            active: created.active,
+          },
+        ])
+        logActivity({
+          action: "supplier_created",
+          category: "stock",
+          details: `Tedarikci eklendi: ${created.name}`,
+          metadata: { supplierId: created.id, phone: created.phone ?? undefined },
         })
-        .then((created) => {
-          setSuppliers((prev) => [
-            ...prev,
-            {
-              id: created.id,
-              name: created.name,
-              contactPerson: created.contactPerson ?? undefined,
-              phone: created.phone ?? undefined,
-              email: created.email ?? undefined,
-              address: created.address ?? undefined,
-              notes: created.notes ?? undefined,
-              active: created.active,
-            },
-          ])
-          logActivity({
-            action: "supplier_created",
-            category: "stock",
-            details: `Tedarikci eklendi: ${created.name}`,
-            metadata: { supplierId: created.id, phone: created.phone ?? undefined },
-          })
-          return true
-        })
-        .catch((e) => {
-          console.error(e)
-          return false
-        })
-    }
-    setSuppliers((prev) => [...prev, { ...s, id: genId("sup") }])
-    logActivity({
-      action: "supplier_created",
-      category: "stock",
-      details: `Tedarikci eklendi: ${s.name}`,
-    })
-    return Promise.resolve(true)
+        return true
+      })
+      .catch((e) => {
+        console.error(e)
+        return false
+      })
   }, [token, logActivity])
 
   const updateSupplier = useCallback((id: string, data: Partial<Supplier>) => {
-    if (token) {
-      api.stock.suppliers
-        .update(token, id, {
-          name: data.name,
-          contactPerson: data.contactPerson,
-          phone: data.phone,
-          email: data.email,
-          address: data.address,
-          notes: data.notes,
-          active: data.active,
-        })
-        .then((updated) => {
-          setSuppliers((prev) =>
-            prev.map((s) =>
-              s.id === id
-                ? {
-                    id: updated.id,
-                    name: updated.name,
-                    contactPerson: updated.contactPerson ?? undefined,
-                    phone: updated.phone ?? undefined,
-                    email: updated.email ?? undefined,
-                    address: updated.address ?? undefined,
-                    notes: updated.notes ?? undefined,
-                    active: updated.active,
-                  }
-                : s,
-            ),
-          )
-          logActivity({
-            action: "supplier_updated",
-            category: "stock",
-            details: `Tedarikci guncellendi: ${updated.name}`,
-            metadata: { supplierId: id, fields: Object.keys(data) },
-          })
-        })
-        .catch(console.error)
-    } else {
-      setSuppliers((prev) =>
-        prev.map((s) => (s.id === id ? { ...s, ...data } : s)),
-      )
-      logActivity({
-        action: "supplier_updated",
-        category: "stock",
-        details: `Tedarikci guncellendi: ${id}`,
-        metadata: { supplierId: id, fields: Object.keys(data) },
+    if (!token) return
+    api.stock.suppliers
+      .update(token, id, {
+        name: data.name,
+        contactPerson: data.contactPerson,
+        phone: data.phone,
+        email: data.email,
+        address: data.address,
+        notes: data.notes,
+        active: data.active,
       })
-    }
+      .then((updated) => {
+        setSuppliers((prev) =>
+          prev.map((s) =>
+            s.id === id
+              ? {
+                  id: updated.id,
+                  name: updated.name,
+                  contactPerson: updated.contactPerson ?? undefined,
+                  phone: updated.phone ?? undefined,
+                  email: updated.email ?? undefined,
+                  address: updated.address ?? undefined,
+                  notes: updated.notes ?? undefined,
+                  active: updated.active,
+                }
+              : s,
+          ),
+        )
+        logActivity({
+          action: "supplier_updated",
+          category: "stock",
+          details: `Tedarikci guncellendi: ${updated.name}`,
+          metadata: { supplierId: id, fields: Object.keys(data) },
+        })
+      })
+      .catch(console.error)
   }, [token, logActivity])
 
   const deleteSupplier = useCallback((id: string) => {
-    if (token) {
-      api.stock.suppliers
-        .delete(token, id)
-        .then(() => {
-          setSuppliers((prev) => prev.filter((s) => s.id !== id))
-          logActivity({ action: "supplier_deleted", category: "stock", details: `Tedarikci silindi: ${id}`, metadata: { supplierId: id } })
-        })
-        .catch(console.error)
-    } else {
-      setSuppliers((prev) => prev.filter((s) => s.id !== id))
-      logActivity({ action: "supplier_deleted", category: "stock", details: `Tedarikci silindi: ${id}`, metadata: { supplierId: id } })
-    }
+    if (!token) return
+    api.stock.suppliers
+      .delete(token, id)
+      .then(() => {
+        setSuppliers((prev) => prev.filter((s) => s.id !== id))
+        logActivity({ action: "supplier_deleted", category: "stock", details: `Tedarikci silindi: ${id}`, metadata: { supplierId: id } })
+      })
+      .catch(console.error)
   }, [token, logActivity])
 
   const addPurchaseOrder = useCallback((po: Omit<PurchaseOrder, "id" | "createdAt">) => {
-    if (token) {
-      api.stock.purchaseOrders
-        .create(token, {
-          supplierId: po.supplierId,
-          supplierName: po.supplierName,
-          items: po.items,
-          notes: po.notes,
-          status: po.status,
-        })
-        .then((created) => {
-          setPurchaseOrders((prev) => [
-            {
-              id: created.id,
-              supplierId: created.supplierId,
-              supplierName: created.supplierName,
-              items: created.items,
-              totalAmount: created.totalAmount,
-              status: created.status,
-              notes: created.notes ?? undefined,
-              createdBy: created.createdBy,
-              createdAt: new Date(created.createdAt),
-              receivedAt: created.receivedAt ? new Date(created.receivedAt) : undefined,
-            },
-            ...prev,
-          ])
-        })
-        .catch(console.error)
-    } else {
-      setPurchaseOrders((prev) => [
-        ...prev,
-        { ...po, id: genId("po-buy"), createdAt: new Date() },
-      ])
-    }
+    if (!token) return
+    api.stock.purchaseOrders
+      .create(token, {
+        supplierId: po.supplierId,
+        supplierName: po.supplierName,
+        items: po.items,
+        notes: po.notes,
+        status: po.status,
+      })
+      .then((created) => {
+        setPurchaseOrders((prev) => [
+          {
+            id: created.id,
+            supplierId: created.supplierId,
+            supplierName: created.supplierName,
+            items: created.items,
+            totalAmount: created.totalAmount,
+            status: created.status,
+            notes: created.notes ?? undefined,
+            createdBy: created.createdBy,
+            createdAt: new Date(created.createdAt),
+            receivedAt: created.receivedAt ? new Date(created.receivedAt) : undefined,
+          },
+          ...prev,
+        ])
+      })
+      .catch(console.error)
   }, [token])
 
   const updatePurchaseOrder = useCallback((id: string, data: Partial<PurchaseOrder>) => {
-    // Only local updates (notes/status tweak) for now
     setPurchaseOrders((prev) =>
       prev.map((po) => (po.id === id ? { ...po, ...data } : po)),
     )
   }, [])
 
   const receivePurchaseOrder = useCallback((id: string) => {
+    if (!token) return
     const po = purchaseOrders.find((p) => p.id === id)
     if (!po) return
-    if (token) {
-      api.stock.purchaseOrders
-        .receive(token, id)
-        .then((updated) => {
-          setPurchaseOrders((prev) =>
-            prev.map((p) =>
-              p.id === id
-                ? {
-                    id: updated.id,
-                    supplierId: updated.supplierId,
-                    supplierName: updated.supplierName,
-                    items: updated.items,
-                    totalAmount: updated.totalAmount,
-                    status: updated.status,
-                    notes: updated.notes ?? undefined,
-                    createdBy: updated.createdBy,
-                    createdAt: new Date(updated.createdAt),
-                    receivedAt: updated.receivedAt
-                      ? new Date(updated.receivedAt)
-                      : undefined,
-                  }
-                : p,
-            ),
-          )
-          // Movements + stock already handled on backend; reload via next sync or optimistic adjust not needed
-        })
-        .catch(console.error)
-    } else {
-      po.items.forEach((item) => {
-        const material = stockMaterials.find((m) => m.id === item.materialId)
-        if (material) {
-          const prev = material.currentStock
-          const next = prev + item.quantity
-          setStockMaterials((mats) =>
-            mats.map((m) =>
-              m.id === item.materialId
-                ? { ...m, currentStock: next, lastUpdated: new Date() }
-                : m,
-            ),
-          )
-          setStockMovements((mvs) => [
-            {
-              id: genId("smv"),
-              materialId: item.materialId,
-              materialName: item.materialName,
-              type: "in" as const,
-              quantity: item.quantity,
-              previousStock: prev,
-              newStock: next,
-              unitCost: item.unitCost,
-              totalCost: item.quantity * item.unitCost,
-              supplierId: po.supplierId,
-              createdBy: currentUser?.name || "Sistem",
-              createdAt: new Date(),
-            },
-            ...mvs,
-          ])
-        }
+    api.stock.purchaseOrders
+      .receive(token, id)
+      .then((updated) => {
+        setPurchaseOrders((prev) =>
+          prev.map((p) =>
+            p.id === id
+              ? {
+                  id: updated.id,
+                  supplierId: updated.supplierId,
+                  supplierName: updated.supplierName,
+                  items: updated.items,
+                  totalAmount: updated.totalAmount,
+                  status: updated.status,
+                  notes: updated.notes ?? undefined,
+                  createdBy: updated.createdBy,
+                  createdAt: new Date(updated.createdAt),
+                  receivedAt: updated.receivedAt
+                    ? new Date(updated.receivedAt)
+                    : undefined,
+                }
+              : p,
+          ),
+        )
       })
-      setPurchaseOrders((prev) =>
-        prev.map((p) =>
-          p.id === id
-            ? { ...p, status: "received" as const, receivedAt: new Date() }
-            : p,
-        ),
-      )
-    }
-  }, [purchaseOrders, stockMaterials, currentUser, token])
+      .catch(console.error)
+  }, [purchaseOrders, token])
 
   const startInventoryCount = useCallback(() => {
-    if (token) {
+    if (!token) return
+    api.stock.inventoryCounts
+      .start(token)
+      .then((created) => {
+        const ic: InventoryCount = {
+          id: created.id,
+          date: new Date(created.date),
+          countedBy: created.countedBy,
+          items: created.items.map((item) => ({
+            materialId: item.materialId,
+            materialName: item.materialName,
+            expectedStock: item.expectedStock,
+            actualStock: item.actualStock,
+            difference: item.difference,
+          })),
+          status: created.status,
+          notes: created.notes ?? undefined,
+        }
+        setInventoryCounts((prev) => [ic, ...prev])
+      })
+      .catch(console.error)
+  }, [token])
+
+  const updateInventoryItem = useCallback(
+    (countId: string, materialId: string, actual: number) => {
+      if (!token) return
       api.stock.inventoryCounts
-        .start(token)
-        .then((created) => {
+        .updateItem(token, countId, { materialId, actual })
+        .then((updated) => {
           const ic: InventoryCount = {
-            id: created.id,
-            date: new Date(created.date),
-            countedBy: created.countedBy,
-            items: created.items.map((item) => ({
+            id: updated.id,
+            date: new Date(updated.date),
+            countedBy: updated.countedBy,
+            items: updated.items.map((item) => ({
               materialId: item.materialId,
               materialName: item.materialName,
               expectedStock: item.expectedStock,
               actualStock: item.actualStock,
               difference: item.difference,
             })),
-            status: created.status,
-            notes: created.notes ?? undefined,
+            status: updated.status,
+            notes: updated.notes ?? undefined,
           }
-          setInventoryCounts((prev) => [ic, ...prev])
+          setInventoryCounts((prev) =>
+            prev.map((c) => (c.id === countId ? ic : c)),
+          )
         })
         .catch(console.error)
-    } else {
-      const items = stockMaterials.map((m) => ({
-        materialId: m.id,
-        materialName: m.name,
-        expectedStock: m.currentStock,
-        actualStock: m.currentStock,
-        difference: 0,
-      }))
-      setInventoryCounts((prev) => [
-        {
-          id: genId("ic"),
-          date: new Date(),
-          countedBy: currentUser?.name || "Sistem",
-          items,
-          status: "in-progress" as const,
-        },
-        ...prev,
-      ])
-    }
-  }, [stockMaterials, currentUser, token])
-
-  const updateInventoryItem = useCallback(
-    (countId: string, materialId: string, actual: number) => {
-      if (token) {
-        api.stock.inventoryCounts
-          .updateItem(token, countId, { materialId, actual })
-          .then((updated) => {
-            const ic: InventoryCount = {
-              id: updated.id,
-              date: new Date(updated.date),
-              countedBy: updated.countedBy,
-              items: updated.items.map((item) => ({
-                materialId: item.materialId,
-                materialName: item.materialName,
-                expectedStock: item.expectedStock,
-                actualStock: item.actualStock,
-                difference: item.difference,
-              })),
-              status: updated.status,
-              notes: updated.notes ?? undefined,
-            }
-            setInventoryCounts((prev) =>
-              prev.map((c) => (c.id === countId ? ic : c)),
-            )
-          })
-          .catch(console.error)
-      } else {
-        setInventoryCounts((prev) =>
-          prev.map((ic) =>
-            ic.id === countId
-              ? {
-                  ...ic,
-                  items: ic.items.map((it) =>
-                    it.materialId === materialId
-                      ? {
-                          ...it,
-                          actualStock: actual,
-                          difference: actual - it.expectedStock,
-                        }
-                      : it,
-                  ),
-                }
-              : ic,
-          ),
-        )
-      }
     },
     [token],
   )
 
   const completeInventoryCount = useCallback(
     (countId: string) => {
-      if (token) {
-        api.stock.inventoryCounts
-          .complete(token, countId)
-          .then((updated) => {
-            const ic: InventoryCount = {
-              id: updated.id,
-              date: new Date(updated.date),
-              countedBy: updated.countedBy,
-              items: updated.items.map((item) => ({
-                materialId: item.materialId,
-                materialName: item.materialName,
-                expectedStock: item.expectedStock,
-                actualStock: item.actualStock,
-                difference: item.difference,
-              })),
-              status: updated.status,
-              notes: updated.notes ?? undefined,
-            }
-            setInventoryCounts((prev) =>
-              prev.map((c) => (c.id === countId ? ic : c)),
-            )
-            // related stockMaterials/movements already updated in backend; next sync will reflect it
-          })
-          .catch(console.error)
-      } else {
-        const count = inventoryCounts.find((ic) => ic.id === countId)
-        if (!count) return
-        count.items.forEach((item) => {
-          if (item.difference !== 0) {
-            setStockMaterials((mats) =>
-              mats.map((m) =>
-                m.id === item.materialId
-                  ? {
-                      ...m,
-                      currentStock: item.actualStock,
-                      lastUpdated: new Date(),
-                    }
-                  : m,
-              ),
-            )
-            setStockMovements((mvs) => [
-              {
-                id: genId("smv"),
-                materialId: item.materialId,
-                materialName: item.materialName,
-                type: "count-adjustment" as const,
-                quantity: Math.max(item.difference, -item.difference),
-                previousStock: item.expectedStock,
-                newStock: item.actualStock,
-                reason: `Sayim farki: ${item.difference > 0 ? "+" : ""}${
-                  item.difference
-                }`,
-                createdBy: currentUser?.name || "Sistem",
-                createdAt: new Date(),
-              },
-              ...mvs,
-            ])
+      if (!token) return
+      api.stock.inventoryCounts
+        .complete(token, countId)
+        .then((updated) => {
+          const ic: InventoryCount = {
+            id: updated.id,
+            date: new Date(updated.date),
+            countedBy: updated.countedBy,
+            items: updated.items.map((item) => ({
+              materialId: item.materialId,
+              materialName: item.materialName,
+              expectedStock: item.expectedStock,
+              actualStock: item.actualStock,
+              difference: item.difference,
+            })),
+            status: updated.status,
+            notes: updated.notes ?? undefined,
           }
+          setInventoryCounts((prev) =>
+            prev.map((c) => (c.id === countId ? ic : c)),
+          )
         })
-        setInventoryCounts((prev) =>
-          prev.map((ic) =>
-            ic.id === countId ? { ...ic, status: "completed" as const } : ic,
-          ),
-        )
-      }
+        .catch(console.error)
     },
-    [inventoryCounts, currentUser, token],
+    [token],
   )
 
   const updateCompletedOrder = useCallback(
     async (
       completedId: string,
       body: CompletedOrderUpdateBody,
-      meta: { previousNet: number; previousMethod: PaymentMethod },
     ): Promise<ClosedTable | null> => {
       if (!token) return null
       try {
         const updated = await api.completedOrders.update(token, completedId, body)
         const mapped = mapCompletedOrderDtoToClosedTable(updated)
         setClosedTables((prev) => prev.map((c) => (c.id === completedId ? mapped : c)))
-        const delta = mapped.netAmount - meta.previousNet
-        if (
-          delta !== 0 &&
-          meta.previousMethod === "nakit" &&
-          mapped.payment.method === "nakit" &&
-          currentShift
-        ) {
-          if (delta > 0) {
-            await addCashTransaction({
-              type: "sale",
-              amount: delta,
-              description: `${mapped.tableName} — tamamlanan hesap duzeltmesi`,
-              reference: mapped.id,
-              createdBy: currentUser?.name || "Yonetici",
-            })
-          } else {
-            await addCashTransaction({
-              type: "refund",
-              amount: Math.abs(delta),
-              description: `${mapped.tableName} — tamamlanan hesap duzeltmesi (iade)`,
-              reference: mapped.id,
-              createdBy: currentUser?.name || "Yonetici",
-            })
+        const freshShift = await api.shifts.getCurrent(token).catch(() => null)
+        if (freshShift) {
+          const mappedShift = mapShiftDtoToPanel(freshShift)
+          setCashShifts((prev) =>
+            prev.map((s) => (s.id === mappedShift.id ? mappedShift : s)),
+          )
+          const cashTxRes = await api.cashTransactions.list(token, freshShift.id).catch(() => null)
+          if (cashTxRes) {
+            setCashTransactions(
+              cashTxRes.map((t) => ({
+                id: t.id,
+                shiftId: t.shiftId,
+                type: t.type,
+                amount: Number(t.amount),
+                description: t.description,
+                reference: t.reference ?? undefined,
+                createdBy: t.createdBy,
+                createdAt: new Date(t.createdAt),
+              })),
+            )
           }
         }
         return mapped
@@ -2336,7 +1826,7 @@ export function PanelProvider({ children }: { children: ReactNode }) {
         return null
       }
     },
-    [token, currentShift, currentUser?.name, addCashTransaction],
+    [token],
   )
 
   // ========== OPEN ACCOUNTS ==========
@@ -2346,40 +1836,7 @@ export function PanelProvider({ children }: { children: ReactNode }) {
         items?: OpenAccountCreateLine[]
       },
     ) => {
-      if (!token) {
-        const lines = a.items?.filter((it) => (it.productName || "").trim()) ?? []
-        const fromLines = lines.length > 0
-          ? lines.reduce((s, it) => s + Math.max(1, Math.floor(Number(it.quantity) || 1)) * Number(it.price || 0), 0)
-          : 0
-        const amount = lines.length > 0 ? fromLines : a.amount
-        const description =
-          lines.length > 0 ? (a.description?.trim() || "Adisyon") : a.description
-        const items: OpenAccount["items"] =
-          lines.length > 0
-            ? lines.map((it, idx) => ({
-                id: genId(`oal-${idx}`),
-                productId: it.productId,
-                productName: (it.productName || "").trim(),
-                quantity: Math.max(1, Math.floor(Number(it.quantity) || 1)),
-                price: Number(it.price),
-                note: it.note,
-              }))
-            : undefined
-        setOpenAccounts((prev) => [
-          ...prev,
-          {
-            ...a,
-            amount,
-            description,
-            items,
-            payments: [],
-            id: genId("oa"),
-            createdAt: new Date(),
-            status: "open",
-          },
-        ])
-        return
-      }
+      if (!token) return
       api.openAccounts
         .create(token, {
           customerName: a.customerName,
@@ -2412,30 +1869,7 @@ export function PanelProvider({ children }: { children: ReactNode }) {
   )
   const payOpenAccount = useCallback(
     (id: string, amount: number) => {
-      if (!token) {
-        setOpenAccounts((prev) =>
-          prev.map((a) => {
-            if (a.id !== id) return a
-            const totalPaid = (a.paidAmount || 0) + amount
-            const status = totalPaid >= a.amount ? ("paid" as const) : ("partial" as const)
-            const payRow: NonNullable<OpenAccount["payments"]>[0] = {
-              id: genId("oap"),
-              amount,
-              receivedBy: currentUser?.name || "Sistem",
-              receivedByUserId: currentUser?.id,
-              createdAt: new Date(),
-            }
-            return {
-              ...a,
-              paidAmount: totalPaid,
-              status,
-              paidAt: status === "paid" ? new Date() : undefined,
-              payments: [...(a.payments ?? []), payRow],
-            }
-          }),
-        )
-        return
-      }
+      if (!token) return
       api.openAccounts
         .pay(token, id, amount)
         .then((updated) => {
@@ -2449,7 +1883,7 @@ export function PanelProvider({ children }: { children: ReactNode }) {
         })
         .catch(console.error)
     },
-    [token, currentUser?.name, currentUser?.id, logActivity],
+    [token, logActivity],
   )
 
   // ========== NOTIFICATIONS ==========
@@ -2482,48 +1916,39 @@ export function PanelProvider({ children }: { children: ReactNode }) {
 
   // ========== PRINTERS ==========
   const addPrinter = useCallback((p: Omit<PrinterConfig, "id">) => {
-    if (token) {
-      api.technical.createPrinter(token, {
-        name: p.name,
-        type: p.type,
-        connection: p.connection,
-        ipAddress: p.ipAddress,
-        port: p.port,
-        department: p.department,
-        paperWidth: p.paperWidth,
-        autoCut: p.autoCut,
-      }).then((created) => {
-        setPrinters((prev) => [
-          ...prev,
-          {
-            id: created.id,
-            name: created.name,
-            type: created.type,
-            connection: created.connection,
-            ipAddress: created.ipAddress ?? undefined,
-            port: created.port ?? undefined,
-            department: created.department ?? undefined,
-            status: created.status,
-            paperWidth: created.paperWidth,
-            autoCut: created.autoCut,
-          },
-        ])
-        logActivity({
-          action: "printer_created",
-          category: "settings",
-          details: `Yazici eklendi: ${created.name}`,
-          metadata: { printerId: created.id, type: created.type, connection: created.connection },
-        })
-      }).catch(console.error)
-    } else {
-      setPrinters((prev) => [...prev, { ...p, id: genId("pr") }])
+    if (!token) return
+    api.technical.createPrinter(token, {
+      name: p.name,
+      type: p.type,
+      connection: p.connection,
+      ipAddress: p.ipAddress,
+      port: p.port,
+      department: p.department,
+      paperWidth: p.paperWidth,
+      autoCut: p.autoCut,
+    }).then((created) => {
+      setPrinters((prev) => [
+        ...prev,
+        {
+          id: created.id,
+          name: created.name,
+          type: created.type,
+          connection: created.connection,
+          ipAddress: created.ipAddress ?? undefined,
+          port: created.port ?? undefined,
+          department: created.department ?? undefined,
+          status: created.status,
+          paperWidth: created.paperWidth,
+          autoCut: created.autoCut,
+        },
+      ])
       logActivity({
         action: "printer_created",
         category: "settings",
-        details: `Yazici eklendi: ${p.name}`,
-        metadata: { type: p.type, connection: p.connection },
+        details: `Yazici eklendi: ${created.name}`,
+        metadata: { printerId: created.id, type: created.type, connection: created.connection },
       })
-    }
+    }).catch(console.error)
   }, [token, logActivity])
 
   const updatePrinter = useCallback((id: string, data: Partial<PrinterConfig>) => {
@@ -2576,37 +2001,29 @@ export function PanelProvider({ children }: { children: ReactNode }) {
   
   // ========== BACKUPS ==========
   const createBackup = useCallback(() => {
-    if (token) {
-      api.technical.createBackup(token, {
-        type: "manual",
-        notes: "Manuel yedekleme",
-      }).then((b) => {
-        setBackups((prev) => [
-          {
-            id: b.id,
-            type: b.type,
-            size: b.size,
-            createdAt: new Date(b.createdAt),
-            status: b.status,
-            notes: b.notes ?? undefined,
-          },
-          ...prev,
-        ])
-        logActivity({
-          action: "backup_created",
-          category: "settings",
-          details: `Manuel yedek alindi (${b.size})`,
-          metadata: { backupId: b.id, status: b.status, size: b.size },
-        })
-      }).catch(console.error)
-    } else {
-      setBackups((prev) => [{ id: genId("bk"), type: "manual", size: "12.6 MB", createdAt: new Date(), status: "success", notes: "Manuel yedekleme" }, ...prev])
+    if (!token) return
+    api.technical.createBackup(token, {
+      type: "manual",
+      notes: "Manuel yedekleme",
+    }).then((b) => {
+      setBackups((prev) => [
+        {
+          id: b.id,
+          type: b.type,
+          size: b.size,
+          createdAt: new Date(b.createdAt),
+          status: b.status,
+          notes: b.notes ?? undefined,
+        },
+        ...prev,
+      ])
       logActivity({
         action: "backup_created",
         category: "settings",
-        details: "Manuel yedek alindi",
+        details: `Manuel yedek alindi (${b.size})`,
+        metadata: { backupId: b.id, status: b.status, size: b.size },
       })
-    }
+    }).catch(console.error)
   }, [token, logActivity])
 
   // ========== DISCOUNT ==========
@@ -2703,10 +2120,7 @@ export function PanelProvider({ children }: { children: ReactNode }) {
 
   // ========== CAMPAIGNS ==========
   const addCampaign = useCallback((c: Omit<Campaign, "id" | "createdAt" | "order">) => {
-    if (!token) {
-      setCampaigns((prev) => [...prev, { ...c, id: genId("camp"), createdAt: new Date(), order: prev.length + 1 }])
-      return
-    }
+    if (!token) return
     api.campaigns.create(token, {
       title: c.title,
       description: c.description,
@@ -2834,7 +2248,7 @@ export function PanelProvider({ children }: { children: ReactNode }) {
       addUser, updateUser, deleteUser,
       addSection, updateSection, deleteSection,
       addTable, deleteTable, updateSettings, reprintReceipt, updateCompletedOrder,
-      addMaterial, updateMaterial, deleteMaterial, addStockMovement, setProductIngredients, deductStockForOrder,
+      addMaterial, updateMaterial, deleteMaterial, addStockMovement, setProductIngredients,
       addSupplier, updateSupplier, deleteSupplier,
       addPurchaseOrder, updatePurchaseOrder, receivePurchaseOrder,
       startInventoryCount, updateInventoryItem, completeInventoryCount,

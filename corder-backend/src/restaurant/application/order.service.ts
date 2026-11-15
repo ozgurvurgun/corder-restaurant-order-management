@@ -7,12 +7,22 @@ import { OrderItemEntity } from '../domain/order-item.entity';
 import { TableEntity } from '../domain/table.entity';
 import { RestaurantStaffEntity } from '../domain/restaurant-staff.entity';
 import { ProductEntity } from '../domain/product.entity';
+import { CashShiftEntity } from '../domain/cash-shift.entity';
+import { CashTransactionEntity } from '../domain/cash-transaction.entity';
+import { CompletedOrderEntity } from '../domain/completed-order.entity';
+import { LedgerCustomerEntity } from '../domain/ledger-customer.entity';
+import { StockMaterialEntity } from '../domain/stock-material.entity';
+import { StockMovementEntity } from '../domain/stock-movement.entity';
 import { CreateOrderDto } from '../api/dto/create-order.dto';
+import { CloseCheckDto } from '../api/dto/close-check.dto';
 import { PrintReceiptDto } from '../api/dto/print-receipt.dto';
 import { OrdersGateway } from '../api/orders.gateway';
-import { CashShiftService } from './cash-shift.service';
+import { CashShiftService, serializeCashShift } from './cash-shift.service';
+import { serializeCashTransaction } from './cash-transactions.service';
+import { serializeCompletedOrder } from './completed-orders.service';
 import { TableService } from './table.service';
 import { LedgerService } from './ledger.service';
+import { computeDiscountKurus, fromKurus, toKurus } from '../../common/money/kurus';
 
 @Injectable()
 export class OrderService {
@@ -367,22 +377,514 @@ export class OrderService {
     return serialized;
   }
 
-  /** Close check: marks all active orders on the table as closed (instant panel/terminal sync). */
-  async closeTable(restaurantId: string, tableId: string): Promise<{ closed: number }> {
-    const result = await this.orderRepo.update(
-      { restaurantId, tableId, status: 'active' },
-      { status: 'closed' },
-    );
-    const closed = result.affected ?? 0;
-    await this.tableRepo.update(
-      { id: tableId, restaurantId },
-      { sessionStaffId: null, sessionStaffName: null, sessionLockedAt: null },
-    );
-    void this.ordersGateway.emitTableSessionPresence(restaurantId).catch(() => undefined);
-    if (closed > 0) {
+  /**
+   * Single-transaction server-side check closing and walk-in quick sale in integer kurus.
+   * Client amounts/prices are never accepted; active orders or walk-in products are loaded from DB.
+   */
+  async closeCheck(
+    restaurantId: string,
+    dto: CloseCheckDto,
+    actor: { id: string; name: string },
+  ) {
+    const hasTable = Boolean(dto.tableId?.trim());
+    const hasWalkInItems = Boolean(dto.items && dto.items.length > 0);
+    if ((hasTable && hasWalkInItems) || (!hasTable && !hasWalkInItems)) {
+      throw new BadRequestException(
+        'tableId veya walk-in items alanlarindan yalnizca biri gonderilmelidir',
+      );
+    }
+
+    const txResult = await this.orderRepo.manager.transaction(async (em) => {
+      const shift = await em.findOne(CashShiftEntity, {
+        where: { restaurantId, status: 'open' },
+        order: { openedAt: 'DESC' },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!shift) {
+        throw new BadRequestException('Kasa açılmadan işlem yapılamaz. Önce kasayı açın.');
+      }
+
+      const now = new Date();
+      const actorId = (actor.id || '').trim() || restaurantId;
+      const actorName = (actor.name || '').trim() || 'Kasa';
+
+      let table: TableEntity | null = null;
+      let tableName = 'Elden Satis';
+      let section = 'Kasa';
+      let waiterName = actorName;
+      let openedAt = now;
+      let rawTotalKurus = 0;
+      let orderIdsToClose: string[] = [];
+      let ordersSnapshot: Array<Record<string, unknown>> = [];
+      const billLinesForStock: Array<{
+        productId: string;
+        productName: string;
+        quantity: number;
+      }> = [];
+
+      if (hasTable) {
+        table = await em.findOne(TableEntity, {
+          where: { id: dto.tableId!, restaurantId },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!table) {
+          throw new NotFoundException('Masa bulunamadi');
+        }
+
+        const activeOrders = await em.find(OrderEntity, {
+          where: { restaurantId, tableId: table.id, status: 'active' },
+          order: { createdAt: 'ASC' },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!activeOrders.length) {
+          throw new BadRequestException('Bu masada aktif siparis bulunamadi');
+        }
+
+        orderIdsToClose = activeOrders.map((o) => o.id);
+        const orderItems = await em.find(OrderItemEntity, {
+          where: { orderId: In(orderIdsToClose) },
+          order: { createdAt: 'ASC' },
+        });
+        const itemsByOrderId = new Map<string, OrderItemEntity[]>();
+        for (const item of orderItems) {
+          const arr = itemsByOrderId.get(item.orderId) ?? [];
+          arr.push(item);
+          itemsByOrderId.set(item.orderId, arr);
+        }
+
+        const staffIds = [
+          ...new Set(
+            activeOrders
+              .map((o) => o.userId?.trim() || '')
+              .filter((id): id is string => Boolean(id)),
+          ),
+        ];
+        const staffRows = staffIds.length
+          ? await em.find(RestaurantStaffEntity, {
+              where: { restaurantId, id: In(staffIds) },
+              select: ['id', 'name'],
+            })
+          : [];
+        const staffNameById = new Map(
+          staffRows.map((s) => [s.id, (s.name || '').trim()]),
+        );
+
+        tableName = (table.name || '').trim() || table.id;
+        section = (table.section || '').trim() || 'default';
+        openedAt = activeOrders[0].createdAt ?? now;
+
+        const latestOrder = [...activeOrders].sort(
+          (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
+        )[0];
+        const latestUid = latestOrder?.userId?.trim() || '';
+        waiterName =
+          latestOrder?.userDisplayName?.trim() ||
+          (latestUid ? staffNameById.get(latestUid) : '') ||
+          actorName;
+
+        for (const o of activeOrders) {
+          const lines = itemsByOrderId.get(o.id) ?? [];
+          for (const line of lines) {
+            if (this.itemOnActiveBill(line.status)) {
+              const unitKurus = toKurus(line.price);
+              if (unitKurus < 0 || line.quantity < 1) {
+                throw new BadRequestException('Gecersiz siparis kalemi');
+              }
+              rawTotalKurus += unitKurus * line.quantity;
+              billLinesForStock.push({
+                productId: line.productId,
+                productName: line.productName,
+                quantity: line.quantity,
+              });
+            }
+          }
+          const uid = o.userId?.trim() || '';
+          const resolvedUserName =
+            o.userDisplayName?.trim() ||
+            (uid ? staffNameById.get(uid) || undefined : undefined);
+
+          ordersSnapshot.push({
+            id: o.id,
+            tableId: o.tableId,
+            userId: o.userId ?? actorId,
+            ...(resolvedUserName ? { userName: resolvedUserName } : {}),
+            ...(o.mergedFrom ? { mergedFrom: o.mergedFrom } : {}),
+            status: 'closed',
+            createdAt: o.createdAt.toISOString(),
+            updatedAt: now.toISOString(),
+            items: lines.map((i) => ({
+              id: i.id,
+              productId: i.productId,
+              productName: i.productName,
+              price: fromKurus(toKurus(i.price)),
+              quantity: i.quantity,
+              ...(i.note ? { note: i.note } : {}),
+              status: i.status,
+              createdAt: i.createdAt.toISOString(),
+              ...(i.cancelReason ? { cancelReason: i.cancelReason } : {}),
+              ...(i.cancelledBy ? { cancelledBy: i.cancelledBy } : {}),
+              ...(i.cancelledAt ? { cancelledAt: i.cancelledAt.toISOString() } : {}),
+            })),
+          });
+        }
+      } else {
+        const walkInItems = dto.items!;
+        const uniqueProductIds = [...new Set(walkInItems.map((i) => i.productId))];
+        const products = await em.find(ProductEntity, {
+          where: { id: In(uniqueProductIds) },
+          relations: ['category'],
+        });
+        const productById = new Map<string, ProductEntity>();
+        for (const p of products) {
+          if (p.category?.restaurantId === restaurantId) {
+            productById.set(p.id, p);
+          }
+        }
+
+        const quickOrderId = randomUUID();
+        const snapItems: Array<Record<string, unknown>> = [];
+        for (const reqItem of walkInItems) {
+          const product = productById.get(reqItem.productId);
+          if (!product) {
+            throw new BadRequestException(
+              'Urun bulunamadi veya bu restorana ait degil',
+            );
+          }
+          const unitKurus = toKurus(product.price);
+          if (unitKurus < 0) {
+            throw new BadRequestException('Urun fiyati gecersiz');
+          }
+          rawTotalKurus += unitKurus * reqItem.quantity;
+          billLinesForStock.push({
+            productId: product.id,
+            productName: product.name,
+            quantity: reqItem.quantity,
+          });
+          snapItems.push({
+            id: randomUUID(),
+            productId: product.id,
+            productName: product.name,
+            price: fromKurus(unitKurus),
+            quantity: reqItem.quantity,
+            ...(reqItem.note?.trim() ? { note: reqItem.note.trim() } : {}),
+            status: 'served',
+            createdAt: now.toISOString(),
+          });
+        }
+
+        orderIdsToClose = [quickOrderId];
+        ordersSnapshot = [
+          {
+            id: quickOrderId,
+            tableId: 'quick-sale',
+            userId: actorId,
+            userName: actorName,
+            status: 'closed',
+            createdAt: now.toISOString(),
+            updatedAt: now.toISOString(),
+            items: snapItems,
+          },
+        ];
+      }
+
+      const discountKurus = computeDiscountKurus(rawTotalKurus, dto.discount ?? null);
+      const netKurus = Math.max(0, rawTotalKurus - discountKurus);
+      const tipKurus = dto.tip != null ? Math.max(0, toKurus(dto.tip)) : 0;
+
+      let nakitKurus = 0;
+      let kartKurus = 0;
+      let yemekKartiKurus = 0;
+      let multinetKurus = 0;
+      let cariKurus = 0;
+      let normalizedSplits: Array<{ method: string; amount: number }> | undefined;
+
+      if (dto.method === 'nakit') {
+        nakitKurus = netKurus;
+      } else if (dto.method === 'kredi-karti') {
+        kartKurus = netKurus;
+      } else if (dto.method === 'yemek-karti') {
+        yemekKartiKurus = netKurus;
+      } else if (dto.method === 'multinet') {
+        multinetKurus = netKurus;
+      } else if (dto.method === 'cari') {
+        if (!dto.ledgerCustomerId) {
+          throw new BadRequestException('Cari hesap kapatma icin cari musteri secilmelidir');
+        }
+        cariKurus =
+          dto.ledgerDebtAmount != null
+            ? Math.min(netKurus, Math.max(0, toKurus(dto.ledgerDebtAmount)))
+            : netKurus;
+      } else if (dto.method === 'coklu') {
+        if (netKurus > 0 && (!dto.splitDetails || dto.splitDetails.length === 0)) {
+          throw new BadRequestException('Karma odeme dagilimi gerekli');
+        }
+        normalizedSplits = [];
+        for (const s of dto.splitDetails ?? []) {
+          const partKurus = toKurus(s.amount);
+          if (partKurus < 0) {
+            throw new BadRequestException('Karma odeme kalemi negatif olamaz');
+          }
+          if (partKurus === 0) continue;
+          if (s.method === 'nakit') nakitKurus += partKurus;
+          else if (s.method === 'kredi-karti') kartKurus += partKurus;
+          else if (s.method === 'yemek-karti') yemekKartiKurus += partKurus;
+          else if (s.method === 'multinet') multinetKurus += partKurus;
+          else if (s.method === 'cari') cariKurus += partKurus;
+          normalizedSplits.push({ method: s.method, amount: fromKurus(partKurus) });
+        }
+        if (cariKurus === 0 && dto.ledgerCustomerId && dto.ledgerDebtAmount != null) {
+          const extraCariKurus = Math.max(0, toKurus(dto.ledgerDebtAmount));
+          if (extraCariKurus > 0) {
+            cariKurus += extraCariKurus;
+            normalizedSplits.push({ method: 'cari', amount: fromKurus(extraCariKurus) });
+          }
+        }
+        const splitSumKurus =
+          nakitKurus + kartKurus + yemekKartiKurus + multinetKurus + cariKurus;
+        if (splitSumKurus !== netKurus) {
+          throw new BadRequestException('Karma odeme toplami net tutara esit olmalidir');
+        }
+      }
+
+      let ledgerCustomer: LedgerCustomerEntity | null = null;
+      if (cariKurus > 0 || dto.method === 'cari') {
+        if (!dto.ledgerCustomerId) {
+          throw new BadRequestException('Cari borc kaydi icin ledgerCustomerId gerekli');
+        }
+        ledgerCustomer = await em.findOne(LedgerCustomerEntity, {
+          where: { id: dto.ledgerCustomerId, restaurantId },
+        });
+        if (!ledgerCustomer) {
+          throw new NotFoundException('Cari bulunamadi');
+        }
+      }
+
+      const discountSnapshot =
+        dto.discount && discountKurus > 0
+          ? {
+              type: dto.discount.type,
+              value: dto.discount.value,
+              reason: dto.discount.reason?.trim() || 'Indirim',
+            }
+          : undefined;
+
+      const paymentSnapshot: Record<string, unknown> = {
+        id: randomUUID(),
+        tableId: table ? table.id : 'quick-sale',
+        tableName,
+        orderIds: orderIdsToClose,
+        amount: fromKurus(netKurus),
+        method: dto.method,
+        ...(normalizedSplits ? { splitDetails: normalizedSplits } : {}),
+        ...(discountSnapshot ? { discount: discountSnapshot } : {}),
+        ...(tipKurus > 0 ? { tip: fromKurus(tipKurus) } : {}),
+        processedBy: actorId,
+        createdAt: now.toISOString(),
+        ...(ledgerCustomer
+          ? {
+              ledgerCustomerId: ledgerCustomer.id,
+              ledgerCustomerName: ledgerCustomer.name,
+            }
+          : {}),
+      };
+
+      const completedEntity = em.create(CompletedOrderEntity, {
+        restaurantId,
+        tableName,
+        section,
+        waiter: waiterName,
+        totalAmount: fromKurus(rawTotalKurus),
+        discountAmount: fromKurus(discountKurus),
+        netAmount: fromKurus(netKurus),
+        closedBy: actorName,
+        openedAt,
+        closedAt: now,
+        paymentMethod: dto.method,
+        paymentSplit: normalizedSplits ?? null,
+        paymentDiscount: discountSnapshot ?? null,
+        paymentTip: fromKurus(tipKurus),
+        ordersSnapshot,
+        paymentSnapshot,
+      });
+      const savedCompleted = await em.save(CompletedOrderEntity, completedEntity);
+
+      if (ledgerCustomer && cariKurus > 0) {
+        await this.ledgerService.recordDebtInTransaction(em, {
+          restaurantId,
+          customerId: ledgerCustomer.id,
+          amount: fromKurus(cariKurus),
+          description: `${tableName} masasi hesabi`,
+          tableId: table ? table.id : null,
+          tableName,
+          completedOrderId: savedCompleted.id,
+          snapshot: ordersSnapshot,
+          recordedBy: actorName,
+        });
+      }
+
+      if (table) {
+        await em.update(
+          OrderEntity,
+          { id: In(orderIdsToClose), restaurantId },
+          { status: 'closed', updatedAt: now },
+        );
+        table.status = 'empty';
+        table.sessionStaffId = null;
+        table.sessionStaffName = null;
+        table.sessionLockedAt = null;
+        await em.save(TableEntity, table);
+      }
+
+      let savedCashTx: CashTransactionEntity | null = null;
+      if (nakitKurus > 0) {
+        const tx = em.create(CashTransactionEntity, {
+          restaurantId,
+          shiftId: shift.id,
+          type: 'sale',
+          amount: fromKurus(nakitKurus),
+          description:
+            dto.method === 'coklu'
+              ? `${tableName} - Hesap (karma nakit)`
+              : `${tableName} - Hesap`,
+          reference: tableName,
+          createdBy: actorName,
+        });
+        savedCashTx = await em.save(CashTransactionEntity, tx);
+        shift.cashIn = fromKurus(toKurus(shift.cashIn) + nakitKurus);
+      }
+
+      shift.totalRevenue = fromKurus(toKurus(shift.totalRevenue) + netKurus);
+      shift.totalNakit = fromKurus(toKurus(shift.totalNakit) + nakitKurus);
+      shift.totalKart = fromKurus(toKurus(shift.totalKart) + kartKurus);
+      shift.totalYemekKarti = fromKurus(toKurus(shift.totalYemekKarti) + yemekKartiKurus);
+      shift.totalMultinet = fromKurus(toKurus(shift.totalMultinet) + multinetKurus);
+      shift.transactionCount = (shift.transactionCount ?? 0) + 1;
+      const savedShift = await em.save(CashShiftEntity, shift);
+
+      const savedMovements: StockMovementEntity[] = [];
+      if (billLinesForStock.length > 0) {
+        const soldProductIds = [...new Set(billLinesForStock.map((l) => l.productId))];
+        const recipeProducts = await em.find(ProductEntity, {
+          where: { id: In(soldProductIds) },
+          relations: ['category'],
+        });
+        const validProductById = new Map<string, ProductEntity>();
+        for (const p of recipeProducts) {
+          if (p.category?.restaurantId === restaurantId) {
+            validProductById.set(p.id, p);
+          }
+        }
+
+        const uuidRe =
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const byMaterial = new Map<string, { quantity: number; labels: string[] }>();
+
+        for (const line of billLinesForStock) {
+          const prod = validProductById.get(line.productId);
+          if (!prod || !Array.isArray(prod.ingredients) || prod.ingredients.length === 0) {
+            continue;
+          }
+          for (const ing of prod.ingredients) {
+            const matId = typeof ing?.materialId === 'string' ? ing.materialId.trim() : '';
+            if (!uuidRe.test(matId)) continue;
+            const perUnit = Number(ing.quantity);
+            if (!Number.isFinite(perUnit) || perUnit <= 0) continue;
+            const deduct = perUnit * line.quantity;
+            if (deduct <= 0) continue;
+            const label = `${prod.name} x${line.quantity}`;
+            const existing = byMaterial.get(matId);
+            if (existing) {
+              existing.quantity += deduct;
+              existing.labels.push(label);
+            } else {
+              byMaterial.set(matId, { quantity: deduct, labels: [label] });
+            }
+          }
+        }
+
+        if (byMaterial.size > 0) {
+          const sortedMaterialIds = [...byMaterial.keys()].sort();
+          const materials = await em.find(StockMaterialEntity, {
+            where: { id: In(sortedMaterialIds), restaurantId },
+            lock: { mode: 'pessimistic_write' },
+          });
+          const matById = new Map(materials.map((m) => [m.id, m]));
+
+          for (const matId of sortedMaterialIds) {
+            const material = matById.get(matId);
+            if (!material || material.restaurantId !== restaurantId) {
+              continue;
+            }
+            const entry = byMaterial.get(matId)!;
+            const deductQty = Number(entry.quantity.toFixed(3));
+            if (deductQty <= 0) continue;
+            const prevStock = Number(material.currentStock ?? 0);
+            const nextStock = Number((prevStock - deductQty).toFixed(3));
+            material.currentStock = nextStock;
+            await em.save(StockMaterialEntity, material);
+
+            const uniqLabels = [...new Set(entry.labels)];
+            const reason =
+              uniqLabels.length === 1
+                ? `Siparis: ${uniqLabels[0]}`
+                : `Siparis: ${uniqLabels.join(', ')}`;
+
+            const mv = em.create(StockMovementEntity, {
+              restaurantId,
+              materialId: material.id,
+              materialName: material.name,
+              type: 'out',
+              quantity: deductQty,
+              previousStock: prevStock,
+              newStock: nextStock,
+              unitCost: null,
+              totalCost: null,
+              supplierId: null,
+              reason,
+              createdBy: actorName,
+            });
+            const savedMv = await em.save(StockMovementEntity, mv);
+            savedMovements.push(savedMv);
+          }
+        }
+      }
+
+      return {
+        savedCompleted,
+        savedShift,
+        savedCashTx,
+        savedMovements,
+      };
+    });
+
+    if (hasTable) {
+      void this.ordersGateway.emitTableSessionPresence(restaurantId).catch(() => undefined);
       this.ordersGateway.emitOrdersUpdated(restaurantId);
     }
-    return { closed };
+
+    return {
+      completedOrder: serializeCompletedOrder(txResult.savedCompleted),
+      shift: serializeCashShift(txResult.savedShift),
+      cashTransaction: txResult.savedCashTx
+        ? serializeCashTransaction(txResult.savedCashTx)
+        : null,
+      stockMovements: txResult.savedMovements.map((m) => ({
+        id: m.id,
+        restaurantId: m.restaurantId,
+        materialId: m.materialId,
+        materialName: m.materialName,
+        type: m.type,
+        quantity: Number(m.quantity),
+        previousStock: Number(m.previousStock),
+        newStock: Number(m.newStock),
+        unitCost: m.unitCost != null ? Number(m.unitCost) : null,
+        totalCost: m.totalCost != null ? Number(m.totalCost) : null,
+        supplierId: m.supplierId,
+        reason: m.reason,
+        createdBy: m.createdBy,
+        createdAt: m.createdAt,
+      })),
+    };
   }
 
   /** Cancels an active order item; emits orders:updated for panel/register sync. */

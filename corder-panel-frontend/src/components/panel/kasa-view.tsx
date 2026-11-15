@@ -137,26 +137,40 @@ export default function KasaView() {
   }, [currentShift, closedTables])
 
   const shiftTotals = useMemo(() => {
-    let totalRevenue = 0
-    let totalNakit = 0
-    let totalKart = 0
-    let totalYemekKarti = 0
-    let totalMultinet = 0
-    let totalCari = 0
-
+    let totalCariKurus = 0
     shiftClosedTables.forEach((ct) => {
-      const amount = ct.netAmount || 0
-      totalRevenue += amount
       const method = ct.payment?.method
-      if (method === "nakit") totalNakit += amount
-      else if (method === "kredi-karti") totalKart += amount
-      else if (method === "yemek-karti") totalYemekKarti += amount
-      else if (method === "multinet") totalMultinet += amount
-      else if (method === "cari") totalCari += amount
+      if (method === "cari") {
+        totalCariKurus += Math.round((ct.netAmount || 0) * 100)
+      } else if (method === "coklu" && ct.payment?.splitDetails) {
+        for (const s of ct.payment.splitDetails) {
+          if (s.method === "cari") {
+            totalCariKurus += Math.round((s.amount || 0) * 100)
+          }
+        }
+      }
     })
 
-    return { totalRevenue, totalNakit, totalKart, totalYemekKarti, totalMultinet, totalCari }
-  }, [shiftClosedTables])
+    if (currentShift) {
+      return {
+        totalRevenue: currentShift.totalRevenue || 0,
+        totalNakit: currentShift.totalNakit || 0,
+        totalKart: currentShift.totalKart || 0,
+        totalYemekKarti: currentShift.totalYemekKarti || 0,
+        totalMultinet: currentShift.totalMultinet || 0,
+        totalCari: totalCariKurus / 100,
+      }
+    }
+
+    return {
+      totalRevenue: 0,
+      totalNakit: 0,
+      totalKart: 0,
+      totalYemekKarti: 0,
+      totalMultinet: 0,
+      totalCari: totalCariKurus / 100,
+    }
+  }, [currentShift, shiftClosedTables])
 
   const closedShifts = useMemo(() =>
     cashShifts.filter((s) => s.status === "closed").sort((a, b) => new Date(b.closedAt!).getTime() - new Date(a.closedAt!).getTime()), [cashShifts])

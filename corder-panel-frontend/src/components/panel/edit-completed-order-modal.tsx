@@ -163,12 +163,7 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
       orders: ordersToSnapshots(draftOrders),
       payment: paymentSnap,
     }
-    const prevNet = closedTable.netAmount
-    const prevMethod = closedTable.payment.method
-    const ok = await updateCompletedOrder(closedTable.id, body, {
-      previousNet: prevNet,
-      previousMethod: prevMethod,
-    })
+    const ok = await updateCompletedOrder(closedTable.id, body)
     setSaving(false)
     if (ok) {
       showToast("Kayit guncellendi", "success")

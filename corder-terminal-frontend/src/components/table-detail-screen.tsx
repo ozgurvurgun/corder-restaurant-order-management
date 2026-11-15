@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   Plus,
   ArrowRightLeft,
-  // X,
   Printer,
   User,
   ChevronRight,
@@ -30,9 +29,7 @@ export function TableDetailScreen({
 }: TableDetailScreenProps) {
   const { showToast } = useToast()
   const { tables, getTableOrders, getTableTotal, printReceipt, currentUser } = useApp()
-  // const [closing, setClosing] = useState(false)
   const [printing, setPrinting] = useState(false)
-  // const [showCloseConfirm, setShowCloseConfirm] = useState(false)
   const [showMoveConfirm, setShowMoveConfirm] = useState(false)
 
   const table = tables.find((t) => t.id === tableId)
@@ -42,20 +39,6 @@ export function TableDetailScreen({
   const total = getTableTotal(tableId)
   const orderCount = tableOrders.length
   const isCheckoutLocked = table.status === "checkout"
-
-  // const handleCloseConfirmed = async () => {
-  //   setClosing(true)
-  //   if (total > 0) await printReceipt(tableId)
-  //   const ok = await closeTable(tableId)
-  //   setClosing(false)
-  //   if (!ok) {
-  //     showToast("Could not close table", "error")
-  //     return
-  //   }
-  //   showToast("Table closed")
-  //   setShowCloseConfirm(false)
-  //   onBack()
-  // }
 
   const handleMoveConfirmed = () => {
     setShowMoveConfirm(false)
@@ -113,13 +96,6 @@ export function TableDetailScreen({
             disabled={isCheckoutLocked}
             color="text-[#e63462]"
           />
-          {/* <ActionRow
-            icon={<X className="h-[20px] w-[20px]" />}
-            label="Masayi Kapat"
-            onClick={() => setShowCloseConfirm(true)}
-            disabled={closing}
-            color="text-[#e63462]"
-          /> */}
           <ActionRow
             icon={<Printer className="h-[20px] w-[20px]" />}
             label="Yazdir"
@@ -151,21 +127,6 @@ export function TableDetailScreen({
           COMPART SOFTWARE
         </p>
       </div>
-
-      {/* Close Table Confirmation */}
-      {/* <ConfirmDialog
-        open={showCloseConfirm}
-        title="Masayi Kapat"
-        message={`${table.name} masasini kapatmak istediginize emin misiniz?${
-          total > 0 ? ` Toplam ₺${formatCurrency(total)} tutarinda adisyon yazdirilacaktir.` : ""
-        }`}
-        confirmText="Evet, Kapat"
-        cancelText="Vazgec"
-        onConfirm={handleCloseConfirmed}
-        onCancel={() => setShowCloseConfirm(false)}
-        loading={closing}
-        destructive
-      /> */}
 
       {/* Move Table Confirmation */}
       <ConfirmDialog

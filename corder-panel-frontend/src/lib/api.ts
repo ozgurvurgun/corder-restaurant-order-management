@@ -185,11 +185,11 @@ export const api = {
         token,
         body: JSON.stringify(body),
       }),
-    close: (token: string, tableId: string) =>
-      request<{ closed: number }>("/restaurant/orders/close", {
-        method: "PATCH",
+    closeCheck: (token: string, body: CloseCheckBody) =>
+      request<CloseCheckResponseDto>("/restaurant/orders/close-check", {
+        method: "POST",
         token,
-        body: JSON.stringify({ tableId }),
+        body: JSON.stringify(body),
       }),
     cancelItem: (token: string, body: { itemId: string; reason?: string }) =>
       request<{ ok: true }>("/restaurant/orders/cancel-item", {
@@ -341,12 +341,6 @@ export const api = {
       const path = qs ? `/restaurant/completed-orders?${qs}` : "/restaurant/completed-orders"
       return request<CompletedOrderDto[]>(path, { token })
     },
-    create: (token: string, body: CompletedOrderCreateBody) =>
-      request<CompletedOrderDto>("/restaurant/completed-orders", {
-        method: "POST",
-        token,
-        body: JSON.stringify(body),
-      }),
     update: (token: string, id: string, body: CompletedOrderUpdateBody) =>
       request<CompletedOrderDto>(`/restaurant/completed-orders/${encodeURIComponent(id)}`, {
         method: "PATCH",
@@ -536,7 +530,7 @@ export const api = {
     },
   },
   cashTransactions: {
-    create: (token: string, body: { type: "sale" | "expense" | "cash-in" | "cash-out" | "refund"; amount: number; description: string; reference?: string; createdBy?: string }) =>
+    create: (token: string, body: { type: "expense" | "cash-in" | "cash-out" | "refund"; amount: number; description: string; reference?: string }) =>
       request<{ transaction: CashTransactionDto; shift: ShiftDto }>("/restaurant/cash-transactions", {
         method: "POST",
         token,
@@ -833,22 +827,25 @@ export interface CompletedOrderDto {
   createdAt: string
 }
 
-export interface CompletedOrderCreateBody {
-  tableName: string
-  section: string
-  waiter: string
-  orders: CompletedOrderSnapshotDto[]
-  payment: CompletedPaymentSnapshotDto
-  totalAmount: number
-  discountAmount: number
-  netAmount: number
-  closedBy: string
-  openedAt: string
-  closedAt: string
-  /** Customer to charge when payment method is `cari`. */
+export interface CloseCheckBody {
+  tableId?: string
+  items?: { productId: string; quantity: number; note?: string }[]
+  method: "nakit" | "kredi-karti" | "yemek-karti" | "multinet" | "coklu" | "cari"
+  discount?: { type: "percent" | "amount"; value: number; reason?: string }
+  splitDetails?: {
+    method: "nakit" | "kredi-karti" | "yemek-karti" | "multinet" | "cari"
+    amount: number
+  }[]
   ledgerCustomerId?: string
-  /** Debt amount to post to ledger (cari portion on split payment); otherwise full net. */
   ledgerDebtAmount?: number
+  tip?: number
+}
+
+export interface CloseCheckResponseDto {
+  completedOrder: CompletedOrderDto
+  shift: ShiftDto
+  cashTransaction: CashTransactionDto | null
+  stockMovements: StockMovementDto[]
 }
 
 export interface LedgerCustomerDto {

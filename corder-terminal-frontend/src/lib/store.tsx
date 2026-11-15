@@ -104,7 +104,6 @@ interface AppContextType extends AppState {
   selectTable: (tableId: string) => void
   moveTable: (fromTableId: string, toTableId: string) => Promise<boolean>
   moveOrderItems: (fromTableId: string, toTableId: string, itemIds: string[]) => Promise<boolean>
-  closeTable: (tableId: string) => Promise<boolean>
   addToCart: (item: CartItem) => void
   removeFromCart: (productId: string) => void
   updateCartQuantity: (productId: string, quantity: number) => void
@@ -399,21 +398,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [refreshData, currentUser?.id, currentUser?.name],
   )
 
-  const closeTable = useCallback(
-    async (tableId: string): Promise<boolean> => {
-      const token = getToken()
-      if (!token) return false
-      try {
-        await api.orders.close(token, tableId)
-        await refreshData()
-        return true
-      } catch {
-        return false
-      }
-    },
-    [refreshData]
-  )
-
   const addToCart = useCallback((item: CartItem) => {
     setCart((prev) => {
       const existing = prev.find((i) => i.productId === item.productId)
@@ -564,7 +548,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       selectTable,
       moveTable,
       moveOrderItems,
-      closeTable,
       addToCart,
       removeFromCart,
       updateCartQuantity,
@@ -601,7 +584,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       selectTable,
       moveTable,
       moveOrderItems,
-      closeTable,
       addToCart,
       removeFromCart,
       updateCartQuantity,

@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@ne
 import { OrderService } from '../application/order.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { MoveOrdersDto } from './dto/move-orders.dto';
-import { CloseOrdersDto } from './dto/close-orders.dto';
+import { CloseCheckDto } from './dto/close-check.dto';
 import { PrintReceiptDto } from './dto/print-receipt.dto';
 import { MoveOrderItemsDto } from './dto/move-order-items.dto';
 import { CancelOrderItemDto } from './dto/cancel-order-item.dto';
@@ -81,12 +81,13 @@ export class OrdersController {
     return this.service.moveTable(restaurantId, dto.fromTableId, dto.toTableId);
   }
 
-  @Patch('close')
-  closeTable(
+  @Post('close-check')
+  closeCheck(
     @RestaurantId() restaurantId: string,
-    @Body() dto: CloseOrdersDto,
+    @RestaurantUser() user: { id: string; name: string },
+    @Body() dto: CloseCheckDto,
   ) {
-    return this.service.closeTable(restaurantId, dto.tableId);
+    return this.service.closeCheck(restaurantId, dto, user);
   }
 
   @Post('print-receipt')

@@ -1,6 +1,5 @@
 import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
-import { CashShiftService } from '../application/cash-shift.service';
-import { CashShiftEntity } from '../domain/cash-shift.entity';
+import { CashShiftService, serializeCashShift } from '../application/cash-shift.service';
 import { OpenShiftDto } from './dto/open-shift.dto';
 import { CloseShiftDto } from './dto/close-shift.dto';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
@@ -16,13 +15,13 @@ export class ShiftsController {
   async getCurrent(@RestaurantId() restaurantId: string) {
     const shift = await this.service.getCurrent(restaurantId);
     if (!shift) return null;
-    return this.toDto(shift);
+    return serializeCashShift(shift);
   }
 
   @Get()
   async list(@RestaurantId() restaurantId: string, @Query('limit') limit?: string) {
     const shifts = await this.service.list(restaurantId, limit ? parseInt(limit, 10) : 50);
-    return shifts.map((s) => this.toDto(s));
+    return shifts.map((s) => serializeCashShift(s));
   }
 
   @Post()
@@ -36,7 +35,7 @@ export class ShiftsController {
       user.name,
       dto.openingBalance ?? 0,
     );
-    return this.toDto(shift);
+    return serializeCashShift(shift);
   }
 
   @Put(':id/close')
@@ -53,28 +52,6 @@ export class ShiftsController {
       dto.closingBalance,
       dto.notes,
     );
-    return this.toDto(shift);
-  }
-
-  private toDto(shift: CashShiftEntity) {
-    return {
-      id: shift.id,
-      openedBy: shift.openedBy,
-      openedAt: shift.openedAt,
-      closedAt: shift.closedAt,
-      closedBy: shift.closedBy,
-      status: shift.status,
-      openingBalance: Number(shift.openingBalance),
-      closingBalance: shift.closingBalance != null ? Number(shift.closingBalance) : null,
-      notes: shift.notes,
-      cashIn: Number(shift.cashIn ?? 0),
-      cashOut: Number(shift.cashOut ?? 0),
-      totalRevenue: Number(shift.totalRevenue ?? 0),
-      totalNakit: Number(shift.totalNakit ?? 0),
-      totalKart: Number(shift.totalKart ?? 0),
-      totalYemekKarti: Number(shift.totalYemekKarti ?? 0),
-      totalMultinet: Number(shift.totalMultinet ?? 0),
-      transactionCount: shift.transactionCount ?? 0,
-    };
+    return serializeCashShift(shift);
   }
 }

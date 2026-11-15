@@ -35,9 +35,16 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill 
   const completedRef = useRef(false)
   const table = tables.find((t) => t.id === tableId)
   const [method, setMethod] = useState<PaymentMethod>("nakit")
-  const [discountType, setDiscountType] = useState<"percent" | "amount">("percent")
-  const [discountValue, setDiscountValue] = useState("")
-  const [discountReason, setDiscountReason] = useState("")
+  const [discountType, setDiscountType] = useState<"percent" | "amount">(() => {
+    if (table?.discount?.type === "amount") return "amount"
+    return "percent"
+  })
+  const [discountValue, setDiscountValue] = useState(() => {
+    if (!table?.discount) return ""
+    if (table.discount.type === "ikram") return "100"
+    return String(table.discount.value)
+  })
+  const [discountReason, setDiscountReason] = useState(() => table?.discount?.reason ?? "")
   const [receivedAmount, setReceivedAmount] = useState("")
   const [splitNakit, setSplitNakit] = useState("")
   const [splitKart, setSplitKart] = useState("")
@@ -51,23 +58,33 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill 
     void ledgerRefresh()
   }, [token, method, ledgerRefresh])
 
+  const rawKurus = Math.max(0, Math.round(total * 100))
   const discountNum = parseFloat(discountValue) || 0
-  const discountAmount = discountType === "percent" ? Math.round(total * discountNum / 100) : discountNum
-  const netTotal = Math.max(0, total - discountAmount)
+  const discountKurus =
+    discountNum <= 0 || rawKurus <= 0
+      ? 0
+      : discountType === "percent"
+        ? Math.min(rawKurus, Math.round((rawKurus * Math.min(100, discountNum)) / 100))
+        : Math.min(rawKurus, Math.round(discountNum * 100))
+  const discountAmount = discountKurus / 100
+  const netKurus = Math.max(0, rawKurus - discountKurus)
+  const netTotal = netKurus / 100
 
-  const received = parseFloat(receivedAmount) || 0
-  const change = received - netTotal
+  const receivedKurus = Math.max(0, Math.round((parseFloat(receivedAmount) || 0) * 100))
+  const received = receivedKurus / 100
+  const change = (receivedKurus - netKurus) / 100
 
-  const splitTotal =
-    (parseFloat(splitNakit) || 0) +
-    (parseFloat(splitKart) || 0) +
-    (parseFloat(splitYemek) || 0) +
-    (parseFloat(splitMultinet) || 0)
-  const splitRemaining = netTotal - splitTotal
+  const splitKurus =
+    Math.max(0, Math.round((parseFloat(splitNakit) || 0) * 100)) +
+    Math.max(0, Math.round((parseFloat(splitKart) || 0) * 100)) +
+    Math.max(0, Math.round((parseFloat(splitYemek) || 0) * 100)) +
+    Math.max(0, Math.round((parseFloat(splitMultinet) || 0) * 100))
+  const splitRemainingKurus = netKurus - splitKurus
+  const splitRemaining = splitRemainingKurus / 100
 
   const canConfirm = () => {
-    if (method === "nakit") return received >= netTotal
-    if (method === "coklu") return Math.abs(splitRemaining) < 0.01
+    if (method === "nakit") return receivedKurus >= netKurus
+    if (method === "coklu") return splitRemainingKurus === 0
     if (method === "cari") return Boolean(ledgerCustomerId)
     return true
   }
@@ -83,15 +100,17 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill 
 
   const handleConfirm = async () => {
     setLoading(true)
-    const discount = discountNum > 0 ? { type: discountType, value: discountNum, reason: discountReason || "Indirim" } : undefined
+    const discount =
+      discountNum > 0
+        ? { type: discountType, value: discountNum, reason: discountReason || "Indirim" }
+        : undefined
     const splitDetails = method === "coklu" ? [
       { method: "nakit" as const, amount: parseFloat(splitNakit) || 0 },
       { method: "kredi-karti" as const, amount: parseFloat(splitKart) || 0 },
       { method: "yemek-karti" as const, amount: parseFloat(splitYemek) || 0 },
       { method: "multinet" as const, amount: parseFloat(splitMultinet) || 0 },
     ].filter(s => s.amount > 0) : undefined
-    await new Promise((r) => setTimeout(r, 400))
-    const ok = await closeTableWithPayment(
+    const res = await closeTableWithPayment(
       tableId,
       method,
       discount,
@@ -99,15 +118,15 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill 
       method === "cari" ? { ledgerCustomerId } : undefined,
     )
     setLoading(false)
-    if (!ok) {
-      showToast("Hesap kapatilamadi", "error")
+    if (!res.ok || !res.completedOrder) {
+      showToast(res.error || "Hesap kapatilamadi", "error")
       return
     }
-    if (token) {
-      await api.tables.update(token, tableId, { status: "empty" }).catch(() => {})
-    }
     completedRef.current = true
-    showToast(`${table?.name || "Masa"} hesabi kesildi - ${formatCurrency(netTotal)} TL`, "success")
+    showToast(
+      `${res.completedOrder.tableName || table?.name || "Masa"} hesabi kesildi - ${formatCurrency(res.completedOrder.netAmount)} TL`,
+      "success",
+    )
     onClose()
   }
 
@@ -262,11 +281,11 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill 
                   />
                 </div>
               </div>
-              <div className={`flex items-center justify-between p-3 rounded-xl ${Math.abs(splitRemaining) < 0.01 ? "bg-[#34c759]/10" : "bg-[#ff9500]/10"}`}>
-                <span className={`text-[14px] font-medium ${Math.abs(splitRemaining) < 0.01 ? "text-[#34c759]" : "text-[#ff9500]"}`}>
-                  {Math.abs(splitRemaining) < 0.01 ? "Tamamlandi" : "Kalan"}
+              <div className={`flex items-center justify-between p-3 rounded-xl ${splitRemainingKurus === 0 ? "bg-[#34c759]/10" : "bg-[#ff9500]/10"}`}>
+                <span className={`text-[14px] font-medium ${splitRemainingKurus === 0 ? "text-[#34c759]" : "text-[#ff9500]"}`}>
+                  {splitRemainingKurus === 0 ? "Tamamlandi" : splitRemainingKurus > 0 ? "Kalan" : "Fazla"}
                 </span>
-                <span className={`text-[17px] font-bold ${Math.abs(splitRemaining) < 0.01 ? "text-[#34c759]" : "text-[#ff9500]"}`}>
+                <span className={`text-[17px] font-bold ${splitRemainingKurus === 0 ? "text-[#34c759]" : "text-[#ff9500]"}`}>
                   {"₺"}{formatCurrency(Math.abs(splitRemaining))}
                 </span>
               </div>

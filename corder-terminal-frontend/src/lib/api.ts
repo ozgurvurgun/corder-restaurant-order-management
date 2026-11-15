@@ -179,12 +179,6 @@ export const api = {
         token,
         body: JSON.stringify(body),
       }),
-    close: (token: string, tableId: string) =>
-      request<{ closed: number }>("/restaurant/orders/close", {
-        method: "PATCH",
-        token,
-        body: JSON.stringify({ tableId }),
-      }),
     printReceipt: (
       token: string,
       body:
