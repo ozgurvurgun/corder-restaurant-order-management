@@ -12,6 +12,8 @@ export function NewRestaurantPage() {
   const [phone, setPhone] = useState("")
   const [email, setEmail] = useState("")
   const [status, setStatus] = useState<"active" | "inactive">("active")
+  const [printAgentUsername, setPrintAgentUsername] = useState("")
+  const [printAgentPassword, setPrintAgentPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
 
@@ -56,6 +58,8 @@ export function NewRestaurantPage() {
         phone: phone.trim() || undefined,
         email: email.trim() || undefined,
         status,
+        ...(printAgentUsername.trim() ? { printAgentUsername: printAgentUsername.trim().toLowerCase() } : {}),
+        ...(printAgentPassword ? { printAgentPassword } : {}),
       })
       navigate("/dashboard/restaurants")
     } catch (err) {
@@ -147,6 +151,35 @@ export function NewRestaurantPage() {
             <option value="active">Aktif</option>
             <option value="inactive">Pasif</option>
           </select>
+        </div>
+        <div className="rounded-xl border border-[#2a2a2a] bg-[#141414] p-4 space-y-3">
+          <p className="text-sm font-medium text-white">Print Agent (Masaüstü Yazıcı Uygulaması) Kullanıcısı (İsteğe Bağlı)</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs text-zinc-400">Kullanıcı Adı</label>
+              <input
+                type="text"
+                value={printAgentUsername}
+                onChange={(e) => setPrintAgentUsername(e.target.value)}
+                placeholder="Örn: merkez-yazici"
+                minLength={3}
+                className="w-full rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-3 py-2 font-mono text-sm text-white outline-none focus:border-blue-500"
+                disabled={loading}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-zinc-400">Parola (en az 6 karakter)</label>
+              <input
+                type="password"
+                value={printAgentPassword}
+                onChange={(e) => setPrintAgentPassword(e.target.value)}
+                placeholder="••••••••"
+                minLength={6}
+                className="w-full rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+                disabled={loading}
+              />
+            </div>
+          </div>
         </div>
         {error && <p className="text-sm text-red-400">{error}</p>}
         <div className="flex gap-3 pt-4">

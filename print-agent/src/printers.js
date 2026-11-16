@@ -2,21 +2,46 @@ const net = require("net")
 const fs = require("fs")
 const os = require("os")
 const path = require("path")
-const { exec } = require("child_process")
+const { execFile } = require("child_process")
 const { info, warn } = require("./logger")
+
+const SAFE_PRINTER_NAME_RE = /^[a-zA-Z0-9_. \-()+@#/:]{1,128}$/
+const LINUX_USB_DEV_RE = /^\/dev\/(usb\/)?lp[0-9]$/
+const SAFE_HOST_RE = /^[a-zA-Z0-9.-]{1,253}$/
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function parsePort(p, fallback) {
+function parsePort(p, fallback = 9100) {
   const n = parseInt(String(p || "").trim(), 10)
-  return Number.isFinite(n) && n > 0 ? n : fallback
+  return Number.isFinite(n) && n > 0 && n <= 65535 ? n : fallback
 }
 
-function sendRawTcp(host, port, bytes) {
+function assertSafePrinterName(name) {
+  const clean = String(name || "").trim()
+  if (!clean || !SAFE_PRINTER_NAME_RE.test(clean) || clean.includes("..")) {
+    throw new Error(`Invalid or unsafe printer identifier: "${clean.slice(0, 40)}"`)
+  }
+  return clean
+}
+
+function sendRawTcp(host, port, bytes, timeoutMs = 8000) {
   return new Promise((resolve, reject) => {
-    const client = net.createConnection({ host, port }, () => {
+    const cleanHost = String(host || "").trim()
+    if (!cleanHost || !SAFE_HOST_RE.test(cleanHost)) {
+      reject(new Error(`Invalid printer host: ${cleanHost}`))
+      return
+    }
+    let settled = false
+    const done = (err) => {
+      if (settled) return
+      settled = true
+      if (err) reject(err)
+      else resolve()
+    }
+
+    const client = net.createConnection({ host: cleanHost, port }, () => {
       try {
         client.setNoDelay(true)
       } catch {
@@ -25,93 +50,97 @@ function sendRawTcp(host, port, bytes) {
       client.write(bytes, (err) => {
         if (err) {
           client.destroy()
-          reject(err)
+          done(err)
           return
         }
         client.end()
       })
     })
 
-    client.on("error", reject)
-    client.on("close", () => resolve())
+    client.setTimeout(timeoutMs)
+    client.on("timeout", () => {
+      client.destroy()
+      done(new Error(`TCP printer timeout (${cleanHost}:${port})`))
+    })
+    client.on("error", (err) => done(err))
+    client.on("close", () => done(null))
   })
 }
 
-function resolveSystemPrintCommand(configCommand) {
-  const raw = String(configCommand || "").trim()
-  if (process.platform === "win32") {
-    return (
-      raw ||
-      'powershell -NoProfile -ExecutionPolicy Bypass -File "./scripts/send-raw-printer.ps1" -PrinterName "{PRINTER_NAME}" -FilePath "{FILE}"'
-    )
-  }
-  if (!raw || raw.toLowerCase().includes("powershell")) {
-    return 'lp -d "{PRINTER_NAME}" -o raw "{FILE}"'
-  }
-  return raw
-}
-
-function execCommand(command, bytes, printerName, usbDrainMs) {
+function runExecFile(binary, args, timeoutMs = 25000) {
   return new Promise((resolve, reject) => {
-    const resolvedBase = resolveSystemPrintCommand(command)
-    if (!resolvedBase) {
-      reject(new Error("PRINT_COMMAND is empty"))
-      return
-    }
-
-    const tempFile = path.join(
-      os.tmpdir(),
-      `corder-print-${Date.now()}-${Math.random().toString(36).slice(2)}.bin`,
-    )
-    fs.writeFileSync(tempFile, bytes)
-
-    const safePrinterName = String(printerName || "").replaceAll('"', "")
-    const resolvedCommand = resolvedBase
-      .replaceAll("{FILE}", tempFile)
-      .replaceAll("{PRINTER_NAME}", safePrinterName)
-
-    const started = Date.now()
-    exec(
-      resolvedCommand,
-      {
-        timeout: 120000,
-        windowsHide: true,
-        maxBuffer: 1024 * 1024,
-      },
-      (error, stdout, stderr) => {
-        const ms = Date.now() - started
-        try {
-          fs.unlinkSync(tempFile)
-        } catch {
-          // noop
-        }
-
-        if (error) {
-          const errTail = stderr ? String(stderr).trim().slice(0, 800) : ""
-          warn(`Print command failed after ${ms}ms`, {
-            error: error.message,
-            stderr: errTail || undefined,
-          })
-          reject(error)
+    execFile(
+      binary,
+      args,
+      { timeout: timeoutMs, windowsHide: true, shell: false, maxBuffer: 512 * 1024 },
+      (err, _stdout, stderr) => {
+        if (err) {
+          const detail = stderr ? String(stderr).trim().slice(0, 300) : err.message
+          reject(new Error(detail || err.message))
           return
         }
-        if (ms > 5000) {
-          info(`Print command slow: ${ms}ms`, { printerName: safePrinterName })
-        }
-        const drain = Math.max(0, Number(usbDrainMs) || 0)
-        if (drain > 0) {
-          sleep(drain).then(resolve)
-        } else {
-          resolve()
-        }
+        resolve()
       },
     )
   })
 }
 
-/**
- * Supports mixed-mode per-job printer targets (system/USB or network raw TCP).
- */
+async function sendToSystemPrinter(bytes, printerName, usbDrainMs) {
+  const safeName = assertSafePrinterName(printerName)
+
+  if (process.platform === "linux" && LINUX_USB_DEV_RE.test(safeName)) {
+    await fs.promises.writeFile(safeName, bytes)
+    const drain = Math.max(0, Number(usbDrainMs) || 0)
+    if (drain > 0) await sleep(drain)
+    return
+  }
+
+  const tempFile = path.join(
+    os.tmpdir(),
+    `corder-job-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.bin`,
+  )
+  fs.writeFileSync(tempFile, bytes, { mode: 0o600 })
+
+  const started = Date.now()
+  try {
+    if (process.platform === "win32") {
+      await runExecFile("cmd.exe", [
+        "/d",
+        "/s",
+        "/c",
+        "copy",
+        "/b",
+        tempFile,
+        `\\\\localhost\\${safeName}`,
+      ])
+    } else {
+      try {
+        await runExecFile("lp", ["-d", safeName, "-o", "raw", tempFile])
+      } catch (lpErr) {
+        await runExecFile("lpr", ["-P", safeName, "-o", "raw", tempFile]).catch(() => {
+          throw lpErr
+        })
+      }
+    }
+    const elapsed = Date.now() - started
+    if (elapsed > 4000) {
+      info(`System print completed slowly (${elapsed}ms)`, { printer: safeName })
+    }
+  } catch (err) {
+    warn("System print failed", { printer: safeName, error: err.message })
+    throw err
+  } finally {
+    try {
+      if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile)
+    } catch {
+      // noop
+    }
+  }
+
+  const drain = Math.max(0, Number(usbDrainMs) || 0)
+  if (drain > 0) await sleep(drain)
+}
+
 async function printBytes(config, bytes, opts = {}) {
   const targetPrinter = opts.printer || null
   const networkTarget = opts.networkTarget ? String(opts.networkTarget).trim() : ""
@@ -137,7 +166,7 @@ async function printBytes(config, bytes, opts = {}) {
       targetPrinter?.name ||
       explicitPrinterName ||
       config.printerName
-    await execCommand(config.printCommand, bytes, sysName, config.printUsbDrainMs)
+    await sendToSystemPrinter(bytes, sysName, config.printUsbDrainMs)
     return
   }
 
@@ -145,17 +174,10 @@ async function printBytes(config, bytes, opts = {}) {
     const host = config.printerHost || "127.0.0.1"
     const port = parsePort(config.printerPort, 9100)
     await sendRawTcp(host, port, bytes)
-    const drain = Math.max(0, Number(config.printUsbDrainMs) || 0)
-    if (drain > 0) await sleep(drain)
     return
   }
 
-  if (config.printerMode === "command") {
-    await execCommand(config.printCommand, bytes, config.printerName, config.printUsbDrainMs)
-    return
-  }
-
-  throw new Error(`Unsupported PRINTER_MODE: ${config.printerMode}`)
+  await sendToSystemPrinter(bytes, config.printerName, config.printUsbDrainMs)
 }
 
 function createPrinter(initialConfig) {

@@ -256,10 +256,10 @@ function startAgent({ config: initialConfig, store, printer }) {
       socket.close()
       socket = null
     }
-    if (!config.backendWsUrl || !config.agentToken) {
+    if (!config.backendWsUrl || !config.agentToken || !config.restaurantId) {
       statusState.socketConnected = false
       statusState.setupRequired = true
-      info("Waiting for backend URL and agent token configuration in UI")
+      info("Waiting for Print Agent username and password login in UI")
       return
     }
     statusState.setupRequired = false

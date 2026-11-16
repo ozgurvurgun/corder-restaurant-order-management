@@ -1,54 +1,45 @@
-const os = require("os")
-const { exec } = require("child_process")
-const { loadSettings, buildRuntimeConfig } = require("./settings-store")
+const { execFile } = require("child_process")
+const { loadSettings, saveSettings, buildRuntimeConfig } = require("./settings-store")
+const { resolveEmbeddedBackendUrl } = require("./config")
 const { JobStore } = require("./job-store")
 const { createPrinter } = require("./printers")
 const { startAgent } = require("./agent")
 const { createUiServer } = require("./ui-server")
-const { httpBaseUrl } = require("./http-sync")
 const { info, error } = require("./logger")
 
 function openDesktopBrowser(url) {
-  const cmd =
-    process.platform === "win32"
-      ? `start "" "${url}"`
-      : process.platform === "darwin"
-        ? `open "${url}"`
-        : `xdg-open "${url}"`
-  exec(cmd, { windowsHide: true }, () => {})
+  if (process.platform === "win32") {
+    execFile("cmd.exe", ["/d", "/s", "/c", "start", "", url], { windowsHide: true }, () => {})
+  } else if (process.platform === "darwin") {
+    execFile("open", [url], () => {})
+  } else {
+    execFile("xdg-open", [url], () => {})
+  }
 }
 
 async function startPrintAgentApp(options = {}) {
-  const settings = loadSettings()
+  const detectedBackendUrl = await resolveEmbeddedBackendUrl(true)
+  const settings = saveSettings({ backendUrl: detectedBackendUrl })
   const config = buildRuntimeConfig(settings)
   const store = new JobStore(config.queueFile)
   const printer = createPrinter(config)
   const agent = startAgent({ config, store, printer })
   const uiServer = createUiServer({ store, agent })
 
-  const preferredPort = Number(options.port || settings.uiPort || 4190)
+  const preferredPort = options.port !== undefined ? Number(options.port) : 4190
   const { port, url: uiUrl } = await uiServer.listen(preferredPort)
 
   const pkg = require("../package.json")
   info("Corder Print Agent & Control Center started", {
     version: pkg.version,
+    platform: process.platform,
     uiUrl,
-    agentId: config.agentId,
-    restaurantId: config.restaurantId,
-    restaurantName: config.restaurantName || "(not synced)",
+    restaurantName: config.restaurantName || "(giriş bekleniyor)",
     printersCount: config.printers.length,
     queueSize: store.getQueueSize(),
-    backendHttpBase: httpBaseUrl(config) || "(unset)",
   })
 
-  if (os.platform() === "win32" && config.printerMode === "command") {
-    info("Windows Raw Printer helper ready (scripts/send-raw-printer.ps1)")
-  }
-
-  const shouldOpenBrowser =
-    options.openBrowser ??
-    (process.argv.includes("--open") || process.env.OPEN_BROWSER === "1")
-
+  const shouldOpenBrowser = options.openBrowser ?? process.argv.includes("--open")
   if (shouldOpenBrowser) {
     openDesktopBrowser(uiUrl)
   }
@@ -56,6 +47,7 @@ async function startPrintAgentApp(options = {}) {
   return {
     port,
     uiUrl,
+    sessionToken: uiServer.sessionToken,
     store,
     printer,
     agent,

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Corder Yazıcı & Mutfak Merkezi</title>
+  <title>Corder Yazıcı &amp; Mutfak Merkezi</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -34,13 +34,13 @@
       </div>
     </header>
 
-    <!-- Setup Banner when token or printers missing -->
+    <!-- Setup Banner when not logged in -->
     <div class="setup-banner hidden" id="setupBanner">
       <div class="setup-banner-content">
-        <strong>Hızlı Kurulum:</strong>
-        <span id="setupBannerText">Şube bağlantısını tamamlamak için lütfen Şube Bağlantısı sekmesinden anahtarınızı girin.</span>
+        <strong>Mekan Girişi Gerekli:</strong>
+        <span id="setupBannerText">Şube bağlantısını başlatmak için Admin panelinden oluşturduğunuz Print Agent kullanıcı adı ve parolası ile giriş yapın.</span>
       </div>
-      <button class="btn btn-primary btn-sm" id="btnGoSetup">Şube Bağlantısına Git</button>
+      <button class="btn btn-primary btn-sm" id="btnGoSetup">Şube Girişine Git</button>
     </div>
 
     <!-- Navigation Tabs -->
@@ -49,7 +49,7 @@
         1. Yazıcılar &amp; Kategori Eşleştirme
       </button>
       <button class="tab-btn" data-tab="connection">
-        2. Şube Bağlantısı &amp; Fiş Ayarları
+        2. Şube Girişi &amp; Fiş Ayarları
       </button>
       <button class="tab-btn" data-tab="queue">
         3. Canlı Kuyruk &amp; Loglar
@@ -78,7 +78,7 @@
             <div class="card-header">
               <div>
                 <h2>USB / Bilgisayar Yazıcıları</h2>
-                <p class="card-desc">Bilgisayara bağlı Windows / USB yazıcıları tek tıkla ekleyin</p>
+                <p class="card-desc">Bilgisayara bağlı Linux (CUPS / USB), Windows veya macOS yazıcıları tek tıkla ekleyin</p>
               </div>
               <button class="btn btn-secondary btn-sm" id="btnDiscoverPrinters">
                 Bilgisayardaki Yazıcıları Tara
@@ -167,29 +167,37 @@
       </div>
     </main>
 
-    <!-- TAB 2: Branch Connection & Ticket Settings -->
+    <!-- TAB 2: Branch Login & Ticket Settings -->
     <main class="tab-panel" id="tab-connection">
       <div class="workspace-grid">
         <section class="card">
           <div class="card-header">
             <div>
-              <h2>Corder Şube Bağlantısı</h2>
-              <p class="card-desc">Yönetim panelinden aldığınız Print Agent anahtarı ile şubenize bağlanın</p>
+              <h2>Mekan / Şube Kullanıcı Girişi</h2>
+              <p class="card-desc">Admin panelinden bu mekan için oluşturulan Print Agent kullanıcı adı ve parolası ile giriş yapın</p>
             </div>
           </div>
+
+          <div id="activeSessionBox" class="inline-feedback status-ok hidden" style="margin-bottom: 14px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+              <span id="activeSessionText">Aktif Oturum</span>
+              <button type="button" class="btn btn-danger btn-sm" id="btnLogoutBranch">Oturumu Kapat</button>
+            </div>
+          </div>
+
           <form id="formConnectBranch" class="form-stack">
             <div class="field-group">
-              <label for="inputBackendUrl">Corder Sunucu Adresi (URL)</label>
-              <input type="url" id="inputBackendUrl" placeholder="https://api.corders.uk" required />
+              <label for="inputUsername">Print Agent Kullanıcı Adı</label>
+              <input type="text" id="inputUsername" placeholder="Örn: merkez-yazici" autocomplete="username" required />
             </div>
             <div class="field-group">
-              <label for="inputAgentToken">Print Agent Anahtarı (Token)</label>
-              <input type="text" id="inputAgentToken" placeholder="pa_..." required />
-              <small class="field-hint">Yönetim Paneli &rarr; Yazıcı / POS Ayarları bölümünden kopyalayabilirsiniz.</small>
+              <label for="inputPassword">Parola</label>
+              <input type="password" id="inputPassword" placeholder="••••••••" autocomplete="current-password" required />
+              <small class="field-hint">Corder Admin Paneli &rarr; Restoran Düzenle &rarr; Print Agent Kullanıcısı bölümünden belirlenir.</small>
             </div>
             <div class="form-footer">
               <button type="submit" class="btn btn-primary" id="btnConnectBranch">
-                Bağlan ve Şube Bilgilerini Çek
+                Giriş Yap ve Şubeyi Bağla
               </button>
             </div>
           </form>
@@ -213,8 +221,8 @@
             </div>
             <div class="field-group">
               <label for="inputUsbDrainMs">USB Yazdırma Bekleme Süresi (ms)</label>
-              <input type="number" id="inputUsbDrainMs" min="0" max="5000" step="50" value="600" />
-              <small class="field-hint">Windows USB yazıcılarda arka arkaya fişlerde takılma olursa 600-900 ms önerilir.</small>
+              <input type="number" id="inputUsbDrainMs" min="0" max="5000" step="50" value="400" />
+              <small class="field-hint">USB yazıcılarda arka arkaya fişlerde tampon dolmasını önlemek için bekleme süresi.</small>
             </div>
             <div class="form-footer">
               <button type="submit" class="btn btn-primary">Fiş Ayarlarını Kaydet</button>
@@ -246,7 +254,7 @@
             <div class="card-header">
               <div>
                 <h2>Son Yazdırılan Fişler</h2>
-                <p class="card-desc">Başarıyla yazıcıdan çıkan son 30 sipariş ve adisyon fişi</p>
+                <p class="card-desc">Başarıyla yazıcıdan çıkan son 15 sipariş ve adisyon fişi</p>
               </div>
             </div>
             <div id="recentPrintedContainer" class="table-list"></div>
@@ -257,7 +265,7 @@
           <div class="card-header">
             <div>
               <h2>Canlı Sistem Günlüğü (Loglar)</h2>
-              <p class="card-desc">Bağlantı ve yazdırma işlemlerinin anlık teknik kaydı</p>
+              <p class="card-desc">Bellek korumalı: Yalnızca son 40 kayıt tutulur, eski kayıtlar otomatik temizlenir</p>
             </div>
             <button class="btn btn-secondary btn-sm" id="btnClearLogs">Logları Temizle</button>
           </div>

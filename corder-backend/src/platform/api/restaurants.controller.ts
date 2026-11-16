@@ -16,9 +16,9 @@ import { PlatformJwtGuard } from '../infrastructure/platform-jwt.guard';
 import { CategoryService } from '../../restaurant/application/category.service';
 
 function sanitizeRestaurant<
-  T extends { terminalPasswordHash?: unknown; printAgentTokenHash?: unknown },
+  T extends { terminalPasswordHash?: unknown; printAgentPasswordHash?: unknown },
 >(r: T) {
-  const { terminalPasswordHash, printAgentTokenHash, ...rest } = r;
+  const { terminalPasswordHash, printAgentPasswordHash, ...rest } = r;
   return rest;
 }
 

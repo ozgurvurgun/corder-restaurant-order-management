@@ -12,7 +12,7 @@ function toRestaurant(r: {
   status: string
   rootAdminId?: string | null
   terminalEmail?: string | null
-  printAgentToken?: string | null
+  printAgentUsername?: string | null
   createdAt: string
 }): Restaurant {
   return {
@@ -26,7 +26,7 @@ function toRestaurant(r: {
     createdAt: typeof r.createdAt === "string" ? r.createdAt : new Date(r.createdAt).toISOString(),
     rootAdminId: r.rootAdminId ?? undefined,
     terminalEmail: r.terminalEmail ?? undefined,
-    printAgentToken: r.printAgentToken ?? undefined,
+    printAgentUsername: r.printAgentUsername ?? undefined,
   }
 }
 
@@ -48,8 +48,8 @@ type StoreContextType = {
   restaurantsLoading: boolean
   restaurantsError: string | null
   loadRestaurants: () => Promise<void>
-  addRestaurant: (r: Omit<Restaurant, "id" | "createdAt" | "rootAdminId">) => Promise<void>
-  updateRestaurant: (id: string, r: Partial<Restaurant> & { terminalPassword?: string }) => Promise<void>
+  addRestaurant: (r: Omit<Restaurant, "id" | "createdAt" | "rootAdminId"> & { printAgentPassword?: string }) => Promise<void>
+  updateRestaurant: (id: string, r: Partial<Restaurant> & { terminalPassword?: string; printAgentPassword?: string }) => Promise<void>
   deleteRestaurant: (id: string) => Promise<void>
   rootAdminsForRestaurant: RootAdmin[]
   rootAdminsLoading: boolean
@@ -112,7 +112,7 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const addRestaurant = useCallback(async (r: Omit<Restaurant, "id" | "createdAt" | "rootAdminId">) => {
+  const addRestaurant = useCallback(async (r: Omit<Restaurant, "id" | "createdAt" | "rootAdminId"> & { printAgentPassword?: string }) => {
     await platform.restaurants.create({
       name: r.name,
       slug: r.slug,
@@ -120,11 +120,13 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
       phone: r.phone,
       email: r.email,
       status: r.status,
+      printAgentUsername: r.printAgentUsername ?? undefined,
+      printAgentPassword: r.printAgentPassword,
     })
     await loadRestaurants()
   }, [loadRestaurants])
 
-  const updateRestaurant = useCallback(async (id: string, r: Partial<Restaurant> & { terminalPassword?: string }) => {
+  const updateRestaurant = useCallback(async (id: string, r: Partial<Restaurant> & { terminalPassword?: string; printAgentPassword?: string }) => {
     await platform.restaurants.update(id, {
       name: r.name,
       slug: r.slug,
@@ -134,7 +136,8 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
       status: r.status,
       terminalEmail: r.terminalEmail,
       terminalPassword: r.terminalPassword,
-      printAgentToken: r.printAgentToken,
+      printAgentUsername: r.printAgentUsername,
+      printAgentPassword: r.printAgentPassword,
     })
     await loadRestaurants()
   }, [loadRestaurants])

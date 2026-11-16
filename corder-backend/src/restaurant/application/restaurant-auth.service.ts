@@ -18,7 +18,7 @@ export interface RestaurantLoginDto {
   restaurantId?: string;
 }
 
-export type RestaurantJwtRole = 'root' | 'staff' | 'terminal';
+export type RestaurantJwtRole = 'root' | 'staff' | 'terminal' | 'print_agent';
 
 export interface RestaurantTokenPayload {
   sub: string;
@@ -105,6 +105,35 @@ export class RestaurantAuthService {
     if (terminalLogin) return terminalLogin;
 
     throw new UnauthorizedException('Invalid email or password');
+  }
+
+  async loginPrintAgent(usernameInput: string, password: string) {
+    const username = usernameInput.toLowerCase().trim();
+    const restaurant = await this.restaurantRepo.findOne({
+      where: { printAgentUsername: username },
+    });
+    if (
+      !restaurant?.printAgentPasswordHash ||
+      !(await bcrypt.compare(password, restaurant.printAgentPasswordHash))
+    ) {
+      throw new UnauthorizedException('Invalid Print Agent username or password');
+    }
+    if (restaurant.status !== 'active') {
+      throw new UnauthorizedException('Restaurant is not active');
+    }
+    const accessToken = this.signToken({
+      sub: restaurant.id,
+      restaurantId: restaurant.id,
+      slug: restaurant.slug,
+      email: restaurant.printAgentUsername!,
+      name: 'Print Agent',
+      type: 'restaurant',
+      role: 'print_agent',
+    });
+    return {
+      accessToken,
+      restaurant: this.toBranchSummary(restaurant),
+    };
   }
 
   async getSessionProfile(user: {

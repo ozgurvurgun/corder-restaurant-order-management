@@ -1,25 +1,38 @@
+const MAX_UI_LOGS = 40
+
 const state = {
   status: {},
-  settings: { printers: [], categories: [], categoryRoutes: {} },
+  settings: { printers: [], categories: [], categoryRoutes: {}, authenticated: false, username: "" },
   discoveredPrinters: [],
   queue: [],
   recentPrinted: [],
   logs: [],
+  lastLogDigest: "",
   initializedForms: false,
 }
 const $ = (id) => document.getElementById(id)
 
 function showToast(message, isError = false) {
+  const container = $("toastContainer")
+  while (container.childNodes.length >= 4) {
+    container.firstChild.remove()
+  }
   const el = document.createElement("div")
   el.className = "toast"
   if (isError) el.style.background = "#dc2626"
   el.textContent = message
-  $("toastContainer").appendChild(el)
-  setTimeout(() => el.remove(), 3200)
+  container.appendChild(el)
+  setTimeout(() => el.remove(), 3000)
 }
 
 async function apiCall(url, options = {}) {
-  const res = await fetch(url, { headers: { "Content-Type": "application/json" }, ...options })
+  const sessionToken = window.corderDesktop?.sessionToken || ""
+  const headers = {
+    "Content-Type": "application/json",
+    ...(sessionToken ? { "X-Corder-Session": sessionToken } : {}),
+    ...(options.headers || {}),
+  }
+  const res = await fetch(url, { credentials: "same-origin", ...options, headers })
   const data = await res.json().catch(() => ({}))
   if (!res.ok || data.ok === false) throw new Error(data.error || `İstek başarısız (${res.status})`)
   return data
@@ -31,21 +44,37 @@ function switchTab(tabId) {
 }
 
 function escapeHtml(str) {
-  return String(str ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;")
+  return String(str ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
 }
 
 function renderHeader() {
   const pill = $("connectionPill")
   const text = $("connectionText")
   const banner = $("setupBanner")
+  const sessionBox = $("activeSessionBox")
+  const sessionText = $("activeSessionText")
   const rName = state.settings.restaurantName || state.status.restaurantName || ""
+  const uname = state.settings.username || ""
   $("headerQueueCount").textContent = String(state.queue.length || 0)
-  if (rName) $("headerBranchInfo").textContent = `Aktif Şube: ${rName} (${state.settings.backendUrl || ""})`
+  $("headerBranchInfo").textContent = rName
+    ? `Aktif Şube: ${rName}${uname ? ` • Kullanıcı: ${uname}` : ""}`
+    : "Masaüstü Otomatik Fiş & Kategori Yönlendirme Sistemi"
+
+  if (state.settings.authenticated && rName) {
+    sessionBox.classList.remove("hidden")
+    sessionText.textContent = `Aktif Oturum: ${rName} (${uname})`
+  } else {
+    sessionBox.classList.add("hidden")
+  }
 
   pill.className = "status-pill"
-  if (state.status.setupRequired || !state.settings.agentToken) {
+  if (state.status.setupRequired || !state.settings.authenticated) {
     pill.classList.add("status-warn")
-    text.textContent = "Kurulum Bekleniyor (Anahtar Girilmedi)"
+    text.textContent = "Giriş Bekleniyor"
     banner.classList.remove("hidden")
   } else if (state.status.socketConnected) {
     pill.classList.add("status-ok")
@@ -63,7 +92,7 @@ function renderPrinters() {
   $("printerCountBadge").textContent = `${printers.length} Yazıcı`
   const container = $("configuredPrintersList")
   if (!printers.length) {
-    container.innerHTML = `<div class="empty-hint">Henüz yazıcı eklenmedi. Aşağıdan USB veya Ağ (IP) yazıcısı ekleyebilirsiniz.</div>`
+    container.innerHTML = `<div class="empty-hint">Henüz yazıcı eklenmedi. Aşağıdan USB/Sistem veya Ağ (IP) yazıcısı ekleyebilirsiniz.</div>`
     return
   }
   container.innerHTML = printers
@@ -81,9 +110,9 @@ function renderPrinters() {
           <div class="printer-sub">Hedef: <strong>${targetText}</strong></div>
         </div>
         <div class="btn-group">
-          <button class="btn btn-secondary btn-sm" onclick="togglePrinterWidth('${escapeHtml(p.id)}', ${nextW})">${nextW}mm Yap</button>
-          <button class="btn btn-primary btn-sm" onclick="testPrint('${escapeHtml(p.id)}')">Test Fişi Yazdır</button>
-          <button class="btn btn-danger btn-sm" onclick="deletePrinter('${escapeHtml(p.id)}')">Sil</button>
+          <button class="btn btn-secondary btn-sm" data-action="toggle-width" data-id="${escapeHtml(p.id)}" data-width="${nextW}">${nextW}mm Yap</button>
+          <button class="btn btn-primary btn-sm" data-action="test-print" data-id="${escapeHtml(p.id)}">Test Fişi Yazdır</button>
+          <button class="btn btn-danger btn-sm" data-action="delete-printer" data-id="${escapeHtml(p.id)}">Sil</button>
         </div>
       </div>`
     })
@@ -105,7 +134,7 @@ function renderDiscoveredPrinters() {
           <div class="printer-title"><span>${escapeHtml(dp.name)}</span>${dp.isDefault ? '<span class="tag">Varsayılan</span>' : ""}</div>
           <div class="printer-sub">${escapeHtml(dp.driverName || "Sistem Yazıcısı")} (${escapeHtml(dp.portName || "USB")})</div>
         </div>
-        ${added ? '<span class="tag">Eklendi</span>' : `<button class="btn btn-primary btn-sm" onclick="useSystemPrinter('${escapeHtml(dp.name)}')">+ Kullan</button>`}
+        ${added ? '<span class="tag">Eklendi</span>' : `<button class="btn btn-primary btn-sm" data-action="use-system-printer" data-name="${escapeHtml(dp.name)}">+ Kullan</button>`}
       </div>`
     })
     .join("")
@@ -127,7 +156,7 @@ function renderRoutingDropdowns() {
   const categories = state.settings.categories || []
   const routes = state.settings.categoryRoutes || {}
   if (!categories.length) {
-    catContainer.innerHTML = `<div class="empty-hint">Henüz kategori listesi çekilmedi. "Şubeden Kategorileri Yenile" butonuna basarak menü kategorilerinizi getirebilirsiniz.</div>`
+    catContainer.innerHTML = `<div class="empty-hint">Henüz kategori listesi çekilmedi. Şube girişi yaptıktan sonra kategoriler otomatik gelir veya "Şubeden Kategorileri Yenile" butonuna basabilirsiniz.</div>`
     return
   }
 
@@ -154,7 +183,7 @@ function renderRoutingDropdowns() {
       ].join("")
       return `<div class="category-row ${cat.isSub ? "sub-category" : ""}">
         <span class="category-name">${cat.isSub ? "↳ " : ""}${escapeHtml(cat.name)}</span>
-        <select class="category-select" onchange="updateCategoryRoute('${escapeHtml(cat.id)}', this.value)">${opts}</select>
+        <select class="category-select" data-category-id="${escapeHtml(cat.id)}">${opts}</select>
       </div>`
     })
     .join("")
@@ -163,6 +192,7 @@ function renderRoutingDropdowns() {
 function renderQueueAndLogs() {
   $("pendingQueueContainer").innerHTML = state.queue.length
     ? state.queue
+        .slice(0, 20)
         .map(
           (item) => `<div class="queue-row">
         <div><strong>Masa: ${escapeHtml(item.tableName || "-")}</strong> &bull; ${escapeHtml(item.printType || "kitchen")}
@@ -186,13 +216,21 @@ function renderQueueAndLogs() {
         .join("")
     : `<div class="empty-hint">Henüz yazdırılmış fiş kaydı bulunmuyor.</div>`
 
-  $("logsContainer").innerHTML = state.logs
-    .slice(0, 80)
-    .map(
-      (l) =>
-        `<div class="log-line log-${escapeHtml(l.level)}">[${new Date(l.timestamp).toLocaleTimeString("tr-TR")}] ${escapeHtml(l.level)}: ${escapeHtml(l.message)} ${l.meta ? escapeHtml(JSON.stringify(l.meta)) : ""}</div>`,
-    )
-    .join("")
+  const boundedLogs = state.logs.slice(0, MAX_UI_LOGS)
+  const digest = boundedLogs.length
+    ? `${boundedLogs.length}:${boundedLogs[0].timestamp}:${boundedLogs[0].repeatCount || 1}`
+    : "empty"
+  if (digest !== state.lastLogDigest) {
+    state.lastLogDigest = digest
+    $("logsContainer").innerHTML = boundedLogs.length
+      ? boundedLogs
+          .map((l) => {
+            const repeatBadge = l.repeatCount > 1 ? ` (x${l.repeatCount})` : ""
+            return `<div class="log-line log-${escapeHtml(l.level)}">[${new Date(l.timestamp).toLocaleTimeString("tr-TR")}] ${escapeHtml(l.level)}${repeatBadge}: ${escapeHtml(l.message)} ${l.meta ? escapeHtml(l.meta) : ""}</div>`
+          })
+          .join("")
+      : `<div class="log-line">Günlük kaydı temiz.</div>`
+  }
 }
 
 async function loadState(rerenderAll = false) {
@@ -206,17 +244,16 @@ async function loadState(rerenderAll = false) {
 
     state.status = data.status || {}
     state.settings = data.settings || {}
-    state.queue = data.queue || []
-    state.recentPrinted = data.recentPrinted || []
-    state.logs = data.logs || []
+    state.queue = (data.queue || []).slice(0, 30)
+    state.recentPrinted = (data.recentPrinted || []).slice(0, 15)
+    state.logs = (data.logs || []).slice(0, MAX_UI_LOGS)
 
     if (!state.initializedForms) {
       state.initializedForms = true
-      $("inputBackendUrl").value = state.settings.backendUrl || "https://api.corders.uk"
-      $("inputAgentToken").value = state.settings.agentToken || ""
+      $("inputUsername").value = state.settings.username || ""
       $("inputFooterLine").value = state.settings.printFooterLine || ""
       $("inputTicketStamp").value = state.settings.printTicketStamp || ""
-      $("inputUsbDrainMs").value = state.settings.printUsbDrainMs ?? 600
+      $("inputUsbDrainMs").value = state.settings.printUsbDrainMs ?? 400
     }
     renderHeader()
     renderQueueAndLogs()
@@ -230,55 +267,78 @@ async function loadState(rerenderAll = false) {
   }
 }
 
-window.useSystemPrinter = async (sysName) => {
-  try {
-    await apiCall("/api/printers", { method: "POST", body: JSON.stringify({ name: sysName, mode: "system", systemPrinterName: sysName, paperWidth: 80 }) })
-    showToast(`"${sysName}" yazıcısı eklendi`)
-    await loadState(true)
-  } catch (e) { showToast(e.message, true) }
-}
-
-window.togglePrinterWidth = async (printerId, paperWidth) => {
-  const p = (state.settings.printers || []).find((item) => item.id === printerId)
-  if (!p) return
-  try {
-    await apiCall("/api/printers", { method: "POST", body: JSON.stringify({ ...p, paperWidth }) })
-    showToast(`${p.name} kağıt genişliği ${paperWidth}mm yapıldı`)
-    await loadState(true)
-  } catch (e) { showToast(e.message, true) }
-}
-
-window.testPrint = async (printerId) => {
-  try {
-    showToast("Test fişi gönderiliyor...")
-    await apiCall("/api/test-print", { method: "POST", body: JSON.stringify({ printerId }) })
-    showToast("Test fişi başarıyla yazdırıldı!")
-    await loadState(false)
-  } catch (e) { showToast(`Yazdırma hatası: ${e.message}`, true) }
-}
-
-window.deletePrinter = async (printerId) => {
-  try {
-    await apiCall(`/api/printers/${encodeURIComponent(printerId)}`, { method: "DELETE" })
-    showToast("Yazıcı kaldırıldı")
-    await loadState(true)
-  } catch (e) { showToast(e.message, true) }
-}
-
-window.updateCategoryRoute = async (categoryId, printerId) => {
-  const nextRoutes = { ...(state.settings.categoryRoutes || {}) }
-  if (printerId) nextRoutes[categoryId] = printerId
-  else delete nextRoutes[categoryId]
-  try {
-    await apiCall("/api/routes", { method: "POST", body: JSON.stringify({ categoryRoutes: nextRoutes }) })
-    state.settings.categoryRoutes = nextRoutes
-    showToast("Kategori yönlendirmesi kaydedildi")
-  } catch (e) { showToast(e.message, true) }
-}
-
 document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll(".tab-btn").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)))
   $("btnGoSetup").addEventListener("click", () => switchTab("connection"))
+
+  $("configuredPrintersList").addEventListener("click", async (e) => {
+    const btn = e.target.closest("button[data-action]")
+    if (!btn) return
+    const action = btn.dataset.action
+    const id = btn.dataset.id
+    if (action === "toggle-width") {
+      const paperWidth = Number(btn.dataset.width) || 80
+      const p = (state.settings.printers || []).find((item) => item.id === id)
+      if (!p) return
+      try {
+        await apiCall("/api/printers", { method: "POST", body: JSON.stringify({ ...p, paperWidth }) })
+        showToast(`${p.name} kağıt genişliği ${paperWidth}mm yapıldı`)
+        await loadState(true)
+      } catch (err) {
+        showToast(err.message, true)
+      }
+    } else if (action === "test-print") {
+      try {
+        showToast("Test fişi gönderiliyor...")
+        await apiCall("/api/test-print", { method: "POST", body: JSON.stringify({ printerId: id }) })
+        showToast("Test fişi başarıyla yazdırıldı!")
+        await loadState(false)
+      } catch (err) {
+        showToast(`Yazdırma hatası: ${err.message}`, true)
+      }
+    } else if (action === "delete-printer") {
+      try {
+        await apiCall(`/api/printers/${encodeURIComponent(id)}`, { method: "DELETE" })
+        showToast("Yazıcı kaldırıldı")
+        await loadState(true)
+      } catch (err) {
+        showToast(err.message, true)
+      }
+    }
+  })
+
+  $("discoveredPrintersList").addEventListener("click", async (e) => {
+    const btn = e.target.closest('button[data-action="use-system-printer"]')
+    if (!btn) return
+    const sysName = btn.dataset.name
+    try {
+      await apiCall("/api/printers", {
+        method: "POST",
+        body: JSON.stringify({ name: sysName, mode: "system", systemPrinterName: sysName, paperWidth: 80 }),
+      })
+      showToast(`"${sysName}" yazıcısı eklendi`)
+      await loadState(true)
+    } catch (err) {
+      showToast(err.message, true)
+    }
+  })
+
+  $("categoryRoutingList").addEventListener("change", async (e) => {
+    const sel = e.target.closest("select[data-category-id]")
+    if (!sel) return
+    const categoryId = sel.dataset.categoryId
+    const printerId = sel.value
+    const nextRoutes = { ...(state.settings.categoryRoutes || {}) }
+    if (printerId) nextRoutes[categoryId] = printerId
+    else delete nextRoutes[categoryId]
+    try {
+      await apiCall("/api/routes", { method: "POST", body: JSON.stringify({ categoryRoutes: nextRoutes }) })
+      state.settings.categoryRoutes = nextRoutes
+      showToast("Kategori yönlendirmesi kaydedildi")
+    } catch (err) {
+      showToast(err.message, true)
+    }
+  })
 
   $("btnDiscoverPrinters").addEventListener("click", async () => {
     try {
@@ -287,7 +347,9 @@ document.addEventListener("DOMContentLoaded", () => {
       state.discoveredPrinters = data.printers || []
       renderDiscoveredPrinters()
       showToast(`${state.discoveredPrinters.length} sistem yazıcısı bulundu`)
-    } catch (e) { showToast(e.message, true) }
+    } catch (e) {
+      showToast(e.message, true)
+    }
   })
 
   $("btnTestIp").addEventListener("click", async () => {
@@ -298,7 +360,10 @@ document.addEventListener("DOMContentLoaded", () => {
     box.textContent = `${host}:${port} bağlantısı test ediliyor...`
     box.classList.remove("hidden")
     try {
-      const res = await fetch("/api/test-network", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ host, port }) }).then((r) => r.json())
+      const res = await apiCall("/api/test-network", {
+        method: "POST",
+        body: JSON.stringify({ host, port }),
+      })
       box.className = `inline-feedback ${res.ok ? "status-ok" : "status-err"}`
       box.textContent = res.ok ? `Bağlantı Başarılı! (${res.latencyMs}ms)` : `Bağlantı Başarısız: ${res.error}`
     } catch (e) {
@@ -319,42 +384,86 @@ document.addEventListener("DOMContentLoaded", () => {
       $("netPrinterPort").value = "9100"
       showToast(`"${name}" ağ yazıcısı eklendi`)
       await loadState(true)
-    } catch (err) { showToast(err.message, true) }
+    } catch (err) {
+      showToast(err.message, true)
+    }
   })
 
   const saveDefaults = async () => {
     try {
-      await apiCall("/api/routes", { method: "POST", body: JSON.stringify({ receiptPrinterId: $("selectReceiptPrinter").value, defaultKitchenPrinterId: $("selectDefaultKitchenPrinter").value }) })
+      await apiCall("/api/routes", {
+        method: "POST",
+        body: JSON.stringify({
+          receiptPrinterId: $("selectReceiptPrinter").value,
+          defaultKitchenPrinterId: $("selectDefaultKitchenPrinter").value,
+        }),
+      })
       showToast("Temel yazıcı yönlendirmesi kaydedildi")
       await loadState(true)
-    } catch (e) { showToast(e.message, true) }
+    } catch (e) {
+      showToast(e.message, true)
+    }
   }
   $("selectReceiptPrinter").addEventListener("change", saveDefaults)
   $("selectDefaultKitchenPrinter").addEventListener("change", saveDefaults)
 
-  const syncBranchContext = async (backendUrl, agentToken) => {
-    showToast("Şube bilgileri ve kategoriler çekiliyor...")
-    const res = await apiCall("/api/connect", { method: "POST", body: JSON.stringify({ backendUrl, agentToken }) })
-    showToast(`Bağlandı: ${res.context?.restaurant?.name || "Şube"} (${res.context?.categories?.length || 0} kategori)`)
-    await loadState(true)
-  }
+  $("btnRefreshCategories").addEventListener("click", async () => {
+    try {
+      showToast("Şube kategorileri yenileniyor...")
+      const res = await apiCall("/api/sync-context", { method: "POST" })
+      showToast(`Kategoriler güncellendi (${res.settings?.categories?.length || 0} kategori)`)
+      await loadState(true)
+    } catch (e) {
+      showToast(e.message, true)
+    }
+  })
 
-  $("btnRefreshCategories").addEventListener("click", () => syncBranchContext(state.settings.backendUrl, state.settings.agentToken).catch((e) => showToast(e.message, true)))
   $("formConnectBranch").addEventListener("submit", async (e) => {
     e.preventDefault()
     try {
-      await syncBranchContext($("inputBackendUrl").value.trim(), $("inputAgentToken").value.trim())
+      showToast("Giriş yapılıyor ve şube bilgileri çekiliyor...")
+      const res = await apiCall("/api/login", {
+        method: "POST",
+        body: JSON.stringify({
+          username: $("inputUsername").value.trim(),
+          password: $("inputPassword").value,
+        }),
+      })
+      $("inputPassword").value = ""
+      showToast(`Bağlandı: ${res.settings?.restaurantName || "Şube"} (${res.settings?.categories?.length || 0} kategori)`)
+      await loadState(true)
       switchTab("workspace")
-    } catch (err) { showToast(`Bağlantı hatası: ${err.message}`, true) }
+    } catch (err) {
+      showToast(`Giriş hatası: ${err.message}`, true)
+    }
+  })
+
+  $("btnLogoutBranch").addEventListener("click", async () => {
+    try {
+      await apiCall("/api/logout", { method: "POST" })
+      showToast("Şube oturumu kapatıldı")
+      await loadState(true)
+    } catch (err) {
+      showToast(err.message, true)
+    }
   })
 
   $("formTicketSettings").addEventListener("submit", async (e) => {
     e.preventDefault()
     try {
-      await apiCall("/api/routes", { method: "POST", body: JSON.stringify({ printFooterLine: $("inputFooterLine").value.trim(), printTicketStamp: $("inputTicketStamp").value.trim(), printUsbDrainMs: Number($("inputUsbDrainMs").value) || 0 }) })
+      await apiCall("/api/routes", {
+        method: "POST",
+        body: JSON.stringify({
+          printFooterLine: $("inputFooterLine").value.trim(),
+          printTicketStamp: $("inputTicketStamp").value.trim(),
+          printUsbDrainMs: Number($("inputUsbDrainMs").value) || 0,
+        }),
+      })
       showToast("Fiş ayarları kaydedildi")
       await loadState(true)
-    } catch (err) { showToast(err.message, true) }
+    } catch (err) {
+      showToast(err.message, true)
+    }
   })
 
   const flushNow = async () => {
@@ -371,6 +480,7 @@ document.addEventListener("DOMContentLoaded", () => {
   })
   $("btnClearLogs").addEventListener("click", async () => {
     await apiCall("/api/logs/clear", { method: "POST" })
+    state.lastLogDigest = ""
     await loadState(false)
   })
 

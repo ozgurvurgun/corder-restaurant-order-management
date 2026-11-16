@@ -1,8 +1,11 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
-import { hashPrintAgentToken } from '../../common/security/print-agent-token';
+import { RestaurantTokenPayload } from '../application/restaurant-auth.service';
+import { requireConfigSecret } from '../../common/security/env.validation';
 
 export type PrintAgentRequest = {
   printAgentRestaurantId: string;
@@ -12,6 +15,8 @@ export type PrintAgentRequest = {
 @Injectable()
 export class PrintAgentGuard implements CanActivate {
   constructor(
+    private readonly jwt: JwtService,
+    private readonly config: ConfigService,
     @InjectRepository(RestaurantEntity)
     private readonly restaurantRepo: Repository<RestaurantEntity>,
   ) {}
@@ -21,14 +26,34 @@ export class PrintAgentGuard implements CanActivate {
     const raw = request.headers?.authorization;
     const token = raw?.startsWith('Bearer ') ? raw.slice(7).trim() : raw?.trim();
     if (!token) {
-      throw new UnauthorizedException();
+      throw new UnauthorizedException('Print Agent authentication required');
     }
-    const tokenHash = hashPrintAgentToken(token);
+    let payload: RestaurantTokenPayload;
+    try {
+      const secret = requireConfigSecret(this.config, 'JWT_SECRET');
+      payload = this.jwt.verify<RestaurantTokenPayload>(token, { secret });
+    } catch {
+      throw new UnauthorizedException('Invalid or expired Print Agent session');
+    }
+    if (
+      payload.type !== 'restaurant' ||
+      payload.role !== 'print_agent' ||
+      !payload.restaurantId ||
+      !payload.email
+    ) {
+      throw new UnauthorizedException('Invalid Print Agent token role');
+    }
     const restaurant = await this.restaurantRepo.findOne({
-      where: { printAgentTokenHash: tokenHash },
+      where: { id: payload.restaurantId },
+      select: { id: true, status: true, printAgentUsername: true },
     });
-    if (!restaurant || restaurant.status !== 'active') {
-      throw new UnauthorizedException();
+    if (
+      !restaurant ||
+      restaurant.status !== 'active' ||
+      !restaurant.printAgentUsername ||
+      restaurant.printAgentUsername !== payload.email
+    ) {
+      throw new UnauthorizedException('Print Agent account is inactive or changed');
     }
     request.printAgentRestaurantId = restaurant.id;
     return true;

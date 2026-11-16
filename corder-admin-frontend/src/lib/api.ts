@@ -94,7 +94,7 @@ export const platform = {
         status: string
         rootAdminId?: string | null
         terminalEmail?: string | null
-        printAgentToken?: string | null
+        printAgentUsername?: string | null
         createdAt: string
       }>>("/platform/restaurants")
     },
@@ -109,7 +109,7 @@ export const platform = {
         status: string
         rootAdminId?: string | null
         terminalEmail?: string | null
-        printAgentToken?: string | null
+        printAgentUsername?: string | null
         createdAt: string
       }>(`/platform/restaurants/${id}`)
     },
@@ -126,7 +126,7 @@ export const platform = {
         }>
       >(`/platform/restaurants/${restaurantId}/categories`)
     },
-    async create(body: { name: string; slug: string; address?: string; phone?: string; email?: string; status?: "active" | "inactive" }) {
+    async create(body: { name: string; slug: string; address?: string; phone?: string; email?: string; status?: "active" | "inactive"; printAgentUsername?: string; printAgentPassword?: string }) {
       const payload = {
         name: body.name,
         slug: body.slug,
@@ -134,13 +134,15 @@ export const platform = {
         ...(body.phone !== undefined ? { phone: body.phone } : {}),
         ...(body.email !== undefined ? { email: body.email } : {}),
         ...(body.status !== undefined ? { status: body.status } : {}),
+        ...(body.printAgentUsername !== undefined ? { printAgentUsername: body.printAgentUsername } : {}),
+        ...(body.printAgentPassword !== undefined ? { printAgentPassword: body.printAgentPassword } : {}),
       }
-      return platformFetch<{ id: string; name: string; slug: string; address?: string; phone?: string; email?: string; status: string; rootAdminId?: string | null; createdAt: string }>(
+      return platformFetch<{ id: string; name: string; slug: string; address?: string; phone?: string; email?: string; status: string; rootAdminId?: string | null; printAgentUsername?: string | null; createdAt: string }>(
         "/platform/restaurants",
         { method: "POST", body: JSON.stringify(payload) }
       )
     },
-    async update(id: string, body: { name?: string; slug?: string; address?: string; phone?: string; email?: string; status?: "active" | "inactive"; terminalEmail?: string | null; terminalPassword?: string; printAgentToken?: string | null }) {
+    async update(id: string, body: { name?: string; slug?: string; address?: string; phone?: string; email?: string; status?: "active" | "inactive"; terminalEmail?: string | null; terminalPassword?: string; printAgentUsername?: string | null; printAgentPassword?: string }) {
       const payload = {
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.slug !== undefined ? { slug: body.slug } : {}),
@@ -150,9 +152,10 @@ export const platform = {
         ...(body.status !== undefined ? { status: body.status } : {}),
         ...(body.terminalEmail !== undefined ? { terminalEmail: body.terminalEmail } : {}),
         ...(body.terminalPassword !== undefined ? { terminalPassword: body.terminalPassword } : {}),
-        ...(body.printAgentToken !== undefined ? { printAgentToken: body.printAgentToken } : {}),
+        ...(body.printAgentUsername !== undefined ? { printAgentUsername: body.printAgentUsername } : {}),
+        ...(body.printAgentPassword !== undefined ? { printAgentPassword: body.printAgentPassword } : {}),
       }
-      return platformFetch<{ id: string; name: string; slug: string; address?: string; phone?: string; email?: string; status: string; rootAdminId?: string | null; terminalEmail?: string | null; printAgentToken?: string | null; createdAt: string }>(
+      return platformFetch<{ id: string; name: string; slug: string; address?: string; phone?: string; email?: string; status: string; rootAdminId?: string | null; terminalEmail?: string | null; printAgentUsername?: string | null; createdAt: string }>(
         `/platform/restaurants/${id}`,
         { method: "PUT", body: JSON.stringify(payload) }
       )

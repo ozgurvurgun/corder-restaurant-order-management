@@ -1,11 +1,15 @@
+const fs = require("fs")
 const net = require("net")
-const { exec } = require("child_process")
+const { execFile } = require("child_process")
 
-function execText(cmd, timeoutMs = 8000) {
+const SAFE_HOST_RE = /^[a-zA-Z0-9.-]{1,253}$/
+
+function execFileText(binary, args, timeoutMs = 6000) {
   return new Promise((resolve) => {
-    exec(
-      cmd,
-      { timeout: timeoutMs, windowsHide: true, maxBuffer: 1024 * 1024 },
+    execFile(
+      binary,
+      args,
+      { timeout: timeoutMs, windowsHide: true, shell: false, maxBuffer: 512 * 1024 },
       (err, stdout) => {
         if (err) {
           resolve("")
@@ -18,9 +22,16 @@ function execText(cmd, timeoutMs = 8000) {
 }
 
 async function discoverWindowsPrinters() {
-  const psCmd =
-    'powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-Printer | Select-Object Name, DriverName, PortName, PrinterStatus | ConvertTo-Json -Compress"'
-  const raw = await execText(psCmd, 10000)
+  const raw = await execFileText(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "Get-Printer | Select-Object Name, DriverName, PortName, PrinterStatus | ConvertTo-Json -Compress",
+    ],
+    8000,
+  )
   if (!raw) return []
   try {
     const parsed = JSON.parse(raw)
@@ -30,7 +41,7 @@ async function discoverWindowsPrinters() {
       .map((item) => ({
         name: String(item.Name).trim(),
         driverName: String(item.DriverName || "Windows Spooler").trim(),
-        portName: String(item.PortName || "").trim(),
+        portName: String(item.PortName || "USB").trim(),
         status: String(item.PrinterStatus ?? "Ready"),
         isDefault: false,
         source: "windows",
@@ -40,31 +51,53 @@ async function discoverWindowsPrinters() {
   }
 }
 
-async function discoverCupsPrinters() {
-  const [lpstatA, lpstatD] = await Promise.all([
-    execText("lpstat -a", 5000),
-    execText("lpstat -d", 5000),
+async function discoverCupsAndLinuxUsbPrinters() {
+  const [lpstatA, lpstatD, lpstatV] = await Promise.all([
+    execFileText("lpstat", ["-a"], 4000),
+    execFileText("lpstat", ["-d"], 4000),
+    execFileText("lpstat", ["-v"], 4000),
   ])
+
   let defaultPrinter = ""
   const defMatch = lpstatD.match(/:\s*(\S+)/)
-  if (defMatch) {
-    defaultPrinter = defMatch[1].trim()
+  if (defMatch) defaultPrinter = defMatch[1].trim()
+
+  const deviceUriMap = new Map()
+  for (const line of lpstatV.split(/\r?\n/).filter(Boolean)) {
+    const m = line.match(/\sfor\s+([^\s:]+):\s*(.+)$/i)
+    if (m) deviceUriMap.set(m[1].trim(), m[2].trim())
   }
-  if (!lpstatA) return []
-  const lines = lpstatA.split(/\r?\n/).filter(Boolean)
+
   const printers = []
-  for (const line of lines) {
+  for (const line of lpstatA.split(/\r?\n/).filter(Boolean)) {
     const firstToken = line.trim().split(/\s+/)[0]
     if (!firstToken || firstToken.includes(":")) continue
     printers.push({
       name: firstToken,
-      driverName: "CUPS",
-      portName: "local",
+      driverName: "CUPS (Linux/macOS)",
+      portName: deviceUriMap.get(firstToken) || "CUPS Queue",
       status: "ready",
       isDefault: firstToken === defaultPrinter,
       source: "cups",
     })
   }
+
+  if (process.platform === "linux") {
+    for (let i = 0; i <= 9; i++) {
+      const devPath = `/dev/usb/lp${i}`
+      if (fs.existsSync(devPath)) {
+        printers.push({
+          name: devPath,
+          driverName: "Linux Doğrudan USB Termal",
+          portName: devPath,
+          status: "ready",
+          isDefault: printers.length === 0,
+          source: "linux-usb",
+        })
+      }
+    }
+  }
+
   return printers
 }
 
@@ -72,20 +105,18 @@ async function discoverSystemPrinters(extraPrinters = []) {
   const discovered =
     process.platform === "win32"
       ? await discoverWindowsPrinters()
-      : await discoverCupsPrinters()
+      : await discoverCupsAndLinuxUsbPrinters()
 
   const mergedMap = new Map()
   for (const p of discovered) {
-    if (p && p.name) {
-      mergedMap.set(p.name, p)
-    }
+    if (p && p.name) mergedMap.set(p.name, p)
   }
   for (const extra of extraPrinters || []) {
     const name = String(extra?.name || extra?.displayName || "").trim()
     if (!name || mergedMap.has(name)) continue
     mergedMap.set(name, {
       name,
-      driverName: String(extra?.driverName || extra?.description || "System").trim(),
+      driverName: String(extra?.driverName || extra?.description || "Sistem Yazıcısı").trim(),
       portName: "system",
       status: String(extra?.status ?? "ready"),
       isDefault: Boolean(extra?.isDefault),
@@ -99,8 +130,12 @@ function testTcpPrinterConnection(host, port = 9100, timeoutMs = 2500) {
   return new Promise((resolve) => {
     const cleanHost = String(host || "").trim()
     const cleanPort = Number(port) || 9100
-    if (!cleanHost) {
-      resolve({ ok: false, error: "Host cannot be empty" })
+    if (!cleanHost || !SAFE_HOST_RE.test(cleanHost)) {
+      resolve({ ok: false, error: "Geçersiz IP veya sunucu adresi" })
+      return
+    }
+    if (cleanPort < 1 || cleanPort > 65535) {
+      resolve({ ok: false, error: "Geçersiz port numarası (1-65535)" })
       return
     }
 
@@ -123,12 +158,12 @@ function testTcpPrinterConnection(host, port = 9100, timeoutMs = 2500) {
 
     socket.on("timeout", () => {
       socket.destroy()
-      finish({ ok: false, error: `Connection timed out (${timeoutMs}ms)` })
+      finish({ ok: false, error: `Bağlantı zaman aşımına uğradı (${timeoutMs}ms)` })
     })
 
     socket.on("error", (err) => {
       socket.destroy()
-      finish({ ok: false, error: err.message || "TCP connection failed" })
+      finish({ ok: false, error: err.message || "TCP bağlantısı kurulamadı" })
     })
   })
 }

@@ -17,26 +17,31 @@ if (typeof electronModule === "string") {
   return
 }
 
-const { app, BrowserWindow, shell } = electronModule
+const { app, BrowserWindow } = electronModule
 const { startPrintAgentApp } = require("../src/index")
 const { info, error } = require("../src/logger")
 
 let mainWindow = null
 let agentApp = null
 
-async function createMainWindow(uiUrl, uiServer) {
+async function createMainWindow(uiUrl, uiServer, sessionToken) {
+  process.env.CORDER_UI_SESSION_TOKEN = sessionToken
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 840,
     minWidth: 960,
     minHeight: 640,
-    title: "Corder Print Agent",
+    title: "Corder Yazıcı & Mutfak Merkezi",
     autoHideMenuBar: true,
     backgroundColor: "#f4f6f9",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
     },
   })
 
@@ -50,9 +55,14 @@ async function createMainWindow(uiUrl, uiServer) {
     })
   }
 
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+  mainWindow.webContents.setWindowOpenHandler(() => {
     return { action: "deny" }
+  })
+
+  mainWindow.webContents.on("will-navigate", (event, targetUrl) => {
+    if (!targetUrl.startsWith(uiUrl)) {
+      event.preventDefault()
+    }
   })
 
   await mainWindow.loadURL(uiUrl)
@@ -75,8 +85,8 @@ if (!singleInstanceLock) {
 
   app.whenReady().then(async () => {
     try {
-      agentApp = await startPrintAgentApp({ openBrowser: false })
-      await createMainWindow(agentApp.uiUrl, agentApp.uiServer)
+      agentApp = await startPrintAgentApp({ openBrowser: false, port: 0 })
+      await createMainWindow(agentApp.uiUrl, agentApp.uiServer, agentApp.sessionToken)
     } catch (err) {
       error("Failed to launch Electron Print Agent", {
         error: err instanceof Error ? err.message : String(err),

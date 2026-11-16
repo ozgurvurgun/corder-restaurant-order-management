@@ -1,8 +1,9 @@
 const { info, warn } = require("./logger")
+const { resolveEmbeddedBackendUrl, PRODUCTION_SERVER_URL } = require("./config")
 
 function normalizeHttpOrigin(rawUrl) {
   const clean = String(rawUrl || "").trim()
-  if (!clean) return ""
+  if (!clean) return PRODUCTION_SERVER_URL
   try {
     const u = new URL(clean)
     u.protocol = u.protocol === "wss:" ? "https:" : u.protocol === "ws:" ? "http:" : u.protocol
@@ -15,7 +16,7 @@ function normalizeHttpOrigin(rawUrl) {
 function httpBaseUrl(config) {
   const explicit = (config?.backendHttpUrl || "").trim()
   if (explicit) return normalizeHttpOrigin(explicit)
-  return normalizeHttpOrigin(config?.backendWsUrl || "")
+  return normalizeHttpOrigin(config?.backendWsUrl || PRODUCTION_SERVER_URL)
 }
 
 async function patchWithRetry(config, url, logLabel, meta) {
@@ -39,7 +40,7 @@ async function patchWithRetry(config, url, logLabel, meta) {
     }
     await new Promise((r) => setTimeout(r, 350 * (i + 1)))
   }
-  warn(`${logLabel} ack failed after retries`, { ...meta, lastErr: lastErr?.slice?.(0, 200) })
+  warn(`${logLabel} ack failed after retries`, { ...meta, lastErr: lastErr?.slice?.(0, 180) })
   return false
 }
 
@@ -97,30 +98,54 @@ async function fetchPendingPrintJobs(config) {
   }
 }
 
-async function fetchAgentContext(backendUrlOrConfig, tokenArg) {
-  const base =
-    typeof backendUrlOrConfig === "object"
-      ? httpBaseUrl(backendUrlOrConfig)
-      : normalizeHttpOrigin(backendUrlOrConfig)
-  const token =
-    typeof backendUrlOrConfig === "object"
-      ? String(backendUrlOrConfig?.agentToken || "").trim()
-      : String(tokenArg || "").trim()
-
-  if (!base) {
-    throw new Error("Backend URL is required")
+async function loginPrintAgent(username, password) {
+  const cleanUser = String(username || "").trim().toLowerCase()
+  const cleanPass = String(password || "")
+  if (!cleanUser || !cleanPass) {
+    throw new Error("Kullanıcı adı ve parola zorunludur.")
   }
+
+  const base = await resolveEmbeddedBackendUrl(true)
+  const url = `${base}/restaurant/print-agent/login`
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: cleanUser, password: cleanPass }),
+  })
+  if (!res.ok) {
+    let errMsg = `Giriş başarısız (${res.status})`
+    try {
+      const body = await res.json()
+      if (body?.message) {
+        errMsg = Array.isArray(body.message) ? body.message.join(", ") : String(body.message)
+      }
+    } catch {
+      // ignore
+    }
+    throw new Error(errMsg)
+  }
+  const data = await res.json()
+  return {
+    backendUrl: base,
+    accessToken: String(data?.accessToken || ""),
+    restaurant: data?.restaurant || null,
+    categories: Array.isArray(data?.categories) ? data.categories : [],
+    printers: Array.isArray(data?.printers) ? data.printers : [],
+  }
+}
+
+async function fetchAgentContext(config) {
+  const base = httpBaseUrl(config)
+  const token = String(config?.agentToken || config?.authToken || "").trim()
   if (!token) {
-    throw new Error("Agent token is required")
+    throw new Error("Önce mekan kullanıcı adı ve parolası ile giriş yapın.")
   }
-
   const url = `${base}/restaurant/print-agent/context`
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!res.ok) {
-    const bodyText = await res.text().catch(() => "")
-    throw new Error(`HTTP ${res.status}: ${bodyText.slice(0, 200) || res.statusText}`)
+    throw new Error(`Kategori ve şube bilgileri çekilemedi (HTTP ${res.status})`)
   }
   const data = await res.json()
   return {
@@ -136,5 +161,6 @@ module.exports = {
   ackPrintJobPrinted,
   fetchPendingKitchenOrders,
   fetchPendingPrintJobs,
+  loginPrintAgent,
   fetchAgentContext,
 }

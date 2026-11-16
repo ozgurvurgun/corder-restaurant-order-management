@@ -12,7 +12,6 @@ import {
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 import { TableService } from '../application/table.service';
 import { buildCorsOptions } from '../../common/security/cors.config';
-import { hashPrintAgentToken } from '../../common/security/print-agent-token';
 
 function getRestaurantRoom(restaurantId: string) {
   return `restaurant:${restaurantId}`;
@@ -49,7 +48,10 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (
         payload.type !== 'restaurant' ||
         !payload.restaurantId ||
-        (payload.role !== 'root' && payload.role !== 'staff' && payload.role !== 'terminal')
+        (payload.role !== 'root' &&
+          payload.role !== 'staff' &&
+          payload.role !== 'terminal' &&
+          payload.role !== 'print_agent')
       ) {
         client.disconnect(true);
         return;
@@ -69,31 +71,29 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
       const activeRestaurant = await this.restaurantRepo.findOne({
         where: { id: targetRestId },
-        select: { id: true, status: true },
+        select: { id: true, status: true, printAgentUsername: true },
       });
       if (!activeRestaurant || activeRestaurant.status !== 'active') {
         client.disconnect(true);
         return;
       }
+      if (
+        payload.role === 'print_agent' &&
+        (!activeRestaurant.printAgentUsername || activeRestaurant.printAgentUsername !== payload.email)
+      ) {
+        client.disconnect(true);
+        return;
+      }
       client.data.restaurantId = targetRestId;
-      client.data.authType = 'jwt';
+      client.data.authType = payload.role === 'print_agent' ? 'print-agent-jwt' : 'jwt';
       client.join(getRestaurantRoom(targetRestId));
-      const map = await this.tableService.buildSessionPresenceMap(targetRestId);
-      client.emit('tables:presence', map);
-      return;
+      if (payload.role !== 'print_agent') {
+        const map = await this.tableService.buildSessionPresenceMap(targetRestId);
+        client.emit('tables:presence', map);
+      }
     } catch {
-      // If not a JWT, fall through to static print-agent token check.
-    }
-
-    const tokenHash = hashPrintAgentToken(token);
-    const restaurant = await this.restaurantRepo.findOne({ where: { printAgentTokenHash: tokenHash } });
-    if (!restaurant || restaurant.status !== 'active') {
       client.disconnect(true);
-      return;
     }
-    client.data.restaurantId = restaurant.id;
-    client.data.authType = 'print-agent-token';
-    client.join(getRestaurantRoom(restaurant.id));
   }
 
   handleDisconnect(_client: Socket): void {

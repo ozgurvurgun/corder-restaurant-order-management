@@ -18,8 +18,8 @@ export interface Restaurant {
   rootAdminId?: string
   /** Terminal login email (independent of boss). */
   terminalEmail?: string | null
-  /** Restaurant-scoped static token for print-agent. */
-  printAgentToken?: string | null
+  /** Print Agent desktop login username. */
+  printAgentUsername?: string | null
 }
 
 export interface BossBranchSummary {

@@ -1,9 +1,10 @@
 const http = require("http")
 const fs = require("fs")
 const path = require("path")
-const { loadSettings, saveSettings, buildRuntimeConfig } = require("./settings-store")
+const crypto = require("crypto")
+const { loadSettings, saveSettings, getPublicSettings, buildRuntimeConfig } = require("./settings-store")
 const { discoverSystemPrinters, testTcpPrinterConnection } = require("./printer-discovery")
-const { fetchAgentContext } = require("./http-sync")
+const { loginPrintAgent, fetchAgentContext } = require("./http-sync")
 const { buildTestTicket } = require("./escpos")
 const { printBytes } = require("./printers")
 const { info, warn, getRecentLogs, clearLogs } = require("./logger")
@@ -17,10 +18,19 @@ const MIME_TYPES = {
   ".svg": "image/svg+xml",
 }
 
+const SECURITY_HEADERS = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "no-referrer",
+  "Content-Security-Policy":
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'",
+  "Cache-Control": "no-store",
+}
+
 function sendJson(res, statusCode, payload) {
   res.writeHead(statusCode, {
+    ...SECURITY_HEADERS,
     "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store",
   })
   res.end(JSON.stringify(payload))
 }
@@ -31,7 +41,7 @@ function readJsonBody(req) {
     let total = 0
     req.on("data", (chunk) => {
       total += chunk.length
-      if (total > 1024 * 1024) {
+      if (total > 256 * 1024) {
         reject(new Error("Payload too large"))
         req.destroy()
         return
@@ -50,7 +60,38 @@ function readJsonBody(req) {
   })
 }
 
-function serveStaticFile(res, urlPath) {
+function parseCookies(cookieHeader) {
+  const out = {}
+  for (const part of String(cookieHeader || "").split(";")) {
+    const idx = part.indexOf("=")
+    if (idx > 0) {
+      out[part.slice(0, idx).trim()] = part.slice(idx + 1).trim()
+    }
+  }
+  return out
+}
+
+function isAllowedLoopbackRequest(req, sessionToken) {
+  const host = String(req.headers.host || "").toLowerCase()
+  if (!host.startsWith("127.0.0.1:") && !host.startsWith("localhost:")) {
+    return false
+  }
+  const headerToken = String(req.headers["x-corder-session"] || "").trim()
+  if (headerToken && headerToken === sessionToken) return true
+
+  const cookies = parseCookies(req.headers.cookie)
+  if (cookies.corder_pa_session !== sessionToken) return false
+
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    const origin = String(req.headers.origin || "").toLowerCase()
+    if (!origin.startsWith("http://127.0.0.1:") && !origin.startsWith("http://localhost:")) {
+      return false
+    }
+  }
+  return true
+}
+
+function serveStaticFile(res, urlPath, sessionToken) {
   const relPath = urlPath === "/" ? "index.html" : urlPath.replace(/^\/+/, "")
   const safePath = path.normalize(relPath).replace(/^(\.\.(\/|\\|$))+/, "")
   const fullPath = path.join(PUBLIC_DIR, safePath)
@@ -59,10 +100,14 @@ function serveStaticFile(res, urlPath) {
     return
   }
   const ext = path.extname(fullPath).toLowerCase()
-  res.writeHead(200, {
+  const headers = {
+    ...SECURITY_HEADERS,
     "Content-Type": MIME_TYPES[ext] || "application/octet-stream",
-    "Cache-Control": "no-store",
-  })
+  }
+  if (relPath === "index.html") {
+    headers["Set-Cookie"] = `corder_pa_session=${sessionToken}; Path=/; HttpOnly; SameSite=Strict`
+  }
+  res.writeHead(200, headers)
   fs.createReadStream(fullPath).pipe(res)
 }
 
@@ -83,24 +128,31 @@ function mapBackendPrinters(backendPrinters = []) {
 
 function createUiServer({ store, agent }) {
   let electronPrinterProvider = null
+  const sessionToken = crypto.randomBytes(32).toString("hex")
 
   const applyAndReload = (partial) => {
     const saved = saveSettings(partial)
     const runtimeConfig = buildRuntimeConfig(saved)
     agent.reloadConfig(runtimeConfig)
-    return { settings: saved, runtimeConfig }
+    return { settings: saved, publicSettings: getPublicSettings(saved), runtimeConfig }
   }
 
   const handleApi = async (req, res, pathname) => {
+    if (!isAllowedLoopbackRequest(req, sessionToken)) {
+      sendJson(res, 403, { ok: false, error: "Forbidden local session" })
+      return
+    }
+
     if (req.method === "GET" && pathname === "/api/state") {
+      const saved = loadSettings()
       sendJson(res, 200, {
         ok: true,
         platform: process.platform,
         status: agent.getStatus(),
-        settings: loadSettings(),
+        settings: getPublicSettings(saved),
         queue: store.getPendingJobs(),
-        recentPrinted: store.getRecentPrinted(30),
-        logs: getRecentLogs(),
+        recentPrinted: store.getRecentPrinted(15),
+        logs: getRecentLogs().slice(0, 40),
       })
       return
     }
@@ -115,27 +167,55 @@ function createUiServer({ store, agent }) {
       return
     }
 
-    if (req.method === "POST" && pathname === "/api/connect") {
+    if (req.method === "POST" && pathname === "/api/login") {
       const body = await readJsonBody(req)
       const current = loadSettings()
-      const backendUrl = String(body.backendUrl ?? current.backendUrl ?? "").trim()
-      const agentToken = String(body.agentToken ?? current.agentToken ?? "").trim()
-      const ctx = await fetchAgentContext(backendUrl, agentToken)
+      const loginResult = await loginPrintAgent(body.username, body.password)
+      const nextPrinters =
+        current.printers.length > 0 ? current.printers : mapBackendPrinters(loginResult.printers)
+      const { publicSettings } = applyAndReload({
+        backendUrl: loginResult.backendUrl,
+        authToken: loginResult.accessToken,
+        username: String(body.username || "").trim().toLowerCase(),
+        restaurantId: loginResult.restaurant?.id || "",
+        restaurantName: loginResult.restaurant?.name || "",
+        categories: loginResult.categories || [],
+        printers: nextPrinters,
+        printFooterLine: current.printFooterLine || loginResult.restaurant?.name || "",
+      })
+      info("Print Agent authenticated with branch", {
+        username: publicSettings.username,
+        restaurantName: publicSettings.restaurantName,
+        categories: publicSettings.categories.length,
+      })
+      sendJson(res, 200, { ok: true, settings: publicSettings })
+      return
+    }
+
+    if (req.method === "POST" && pathname === "/api/logout") {
+      const { publicSettings } = applyAndReload({
+        authToken: "",
+        restaurantId: "",
+        restaurantName: "",
+      })
+      info("Print Agent logged out")
+      sendJson(res, 200, { ok: true, settings: publicSettings })
+      return
+    }
+
+    if (req.method === "POST" && pathname === "/api/sync-context") {
+      const current = loadSettings()
+      const runtimeConfig = buildRuntimeConfig(current)
+      const ctx = await fetchAgentContext(runtimeConfig)
       const nextPrinters = current.printers.length > 0 ? current.printers : mapBackendPrinters(ctx.printers)
-      const { settings } = applyAndReload({
-        backendUrl,
-        agentToken,
-        restaurantId: ctx.restaurant?.id || current.restaurantId || "*",
-        restaurantName: ctx.restaurant?.name || current.restaurantName || "",
+      const { publicSettings } = applyAndReload({
+        restaurantId: ctx.restaurant?.id || current.restaurantId,
+        restaurantName: ctx.restaurant?.name || current.restaurantName,
         categories: ctx.categories || [],
         printers: nextPrinters,
-        printFooterLine: current.printFooterLine || ctx.restaurant?.name || "",
       })
-      info("Connected to Corder branch context", {
-        restaurantName: settings.restaurantName,
-        categories: settings.categories.length,
-      })
-      sendJson(res, 200, { ok: true, context: ctx, settings })
+      info("Branch categories synchronized", { categories: publicSettings.categories.length })
+      sendJson(res, 200, { ok: true, settings: publicSettings })
       return
     }
 
@@ -158,9 +238,9 @@ function createUiServer({ store, agent }) {
       if (idx >= 0) printers[idx] = entry
       else printers.push(entry)
 
-      const { settings } = applyAndReload({ printers })
+      const { publicSettings } = applyAndReload({ printers })
       info("Printer saved", { id: entry.id, name: entry.name, mode: entry.mode })
-      sendJson(res, 200, { ok: true, printer: entry, settings })
+      sendJson(res, 200, { ok: true, printer: entry, settings: publicSettings })
       return
     }
 
@@ -172,7 +252,7 @@ function createUiServer({ store, agent }) {
       for (const [cid, pid] of Object.entries(categoryRoutes)) {
         if (pid === id) delete categoryRoutes[cid]
       }
-      const { settings } = applyAndReload({
+      const { publicSettings } = applyAndReload({
         printers,
         categoryRoutes,
         defaultKitchenPrinterId:
@@ -180,7 +260,7 @@ function createUiServer({ store, agent }) {
         receiptPrinterId: current.receiptPrinterId === id ? printers[0]?.id || "" : current.receiptPrinterId,
       })
       info("Printer removed", { id })
-      sendJson(res, 200, { ok: true, settings })
+      sendJson(res, 200, { ok: true, settings: publicSettings })
       return
     }
 
@@ -193,8 +273,6 @@ function createUiServer({ store, agent }) {
         "receiptPrinterId",
         "printFooterLine",
         "printTicketStamp",
-        "backendUrl",
-        "agentToken",
       ]) {
         if (body[k] !== undefined) patch[k] = String(body[k] || "").trim()
       }
@@ -203,8 +281,8 @@ function createUiServer({ store, agent }) {
       }
       if (body.printUsbDrainMs !== undefined) patch.printUsbDrainMs = Number(body.printUsbDrainMs || 0)
 
-      const { settings } = applyAndReload({ ...current, ...patch })
-      sendJson(res, 200, { ok: true, settings })
+      const { publicSettings } = applyAndReload({ ...current, ...patch })
+      sendJson(res, 200, { ok: true, settings: publicSettings })
       return
     }
 
@@ -223,7 +301,7 @@ function createUiServer({ store, agent }) {
         settings.printers.find((p) => p.id === body.printerId) ||
         runtimeConfig.defaultKitchenPrinter
       if (!target) {
-        sendJson(res, 400, { ok: false, error: "No printer selected for test print" })
+        sendJson(res, 400, { ok: false, error: "Test için yazıcı seçilmedi" })
         return
       }
       await printBytes(runtimeConfig, buildTestTicket(target), { printer: target })
@@ -258,7 +336,7 @@ function createUiServer({ store, agent }) {
     try {
       const parsed = new URL(req.url || "/", "http://127.0.0.1")
       if (parsed.pathname.startsWith("/api/")) await handleApi(req, res, parsed.pathname)
-      else serveStaticFile(res, parsed.pathname)
+      else serveStaticFile(res, parsed.pathname, sessionToken)
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
       warn("UI API request failed", { url: req.url, error: message })
@@ -268,22 +346,27 @@ function createUiServer({ store, agent }) {
 
   return {
     server,
+    sessionToken,
     setElectronPrinterProvider(fn) {
       electronPrinterProvider = fn
     },
-    listen(preferredPort = 4190) {
+    listen(preferredPort = 0) {
       return new Promise((resolve, reject) => {
-        let port = Number(preferredPort) || 4190
+        let port = Number(preferredPort) || 0
         const tryListen = (attemptsLeft) => {
           server.once("error", (err) => {
             if (err.code === "EADDRINUSE" && attemptsLeft > 0) {
-              port += 1
+              port = port ? port + 1 : 0
               tryListen(attemptsLeft - 1)
             } else {
               reject(err)
             }
           })
-          server.listen(port, "127.0.0.1", () => resolve({ port, url: `http://127.0.0.1:${port}` }))
+          server.listen(port, "127.0.0.1", () => {
+            const addr = server.address()
+            const boundPort = typeof addr === "object" && addr ? addr.port : port
+            resolve({ port: boundPort, url: `http://127.0.0.1:${boundPort}` })
+          })
         }
         tryListen(10)
       })

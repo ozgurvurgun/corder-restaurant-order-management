@@ -20,7 +20,7 @@ export class LoginRateLimiterService {
   private readonly buckets = new Map<string, RateBucket>();
 
   consumeLoginAttempt(
-    scope: 'restaurant' | 'platform',
+    scope: 'restaurant' | 'platform' | 'print-agent',
     ip: string,
     email: string,
   ): void {

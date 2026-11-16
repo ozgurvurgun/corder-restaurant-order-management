@@ -27,6 +27,11 @@ export class CreateRestaurantDto {
 
   @IsOptional()
   @IsString()
-  @MinLength(12)
-  printAgentToken?: string;
+  @MinLength(3)
+  printAgentUsername?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(6)
+  printAgentPassword?: string;
 }

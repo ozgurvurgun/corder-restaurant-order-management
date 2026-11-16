@@ -160,7 +160,7 @@ export function EditRestaurantPage() {
         <PrintAgentTokenSection
           restaurantId={id}
           initialTerminalEmail={restaurant.terminalEmail}
-          initialPrintAgentToken={restaurant.printAgentToken}
+          initialPrintAgentUsername={restaurant.printAgentUsername}
           onSaveTerminalConfig={async (config) => {
             await updateRestaurant(id, config)
           }}

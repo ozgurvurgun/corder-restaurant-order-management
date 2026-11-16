@@ -36,7 +36,8 @@ export class CoreAndCatalogSchema1760000000000 implements MigrationInterface {
         "root_admin_id" uuid,
         "terminal_email" character varying,
         "terminal_password_hash" character varying,
-        "print_agent_token_hash" character varying(64),
+        "print_agent_username" character varying,
+        "print_agent_password_hash" character varying,
         "created_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
         CONSTRAINT "PK_restaurants" PRIMARY KEY ("id"),
         CONSTRAINT "UQ_restaurants_slug" UNIQUE ("slug")
@@ -46,7 +47,7 @@ export class CoreAndCatalogSchema1760000000000 implements MigrationInterface {
       `CREATE INDEX "IDX_restaurants_terminal_email" ON "restaurants" ("terminal_email")`,
     );
     await queryRunner.query(
-      `CREATE UNIQUE INDEX "IDX_restaurants_print_agent_token_hash" ON "restaurants" ("print_agent_token_hash")`,
+      `CREATE UNIQUE INDEX "IDX_restaurants_print_agent_username" ON "restaurants" ("print_agent_username")`,
     );
 
     await queryRunner.query(`

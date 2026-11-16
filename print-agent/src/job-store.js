@@ -1,13 +1,14 @@
 const fs = require("fs")
 const path = require("path")
 
-const MAX_PRINTED_ENTRIES = 2000
-const MAX_PRINTED_AGE_MS = 7 * 24 * 60 * 60 * 1000
+const MAX_PRINTED_ENTRIES = 200
+const MAX_PRINTED_AGE_MS = 24 * 60 * 60 * 1000
+const MAX_QUEUE_ENTRIES = 250
 
 function ensureDir(filePath) {
   const dir = path.dirname(filePath)
   try {
-    fs.mkdirSync(dir, { recursive: true })
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 })
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
     throw new Error(`Queue directory create failed (${dir}): ${message}`)
@@ -73,10 +74,13 @@ class JobStore {
 
   save() {
     ensureDir(this.filePath)
+    if (this.state.queue.length > MAX_QUEUE_ENTRIES) {
+      this.state.queue.splice(0, this.state.queue.length - MAX_QUEUE_ENTRIES)
+    }
     const payload = JSON.stringify(this.state, null, 2)
     const tmpPath = `${this.filePath}.${process.pid}.tmp`
     try {
-      fs.writeFileSync(tmpPath, payload, "utf8")
+      fs.writeFileSync(tmpPath, payload, { encoding: "utf8", mode: 0o600 })
       fs.renameSync(tmpPath, this.filePath)
     } catch {
       try {
@@ -84,7 +88,7 @@ class JobStore {
       } catch {
         // noop
       }
-      fs.writeFileSync(this.filePath, payload, "utf8")
+      fs.writeFileSync(this.filePath, payload, { encoding: "utf8", mode: 0o600 })
     }
   }
 

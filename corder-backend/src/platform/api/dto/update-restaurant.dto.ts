@@ -63,6 +63,11 @@ export class UpdateRestaurantDto {
 
   @IsOptional()
   @IsString()
-  @MinLength(12, { message: 'Print agent token must be at least 12 characters' })
-  printAgentToken?: string | null;
+  @MinLength(3, { message: 'Print agent username must be at least 3 characters' })
+  printAgentUsername?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(6, { message: 'Print agent password must be at least 6 characters' })
+  printAgentPassword?: string;
 }

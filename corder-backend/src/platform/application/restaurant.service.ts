@@ -1,18 +1,32 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { RestaurantEntity } from '../domain/restaurant.entity';
 import { CreateRestaurantDto } from '../api/dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from '../api/dto/update-restaurant.dto';
-import { hashPrintAgentToken } from '../../common/security/print-agent-token';
 
 @Injectable()
-export class RestaurantService {
+export class RestaurantService implements OnModuleInit {
   constructor(
     @InjectRepository(RestaurantEntity)
     private readonly repo: Repository<RestaurantEntity>,
   ) {}
+
+  async onModuleInit() {
+    await this.repo.query(`
+      ALTER TABLE "restaurants"
+        ADD COLUMN IF NOT EXISTS "print_agent_username" character varying,
+        ADD COLUMN IF NOT EXISTS "print_agent_password_hash" character varying;
+    `);
+    await this.repo.query(`
+      DROP INDEX IF EXISTS "IDX_restaurants_print_agent_token_hash";
+      ALTER TABLE "restaurants" DROP COLUMN IF EXISTS "print_agent_token_hash";
+      CREATE UNIQUE INDEX IF NOT EXISTS "IDX_restaurants_print_agent_username"
+        ON "restaurants" ("print_agent_username")
+        WHERE "print_agent_username" IS NOT NULL;
+    `);
+  }
 
   async findAll(): Promise<RestaurantEntity[]> {
     return this.repo.find({ order: { createdAt: 'DESC' } });
@@ -32,17 +46,23 @@ export class RestaurantService {
     const slug = dto.slug.toLowerCase().trim();
     const existing = await this.repo.findOne({ where: { slug } });
     if (existing) throw new ConflictException('Slug already in use');
-    const { printAgentToken: rawPrintAgentToken, ...restDto } = dto;
-    const rawToken = rawPrintAgentToken?.trim() || null;
-    const printAgentTokenHash = rawToken ? hashPrintAgentToken(rawToken) : null;
-    if (printAgentTokenHash) {
-      const tokenOwner = await this.repo.findOne({ where: { printAgentTokenHash } });
-      if (tokenOwner) throw new ConflictException('Print agent token already in use');
+    const {
+      printAgentUsername: rawUsername,
+      printAgentPassword: rawPassword,
+      ...restDto
+    } = dto;
+    const printAgentUsername = rawUsername?.trim().toLowerCase() || null;
+    if (printAgentUsername) {
+      const owner = await this.repo.findOne({ where: { printAgentUsername } });
+      if (owner) throw new ConflictException('Print agent username already in use');
     }
+    const printAgentPasswordHash =
+      rawPassword && rawPassword.length > 0 ? await bcrypt.hash(rawPassword, 10) : null;
     const entity = this.repo.create({
       ...restDto,
       slug,
-      printAgentTokenHash,
+      printAgentUsername,
+      printAgentPasswordHash,
     });
     return this.repo.save(entity);
   }
@@ -72,16 +92,18 @@ export class RestaurantService {
     if (dto.terminalPassword !== undefined && dto.terminalPassword.length > 0) {
       entity.terminalPasswordHash = await bcrypt.hash(dto.terminalPassword, 10);
     }
-    if (dto.printAgentToken !== undefined) {
-      const rawToken = dto.printAgentToken?.trim() || null;
-      const nextHash = rawToken ? hashPrintAgentToken(rawToken) : null;
-      if (nextHash && nextHash !== entity.printAgentTokenHash) {
-        const tokenOwner = await this.repo.findOne({ where: { printAgentTokenHash: nextHash } });
-        if (tokenOwner && tokenOwner.id !== entity.id) {
-          throw new ConflictException('Print agent token already in use');
+    if (dto.printAgentUsername !== undefined) {
+      const nextUsername = dto.printAgentUsername?.trim().toLowerCase() || null;
+      if (nextUsername && nextUsername !== entity.printAgentUsername) {
+        const owner = await this.repo.findOne({ where: { printAgentUsername: nextUsername } });
+        if (owner && owner.id !== entity.id) {
+          throw new ConflictException('Print agent username already in use');
         }
       }
-      entity.printAgentTokenHash = nextHash;
+      entity.printAgentUsername = nextUsername;
+    }
+    if (dto.printAgentPassword !== undefined && dto.printAgentPassword.length > 0) {
+      entity.printAgentPasswordHash = await bcrypt.hash(dto.printAgentPassword, 10);
     }
     return this.repo.save(entity);
   }
