@@ -1,5 +1,23 @@
 const path = require("path")
-const { app, BrowserWindow, shell } = require("electron")
+const { spawn } = require("child_process")
+const electronModule = require("electron")
+
+if (typeof electronModule === "string") {
+  const cleanEnv = { ...process.env }
+  delete cleanEnv.ELECTRON_RUN_AS_NODE
+  const args = [__filename, ...process.argv.slice(2)]
+  if (process.platform === "linux" && !args.includes("--no-sandbox")) {
+    args.unshift("--no-sandbox")
+  }
+  const child = spawn(electronModule, args, {
+    stdio: "inherit",
+    env: cleanEnv,
+  })
+  child.on("exit", (code) => process.exit(code ?? 0))
+  return
+}
+
+const { app, BrowserWindow, shell } = electronModule
 const { startPrintAgentApp } = require("../src/index")
 const { info, error } = require("../src/logger")
 
