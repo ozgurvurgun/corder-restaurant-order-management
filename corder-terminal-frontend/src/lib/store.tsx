@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef, type ReactNode } from "react"
-import type { Socket } from "socket.io-client"
+import { io, type Socket } from "socket.io-client"
 import type {
   PaymentMethod, TerminalCategory, TerminalOrder, TerminalOrderItem,
   TerminalProduct, TerminalScreen, TerminalTable, TerminalUser,
@@ -155,24 +155,19 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     const token = getToken()
     const base = getBase()
     if (!token || !base) return
-    let cancelled = false
-    import("socket.io-client").then(({ io }) => {
-      if (cancelled) return
-      const socket = io(base, {
-        path: "/ws", auth: { token }, transports: ["websocket", "polling"],
-        reconnectionAttempts: Infinity, reconnectionDelayMax: 10000, timeout: 20000,
-      })
-      socketRef.current = socket
-      const syncAll = () => void refreshData()
-      socket.on("order:created", syncAll)
-      socket.on("orders:moved", syncAll)
-      socket.on("orders:updated", syncAll)
-      socket.on("reconnect", syncAll)
-      socket.on("tables:presence", () => void pullTables())
-      socket.on("connect", syncAll)
+    const socket = io(base, {
+      path: "/ws", auth: { token }, transports: ["websocket", "polling"],
+      reconnectionAttempts: Infinity, reconnectionDelayMax: 10000, timeout: 20000,
     })
+    socketRef.current = socket
+    const syncAll = () => void refreshData()
+    socket.on("order:created", syncAll)
+    socket.on("orders:moved", syncAll)
+    socket.on("orders:updated", syncAll)
+    socket.on("reconnect", syncAll)
+    socket.on("tables:presence", () => void pullTables())
+    socket.on("connect", syncAll)
     return () => {
-      cancelled = true
       socketRef.current?.disconnect()
       socketRef.current = null
     }

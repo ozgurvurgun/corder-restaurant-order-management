@@ -1,29 +1,13 @@
-import { lazy, Suspense } from "react"
 import { usePanelAuth } from "@/lib/panel-auth"
 import { I18nProvider } from "@/lib/panel-i18n"
 import { PanelToastProvider } from "@/components/panel/panel-toast"
-
-const AuthenticatedShell = lazy(() =>
-  import("./AuthenticatedShell").then((m) => ({ default: m.AuthenticatedShell }))
-)
-
-function AuthGateLoading() {
-  return (
-    <div className="h-dvh w-full flex items-center justify-center bg-[#0a0a0a]">
-      <span className="text-zinc-500 text-sm">Yükleniyor…</span>
-    </div>
-  )
-}
+import { AuthenticatedShell } from "./AuthenticatedShell"
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { token } = usePanelAuth()
 
   if (token) {
-    return (
-      <Suspense fallback={<AuthGateLoading />}>
-        <AuthenticatedShell />
-      </Suspense>
-    )
+    return <AuthenticatedShell />
   }
 
   return (

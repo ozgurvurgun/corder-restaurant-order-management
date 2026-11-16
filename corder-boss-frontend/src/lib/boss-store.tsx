@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import type { Socket } from "socket.io-client"
+import { io, type Socket } from "socket.io-client"
 import {
   bossApi,
   clearBossSession,
@@ -183,26 +183,21 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const token = getBossToken()
     if (!token || !effectiveBranchId) return
-    let cancelled = false
-    import("socket.io-client").then(({ io }) => {
-      if (cancelled) return
-      const socket = io(getApiBase(), {
-        path: "/ws",
-        auth: { token, restaurantId: effectiveBranchId },
-        transports: ["websocket", "polling"],
-      })
-      socketRef.current = socket
-      const onRealtimeChange = () => {
-        void bossApi.overview.get(selectedBranchId).then(setOverview).catch(() => {})
-        void refreshBranchDetails(effectiveBranchId)
-      }
-      socket.on("order:created", onRealtimeChange)
-      socket.on("orders:moved", onRealtimeChange)
-      socket.on("orders:updated", onRealtimeChange)
-      socket.on("tables:presence", onRealtimeChange)
+    const socket = io(getApiBase(), {
+      path: "/ws",
+      auth: { token, restaurantId: effectiveBranchId },
+      transports: ["websocket", "polling"],
     })
+    socketRef.current = socket
+    const onRealtimeChange = () => {
+      void bossApi.overview.get(selectedBranchId).then(setOverview).catch(() => {})
+      void refreshBranchDetails(effectiveBranchId)
+    }
+    socket.on("order:created", onRealtimeChange)
+    socket.on("orders:moved", onRealtimeChange)
+    socket.on("orders:updated", onRealtimeChange)
+    socket.on("tables:presence", onRealtimeChange)
     return () => {
-      cancelled = true
       socketRef.current?.disconnect()
       socketRef.current = null
     }

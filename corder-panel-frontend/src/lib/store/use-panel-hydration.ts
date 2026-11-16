@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react"
+import { io, type Socket } from "socket.io-client"
 import {
   itemCountsTowardBill,
   type AuditLog, type Campaign, type CashShift, type CashTransaction, type ClosedTable,
@@ -48,7 +49,7 @@ export function usePanelApiSync(
   setCampaigns?: (v: Campaign[] | ((prev: Campaign[]) => Campaign[])) => void,
   setLedgerCustomers?: (v: LedgerCustomer[] | ((prev: LedgerCustomer[]) => LedgerCustomer[])) => void,
 ) {
-  const socketRef = useRef<{ disconnect: () => void } | null>(null)
+  const socketRef = useRef<Socket | null>(null)
   const loadRef = useRef<() => Promise<void>>(null!)
 
   useEffect(() => {
@@ -146,26 +147,21 @@ export function usePanelApiSync(
     }
     const baseUrl = getBase()
     if (!baseUrl) return
-    let cancelled = false
-    import("socket.io-client").then(({ io }) => {
-      if (cancelled) return
-      const socket = io(baseUrl, { path: "/ws", auth: { token }, transports: ["websocket", "polling"], reconnectionAttempts: Infinity, reconnectionDelayMax: 10000, timeout: 20000 })
-      socketRef.current = socket
-      socket.on("order:created", (payload: OrderDto) => {
-        const mapped = mapOrder(payload)
-        setOrders((prev) => {
-          if (prev.some((o) => o.id === mapped.id)) return prev
-          const lineTotal = mapped.items.filter(itemCountsTowardBill).reduce((s, i) => s + i.price * i.quantity, 0)
-          setTables((pt) => pt.map((t) => (t.id === mapped.tableId ? { ...t, status: "occupied" as const, totalAmount: (t.totalAmount || 0) + lineTotal, orderCount: t.orderCount + 1, lastUpdated: mapped.updatedAt, activeOrderId: mapped.id } : t)))
-          return [mapped, ...prev]
-        })
+    const socket = io(baseUrl, { path: "/ws", auth: { token }, transports: ["websocket", "polling"], reconnectionAttempts: Infinity, reconnectionDelayMax: 10000, timeout: 20000 })
+    socketRef.current = socket
+    socket.on("order:created", (payload: OrderDto) => {
+      const mapped = mapOrder(payload)
+      setOrders((prev) => {
+        if (prev.some((o) => o.id === mapped.id)) return prev
+        const lineTotal = mapped.items.filter(itemCountsTowardBill).reduce((s, i) => s + i.price * i.quantity, 0)
+        setTables((pt) => pt.map((t) => (t.id === mapped.tableId ? { ...t, status: "occupied" as const, totalAmount: (t.totalAmount || 0) + lineTotal, orderCount: t.orderCount + 1, lastUpdated: mapped.updatedAt, activeOrderId: mapped.id } : t)))
+        return [mapped, ...prev]
       })
-      socket.on("orders:moved", () => void loadRef.current?.())
-      socket.on("orders:updated", () => void loadRef.current?.())
-      socket.on("reconnect", () => void loadRef.current?.())
     })
+    socket.on("orders:moved", () => void loadRef.current?.())
+    socket.on("orders:updated", () => void loadRef.current?.())
+    socket.on("reconnect", () => void loadRef.current?.())
     return () => {
-      cancelled = true
       socketRef.current?.disconnect()
       socketRef.current = null
     }
