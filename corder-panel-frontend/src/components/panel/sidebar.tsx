@@ -1,19 +1,35 @@
 import {
-  LayoutGrid, ListOrdered, Package, Users, BarChart3, Settings, Utensils,
-  Wallet, Warehouse, Wrench, Home, LogOut, Megaphone, ShoppingBag,
+  LayoutGrid,
+  ListOrdered,
+  Package,
+  Users,
+  BarChart3,
+  Settings,
+  Utensils,
+  Wallet,
+  Warehouse,
+  Wrench,
+  Home,
+  LogOut,
+  Megaphone,
+  ShoppingBag,
 } from "lucide-react"
 import { usePanelStore } from "@/lib/panel-store"
 import { usePanelI18n } from "@/lib/panel-i18n"
 import { usePanelAuth } from "@/lib/panel-auth"
+import type { PanelViewId } from "@/lib/panel-types"
 
-export type PanelScreen = "dashboard" | "tables" | "quick-sale" | "live-orders" | "products" | "users" | "reports" | "settings" | "kasa" | "stock" | "teknik" | "campaigns"
+export type PanelScreen = PanelViewId
 
 interface SidebarProps {
-  activeScreen: PanelScreen
-  onNavigate: (screen: PanelScreen) => void
+  activeScreen: PanelViewId
+  onNavigate: (screen: PanelViewId) => void
 }
 
-export default function PanelSidebar({ activeScreen, onNavigate }: SidebarProps) {
+export default function PanelSidebar({
+  activeScreen,
+  onNavigate,
+}: SidebarProps) {
   const { currentUser, settings, notifications } = usePanelStore()
   const { locale, t } = usePanelI18n()
   const { currentBusiness, logout } = usePanelAuth()
@@ -23,33 +39,57 @@ export default function PanelSidebar({ activeScreen, onNavigate }: SidebarProps)
     {
       label: locale === "tr" ? "Genel" : "General",
       items: [
-        { id: "dashboard" as PanelScreen, label: locale === "tr" ? "Ana Sayfa" : "Dashboard", icon: Home },
+        {
+          id: "dashboard" as PanelViewId,
+          label: locale === "tr" ? "Ana Sayfa" : "Dashboard",
+          icon: Home,
+        },
       ],
     },
     {
       label: locale === "tr" ? "Operasyon" : "Operations",
       items: [
-        { id: "tables" as PanelScreen, label: t("tables"), icon: LayoutGrid },
-        { id: "quick-sale" as PanelScreen, label: locale === "tr" ? "Hizli Satis" : "Quick Sale", icon: ShoppingBag },
-        { id: "live-orders" as PanelScreen, label: t("completedOrders"), icon: ListOrdered },
-        { id: "kasa" as PanelScreen, label: t("cashRegister"), icon: Wallet },
+        { id: "tables" as PanelViewId, label: t("tables"), icon: LayoutGrid },
+        {
+          id: "quick-sale" as PanelViewId,
+          label: locale === "tr" ? "Hizli Satis" : "Quick Sale",
+          icon: ShoppingBag,
+        },
+        {
+          id: "live-orders" as PanelViewId,
+          label: t("completedOrders"),
+          icon: ListOrdered,
+        },
+        {
+          id: "cash-register" as PanelViewId,
+          label: t("cashRegister"),
+          icon: Wallet,
+        },
       ],
     },
     {
       label: locale === "tr" ? "Yonetim" : "Management",
       items: [
-        { id: "products" as PanelScreen, label: t("products"), icon: Package },
-        { id: "campaigns" as PanelScreen, label: locale === "tr" ? "Kampanyalar" : "Campaigns", icon: Megaphone },
-        { id: "stock" as PanelScreen, label: t("stock"), icon: Warehouse },
-        { id: "users" as PanelScreen, label: t("users"), icon: Users },
+        { id: "products" as PanelViewId, label: t("products"), icon: Package },
+        {
+          id: "campaigns" as PanelViewId,
+          label: locale === "tr" ? "Kampanyalar" : "Campaigns",
+          icon: Megaphone,
+        },
+        { id: "stock" as PanelViewId, label: t("stock"), icon: Warehouse },
+        { id: "users" as PanelViewId, label: t("users"), icon: Users },
       ],
     },
     {
       label: locale === "tr" ? "Analiz & Sistem" : "Analytics & System",
       items: [
-        { id: "reports" as PanelScreen, label: t("reports"), icon: BarChart3 },
-        { id: "teknik" as PanelScreen, label: locale === "tr" ? "Teknik" : "Technical", icon: Wrench },
-        { id: "settings" as PanelScreen, label: t("settings"), icon: Settings },
+        { id: "reports" as PanelViewId, label: t("reports"), icon: BarChart3 },
+        {
+          id: "technical" as PanelViewId,
+          label: t("technical"),
+          icon: Wrench,
+        },
+        { id: "settings" as PanelViewId, label: t("settings"), icon: Settings },
       ],
     },
   ]
@@ -62,7 +102,9 @@ export default function PanelSidebar({ activeScreen, onNavigate }: SidebarProps)
           <Utensils className="w-4 h-4 text-white" />
         </div>
         <div>
-          <h1 className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white leading-tight">{currentBusiness?.name || settings.name || "Corder"}</h1>
+          <h1 className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white leading-tight">
+            {currentBusiness?.name || settings.name || "Corder"}
+          </h1>
           <p className="text-[11px] text-[#86868b] leading-tight">
             {locale === "tr" ? "Yonetim Paneli" : "Management Panel"}
           </p>
@@ -73,7 +115,9 @@ export default function PanelSidebar({ activeScreen, onNavigate }: SidebarProps)
       <nav className="flex-1 px-3 py-1 flex flex-col gap-3 overflow-auto">
         {NAV_GROUPS.map((group) => (
           <div key={group.label}>
-            <p className="px-2.5 text-[10px] font-semibold text-[#86868b] uppercase tracking-wider mb-1">{group.label}</p>
+            <p className="px-2.5 text-[10px] font-semibold text-[#86868b] uppercase tracking-wider mb-1">
+              {group.label}
+            </p>
             <div className="flex flex-col gap-0.5">
               {group.items.map((item) => {
                 const isActive = activeScreen === item.id
@@ -88,10 +132,16 @@ export default function PanelSidebar({ activeScreen, onNavigate }: SidebarProps)
                         : "text-[#1d1d1f] dark:text-[#f5f5f7] hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
                     }`}
                   >
-                    <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${isActive ? "text-[#e63462]" : "text-[#86868b]"}`} />
+                    <Icon
+                      className={`w-[18px] h-[18px] flex-shrink-0 ${
+                        isActive ? "text-[#e63462]" : "text-[#86868b]"
+                      }`}
+                    />
                     <span className="flex-1">{item.label}</span>
-                    {item.id === "teknik" && unreadCount > 0 && (
-                      <span className="w-5 h-5 rounded-full bg-[#e63462] text-white text-[10px] font-bold flex items-center justify-center">{unreadCount}</span>
+                    {item.id === "technical" && unreadCount > 0 && (
+                      <span className="w-5 h-5 rounded-full bg-[#e63462] text-white text-[10px] font-bold flex items-center justify-center">
+                        {unreadCount}
+                      </span>
                     )}
                   </button>
                 )
@@ -111,9 +161,12 @@ export default function PanelSidebar({ activeScreen, onNavigate }: SidebarProps)
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[12px] font-semibold text-[#1d1d1f] dark:text-white leading-tight capitalize truncate">
-              {currentUser?.name?.trim() || (locale === "tr" ? "Yonetici" : "Admin")}
+              {currentUser?.name?.trim() ||
+                (locale === "tr" ? "Yonetici" : "Admin")}
             </p>
-            <p className="text-[10px] text-[#86868b] leading-tight capitalize">{currentUser?.role}</p>
+            <p className="text-[10px] text-[#86868b] leading-tight capitalize">
+              {currentUser?.role}
+            </p>
           </div>
           <button
             onClick={logout}

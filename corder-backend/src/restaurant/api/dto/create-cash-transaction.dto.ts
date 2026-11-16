@@ -27,3 +27,4 @@ export class CreateCashTransactionDto {
   @MaxLength(255)
   reference?: string;
 }
+

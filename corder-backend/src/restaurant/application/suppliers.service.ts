@@ -46,7 +46,7 @@ export class SuppliersService {
 
   async update(restaurantId: string, id: string, dto: UpdateSupplierDto) {
     const entity = await this.repo.findOne({ where: { id, restaurantId } });
-    if (!entity) throw new NotFoundException('Tedarikçi bulunamadı.');
+    if (!entity) throw new NotFoundException('Supplier not found.');
     if (dto.name != null) entity.name = dto.name;
     if (dto.contactPerson !== undefined) entity.contactPerson = dto.contactPerson ?? null;
     if (dto.phone !== undefined) entity.phone = dto.phone ?? null;
@@ -63,4 +63,3 @@ export class SuppliersService {
     await this.repo.remove(entity);
   }
 }
-

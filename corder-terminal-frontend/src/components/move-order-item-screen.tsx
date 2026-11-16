@@ -4,7 +4,9 @@ import { useApp } from "@/lib/store"
 import { useToast } from "@/components/ios-toast"
 import { ConfirmDialog } from "./confirm-dialog"
 import { formatCurrency } from "@/lib/format"
-import type { Table } from "@/lib/types"
+import type { TerminalTable } from "@/lib/types"
+
+const ALL_SECTIONS = "all"
 
 interface MoveOrderItemScreenProps {
   fromTableId: string
@@ -15,25 +17,31 @@ interface MoveOrderItemScreenProps {
 
 type FilterMode = "all" | "open" | "number"
 
-export function MoveOrderItemScreen({ fromTableId, itemId, productName, onBack }: MoveOrderItemScreenProps) {
+export function MoveOrderItemScreen({
+  fromTableId,
+  itemId,
+  productName,
+  onBack,
+}: MoveOrderItemScreenProps) {
   const { showToast } = useToast()
-  const { tables, moveOrderItems } = useApp()
+  const { tables, moveOrderItemsToTable } = useApp()
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null)
   const [showConfirm, setShowConfirm] = useState(false)
   const [moving, setMoving] = useState(false)
-  const [activeSection, setActiveSection] = useState<string>("Tumu")
+  const [activeSection, setActiveSection] = useState<string>(ALL_SECTIONS)
   const [filterMode, setFilterMode] = useState<FilterMode>("all")
   const [tableNumber, setTableNumber] = useState("")
 
   const fromTable = tables.find((t) => t.id === fromTableId)
   const selectedTarget = tables.find((t) => t.id === selectedTargetId)
   const isTargetOccupied = selectedTarget?.status === "occupied"
-  const sections = ["Tumu", ...Array.from(new Set(tables.map((t) => t.section).filter(Boolean)))]
+  const sectionNames = Array.from(new Set(tables.map((t) => t.section).filter(Boolean)))
+  const sections = [ALL_SECTIONS, ...sectionNames]
 
   const filteredTables = tables
     .filter((t) => t.id !== fromTableId)
     .filter((t) => {
-      if (activeSection !== "Tumu" && t.section !== activeSection) return false
+      if (activeSection !== ALL_SECTIONS && t.section !== activeSection) return false
       if (filterMode === "open" && t.status === "empty") return false
       return true
     })
@@ -46,7 +54,7 @@ export function MoveOrderItemScreen({ fromTableId, itemId, productName, onBack }
   const handleConfirm = async () => {
     if (!selectedTargetId) return
     setMoving(true)
-    const ok = await moveOrderItems(fromTableId, selectedTargetId, [itemId])
+    const ok = await moveOrderItemsToTable(fromTableId, selectedTargetId, [itemId])
     setMoving(false)
     if (!ok) {
       showToast("Urun tasinamadi", "error")
@@ -60,7 +68,7 @@ export function MoveOrderItemScreen({ fromTableId, itemId, productName, onBack }
   const handleNumberSearch = () => {
     if (!tableNumber) return
     const found = tables.find(
-      (t) => t.id !== fromTableId && t.name.toLowerCase().includes(tableNumber.toLowerCase()),
+      (t) => t.id !== fromTableId && t.name.toLowerCase().includes(tableNumber.toLowerCase())
     )
     if (found) handleSelectTarget(found.id)
     else showToast("Masa bulunamadi", "error")
@@ -69,8 +77,15 @@ export function MoveOrderItemScreen({ fromTableId, itemId, productName, onBack }
 
   return (
     <div className="h-dvh flex flex-col bg-background relative overflow-hidden">
-      <header className="bg-[#e63462] text-white flex items-center gap-3 flex-shrink-0 safe-top relative" style={{ minHeight: 44 }}>
-        <button onClick={onBack} className="flex items-center gap-0.5 pl-2 pr-3 py-2.5 active:opacity-60 z-10" aria-label="Geri">
+      <header
+        className="bg-[#e63462] text-white flex items-center gap-3 flex-shrink-0 safe-top relative"
+        style={{ minHeight: 44 }}
+      >
+        <button
+          onClick={onBack}
+          className="flex items-center gap-0.5 pl-2 pr-3 py-2.5 active:opacity-60 z-10"
+          aria-label="Geri"
+        >
           <ChevronLeft className="h-[22px] w-[22px]" />
           <span className="text-[17px]">Geri</span>
         </button>
@@ -91,10 +106,12 @@ export function MoveOrderItemScreen({ fromTableId, itemId, productName, onBack }
               key={section}
               onClick={() => setActiveSection(section)}
               className={`flex-shrink-0 px-3 py-[7px] text-[13px] font-semibold rounded-md ${
-                activeSection === section ? "bg-card text-[#e63462] shadow-sm" : "text-muted-foreground"
+                activeSection === section
+                  ? "bg-card text-[#e63462] shadow-sm"
+                  : "text-muted-foreground"
               }`}
             >
-              {section}
+              {section === ALL_SECTIONS ? "Tumu" : section}
             </button>
           ))}
         </div>
@@ -127,7 +144,11 @@ export function MoveOrderItemScreen({ fromTableId, itemId, productName, onBack }
         ) : (
           <div className="grid grid-cols-3 gap-2.5">
             {filteredTables.map((table) => (
-              <ItemMoveTableCard key={table.id} table={table} onClick={() => handleSelectTarget(table.id)} />
+              <ItemMoveTableCard
+                key={table.id}
+                table={table}
+                onClick={() => handleSelectTarget(table.id)}
+              />
             ))}
           </div>
         )}
@@ -183,7 +204,7 @@ export function MoveOrderItemScreen({ fromTableId, itemId, productName, onBack }
   )
 }
 
-function ItemMoveTableCard({ table, onClick }: { table: Table; onClick: () => void }) {
+function ItemMoveTableCard({ table, onClick }: { table: TerminalTable; onClick: () => void }) {
   const isOccupied = table.status !== "empty"
   return (
     <button
@@ -199,7 +220,7 @@ function ItemMoveTableCard({ table, onClick }: { table: Table; onClick: () => vo
           <Merge className="h-3.5 w-3.5 text-white/60 mt-0.5" />
           <span className="text-[11px] font-medium text-white/80 mt-0.5">
             {"₺"}
-            {formatCurrency(table.totalAmount)}
+            {formatCurrency(table.currentTotal)}
           </span>
         </>
       ) : (
@@ -223,7 +244,9 @@ function TabBarButton({
   return (
     <button
       onClick={onClick}
-      className={`flex-1 flex flex-col items-center gap-0.5 py-3 min-h-[54px] ${active ? "text-[#e63462]" : "text-muted-foreground"}`}
+      className={`flex-1 flex flex-col items-center gap-0.5 py-3 min-h-[54px] ${
+        active ? "text-[#e63462]" : "text-muted-foreground"
+      }`}
     >
       {icon}
       <span className="text-[10px] font-medium">{label}</span>

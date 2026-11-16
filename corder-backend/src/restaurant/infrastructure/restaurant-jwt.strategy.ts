@@ -35,7 +35,7 @@ export class RestaurantJwtStrategy extends PassportStrategy(Strategy, 'restauran
       select: { id: true, status: true, slug: true },
     });
     if (!restaurant || restaurant.status !== 'active') {
-      throw new UnauthorizedException('Restoran aktif degil');
+      throw new UnauthorizedException('Restaurant is not active');
     }
     return {
       restaurantId: restaurant.id,

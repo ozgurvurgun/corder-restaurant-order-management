@@ -1,195 +1,119 @@
 import { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef, type ReactNode } from "react"
 import type { Socket } from "socket.io-client"
-import type { User, Table, Order, OrderItem, CartItem } from "./types"
+import type {
+  PaymentMethod, TerminalCategory, TerminalOrder, TerminalOrderItem,
+  TerminalProduct, TerminalScreen, TerminalTable, TerminalUser,
+} from "./types"
 import {
-  api,
-  getToken,
-  setToken,
-  clearToken,
-  getRestaurant,
-  setRestaurant,
-  getStaffSession,
-  setStaffSession,
-  clearStaffSession,
-  getBase,
-  setAuthExpiredHandler,
-  setStaffExpiredHandler,
+  api, getToken, setToken, clearToken, getRestaurant, setRestaurant,
+  getStaffSession, setStaffSession, clearStaffSession, getBase,
+  setAuthExpiredHandler, setStaffExpiredHandler, type RawTableDto, type OrderDto,
 } from "./api"
-import type { OrderDto } from "./api"
+import {
+  calculateOrderItemsTotal, mapMenuTreeToCategoriesAndProducts,
+  mapOrderDtoToTerminalOrder, mapTablesWithOrders, upsertCartItem,
+} from "./terminal-mappers"
 
-interface RawTable {
-  id: string
-  name: string
-  section: string
-  status: string
-  sessionStaffId?: string | null
-  sessionStaffName?: string | null
-  sessionLockedAt?: string | null
-}
-
-const SESSION_LOCK_STALE_MS = 120_000
-
-function orderDtoToOrder(d: OrderDto): Order {
-  return {
-    id: d.id,
-    tableId: d.tableId,
-    userId: d.userId ?? "",
-    userName: d.userName?.trim() || undefined,
-    items: d.items.map((i) => ({
-      id: i.id,
-      productId: i.productId,
-      productName: i.productName,
-      price: i.price,
-      quantity: i.quantity,
-      note: i.note,
-      status: i.status as OrderItem["status"],
-      createdAt: new Date(i.createdAt),
-      sentAt: i.status === "sent" ? new Date(i.createdAt) : undefined,
-    })),
-    status: d.status as Order["status"],
-    createdAt: new Date(d.createdAt),
-    updatedAt: new Date(d.updatedAt),
-    mergedFrom: d.mergedFrom ?? undefined,
-  }
-}
-
-function deriveTables(rawTables: RawTable[], orders: Order[]): Table[] {
-  const activeOrders = orders.filter((o) => o.status === "active")
-  return rawTables.map((t) => {
-    const tableOrders = activeOrders.filter((o) => o.tableId === t.id)
-    const isCheckoutLocked = t.status === "checkout"
-    const totalAmount = tableOrders.reduce(
-      (sum, o) => sum + o.items.filter((i) => i.status !== "cancelled").reduce((s, i) => s + i.price * i.quantity, 0),
-      0
-    )
-    const lastOrder = [...tableOrders].sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    )[0]
-    const waiter = lastOrder?.userName?.trim() || undefined
-    const sid = t.sessionStaffId?.trim()
-    const lockedAt = t.sessionLockedAt ? new Date(t.sessionLockedAt) : null
-    const isStale = !lockedAt || Date.now() - lockedAt.getTime() > SESSION_LOCK_STALE_MS
-    const focusLock = sid && !isStale
-      ? {
-          staffId: sid,
-          staffName: (t.sessionStaffName ?? "Garson").trim() || "Garson",
-        }
-      : undefined
-    return {
-      id: t.id,
-      name: t.name,
-      section: t.section,
-      status: tableOrders.length === 0 ? ("empty" as const) : (isCheckoutLocked ? ("checkout" as const) : ("occupied" as const)),
-      activeOrderId: lastOrder?.id,
-      waiter,
-      focusLock,
-      totalAmount,
-      orderCount: tableOrders.length,
-      lastUpdated: lastOrder ? new Date(lastOrder.updatedAt) : undefined,
-    }
-  })
-}
-
-interface AppState {
-  currentUser: User | null
-  isLoggedIn: boolean
-  isOffline: boolean
+interface TerminalContextType {
+  currentUser: TerminalUser | null; isLoggedIn: boolean; isOffline: boolean
   restaurant: { id: string; name: string; slug: string } | null
-  tables: Table[]
-  orders: Order[]
-  cart: CartItem[]
-  activeTableId: string | null
-  loadError: string | null
-}
-
-interface AppContextType extends AppState {
+  activeScreen: TerminalScreen; tables: TerminalTable[]; categories: TerminalCategory[]
+  products: TerminalProduct[]; orders: TerminalOrder[]; selectedTable: TerminalTable | null
+  cart: TerminalOrderItem[]; selectedCategory: string | null; isLoading: boolean; error: string | null
   login: (email: string, password: string) => Promise<boolean>
-  verifyStaffPin: (pin: string) => Promise<{ ok: boolean; error?: string }>
-  logout: () => void
-  staffLogout: () => void
-  toggleOffline: () => void
-  refreshData: () => Promise<void>
-  selectTable: (tableId: string) => void
+  loginWithPin: (pin: string) => Promise<{ ok: boolean; error?: string }>
+  logout: () => void; logoutRestaurant: () => void; toggleOffline: () => void; refreshData: () => Promise<void>
+  setActiveScreen: (screen: TerminalScreen) => void
+  selectTable: (tableOrId: TerminalTable | string | null) => Promise<{ ok: boolean; holderName?: string }>
+  releaseTableSession: () => void; selectCategory: (categoryId: string | null) => void
+  addToCart: (product: TerminalProduct, quantity?: number, note?: string) => void
+  removeFromCart: (itemOrProductId: string) => void
+  updateCartQuantity: (itemOrProductId: string, quantity: number) => void
+  updateCartNote: (itemOrProductId: string, note: string) => void
+  clearCart: () => void; submitOrder: (tableId?: string) => Promise<boolean>
+  requestBill: (tableId: string) => Promise<boolean>
+  closeTable: (tableId: string, method?: PaymentMethod) => Promise<boolean>
   moveTable: (fromTableId: string, toTableId: string) => Promise<boolean>
-  moveOrderItems: (fromTableId: string, toTableId: string, itemIds: string[]) => Promise<boolean>
-  addToCart: (item: CartItem) => void
-  removeFromCart: (productId: string) => void
-  updateCartQuantity: (productId: string, quantity: number) => void
-  updateCartNote: (productId: string, note: string) => void
-  clearCart: () => void
-  getCartTotal: () => number
-  sendOrder: (tableId: string) => Promise<boolean>
-  getTableOrders: (tableId: string) => Order[]
-  getTableTotal: (tableId: string) => number
-  cancelOrderItem: (orderId: string, itemId: string) => void
-  undoLastAction: () => void
-  lastAction: { type: string; data: unknown } | null
+  moveOrderItemsToTable: (fromTableId: string, toTableId: string, itemIds: string[]) => Promise<boolean>
+  cancelOrderItemOnServer: (orderId: string, itemId: string) => Promise<boolean>
+  processPayment: (orderId: string, method: PaymentMethod, amount?: number) => Promise<boolean>
   printReceipt: (tableId: string) => Promise<void>
-  /** Mark the table as in-use on this device; other waiters are blocked. */
-  requestTableFocus: (tableId: string) => Promise<{ ok: boolean; holderName?: string }>
-  /** Release the lock when returning to tables or when the session ends. */
-  releaseTableFocus: () => void
+  getTableOrders: (tableId: string) => TerminalOrder[]
+  getTableTotal: (tableId: string) => number
+  getCartTotal: () => number; getCartItemCount: () => number
 }
 
-const AppContext = createContext<AppContextType | null>(null)
+const TerminalContext = createContext<TerminalContextType | null>(null)
 
-export function AppProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const session = getStaffSession()
-    return session ? { id: session.staffId, name: session.name, role: session.role } : null
+export function TerminalProvider({ children }: { children: ReactNode }) {
+  const [currentUser, setCurrentUser] = useState<TerminalUser | null>(() => {
+    const s = getStaffSession()
+    return s ? { id: s.staffId, name: s.name, role: s.role } : null
   })
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isOffline, setIsOffline] = useState(false)
   const [restaurant, setRestaurantState] = useState<{ id: string; name: string; slug: string } | null>(null)
-  const [rawTables, setRawTables] = useState<RawTable[]>([])
-  const [orders, setOrders] = useState<Order[]>([])
-  const [cart, setCart] = useState<CartItem[]>([])
-  const [activeTableId, setActiveTableId] = useState<string | null>(null)
-  const [lastAction, setLastAction] = useState<{ type: string; data: unknown } | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [activeScreen, setActiveScreen] = useState<TerminalScreen>("tables")
+  const [rawTables, setRawTables] = useState<RawTableDto[]>([])
+  const [rawOrders, setRawOrders] = useState<OrderDto[]>([])
+  const [categories, setCategories] = useState<TerminalCategory[]>([])
+  const [products, setProducts] = useState<TerminalProduct[]>([])
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [cart, setCart] = useState<TerminalOrderItem[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const socketRef = useRef<Socket | null>(null)
-  const sendOrderFlightRef = useRef(false)
-  const focusTableIdRef = useRef<string | null>(null)
-  // Kept until unlock succeeds — back button still uses this even if the API errors
+  const submitInFlightRef = useRef(false)
+  const lockedTableIdRef = useRef<string | null>(null)
   const pendingUnlockTableIdRef = useRef<string | null>(null)
-  const currentUserRef = useRef<User | null>(currentUser)
-  useEffect(() => {
-    currentUserRef.current = currentUser
-  }, [currentUser])
+  const currentUserRef = useRef<TerminalUser | null>(currentUser)
 
-  const tables = useMemo(() => deriveTables(rawTables, orders), [rawTables, orders])
+  useEffect(() => { currentUserRef.current = currentUser }, [currentUser])
+
+  const productsById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products])
+  const orders = useMemo(
+    () => rawOrders.map((dto) => mapOrderDtoToTerminalOrder(dto, rawTables, productsById)),
+    [rawOrders, rawTables, productsById]
+  )
+  const tables = useMemo(() => mapTablesWithOrders(rawTables, orders), [rawTables, orders])
+  const selectedTable = useMemo(
+    () => (selectedTableId ? tables.find((t) => t.id === selectedTableId) ?? null : null),
+    [tables, selectedTableId]
+  )
 
   const pullTables = useCallback(async () => {
     const token = getToken()
     if (!token) return
-    try {
-      const tablesRes = await api.tables.list(token)
-      setRawTables(tablesRes)
-    } catch {
-      /* ignore */
-    }
+    try { setRawTables(await api.tables.list(token)) } catch { /* ignore polling errors */ }
   }, [])
 
   const refreshData = useCallback(async () => {
     const token = getToken()
     if (!token) return
-    setLoadError(null)
+    setIsLoading(true)
+    setError(null)
     try {
-      const [tablesRes, ordersRes] = await Promise.all([
+      const [tablesRes, ordersRes, menuRes] = await Promise.all([
         api.tables.list(token),
         api.orders.list(token),
+        api.menu.terminal(token).catch(() => null),
       ])
       setRawTables(tablesRes)
-      setOrders(ordersRes.map(orderDtoToOrder))
-      const session = getStaffSession()
-      if (session) {
-        setCurrentUser({ id: session.staffId, name: session.name, role: session.role })
-      } else {
-        setCurrentUser(null)
+      setRawOrders(ordersRes)
+      if (menuRes) {
+        const mapped = mapMenuTreeToCategoriesAndProducts(menuRes.categories)
+        setCategories(mapped.categories)
+        setProducts(mapped.products)
+        setSelectedCategory((prev) => prev ?? mapped.categories.find((c) => !c.parentId)?.id ?? null)
       }
-    } catch (e) {
-      setLoadError(e instanceof Error ? e.message : "Veri yuklenemedi")
+      const s = getStaffSession()
+      setCurrentUser(s ? { id: s.staffId, name: s.name, role: s.role } : null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Veri yuklenemedi")
+    } finally {
+      setIsLoading(false)
     }
   }, [])
 
@@ -203,31 +127,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [refreshData])
 
-  // PWA / background: if the socket was missed or the tab slept, panel may have changed — refetch from API on visible
   useEffect(() => {
     if (!isLoggedIn) return
-    const sync = () => {
-      if (document.visibilityState === "visible") void refreshData()
-    }
-    const onOnline = () => void refreshData()
-    document.addEventListener("visibilitychange", sync)
-    window.addEventListener("online", onOnline)
+    const syncOnVisible = () => { if (document.visibilityState === "visible") void refreshData() }
+    const syncOnOnline = () => void refreshData()
+    document.addEventListener("visibilitychange", syncOnVisible)
+    window.addEventListener("online", syncOnOnline)
+    const intervalId = window.setInterval(syncOnVisible, 45_000)
     return () => {
-      document.removeEventListener("visibilitychange", sync)
-      window.removeEventListener("online", onOnline)
+      document.removeEventListener("visibilitychange", syncOnVisible)
+      window.removeEventListener("online", syncOnOnline)
+      window.clearInterval(intervalId)
     }
   }, [isLoggedIn, refreshData])
 
-  // Periodic backup sync (if the socket drops silently)
-  useEffect(() => {
-    if (!isLoggedIn) return
-    const id = window.setInterval(() => {
-      if (document.visibilityState === "visible") void refreshData()
-    }, 45000)
-    return () => window.clearInterval(id)
-  }, [isLoggedIn, refreshData])
-
-  // WebSocket: instant panel/terminal sync (orders, table moves, close check)
   useEffect(() => {
     if (!isLoggedIn) return
     const token = getToken()
@@ -237,34 +150,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
     import("socket.io-client").then(({ io }) => {
       if (cancelled) return
       const socket = io(base, {
-        path: "/ws",
-        auth: { token },
-        transports: ["websocket", "polling"],
-        reconnectionAttempts: Infinity,
-        reconnectionDelayMax: 10000,
-        timeout: 20000,
+        path: "/ws", auth: { token }, transports: ["websocket", "polling"],
+        reconnectionAttempts: Infinity, reconnectionDelayMax: 10000, timeout: 20000,
       })
       socketRef.current = socket
-      const pull = () => void refreshData()
-      socket.on("order:created", pull)
-      socket.on("orders:moved", pull)
-      socket.on("orders:updated", pull)
-      socket.on("reconnect", pull)
+      const syncAll = () => void refreshData()
+      socket.on("order:created", syncAll)
+      socket.on("orders:moved", syncAll)
+      socket.on("orders:updated", syncAll)
+      socket.on("reconnect", syncAll)
       socket.on("tables:presence", () => void pullTables())
-      socket.on("connect", () => {
-        void pull()
-      })
+      socket.on("connect", syncAll)
     })
     return () => {
       cancelled = true
-      const s = socketRef.current
-      s?.disconnect()
+      socketRef.current?.disconnect()
       socketRef.current = null
     }
   }, [isLoggedIn, refreshData, pullTables])
 
+  const releaseTableSession = useCallback(() => {
+    const tableId = lockedTableIdRef.current ?? pendingUnlockTableIdRef.current
+    const user = currentUserRef.current
+    const token = getToken()
+    lockedTableIdRef.current = null
+    setSelectedTableId(null)
+    if (!tableId || !user || !token) return
+    void api.tables.sessionUnlock(token, tableId).then(() => {
+      pendingUnlockTableIdRef.current = null
+      void pullTables()
+    }).catch(() => { /* keep pendingUnlockTableIdRef for retry */ })
+  }, [pullTables])
+
+  const logout = useCallback(() => {
+    releaseTableSession(); clearStaffSession(); setCurrentUser(null); setActiveScreen("tables")
+  }, [releaseTableSession])
+
+  const logoutRestaurant = useCallback(() => {
+    releaseTableSession(); clearToken(); clearStaffSession()
+    setIsLoggedIn(false); setRestaurantState(null); setCurrentUser(null); setActiveScreen("tables")
+    setRawTables([]); setRawOrders([]); setCategories([]); setProducts([]); setCart([]); setError(null)
+  }, [releaseTableSession])
+
+  useEffect(() => {
+    setAuthExpiredHandler(logoutRestaurant)
+    setStaffExpiredHandler(() => {
+      clearStaffSession(); setCurrentUser(null); setSelectedTableId(null); setActiveScreen("tables")
+      lockedTableIdRef.current = null; pendingUnlockTableIdRef.current = null
+    })
+    return () => { setAuthExpiredHandler(null); setStaffExpiredHandler(null) }
+  }, [logoutRestaurant])
+
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {
-    setLoadError(null)
+    setError(null)
     try {
       const res = await api.restaurant.login(email, password)
       clearStaffSession()
@@ -275,274 +213,95 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setIsLoggedIn(true)
       await refreshData()
       return true
-    } catch (e) {
-      setLoadError(e instanceof Error ? e.message : "Giris basarisiz")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Giris basarisiz")
       return false
     }
   }, [refreshData])
 
-  const verifyStaffPin = useCallback(
-    async (pin: string): Promise<{ ok: boolean; error?: string }> => {
-      const token = getToken()
-      if (!token) return { ok: false, error: "Restoran oturumu gerekli" }
-      try {
-        const res = await api.staff.verifyPin(token, pin)
-        setStaffSession({
-          staffId: res.staffId,
-          name: res.name,
-          role: res.role,
-          staffToken: res.staffToken,
-        })
-        setCurrentUser({
-          id: res.staffId,
-          name: res.name,
-          role: res.role,
-        })
-        return { ok: true }
-      } catch (e) {
-        return {
-          ok: false,
-          error: e instanceof Error ? e.message : "Gecersiz PIN",
-        }
-      }
-    },
-    [],
-  )
-
-  const releaseTableFocus = useCallback(() => {
-    const tid = focusTableIdRef.current ?? pendingUnlockTableIdRef.current
-    const u = currentUserRef.current
+  const loginWithPin = useCallback(async (pin: string): Promise<{ ok: boolean; error?: string }> => {
     const token = getToken()
-    focusTableIdRef.current = null
-    if (!tid || !u || !token) return
-    void api.tables
-      .sessionUnlock(token, tid)
-      .then(() => {
-        pendingUnlockTableIdRef.current = null
-        void pullTables()
-      })
-      .catch(() => {
-        // pendingUnlockTableIdRef is kept — will retry on the next logout attempt
-      })
-  }, [pullTables])
-
-  const staffLogout = useCallback(() => {
-    releaseTableFocus()
-    clearStaffSession()
-    setCurrentUser(null)
-    setActiveTableId(null)
-  }, [releaseTableFocus])
-
-  const logout = useCallback(() => {
-    releaseTableFocus()
-    clearToken()
-    clearStaffSession()
-    setIsLoggedIn(false)
-    setRestaurantState(null)
-    setCurrentUser(null)
-    setActiveTableId(null)
-    setRawTables([])
-    setOrders([])
-    setCart([])
-    setLoadError(null)
-  }, [releaseTableFocus])
-
-  useEffect(() => {
-    setAuthExpiredHandler(() => {
-      logout()
-    })
-    setStaffExpiredHandler(() => {
-      clearStaffSession()
-      setCurrentUser(null)
-      setActiveTableId(null)
-      focusTableIdRef.current = null
-      pendingUnlockTableIdRef.current = null
-    })
-    return () => {
-      setAuthExpiredHandler(null)
-      setStaffExpiredHandler(null)
-    }
-  }, [logout])
-
-  const requestTableFocus = useCallback(async (tableId: string): Promise<{ ok: boolean; holderName?: string }> => {
-    if (isOffline) {
-      focusTableIdRef.current = tableId
+    if (!token) return { ok: false, error: "Restoran oturumu gerekli" }
+    try {
+      const res = await api.staff.verifyPin(token, pin)
+      setStaffSession({ staffId: res.staffId, name: res.name, role: res.role, staffToken: res.staffToken })
+      setCurrentUser({ id: res.staffId, name: res.name, role: res.role })
+      setActiveScreen("tables")
       return { ok: true }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : "Gecersiz PIN" }
     }
-    const u = currentUserRef.current
-    if (!u) return { ok: false, holderName: "Garson secilmedi" }
+  }, [])
+
+  const selectTable = useCallback(async (tableOrId: TerminalTable | string | null): Promise<{ ok: boolean; holderName?: string }> => {
+    if (!tableOrId) { releaseTableSession(); return { ok: true } }
+    const tableId = typeof tableOrId === "string" ? tableOrId : tableOrId.id
+    if (isOffline) { lockedTableIdRef.current = tableId; setSelectedTableId(tableId); return { ok: true } }
+    const user = currentUserRef.current
     const token = getToken()
+    if (!user) return { ok: false, holderName: "Garson secilmedi" }
     if (!token) return { ok: false, holderName: "Baglanti yok" }
     try {
-      const r = await api.tables.sessionLock(token, tableId)
-      if (!r.ok) {
-        return { ok: false, holderName: r.holderName }
-      }
-      focusTableIdRef.current = tableId
+      const res = await api.tables.sessionLock(token, tableId)
+      if (!res.ok) return { ok: false, holderName: res.holderName }
+      lockedTableIdRef.current = tableId
       pendingUnlockTableIdRef.current = tableId
+      setSelectedTableId(tableId)
       void pullTables()
       return { ok: true }
-    } catch (e) {
-      return {
-        ok: false,
-        holderName: e instanceof Error && e.message ? e.message : "Baglanti yok",
-      }
+    } catch (err) {
+      return { ok: false, holderName: err instanceof Error && err.message ? err.message : "Baglanti yok" }
     }
-  }, [isOffline, pullTables])
+  }, [isOffline, pullTables, releaseTableSession])
 
-  const toggleOffline = useCallback(() => {
-    setIsOffline((prev) => !prev)
+  const toggleOffline = useCallback(() => setIsOffline((prev) => !prev), [])
+  const selectCategory = useCallback((categoryId: string | null) => setSelectedCategory(categoryId), [])
+  const addToCart = useCallback((product: TerminalProduct, quantity = 1, note?: string) => {
+    setCart((prev) => upsertCartItem(prev, product, quantity, note))
   }, [])
-
-  const selectTable = useCallback((tableId: string) => {
-    setActiveTableId(tableId)
+  const removeFromCart = useCallback((id: string) => {
+    setCart((prev) => prev.filter((i) => i.id !== id && i.product.id !== id))
   }, [])
-
-  const moveTable = useCallback(
-    async (fromTableId: string, toTableId: string): Promise<boolean> => {
-      const token = getToken()
-      if (!token) return false
-      try {
-        await api.orders.move(token, fromTableId, toTableId)
-        await refreshData()
-        return true
-      } catch {
-        return false
-      }
-    },
-    [refreshData]
-  )
-
-  const moveOrderItems = useCallback(
-    async (fromTableId: string, toTableId: string, itemIds: string[]): Promise<boolean> => {
-      const token = getToken()
-      if (!token || itemIds.length === 0) return false
-      try {
-        await api.orders.moveItems(token, {
-          fromTableId,
-          toTableId,
-          itemIds,
-        })
-        await refreshData()
-        return true
-      } catch {
-        return false
-      }
-    },
-    [refreshData],
-  )
-
-  const addToCart = useCallback((item: CartItem) => {
-    setCart((prev) => {
-      const existing = prev.find((i) => i.productId === item.productId)
-      if (existing) {
-        return prev.map((i) =>
-          i.productId === item.productId ? { ...i, quantity: i.quantity + item.quantity } : i
-        )
-      }
-      return [...prev, item]
-    })
-  }, [])
-
-  const removeFromCart = useCallback((productId: string) => {
-    setCart((prev) => prev.filter((i) => i.productId !== productId))
-  }, [])
-
-  const updateCartQuantity = useCallback((productId: string, quantity: number) => {
-    if (quantity <= 0) {
-      setCart((prev) => prev.filter((i) => i.productId !== productId))
-    } else {
-      setCart((prev) => prev.map((i) => (i.productId === productId ? { ...i, quantity } : i)))
-    }
-  }, [])
-
-  const updateCartNote = useCallback((productId: string, note: string) => {
-    setCart((prev) => prev.map((i) => (i.productId === productId ? { ...i, note } : i)))
-  }, [])
-
-  const clearCart = useCallback(() => setCart([]), [])
-
-  const getCartTotal = useCallback(() => {
-    return cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  }, [cart])
-
-  const sendOrder = useCallback(
-    async (tableId: string): Promise<boolean> => {
-      if (cart.length === 0) return false
-      if (sendOrderFlightRef.current) return false
-      const table = tables.find((t) => t.id === tableId)
-      if (table?.status === "checkout") {
-        setLoadError("Masa hesap kesiminde. Hesap penceresi kapatilmadan siparis gonderilemez.")
-        return false
-      }
-      const token = getToken()
-      if (!token) return false
-      sendOrderFlightRef.current = true
-      setLoadError(null)
-      try {
-        await api.orders.create(token, {
-          tableId,
-          items: cart.map((i) => ({
-            productId: i.productId,
-            quantity: i.quantity,
-            note: i.note,
-          })),
-        })
-        await refreshData()
-        setCart([])
-        return true
-      } catch (e) {
-        setLoadError(e instanceof Error ? e.message : "Siparis gonderilemedi")
-        return false
-      } finally {
-        sendOrderFlightRef.current = false
-      }
-    },
-    [cart, tables, refreshData]
-  )
-
-  const getTableOrders = useCallback(
-    (tableId: string) => orders.filter((o) => o.tableId === tableId && o.status === "active"),
-    [orders]
-  )
-
-  const getTableTotal = useCallback(
-    (tableId: string) =>
-      orders
-        .filter((o) => o.tableId === tableId && o.status === "active")
-        .reduce(
-          (sum, o) =>
-            sum + o.items.filter((i) => i.status !== "cancelled").reduce((s, i) => s + i.price * i.quantity, 0),
-          0
-        ),
-    [orders]
-  )
-
-  const cancelOrderItem = useCallback((orderId: string, itemId: string) => {
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
-          ? { ...o, items: o.items.map((i) => (i.id === itemId ? { ...i, status: "cancelled" as const } : i)) }
-          : o
-      )
+  const updateCartQuantity = useCallback((id: string, quantity: number) => {
+    setCart((prev) =>
+      quantity <= 0
+        ? prev.filter((i) => i.id !== id && i.product.id !== id)
+        : prev.map((i) => (i.id === id || i.product.id === id ? { ...i, quantity } : i))
     )
-    setLastAction({ type: "cancelItem", data: { orderId, itemId } })
   }, [])
+  const updateCartNote = useCallback((id: string, note: string) => {
+    setCart((prev) => prev.map((i) => (i.id === id || i.product.id === id ? { ...i, note } : i)))
+  }, [])
+  const clearCart = useCallback(() => setCart([]), [])
+  const getCartTotal = useCallback(() => calculateOrderItemsTotal(cart), [cart])
+  const getCartItemCount = useCallback(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart])
 
-  const undoLastAction = useCallback(() => {
-    if (!lastAction) return
-    if (lastAction.type === "cancelItem") {
-      const { orderId, itemId } = lastAction.data as { orderId: string; itemId: string }
-      setOrders((prev) =>
-        prev.map((o) =>
-          o.id === orderId
-            ? { ...o, items: o.items.map((i) => (i.id === itemId ? { ...i, status: "sent" as const } : i)) }
-            : o
-        )
-      )
+  const submitOrder = useCallback(async (explicitTableId?: string): Promise<boolean> => {
+    const targetTableId = explicitTableId ?? selectedTableId
+    if (!targetTableId || cart.length === 0 || submitInFlightRef.current) return false
+    if (tables.find((t) => t.id === targetTableId)?.status === "bill-requested") {
+      setError("Masa hesap kesiminde. Hesap penceresi kapatilmadan siparis gonderilemez.")
+      return false
     }
-    setLastAction(null)
-  }, [lastAction])
+    const token = getToken()
+    if (!token) return false
+    submitInFlightRef.current = true
+    setError(null)
+    try {
+      await api.orders.create(token, {
+        tableId: targetTableId,
+        items: cart.map((i) => ({ productId: i.product.id, quantity: i.quantity, note: i.note })),
+      })
+      await refreshData()
+      setCart([])
+      return true
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Siparis gonderilemedi")
+      return false
+    } finally {
+      submitInFlightRef.current = false
+    }
+  }, [cart, selectedTableId, tables, refreshData])
 
   const printReceipt = useCallback(async (tableId: string) => {
     const token = getToken()
@@ -550,84 +309,54 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await api.orders.printReceipt(token, { tableId })
   }, [])
 
-  const value = useMemo<AppContextType>(
-    () => ({
-      currentUser,
-      isLoggedIn,
-      isOffline,
-      restaurant,
-      tables,
-      orders,
-      cart,
-      activeTableId,
-      loadError,
-      login,
-      verifyStaffPin,
-      logout,
-      staffLogout,
-      toggleOffline,
-      refreshData,
-      selectTable,
-      moveTable,
-      moveOrderItems,
-      addToCart,
-      removeFromCart,
-      updateCartQuantity,
-      updateCartNote,
-      clearCart,
-      getCartTotal,
-      sendOrder,
-      getTableOrders,
-      getTableTotal,
-      cancelOrderItem,
-      undoLastAction,
-      lastAction,
-      printReceipt,
-      requestTableFocus,
-      releaseTableFocus,
-    }),
-    [
-      currentUser,
-      isLoggedIn,
-      isOffline,
-      restaurant,
-      tables,
-      orders,
-      cart,
-      activeTableId,
-      loadError,
-      login,
-      verifyStaffPin,
-      logout,
-      staffLogout,
-      toggleOffline,
-      refreshData,
-      selectTable,
-      moveTable,
-      moveOrderItems,
-      addToCart,
-      removeFromCart,
-      updateCartQuantity,
-      updateCartNote,
-      clearCart,
-      getCartTotal,
-      sendOrder,
-      getTableOrders,
-      getTableTotal,
-      cancelOrderItem,
-      undoLastAction,
-      lastAction,
-      printReceipt,
-      requestTableFocus,
-      releaseTableFocus,
-    ]
+  const runServerMutation = useCallback(async (fn: (token: string) => Promise<unknown>): Promise<boolean> => {
+    const token = getToken()
+    if (!token) return false
+    try { await fn(token); await refreshData(); return true } catch { return false }
+  }, [refreshData])
+
+  const requestBill = useCallback((tableId: string) => runServerMutation((t) => api.orders.printReceipt(t, { tableId })), [runServerMutation])
+  const closeTable = useCallback((tableId: string, method: PaymentMethod = "cash") => runServerMutation((t) => api.tables.closeCheck(t, tableId, { method })), [runServerMutation])
+  const moveTable = useCallback((fromTableId: string, toTableId: string) => runServerMutation((t) => api.orders.move(t, fromTableId, toTableId)), [runServerMutation])
+  const moveOrderItemsToTable = useCallback((fromTableId: string, toTableId: string, itemIds: string[]) => {
+    if (itemIds.length === 0) return Promise.resolve(false)
+    return runServerMutation((t) => api.orders.moveItems(t, { fromTableId, toTableId, itemIds }))
+  }, [runServerMutation])
+  const cancelOrderItemOnServer = useCallback((orderId: string, itemId: string) => runServerMutation((t) => api.orders.cancelItem(t, orderId, itemId)), [runServerMutation])
+  const processPayment = useCallback((orderId: string, method: PaymentMethod, amount?: number) => {
+    const tableId = orders.find((o) => o.id === orderId)?.tableId ?? selectedTableId
+    if (!tableId) return Promise.resolve(false)
+    return runServerMutation((t) => api.tables.closeCheck(t, tableId, { method, paidAmount: amount }))
+  }, [orders, selectedTableId, runServerMutation])
+
+  const getTableOrders = useCallback((tableId: string) => orders.filter((o) => o.tableId === tableId && o.status === "active"), [orders])
+  const getTableTotal = useCallback(
+    (tableId: string) => orders.filter((o) => o.tableId === tableId && o.status === "active").reduce((sum, o) => sum + calculateOrderItemsTotal(o.items), 0),
+    [orders]
   )
 
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>
+  return (
+    <TerminalContext.Provider
+      value={{
+        currentUser, isLoggedIn, isOffline, restaurant, activeScreen, tables, categories, products, orders,
+        selectedTable, cart, selectedCategory, isLoading, error, login, loginWithPin, logout, logoutRestaurant,
+        toggleOffline, refreshData, setActiveScreen, selectTable, releaseTableSession, selectCategory, addToCart,
+        removeFromCart, updateCartQuantity, updateCartNote, clearCart, submitOrder, requestBill, closeTable,
+        moveTable, moveOrderItemsToTable, cancelOrderItemOnServer, processPayment, printReceipt, getTableOrders,
+        getTableTotal, getCartTotal, getCartItemCount,
+      }}
+    >
+      {children}
+    </TerminalContext.Provider>
+  )
 }
 
-export function useApp() {
-  const context = useContext(AppContext)
-  if (!context) throw new Error("useApp must be used within AppProvider")
+export const AppProvider = TerminalProvider
+
+export function useTerminal() {
+  const context = useContext(TerminalContext)
+  if (!context) throw new Error("useTerminal must be used within TerminalProvider")
   return context
 }
+
+export const useApp = useTerminal

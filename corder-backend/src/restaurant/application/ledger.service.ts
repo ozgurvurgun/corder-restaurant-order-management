@@ -19,6 +19,24 @@ export class LedgerService {
     private readonly entryRepo: Repository<LedgerEntryEntity>,
   ) {}
 
+  private parseDateRange(
+    fromIso?: string,
+    toIso?: string,
+  ): { from: Date; to: Date } | undefined {
+    const from = (fromIso || '').trim() ? new Date(fromIso!.trim()) : undefined;
+    const to = (toIso || '').trim() ? new Date(toIso!.trim()) : undefined;
+    if (
+      from != null &&
+      to != null &&
+      !Number.isNaN(from.getTime()) &&
+      !Number.isNaN(to.getTime()) &&
+      from.getTime() <= to.getTime()
+    ) {
+      return { from, to };
+    }
+    return undefined;
+  }
+
   private async aggregateNetByCustomer(
     restaurantId: string,
     customerIds: string[],
@@ -55,10 +73,10 @@ export class LedgerService {
       creditSum: string | null;
     }>();
     for (const r of rows) {
-      const d = Number(r.debtSum || 0);
-      const p = Number(r.paySum || 0);
-      const c = Number(r.creditSum || 0);
-      out.set(r.customerId, d - p - c);
+      const debt = Number(r.debtSum || 0);
+      const pay = Number(r.paySum || 0);
+      const credit = Number(r.creditSum || 0);
+      out.set(r.customerId, debt - pay - credit);
     }
     return out;
   }
@@ -71,19 +89,12 @@ export class LedgerService {
     const ids = customers.map((c) => c.id);
     if (!ids.length) return [];
     const lifetimeMap = await this.aggregateNetByCustomer(restaurantId, ids);
+    const range = this.parseDateRange(fromIso, toIso);
+    const periodMap = range
+      ? await this.aggregateNetByCustomer(restaurantId, ids, range)
+      : null;
 
-    const from = (fromIso || '').trim() ? new Date(fromIso!.trim()) : undefined;
-    const to = (toIso || '').trim() ? new Date(toIso!.trim()) : undefined;
-    const useRange =
-      from != null &&
-      to != null &&
-      !Number.isNaN(from.getTime()) &&
-      !Number.isNaN(to.getTime()) &&
-      from.getTime() <= to.getTime();
-
-    const periodMap = useRange ? await this.aggregateNetByCustomer(restaurantId, ids, { from: from!, to: to! }) : null;
-
-    const row = (c: (typeof customers)[0]) => ({
+    const serializeRow = (c: LedgerCustomerEntity) => ({
       id: c.id,
       restaurantId: c.restaurantId,
       name: c.name,
@@ -91,18 +102,18 @@ export class LedgerService {
       notes: c.notes,
       createdAt: c.createdAt.toISOString(),
       balance: lifetimeMap.get(c.id) ?? 0,
-      ...(useRange && periodMap ? { periodNet: periodMap.get(c.id) ?? 0 } : {}),
+      ...(periodMap ? { periodNet: periodMap.get(c.id) ?? 0 } : {}),
     });
 
-    if (useRange && periodMap) {
-      return customers.filter((c) => periodMap.has(c.id)).map(row);
+    if (periodMap) {
+      return customers.filter((c) => periodMap.has(c.id)).map(serializeRow);
     }
-    return customers.map(row);
+    return customers.map(serializeRow);
   }
 
   async createCustomer(restaurantId: string, dto: CreateLedgerCustomerDto) {
     const name = (dto.name || '').trim();
-    if (!name) throw new BadRequestException('Cari adi gerekli');
+    if (!name) throw new BadRequestException('Ledger customer name is required');
     const row = this.customerRepo.create({
       restaurantId,
       name,
@@ -121,25 +132,23 @@ export class LedgerService {
     };
   }
 
-  async listEntries(restaurantId: string, customerId: string, fromIso?: string, toIso?: string) {
+  async listEntries(
+    restaurantId: string,
+    customerId: string,
+    fromIso?: string,
+    toIso?: string,
+  ) {
     await this.assertCustomer(restaurantId, customerId);
-    const from = (fromIso || '').trim() ? new Date(fromIso!.trim()) : undefined;
-    const to = (toIso || '').trim() ? new Date(toIso!.trim()) : undefined;
-    const useRange =
-      from != null &&
-      to != null &&
-      !Number.isNaN(from.getTime()) &&
-      !Number.isNaN(to.getTime()) &&
-      from.getTime() <= to.getTime();
+    const range = this.parseDateRange(fromIso, toIso);
 
     const qb = this.entryRepo
       .createQueryBuilder('e')
       .where('e.restaurant_id = :restaurantId', { restaurantId })
       .andWhere('e.customer_id = :customerId', { customerId })
       .orderBy('e.created_at', 'DESC');
-    if (useRange) {
-      qb.andWhere('e.created_at >= :from', { from: from! });
-      qb.andWhere('e.created_at <= :to', { to: to! });
+    if (range) {
+      qb.andWhere('e.created_at >= :from', { from: range.from });
+      qb.andWhere('e.created_at <= :to', { to: range.to });
     }
     const list = await qb.getMany();
     return list.map((e) => ({
@@ -164,14 +173,16 @@ export class LedgerService {
     receivedByUserId?: string | null,
   ) {
     const pay = Number(amount);
-    if (!Number.isFinite(pay) || pay <= 0) throw new BadRequestException('Tutar gecersiz');
+    if (!Number.isFinite(pay) || pay <= 0) {
+      throw new BadRequestException('Invalid payment amount');
+    }
     await this.assertCustomer(restaurantId, customerId);
     const row = this.entryRepo.create({
       restaurantId,
       customerId,
       entryType: 'payment',
       amount: pay,
-      description: 'Tahsilat',
+      description: 'Payment received',
       tableId: null,
       tableName: null,
       completedOrderId: null,
@@ -181,15 +192,21 @@ export class LedgerService {
     });
     await this.entryRepo.save(row);
     const customers = await this.listCustomers(restaurantId);
-    const c = customers.find((x) => x.id === customerId);
-    if (!c) throw new NotFoundException('Cari bulunamadi');
-    return c;
+    const customer = customers.find((x) => x.id === customerId);
+    if (!customer) throw new NotFoundException('Ledger customer not found');
+    return customer;
   }
 
-  private async assertCustomer(restaurantId: string, customerId: string): Promise<LedgerCustomerEntity> {
-    const c = await this.customerRepo.findOne({ where: { id: customerId, restaurantId } });
-    if (!c) throw new NotFoundException('Cari bulunamadi');
-    return c;
+  private async assertCustomer(
+    restaurantId: string,
+    customerId: string,
+    em?: EntityManager,
+  ): Promise<LedgerCustomerEntity> {
+    const customer = em
+      ? await em.findOne(LedgerCustomerEntity, { where: { id: customerId, restaurantId } })
+      : await this.customerRepo.findOne({ where: { id: customerId, restaurantId } });
+    if (!customer) throw new NotFoundException('Ledger customer not found');
+    return customer;
   }
 
   async recordDebtInTransaction(
@@ -203,16 +220,14 @@ export class LedgerService {
       tableName?: string | null;
       completedOrderId: string;
       snapshot: unknown;
-      /** Panel username etc.; shown on the ledger movement list. */
       recordedBy?: string | null;
     },
   ): Promise<void> {
     const amt = Number(params.amount);
-    if (!Number.isFinite(amt) || amt < 0) throw new BadRequestException('Borc tutari gecersiz');
-    const cust = await em.findOne(LedgerCustomerEntity, {
-      where: { id: params.customerId, restaurantId: params.restaurantId },
-    });
-    if (!cust) throw new NotFoundException('Cari bulunamadi');
+    if (!Number.isFinite(amt) || amt < 0) {
+      throw new BadRequestException('Invalid debt amount');
+    }
+    await this.assertCustomer(params.restaurantId, params.customerId, em);
     const row = em.create(LedgerEntryEntity, {
       restaurantId: params.restaurantId,
       customerId: params.customerId,
@@ -229,7 +244,6 @@ export class LedgerService {
     await em.save(LedgerEntryEntity, row);
   }
 
-  /** Debt from check lines outside a completed order (completed_order_id = null). */
   async recordStandaloneDebt(
     em: EntityManager,
     params: {
@@ -244,17 +258,16 @@ export class LedgerService {
     },
   ): Promise<void> {
     const amt = Number(params.amount);
-    if (!Number.isFinite(amt) || amt <= 0) throw new BadRequestException('Borc tutari gecersiz');
-    const cust = await em.findOne(LedgerCustomerEntity, {
-      where: { id: params.customerId, restaurantId: params.restaurantId },
-    });
-    if (!cust) throw new NotFoundException('Cari bulunamadi');
+    if (!Number.isFinite(amt) || amt <= 0) {
+      throw new BadRequestException('Invalid debt amount');
+    }
+    await this.assertCustomer(params.restaurantId, params.customerId, em);
     const row = em.create(LedgerEntryEntity, {
       restaurantId: params.restaurantId,
       customerId: params.customerId,
       entryType: 'debt',
       amount: amt,
-      description: params.description.trim() || 'Urun cari',
+      description: params.description.trim() || 'Ledger item assignment',
       tableId: params.tableId?.trim() || null,
       tableName: params.tableName?.trim() || null,
       completedOrderId: null,
@@ -265,7 +278,6 @@ export class LedgerService {
     await em.save(LedgerEntryEntity, row);
   }
 
-  /** Entry that reduces debt when a check line is taken back from the ledger (completed_order_id = null). */
   async recordStandaloneCredit(
     em: EntityManager,
     params: {
@@ -280,17 +292,16 @@ export class LedgerService {
     },
   ): Promise<void> {
     const amt = Number(params.amount);
-    if (!Number.isFinite(amt) || amt <= 0) throw new BadRequestException('Tutar gecersiz');
-    const cust = await em.findOne(LedgerCustomerEntity, {
-      where: { id: params.customerId, restaurantId: params.restaurantId },
-    });
-    if (!cust) throw new NotFoundException('Cari bulunamadi');
+    if (!Number.isFinite(amt) || amt <= 0) {
+      throw new BadRequestException('Invalid credit amount');
+    }
+    await this.assertCustomer(params.restaurantId, params.customerId, em);
     const row = em.create(LedgerEntryEntity, {
       restaurantId: params.restaurantId,
       customerId: params.customerId,
       entryType: 'credit',
       amount: amt,
-      description: (params.description ?? '').trim() || 'Adisyon cari geri al',
+      description: (params.description ?? '').trim() || 'Revert ledger item',
       tableId: params.tableId?.trim() || null,
       tableName: params.tableName?.trim() || null,
       completedOrderId: null,
@@ -301,10 +312,6 @@ export class LedgerService {
     await em.save(LedgerEntryEntity, row);
   }
 
-  /**
-   * Finds the latest unfinished table ledger debt entry that references this order_item id.
-   * Matches snapshot `items[].orderItemId` or legacy `items[].id`.
-   */
   async findStandaloneDebtEntryForOrderItem(
     em: EntityManager,
     restaurantId: string,
@@ -319,11 +326,13 @@ export class LedgerService {
       order: { createdAt: 'DESC' },
       take: 300,
     });
-    for (const e of rows) {
-      const snap = e.snapshot as { items?: Array<{ orderItemId?: string; id?: string }> } | null;
+    for (const entry of rows) {
+      const snap = entry.snapshot as {
+        items?: Array<{ orderItemId?: string; id?: string }>;
+      } | null;
       const items = snap?.items ?? [];
       if (items.some((it) => (it.orderItemId ?? it.id) === orderItemId)) {
-        return e;
+        return entry;
       }
     }
     return null;

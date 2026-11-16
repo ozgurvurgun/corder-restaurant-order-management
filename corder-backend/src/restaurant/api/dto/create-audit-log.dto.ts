@@ -9,7 +9,9 @@ const AUDIT_CATEGORIES: readonly AuditCategory[] = [
   'user',
   'settings',
   'stock',
-  'kasa',
+  'cash-register',
+  'register',
+  'shift',
   'table',
 ];
 

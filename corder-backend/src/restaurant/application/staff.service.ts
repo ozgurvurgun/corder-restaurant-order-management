@@ -145,6 +145,6 @@ export class StaffService {
         };
       }
     }
-    throw new UnauthorizedException('Gecersiz PIN');
+    throw new UnauthorizedException('Invalid PIN');
   }
 }

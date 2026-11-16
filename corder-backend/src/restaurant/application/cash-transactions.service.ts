@@ -5,21 +5,10 @@ import { CashTransactionEntity } from '../domain/cash-transaction.entity';
 import { CashShiftEntity } from '../domain/cash-shift.entity';
 import { CashShiftService } from './cash-shift.service';
 import { CreateCashTransactionDto } from '../api/dto/create-cash-transaction.dto';
-import { fromKurus, toKurus } from '../../common/money/kurus';
+import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
+import { serializeCashTransaction } from './orders/order.mapper';
 
-export function serializeCashTransaction(tx: CashTransactionEntity) {
-  return {
-    id: tx.id,
-    restaurantId: tx.restaurantId,
-    shiftId: tx.shiftId,
-    type: tx.type,
-    amount: Number(tx.amount),
-    description: tx.description,
-    reference: tx.reference,
-    createdBy: tx.createdBy,
-    createdAt: tx.createdAt,
-  };
-}
+export { serializeCashTransaction };
 
 @Injectable()
 export class CashTransactionsService {
@@ -34,13 +23,13 @@ export class CashTransactionsService {
     dto: CreateCashTransactionDto,
     createdBy: string,
   ): Promise<{ transaction: CashTransactionEntity; shift: CashShiftEntity }> {
-    const amountKurus = toKurus(dto.amount);
-    if (amountKurus <= 0) {
-      throw new BadRequestException('Tutar pozitif olmalidir.');
+    const amountMinorUnits = toMinorUnits(dto.amount);
+    if (amountMinorUnits <= 0) {
+      throw new BadRequestException('Amount must be positive.');
     }
     const description = dto.description.trim();
     if (!description) {
-      throw new BadRequestException('Aciklama gerekli.');
+      throw new BadRequestException('Description is required.');
     }
 
     return this.repo.manager.transaction(async (em) => {
@@ -50,26 +39,23 @@ export class CashTransactionsService {
         lock: { mode: 'pessimistic_write' },
       });
       if (!shift) {
-        throw new BadRequestException('Kasa açılmadan işlem yapılamaz. Önce kasayı açın.');
+        throw new BadRequestException(
+          'Cannot process transaction without an open cash shift. Please open a shift first.',
+        );
       }
 
       const tx = em.create(CashTransactionEntity, {
         restaurantId,
         shiftId: shift.id,
         type: dto.type,
-        amount: fromKurus(amountKurus),
+        amount: fromMinorUnits(amountMinorUnits),
         description,
         reference: dto.reference?.trim() || null,
-        createdBy: createdBy.trim() || 'Sistem',
+        createdBy: createdBy.trim() || 'System',
       });
       const savedTx = await em.save(CashTransactionEntity, tx);
 
-      if (dto.type === 'cash-in') {
-        shift.cashIn = fromKurus(toKurus(shift.cashIn) + amountKurus);
-      } else {
-        shift.cashOut = fromKurus(toKurus(shift.cashOut) + amountKurus);
-      }
-      shift.transactionCount = (shift.transactionCount ?? 0) + 1;
+      shift.recordCashMovement(dto.type, amountMinorUnits);
       const savedShift = await em.save(CashShiftEntity, shift);
 
       return { transaction: savedTx, shift: savedShift };

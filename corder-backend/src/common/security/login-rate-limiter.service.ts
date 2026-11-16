@@ -47,7 +47,7 @@ export class LoginRateLimiterService {
     existing.count += 1;
     if (existing.count > MAX_ATTEMPTS_PER_WINDOW) {
       throw new HttpException(
-        'Cok fazla giris denemesi. Lutfen bir dakika bekleyip tekrar deneyin.',
+        'Too many login attempts. Please wait one minute and try again.',
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }

@@ -1,3 +1,18 @@
+const PAYMENT_METHOD_LABELS = {
+  cash: "NAKIT",
+  "credit-card": "KREDI KARTI",
+  "meal-card": "YEMEK KARTI",
+  multinet: "MULTINET",
+  split: "COKLU ODEME",
+  ledger: "CARI",
+}
+
+function formatPaymentMethodLabel(method) {
+  if (!method) return ""
+  const key = String(method).trim().toLowerCase()
+  return PAYMENT_METHOD_LABELS[key] || trSafe(String(method).toUpperCase())
+}
+
 function trSafe(text) {
   if (!text) return ""
   return String(text)
@@ -30,7 +45,7 @@ function formatTicketDate(input) {
   return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
-function siparisNoFromId(id) {
+function orderNumberFromId(id) {
   const s = String(id || "")
   let h = 2166136261
   for (let i = 0; i < s.length; i++) {
@@ -126,7 +141,7 @@ function noteBlock(note, width, columnIndent = 2) {
   return wrapped.map((ln) => `${" ".repeat(indent)}${ln}\n`).join("")
 }
 
-/** Gap between Birim Fiyat column and Urun (spaces only). */
+/** Gap between Unit Price column and Product column (spaces only). */
 const COL_GAP = "  "
 
 function tableColLayout(width) {
@@ -137,7 +152,7 @@ function tableColLayout(width) {
   return { qtyW, priceW, gapLen, nameW }
 }
 
-/** Left column (Miktar): header and values start at same x. */
+/** Left column (Qty): header and values start at same x. */
 function colQty(value, qtyW) {
   return trSafe(value).slice(0, qtyW).padEnd(qtyW, " ")
 }
@@ -152,8 +167,8 @@ function colPriceHeader(priceW) {
 }
 
 /**
- * One item: qty + price on first line; long product names wrap only in the Urun column,
- * continuation lines leave Miktar/Birim Fiyat columns blank.
+ * One item: qty + price on first line; long product names wrap only in the Product column,
+ * continuation lines leave Qty/Unit Price columns blank.
  */
 function tableItemRows(qty, unitPrice, name, width) {
   const { qtyW, priceW, nameW } = tableColLayout(width)
@@ -255,9 +270,12 @@ function buildStandardTicket(payload, options = {}, heading = "SIPARIS") {
   }
 
   push(kvLine("Tarih/Saat", formatTicketDate(payload.createdAt), width))
-  push(kvLine("Siparis No", siparisNoFromId(payload.jobId), width))
+  push(kvLine("Siparis No", orderNumberFromId(payload.jobId), width))
   push(kvLine("Masa", payload.tableName || "-", width))
   push(kvLine("Garson", payload.waiterName || "-", width))
+  if (payload.paymentMethod) {
+    push(kvLine("Odeme", formatPaymentMethodLabel(payload.paymentMethod), width))
+  }
   push("\n")
 
   chunks.push(BOLD_ON)
@@ -366,4 +384,9 @@ function buildKitchenCancelTicket(payload, options = {}) {
   return escposBytes(Buffer.concat(chunks), feedBeforeCut)
 }
 
-module.exports = { buildKitchenTicket, buildReceipt, buildKitchenCancelTicket }
+module.exports = {
+  buildKitchenTicket,
+  buildReceipt,
+  buildKitchenCancelTicket,
+  formatPaymentMethodLabel,
+}

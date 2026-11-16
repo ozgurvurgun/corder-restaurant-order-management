@@ -2,78 +2,100 @@
 // Corder Terminal - Type Definitions
 // ==========================================
 
-export interface User {
+export type TableStatus = "empty" | "occupied" | "bill-requested" | "reserved"
+
+export type StaffRole = "manager" | "cashier" | "waiter"
+
+export type PaymentMethod =
+  | "cash"
+  | "credit-card"
+  | "meal-card"
+  | "multinet"
+  | "split"
+  | "ledger"
+
+export type TerminalScreen =
+  | "tables"
+  | "order"
+  | "cart"
+  | "table-detail"
+  | "move-table"
+  | "move-item"
+  | "open-orders"
+
+export interface TerminalUser {
   id: string
   name: string
-  avatar?: string
-  role: "garson" | "mudur" | "kasiyer"
+  role: StaffRole
 }
 
-export interface Category {
+export interface TerminalTable {
   id: string
+  number: number
   name: string
-  slug: string
+  capacity: number
+  status: TableStatus
+  section: string
+  openedAt?: string
+  guestCount?: number
+  activeWaiter?: string
+  currentTotal: number
+  lockedByStaffId?: string
+  lockedByStaffName?: string
 }
 
-export interface Product {
+export interface TerminalProduct {
   id: string
   name: string
   price: number
   categoryId: string
-  image?: string
-  inStock: boolean
   description?: string
+  imageUrl?: string
+  isAvailable: boolean
+  preparationTime?: number
 }
 
-export interface OrderItem {
+export interface TerminalCategory {
   id: string
-  productId: string
-  productName: string
-  price: number
+  name: string
+  icon?: string
+  productCount: number
+  parentId?: string | null
+  sortOrder?: number
+}
+
+export type OrderItemStatus =
+  | "pending"
+  | "sent"
+  | "preparing"
+  | "ready"
+  | "served"
+  | "cancelled"
+
+export interface TerminalOrderItem {
+  id: string
+  product: TerminalProduct
   quantity: number
   note?: string
-  status: "pending" | "sent" | "preparing" | "ready" | "served" | "cancelled"
-  createdAt: Date
-  sentAt?: Date
+  status: OrderItemStatus
+  requiresManagerApproval?: boolean
 }
 
-export interface Order {
+export type OrderStatus = "active" | "closed" | "cancelled"
+
+export interface TerminalOrder {
   id: string
   tableId: string
-  userId: string
-  userName?: string
-  items: OrderItem[]
-  status: "active" | "closed" | "cancelled"
-  createdAt: Date
-  updatedAt: Date
-  mergedFrom?: string // table name if this order was moved/merged from another table
-}
-
-export type TableStatus = "empty" | "occupied" | "ordering" | "checkout"
-
-export interface Table {
-  id: string
-  name: string
-  section: string
-  status: TableStatus
-  activeOrderId?: string
-  waiter?: string
-  /** Waiter currently working this table on another terminal (socket lock). */
-  focusLock?: { staffId: string; staffName: string }
+  tableName: string
+  tableNumber: number
+  items: TerminalOrderItem[]
+  waiterId: string
+  waiterName: string
+  createdAt: string
+  updatedAt: string
+  status: OrderStatus
   totalAmount: number
-  orderCount: number
-  lastUpdated?: Date
-}
-
-export interface Section {
-  id: string
-  name: string
-}
-
-export interface CartItem {
-  productId: string
-  productName: string
-  price: number
-  quantity: number
-  note?: string
+  paymentMethod?: PaymentMethod
+  paidAmount?: number
+  mergedFrom?: string
 }

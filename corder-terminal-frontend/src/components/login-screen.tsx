@@ -7,7 +7,7 @@ interface LoginScreenProps {
 }
 
 export function LoginScreen({ onLogin }: LoginScreenProps) {
-  const { login, loadError } = useApp()
+  const { login, error } = useApp()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
@@ -51,9 +51,9 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
             />
           </div>
 
-          {(loadError || null) && (
+          {error && (
             <p className="text-white/90 text-[13px] text-center bg-white/10 backdrop-blur-xl rounded-xl py-2.5 px-4">
-              {loadError}
+              {error}
             </p>
           )}
 

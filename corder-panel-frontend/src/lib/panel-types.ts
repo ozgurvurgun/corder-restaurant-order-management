@@ -1,39 +1,42 @@
 // ==========================================
 // Corder Management Panel - Type Definitions
-// Comprehensive restaurant management system
 // ==========================================
 
-// ---- AUTH & USERS ----
+export type PanelUserRole = "manager" | "cashier" | "waiter"
+export type PanelViewId = "dashboard" | "tables" | "cash-register" | "quick-sale" | "live-orders" | "products" | "campaigns" | "stock" | "reports" | "users" | "settings" | "technical"
+export type PanelDiscountType = "percent" | "amount" | "complimentary"
+export type CloseCheckPaymentMethod = "cash" | "credit-card" | "meal-card" | "multinet" | "split" | "ledger"
+export type PanelPaymentMethod = CloseCheckPaymentMethod
+export type PaymentMethod = PanelPaymentMethod
+export type CloseCheckSplitMethod = "cash" | "credit-card" | "meal-card" | "multinet" | "ledger"
+
 export interface PanelUser {
   id: string
   name: string
-  role: "garson" | "mudur" | "kasiyer" | "root"
+  role: PanelUserRole | "root"
   email?: string
   phone?: string
-  /** Numeric PIN (4–8 digits) for terminal “next step” user selection; only from Panel. */
   pin?: string
   active: boolean
   createdAt: Date
-  isRoot?: boolean // Root user cannot be edited or deleted from panel
+  isRoot?: boolean
 }
 
-// ---- CATEGORIES & PRODUCTS ----
 export interface PanelCategory {
   id: string
   name: string
   slug: string
   order: number
-  /** Empty or missing = root category */
   parentId?: string | null
-  showInTerminal: boolean // Show in terminal?
-  showInMenu: boolean     // Show in menu?
-  showInQuickSale: boolean // Show in quick sale?
+  showInTerminal: boolean
+  showInMenu: boolean
+  showInQuickSale: boolean
 }
 
 export interface ProductIngredient {
   materialId: string
   materialName: string
-  quantity: number // amount used per product
+  quantity: number
   unit: string
 }
 
@@ -46,11 +49,10 @@ export interface PanelProduct {
   inStock: boolean
   order?: number
   description?: string
-  costPrice?: number // cost price
-  ingredients?: ProductIngredient[] // linked stock materials
+  costPrice?: number
+  ingredients?: ProductIngredient[]
 }
 
-// ---- ORDERS ----
 export interface PanelOrderItem {
   id: string
   productId: string
@@ -70,7 +72,6 @@ export interface PanelOrder {
   id: string
   tableId: string
   userId: string
-  /** API userName: display when register/admin user is not in staff. */
   userName?: string
   items: PanelOrderItem[]
   status: "active" | "closed" | "cancelled"
@@ -79,20 +80,16 @@ export interface PanelOrder {
   mergedFrom?: string
 }
 
-/** Lines included in table check, splits, and receipts (excludes cancelled and ledger-assigned). */
 export function itemCountsTowardBill(i: { status: string }): boolean {
   return i.status !== "cancelled" && i.status !== "ledger"
 }
 
-/** Ledger-assigned, or legacy cancelled + marked 'Assigned to ledger'. */
 export function itemIsLedgerLike(i: PanelOrderItem): boolean {
   if (i.status === "ledger") return true
   const r = (i.cancelReason ?? "").trim()
-  if (i.status === "cancelled" && (r === "Cariye atildi" || r.includes("Cariye"))) return true
-  return false
+  return i.status === "cancelled" && (r === "Assigned to ledger" || r.startsWith("Cari"))
 }
 
-// ---- TABLES ----
 export type PanelTableStatus = "empty" | "occupied" | "ordering" | "checkout"
 
 export interface PanelTable {
@@ -105,12 +102,7 @@ export interface PanelTable {
   totalAmount: number
   orderCount: number
   lastUpdated?: Date
-  discount?: {
-    type: "percent" | "amount" | "ikram"
-    value: number
-    amount: number
-    reason: string
-  }
+  discount?: { type: PanelDiscountType; value: number; amount: number; reason: string }
   splitInfo?: {
     type: "person" | "items"
     personCount?: number
@@ -126,22 +118,18 @@ export interface PanelSection {
   name: string
 }
 
-// ---- PAYMENTS ----
-export type PaymentMethod = "nakit" | "kredi-karti" | "yemek-karti" | "multinet" | "coklu" | "cari"
-
 export interface Payment {
   id: string
   tableId: string
   tableName: string
   orderIds: string[]
   amount: number
-  method: PaymentMethod
+  method: PanelPaymentMethod
   splitDetails?: { method: string; amount: number }[]
   discount?: { type: "percent" | "amount"; value: number; reason: string }
   tip?: number
   processedBy: string
   createdAt: Date
-  /** Customer charged on `cari` payment (snapshot). */
   ledgerCustomerId?: string
   ledgerCustomerName?: string
 }
@@ -161,7 +149,6 @@ export interface ClosedTable {
   closedAt: Date
 }
 
-// ---- OPEN ACCOUNTS (On account / credit) ----
 export interface OpenAccountLine {
   id: string
   productId?: string
@@ -192,23 +179,18 @@ export interface OpenAccount {
   paidAt?: Date
   status: "open" | "paid" | "partial"
   paidAmount?: number
-  /** Check lines (API). */
   items?: OpenAccountLine[]
-  /** Partial payments; `receivedBy` is the staff who collected. */
   payments?: OpenAccountPayment[]
 }
 
-/** Lines when creating an open account (no id). */
 export type OpenAccountCreateLine = Pick<OpenAccountLine, "productName" | "quantity" | "price" | "productId" | "note">
 
-// ---- LEDGER (on-account customer card + movements) ----
 export interface LedgerCustomer {
   id: string
   name: string
   phone?: string
   notes?: string
   balance: number
-  /** Period net movement when the register date filter is on. */
   periodNet?: number
   createdAt: Date
 }
@@ -226,7 +208,6 @@ export interface LedgerEntry {
   createdAt: Date
 }
 
-// ---- KASA (Cash Register) ----
 export interface CashShift {
   id: string
   openedBy: string
@@ -240,27 +221,28 @@ export interface CashShift {
   cashIn: number
   cashOut: number
   totalRevenue: number
-  totalNakit: number
-  totalKart: number
-  totalYemekKarti: number
+  totalCash: number
+  totalCard: number
+  totalMealCard: number
   totalMultinet: number
   transactionCount: number
   notes?: string
 }
+
+export type PanelCashShift = CashShift
 
 export interface CashTransaction {
   id: string
   shiftId: string
   type: "sale" | "expense" | "cash-in" | "cash-out" | "refund"
   amount: number
-  method?: PaymentMethod
+  method?: PanelPaymentMethod
   description: string
-  reference?: string // e.g. payment id, table name
+  reference?: string
   createdBy: string
   createdAt: Date
 }
 
-// ---- CANCELLATIONS ----
 export interface CancelledItem {
   id: string
   orderItem: PanelOrderItem
@@ -271,13 +253,12 @@ export interface CancelledItem {
   cancelledAt: Date
 }
 
-// ---- STOCK & MATERIALS ----
 export interface StockMaterial {
   id: string
   name: string
   unit: "kg" | "lt" | "adet" | "gr" | "ml" | "paket" | "koli"
   currentStock: number
-  minStock: number // alert when below this
+  minStock: number
   costPerUnit: number
   supplierId?: string
   category: string
@@ -333,7 +314,6 @@ export interface InventoryCount {
   notes?: string
 }
 
-// ---- NOTIFICATIONS ----
 export interface PanelNotification {
   id: string
   type: "new-order" | "order-ready" | "stock-low" | "shift-reminder" | "system" | "kitchen-alert"
@@ -344,19 +324,17 @@ export interface PanelNotification {
   createdAt: Date
 }
 
-// ---- AUDIT LOG ----
 export interface AuditLog {
   id: string
   userId: string
   userName: string
   action: string
-  category: "auth" | "order" | "payment" | "product" | "user" | "settings" | "stock" | "kasa" | "table"
+  category: "auth" | "order" | "payment" | "product" | "user" | "settings" | "stock" | "cash-register" | "table"
   details: string
   metadata?: Record<string, unknown>
   createdAt: Date
 }
 
-// ---- MULTI-BRANCH ----
 export interface Branch {
   id: string
   name: string
@@ -366,29 +344,26 @@ export interface Branch {
   isCurrent: boolean
 }
 
-// ---- PRINTER ----
 export interface PrinterConfig {
   id: string
   name: string
-  type: string // dynamic printer type from printerDepartments
+  type: string
   connection: "usb" | "network" | "bluetooth"
   ipAddress?: string
   port?: number
-  department?: string // which kitchen department
+  department?: string
   status: "online" | "offline" | "error"
   paperWidth: 58 | 80
   autoCut: boolean
 }
 
-// ---- PRINTER DEPARTMENT ----
 export interface PrinterDepartment {
   id: string
-  name: string // e.g. "Cash Register Printer", "Kitchen Printer", "Bar Printer"
-  code: string // e.g. "thermal", "kitchen", "bar"
-  color?: string // optional color for UI
+  name: string
+  code: string
+  color?: string
 }
 
-// ---- DAILY REPORT ----
 export interface DailyReport {
   date: string
   totalRevenue: number
@@ -403,9 +378,8 @@ export interface DailyReport {
   hourlyRevenue: { hour: string; revenue: number; orders: number }[]
 }
 
-// ---- ADVANCED REPORTS ----
 export interface PeriodReport {
-  period: string // e.g. "2026-02-W08", "2026-02", "2026"
+  period: string
   periodLabel: string
   totalRevenue: number
   totalOrders: number
@@ -413,8 +387,8 @@ export interface PeriodReport {
   avgOrderValue: number
   cancelledAmount: number
   discountAmount: number
-  comparisonRevenue?: number // previous period for comparison
-  comparisonChange?: number // percentage change
+  comparisonRevenue?: number
+  comparisonChange?: number
 }
 
 export interface ProductTrend {
@@ -434,7 +408,6 @@ export interface HourlyDensity {
   average: number
 }
 
-// ---- SETTINGS ----
 export interface RestaurantSettings {
   name: string
   address?: string
@@ -444,13 +417,11 @@ export interface RestaurantSettings {
   currencySymbol: string
   receiptFooter?: string
   receiptHeader?: string
-  // Social & Contact
   whatsapp?: string
   instagram?: string
   facebook?: string
   website?: string
   workingHours?: string
-  // Display customization
   fontSize?: "small" | "medium" | "large"
   tableCardSize?: "compact" | "normal" | "large"
   showProductImages?: boolean
@@ -458,7 +429,6 @@ export interface RestaurantSettings {
   quickActionsEnabled?: boolean
 }
 
-// ---- CAMPAIGNS ----
 export interface Campaign {
   id: string
   title: string

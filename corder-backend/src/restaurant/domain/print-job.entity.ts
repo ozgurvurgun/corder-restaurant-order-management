@@ -36,3 +36,4 @@ export class PrintJobEntity {
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }
+

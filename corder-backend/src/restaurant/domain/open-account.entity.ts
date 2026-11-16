@@ -8,9 +8,11 @@ import {
   CreateDateColumn,
   Index,
 } from 'typeorm';
+import { BadRequestException } from '@nestjs/common';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 import { OpenAccountItemEntity } from './open-account-item.entity';
 import { OpenAccountPaymentEntity } from './open-account-payment.entity';
+import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
 
 @Entity('open_accounts')
 @Index(['restaurantId'])
@@ -57,5 +59,23 @@ export class OpenAccountEntity {
 
   @OneToMany(() => OpenAccountPaymentEntity, (p) => p.openAccount)
   payments: OpenAccountPaymentEntity[];
-}
 
+  applyPayment(paymentMinorUnits: number, now: Date = new Date()): void {
+    if (!Number.isFinite(paymentMinorUnits) || paymentMinorUnits <= 0) {
+      throw new BadRequestException('Invalid payment amount');
+    }
+    const totalMinor = toMinorUnits(this.amount);
+    const currentPaidMinor = toMinorUnits(this.paidAmount ?? 0);
+    const nextPaidMinor = currentPaidMinor + paymentMinorUnits;
+    if (nextPaidMinor > totalMinor) {
+      throw new BadRequestException('Payment cannot exceed total balance');
+    }
+    this.paidAmount = fromMinorUnits(nextPaidMinor);
+    if (nextPaidMinor === totalMinor) {
+      this.status = 'paid';
+      this.paidAt = now;
+    } else {
+      this.status = 'partial';
+    }
+  }
+}

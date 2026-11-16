@@ -14,22 +14,22 @@ import {
 } from 'class-validator';
 
 export const PAYMENT_METHODS = [
-  'nakit',
-  'kredi-karti',
-  'yemek-karti',
+  'cash',
+  'credit-card',
+  'meal-card',
   'multinet',
-  'coklu',
-  'cari',
+  'split',
+  'ledger',
 ] as const;
 
 export type CloseCheckMethod = (typeof PAYMENT_METHODS)[number];
 
 export const SPLIT_PAYMENT_METHODS = [
-  'nakit',
-  'kredi-karti',
-  'yemek-karti',
+  'cash',
+  'credit-card',
+  'meal-card',
   'multinet',
-  'cari',
+  'ledger',
 ] as const;
 
 export type CloseCheckSplitMethod = (typeof SPLIT_PAYMENT_METHODS)[number];

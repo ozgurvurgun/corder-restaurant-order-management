@@ -59,7 +59,7 @@ export class StaffSessionService {
     const raw = req.headers['x-staff-token'];
     const token = Array.isArray(raw) ? raw[0]?.trim() : raw?.trim();
     if (!token) {
-      throw new UnauthorizedException('Personel PIN dogrulamasi gerekli');
+      throw new UnauthorizedException('Staff PIN verification is required');
     }
     return this.verifyToken(token, restaurantId);
   }
@@ -84,20 +84,20 @@ export class StaffSessionService {
         secret: requireConfigSecret(this.config, 'JWT_SECRET'),
       });
     } catch {
-      throw new UnauthorizedException('Gecersiz veya suresi dolmus personel oturumu');
+      throw new UnauthorizedException('Invalid or expired staff session');
     }
     if (
       payload.typ !== 'staff_session' ||
       !payload.sub ||
       payload.restaurantId !== restaurantId
     ) {
-      throw new UnauthorizedException('Gecersiz personel oturumu');
+      throw new UnauthorizedException('Invalid staff session');
     }
     const staff = await this.staffRepo.findOne({
       where: { id: payload.sub, restaurantId, isActive: true },
     });
     if (!staff) {
-      throw new UnauthorizedException('Personel bulunamadi veya pasif');
+      throw new UnauthorizedException('Staff member not found or inactive');
     }
     return {
       staffId: staff.id,

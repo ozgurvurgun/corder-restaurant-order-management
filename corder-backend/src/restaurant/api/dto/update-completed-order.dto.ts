@@ -11,6 +11,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { PAYMENT_METHODS, CloseCheckMethod } from './close-check.dto';
 
 export class CompletedOrderItemDto {
   @IsString()
@@ -125,8 +126,8 @@ export class CompletedPaymentDto {
   @Min(0)
   amount!: number;
 
-  @IsIn(['nakit', 'kredi-karti', 'yemek-karti', 'multinet', 'coklu', 'cari'])
-  method!: string;
+  @IsIn(PAYMENT_METHODS)
+  method!: CloseCheckMethod;
 
   @IsOptional()
   @IsArray()
@@ -159,7 +160,7 @@ export class CompletedPaymentDto {
   ledgerCustomerName?: string;
 }
 
-/** Completed check correction — totals are recalculated on the server in kurus. */
+/** Completed check adjustment — totals are recalculated on the server in minor units. */
 export class UpdateCompletedOrderDto {
   @IsArray()
   @ValidateNested({ each: true })

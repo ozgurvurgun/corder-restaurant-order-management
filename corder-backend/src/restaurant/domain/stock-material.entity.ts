@@ -41,7 +41,7 @@ export class StockMaterialEntity {
   @Column({ name: 'supplier_id', type: 'uuid', nullable: true })
   supplierId: string | null;
 
-  @Column({ type: 'varchar', length: 128, default: 'Diger' })
+  @Column({ type: 'varchar', length: 128, default: 'Other' })
   category: string;
 
   @CreateDateColumn({ name: 'created_at' })
@@ -49,5 +49,11 @@ export class StockMaterialEntity {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
-}
 
+  applyDelta(delta: number): { previousStock: number; newStock: number } {
+    const previousStock = Number(this.currentStock ?? 0);
+    const newStock = Number((previousStock + delta).toFixed(3));
+    this.currentStock = newStock;
+    return { previousStock, newStock };
+  }
+}

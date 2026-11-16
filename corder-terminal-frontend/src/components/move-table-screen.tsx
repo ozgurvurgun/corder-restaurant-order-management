@@ -4,7 +4,9 @@ import { useApp } from "@/lib/store"
 import { useToast } from "@/components/ios-toast"
 import { ConfirmDialog } from "./confirm-dialog"
 import { formatCurrency } from "@/lib/format"
-import type { Table } from "@/lib/types"
+import type { TerminalTable } from "@/lib/types"
+
+const ALL_SECTIONS = "all"
 
 interface MoveTableScreenProps {
   fromTableId: string
@@ -20,21 +22,21 @@ export function MoveTableScreen({ fromTableId, onBack, onMoved }: MoveTableScree
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null)
   const [showConfirm, setShowConfirm] = useState(false)
   const [moving, setMoving] = useState(false)
-  const [activeSection, setActiveSection] = useState<string>("Tumu")
+  const [activeSection, setActiveSection] = useState<string>(ALL_SECTIONS)
   const [filterMode, setFilterMode] = useState<FilterMode>("all")
   const [tableNumber, setTableNumber] = useState("")
 
   const fromTable = tables.find((t) => t.id === fromTableId)
   const selectedTarget = tables.find((t) => t.id === selectedTargetId)
-  const sections = ["Tumu", ...Array.from(new Set(tables.map((t) => t.section).filter(Boolean)))]
+  const sectionNames = Array.from(new Set(tables.map((t) => t.section).filter(Boolean)))
+  const sections = [ALL_SECTIONS, ...sectionNames]
 
   const isTargetOccupied = selectedTarget?.status === "occupied"
 
-  // Filter tables: exclude the source table, then apply section & filter
   const filteredTables = tables
     .filter((t) => t.id !== fromTableId)
     .filter((t) => {
-      if (activeSection !== "Tumu" && t.section !== activeSection) return false
+      if (activeSection !== ALL_SECTIONS && t.section !== activeSection) return false
       if (filterMode === "open" && t.status === "empty") return false
       return true
     })
@@ -79,8 +81,15 @@ export function MoveTableScreen({ fromTableId, onBack, onMoved }: MoveTableScree
   return (
     <div className="h-dvh flex flex-col bg-background relative overflow-hidden">
       {/* Fixed iOS Navigation Bar */}
-      <header className="bg-[#e63462] text-white flex items-center gap-3 flex-shrink-0 safe-top relative" style={{ minHeight: 44 }}>
-        <button onClick={onBack} className="flex items-center gap-0.5 pl-2 pr-3 py-2.5 active:opacity-60 z-10" aria-label="Geri">
+      <header
+        className="bg-[#e63462] text-white flex items-center gap-3 flex-shrink-0 safe-top relative"
+        style={{ minHeight: 44 }}
+      >
+        <button
+          onClick={onBack}
+          className="flex items-center gap-0.5 pl-2 pr-3 py-2.5 active:opacity-60 z-10"
+          aria-label="Geri"
+        >
           <ChevronLeft className="h-[22px] w-[22px]" />
           <span className="text-[17px]">Geri</span>
         </button>
@@ -102,7 +111,7 @@ export function MoveTableScreen({ fromTableId, onBack, onMoved }: MoveTableScree
                   : "text-muted-foreground"
               }`}
             >
-              {section}
+              {section === ALL_SECTIONS ? "Tumu" : section}
             </button>
           ))}
         </div>
@@ -201,7 +210,7 @@ export function MoveTableScreen({ fromTableId, onBack, onMoved }: MoveTableScree
   )
 }
 
-function MoveTableCard({ table, onClick }: { table: Table; onClick: () => void }) {
+function MoveTableCard({ table, onClick }: { table: TerminalTable; onClick: () => void }) {
   const isOccupied = table.status !== "empty"
 
   return (
@@ -219,10 +228,10 @@ function MoveTableCard({ table, onClick }: { table: Table; onClick: () => void }
         <>
           <Merge className="h-3.5 w-3.5 text-white/60 mt-0.5" />
           <span className="text-[11px] font-medium text-white/80 mt-0.5">
-            {"₺"}{formatCurrency(table.totalAmount)}
+            {"₺"}{formatCurrency(table.currentTotal)}
           </span>
           <div className="flex items-center justify-between w-full text-[11px] text-white/60 mt-auto pt-0.5">
-            <span className="capitalize truncate">{table.waiter}</span>
+            <span className="capitalize truncate">{table.activeWaiter}</span>
           </div>
         </>
       ) : (

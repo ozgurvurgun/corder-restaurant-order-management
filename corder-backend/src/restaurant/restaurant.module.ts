@@ -37,6 +37,13 @@ import { StaffService } from './application/staff.service';
 import { StaffSessionService } from './application/staff-session.service';
 import { TableService } from './application/table.service';
 import { OrderService } from './application/order.service';
+import { OrderQueryService } from './application/orders/order-query.service';
+import { CreateOrderUseCase } from './application/orders/create-order.use-case';
+import { TransferOrderUseCase } from './application/orders/transfer-order.use-case';
+import { CancelOrderItemUseCase } from './application/orders/cancel-order-item.use-case';
+import { OrderLedgerUseCase } from './application/orders/order-ledger.use-case';
+import { CloseCheckUseCase } from './application/orders/close-check.use-case';
+import { PrintReceiptUseCase } from './application/orders/print-receipt.use-case';
 import { CategoryService } from './application/category.service';
 import { ProductService } from './application/product.service';
 import { CompletedOrdersService } from './application/completed-orders.service';
@@ -62,8 +69,13 @@ import { CashTransactionsController } from './api/cash-transactions.controller';
 import { OpenAccountsController } from './api/open-accounts.controller';
 import { LedgerController } from './api/ledger.controller';
 import { CampaignsController } from './api/campaigns.controller';
-import { StockController } from './api/stock.controller';
-import { TechnicalController } from './api/technical.controller';
+import { StockMaterialsController } from './api/stock-materials.controller';
+import { StockMovementsController } from './api/stock-movements.controller';
+import { SuppliersController } from './api/suppliers.controller';
+import { PurchaseOrdersController } from './api/purchase-orders.controller';
+import { InventoryCountsController } from './api/inventory-counts.controller';
+import { PrintersController } from './api/printers.controller';
+import { AuditLogsController } from './api/audit-logs.controller';
 import { RestaurantSettingsController } from './api/restaurant-settings.controller';
 import { RestaurantMenuController } from './api/restaurant-menu.controller';
 import { OrdersGateway } from './api/orders.gateway';
@@ -132,8 +144,13 @@ import {
     OpenAccountsController,
     LedgerController,
     CampaignsController,
-    StockController,
-    TechnicalController,
+    StockMaterialsController,
+    StockMovementsController,
+    SuppliersController,
+    PurchaseOrdersController,
+    InventoryCountsController,
+    PrintersController,
+    AuditLogsController,
     RestaurantSettingsController,
     RestaurantMenuController,
     PrintAgentController,
@@ -144,6 +161,13 @@ import {
     StaffSessionService,
     TableService,
     OrderService,
+    OrderQueryService,
+    CreateOrderUseCase,
+    TransferOrderUseCase,
+    CancelOrderItemUseCase,
+    OrderLedgerUseCase,
+    CloseCheckUseCase,
+    PrintReceiptUseCase,
     CategoryService,
     ProductService,
     CashShiftService,
@@ -166,6 +190,13 @@ import {
     PrintAgentGuard,
     PanelRootGuard,
   ],
-  exports: [RestaurantAuthService, TableService, OrderService, CategoryService, ProductService, CashShiftService],
+  exports: [
+    RestaurantAuthService,
+    TableService,
+    OrderService,
+    CategoryService,
+    ProductService,
+    CashShiftService,
+  ],
 })
 export class RestaurantModule {}

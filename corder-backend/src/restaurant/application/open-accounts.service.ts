@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { OpenAccountEntity } from '../domain/open-account.entity';
 import { OpenAccountItemEntity } from '../domain/open-account-item.entity';
 import { OpenAccountPaymentEntity } from '../domain/open-account-payment.entity';
-import { fromKurus, toKurus } from '../../common/money/kurus';
+import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
 
 export interface CreateOpenAccountItemDto {
   productName: string;
@@ -17,12 +17,9 @@ export interface CreateOpenAccountItemDto {
 export interface CreateOpenAccountDto {
   customerName: string;
   customerPhone?: string;
-  /** For single-amount (legacy) mode; may be empty when `items` is set. */
   amount?: number;
-  /** Account / check note */
   description?: string;
   createdBy: string;
-  /** Check lines; when set, `amount` is computed from the lines. */
   items?: CreateOpenAccountItemDto[];
 }
 
@@ -42,8 +39,12 @@ export class OpenAccountsService {
     items: OpenAccountItemEntity[],
     payments: OpenAccountPaymentEntity[],
   ) {
-    const sortedItems = [...items].sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.getTime() - b.createdAt.getTime());
-    const sortedPayments = [...payments].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    const sortedItems = [...items].sort(
+      (a, b) => a.sortOrder - b.sortOrder || a.createdAt.getTime() - b.createdAt.getTime(),
+    );
+    const sortedPayments = [...payments].sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+    );
     return {
       id: acc.id,
       restaurantId: acc.restaurantId,
@@ -97,23 +98,33 @@ export class OpenAccountsService {
     let description: string;
 
     if (hasItems) {
-      amount = dto.items!.reduce((s, it) => {
+      amount = dto.items!.reduce((sum, it) => {
         const q = Math.max(1, Math.floor(Number(it.quantity) || 0));
         const p = Number(it.price);
-        if (!Number.isFinite(p) || p < 0) throw new BadRequestException('Gecersiz satir fiyati');
+        if (!Number.isFinite(p) || p < 0) {
+          throw new BadRequestException('Invalid line item price');
+        }
         const name = (it.productName || '').trim();
-        if (!name) throw new BadRequestException('Urun adi bos olamaz');
-        return s + q * p;
+        if (!name) throw new BadRequestException('Product name cannot be empty');
+        return sum + q * p;
       }, 0);
-      if (amount <= 0) throw new BadRequestException('Toplam tutar sifirdan buyuk olmali');
-      description = (dto.description ?? '').trim() || 'Adisyon';
+      if (amount <= 0) {
+        throw new BadRequestException('Total amount must be greater than zero');
+      }
+      description = (dto.description ?? '').trim() || 'Check';
     } else {
-      if (dto.amount == null || !Number.isFinite(Number(dto.amount)) || Number(dto.amount) <= 0) {
-        throw new BadRequestException('Tutar veya satir listesi gerekli');
+      if (
+        dto.amount == null ||
+        !Number.isFinite(Number(dto.amount)) ||
+        Number(dto.amount) <= 0
+      ) {
+        throw new BadRequestException('Either amount or item list is required');
       }
       amount = Number(dto.amount);
       description = (dto.description ?? '').trim();
-      if (!description) throw new BadRequestException('Aciklama gerekli (satir yokken)');
+      if (!description) {
+        throw new BadRequestException('Description is required when no items are provided');
+      }
     }
 
     const acc = this.repo.create({
@@ -157,11 +168,11 @@ export class OpenAccountsService {
   ) {
     const payAmt = Number(amount);
     if (!Number.isFinite(payAmt) || payAmt <= 0) {
-      throw new BadRequestException('Odeme tutari gecersiz');
+      throw new BadRequestException('Invalid payment amount');
     }
-    const payKurus = toKurus(payAmt);
-    if (payKurus <= 0) {
-      throw new BadRequestException('Odeme tutari gecersiz');
+    const payMinorUnits = toMinorUnits(payAmt);
+    if (payMinorUnits <= 0) {
+      throw new BadRequestException('Invalid payment amount');
     }
 
     return this.repo.manager.transaction(async (em) => {
@@ -169,28 +180,15 @@ export class OpenAccountsService {
         where: { id, restaurantId },
         lock: { mode: 'pessimistic_write' },
       });
-      if (!acc) throw new NotFoundException('Acik hesap bulunamadi');
+      if (!acc) throw new NotFoundException('Open account not found');
 
-      const totalKurus = toKurus(acc.amount);
-      const currentPaidKurus = toKurus(acc.paidAmount ?? 0);
-      const nextPaidKurus = currentPaidKurus + payKurus;
-      if (nextPaidKurus > totalKurus) {
-        throw new BadRequestException('Odeme toplam borcu asamaz');
-      }
-
-      acc.paidAmount = fromKurus(nextPaidKurus);
-      if (nextPaidKurus === totalKurus) {
-        acc.status = 'paid';
-        acc.paidAt = new Date();
-      } else {
-        acc.status = 'partial';
-      }
+      acc.applyPayment(payMinorUnits);
       await em.save(OpenAccountEntity, acc);
 
       const row = em.create(OpenAccountPaymentEntity, {
         openAccountId: acc.id,
-        amount: fromKurus(payKurus),
-        receivedBy: receivedBy.trim() || 'Bilinmiyor',
+        amount: fromMinorUnits(payMinorUnits),
+        receivedBy: receivedBy.trim() || 'Unknown',
         receivedByUserId: receivedByUserId?.trim() || null,
         note: null,
       });

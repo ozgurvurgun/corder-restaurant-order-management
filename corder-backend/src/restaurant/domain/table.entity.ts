@@ -43,4 +43,41 @@ export class TableEntity {
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  hasActiveLock(staleThresholdMs: number, now: Date = new Date()): boolean {
+    if (!this.sessionStaffId || !this.sessionLockedAt) {
+      return false;
+    }
+    const staleBefore = new Date(now.getTime() - staleThresholdMs);
+    return this.sessionLockedAt >= staleBefore;
+  }
+
+  isLockedByOther(
+    staffId: string | null | undefined,
+    staleThresholdMs: number,
+    now: Date = new Date(),
+  ): boolean {
+    if (!this.hasActiveLock(staleThresholdMs, now)) {
+      return false;
+    }
+    const sid = (staffId ?? '').trim();
+    return !sid || this.sessionStaffId !== sid;
+  }
+
+  lockSession(staffId: string, staffName: string, now: Date = new Date()): void {
+    this.sessionStaffId = staffId;
+    this.sessionStaffName = staffName.trim() || 'Waiter';
+    this.sessionLockedAt = now;
+  }
+
+  releaseSession(): void {
+    this.sessionStaffId = null;
+    this.sessionStaffName = null;
+    this.sessionLockedAt = null;
+  }
+
+  markEmpty(): void {
+    this.status = 'empty';
+    this.releaseSession();
+  }
 }

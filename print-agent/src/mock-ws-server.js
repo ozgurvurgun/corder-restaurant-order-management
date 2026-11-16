@@ -17,11 +17,11 @@ io.on("connection", (socket) => {
   const payload = {
     id: `ord-${Date.now()}`,
     restaurantId: "demo-restaurant",
-    tableId: "Bahce 1",
+    tableId: "Table 1",
     createdAt: new Date().toISOString(),
     items: [
-      { productName: "Lahmacun", quantity: 2, price: 90, note: "az acili", status: "sent" },
-      { productName: "Ayran", quantity: 1, price: 30, status: "sent" },
+      { productName: "Flatbread", quantity: 2, price: 90, note: "mild", status: "sent" },
+      { productName: "Sparkling Water", quantity: 1, price: 30, status: "sent" },
     ],
   }
 

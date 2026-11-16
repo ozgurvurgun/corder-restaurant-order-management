@@ -9,7 +9,8 @@ import {
 } from 'typeorm';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 
-export type StaffRole = 'mudur' | 'kasiyer' | 'garson';
+export const STAFF_ROLES = ['manager', 'cashier', 'waiter'] as const;
+export type StaffRole = (typeof STAFF_ROLES)[number];
 
 @Entity('restaurant_staff')
 @Index(['restaurantId'])

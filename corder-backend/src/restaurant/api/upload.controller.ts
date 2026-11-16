@@ -35,7 +35,7 @@ function sanitizeTenantSegment(slug: string): string {
     .replace(/[^a-z0-9-]+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
-  return (s || 'restoran').slice(0, 80);
+  return (s || 'restaurant').slice(0, 80);
 }
 
 function tenantPrefix(user: RestaurantUser): string {
@@ -60,7 +60,7 @@ export class UploadController {
         if (!parsed) {
           cb(
             new BadRequestException(
-              'Gecersiz dosya adi veya uzantisi (yalnizca jpg, jpeg, png, gif, webp)',
+              'Invalid filename or extension (allowed: jpg, jpeg, png, gif, webp)',
             ),
             false,
           );
@@ -75,19 +75,21 @@ export class UploadController {
     @UploadedFile() file: Express.Multer.File,
   ) {
     if (!file?.buffer?.length) {
-      throw new BadRequestException('Dosya yuklenmedi');
+      throw new BadRequestException('No file uploaded');
     }
 
     const parsed = validateOriginalImageFilename(file.originalname);
     if (!parsed) {
       throw new BadRequestException(
-        'Gecersiz dosya adi veya uzantisi (yalnizca jpg, jpeg, png, gif, webp)',
+        'Invalid filename or extension (allowed: jpg, jpeg, png, gif, webp)',
       );
     }
 
     const detectedMime = detectImageMimeFromMagicBytes(file.buffer);
     if (!detectedMime || detectedMime !== parsed.expectedMime) {
-      throw new BadRequestException('Dosya icerigi uzantisi ile uyusmuyor veya gecerli bir gorsel degil');
+      throw new BadRequestException(
+        'File content does not match extension or is not a valid image',
+      );
     }
 
     const tenant = tenantPrefix(req.user);
@@ -104,37 +106,37 @@ export class UploadController {
         const msg = e.message ?? '';
         if (name === 'AccessDenied' || /access denied/i.test(msg)) {
           throw new ForbiddenException(
-            'R2 erisim reddedildi: API token bu bucket icin Object Read & Write olmali (corder-uploads).',
+            'R2 access denied: API token must have Object Read & Write permissions for this bucket.',
           );
         }
         if (name === 'InvalidAccessKeyId' || name === 'SignatureDoesNotMatch') {
           throw new BadRequestException(
-            'R2 anahtarlari gecersiz veya yanlis; ACCESS_KEY / SECRET kontrol edin.',
+            'Invalid R2 credentials; please verify R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY.',
           );
         }
         if (name === 'NoSuchBucket' || /no such bucket/i.test(msg)) {
           throw new BadRequestException(
-            'R2 bucket bulunamadi: R2_BUCKET_NAME ve hesap eslesiyor mu?',
+            'R2 bucket not found: verify R2_BUCKET_NAME and account ID.',
           );
         }
         if (process.env.UPLOAD_DEBUG === 'true') {
           throw new InternalServerErrorException(`${name}: ${msg}`);
         }
-        throw new InternalServerErrorException('Dosya yuklenemedi');
+        throw new InternalServerErrorException('File upload failed');
       }
     }
 
     const rootDir = uploadsDir();
     const dest = resolve(rootDir, key);
     if (!dest.startsWith(`${rootDir}${sep}`)) {
-      throw new BadRequestException('Gecersiz yukleme hedefi');
+      throw new BadRequestException('Invalid upload destination');
     }
     try {
       await mkdir(dirname(dest), { recursive: true });
       await writeFile(dest, file.buffer);
     } catch (err) {
       this.logger.error('Local upload write failed', err instanceof Error ? err.stack : err);
-      throw new InternalServerErrorException('Dosya diske yazilamadi');
+      throw new InternalServerErrorException('Failed to write file to disk');
     }
     return { url: `/uploads/${key}` };
   }

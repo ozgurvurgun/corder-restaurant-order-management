@@ -13,3 +13,4 @@ export class RestaurantMenuController {
     return this.menuQuery.getTerminalMenuByRestaurantId(restaurantId);
   }
 }
+

@@ -31,3 +31,4 @@ export function buildCorsOptions(): {
     credentials: true,
   };
 }
+

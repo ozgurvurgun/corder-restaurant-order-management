@@ -1,4 +1,5 @@
 import { IsString, IsOptional, IsIn, IsBoolean, MinLength, MaxLength, Matches } from 'class-validator';
+import { STAFF_ROLES, StaffRole } from '../../domain/restaurant-staff.entity';
 
 export class UpdateStaffDto {
   @IsOptional()
@@ -6,8 +7,8 @@ export class UpdateStaffDto {
   name?: string;
 
   @IsOptional()
-  @IsIn(['mudur', 'kasiyer', 'garson'])
-  role?: 'mudur' | 'kasiyer' | 'garson';
+  @IsIn(STAFF_ROLES)
+  role?: StaffRole;
 
   @IsOptional()
   @IsString()

@@ -1,51 +1,19 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
 import { PanelRootGuard } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
-import { PrintersService, CreatePrinterDto, UpdatePrinterDto } from '../application/printers.service';
 import { AuditLogsService } from '../application/audit-logs.service';
 import { AuditCategory } from '../domain/audit-log.entity';
 import { CreateAuditLogBodyDto } from './dto/create-audit-log.dto';
 
-@Controller('restaurant')
+@Controller('restaurant/audit-logs')
 @UseGuards(RestaurantJwtGuard, PanelRootGuard)
-export class TechnicalController {
-  constructor(
-    private readonly printers: PrintersService,
-    private readonly audits: AuditLogsService,
-  ) {}
+export class AuditLogsController {
+  constructor(private readonly audits: AuditLogsService) {}
 
-  // ----- Printers -----
-
-  @Get('printers')
-  listPrinters(@RestaurantId() restaurantId: string) {
-    return this.printers.list(restaurantId);
-  }
-
-  @Post('printers')
-  createPrinter(@RestaurantId() restaurantId: string, @Body() body: CreatePrinterDto) {
-    return this.printers.create(restaurantId, body);
-  }
-
-  @Put('printers/:id')
-  updatePrinter(
-    @RestaurantId() restaurantId: string,
-    @Param('id') id: string,
-    @Body() body: UpdatePrinterDto,
-  ) {
-    return this.printers.update(restaurantId, id, body);
-  }
-
-  @Delete('printers/:id')
-  deletePrinter(@RestaurantId() restaurantId: string, @Param('id') id: string) {
-    return this.printers.remove(restaurantId, id);
-  }
-
-  // ----- Audit logs -----
-
-  @Get('audit-logs')
-  listAuditLogs(
+  @Get()
+  list(
     @RestaurantId() restaurantId: string,
     @Query('category') category?: AuditCategory,
     @Query('limit') limit?: string,
@@ -63,8 +31,8 @@ export class TechnicalController {
     });
   }
 
-  @Post('audit-logs')
-  createAuditLog(
+  @Post()
+  create(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { id: string; name: string },
     @Body() body: CreateAuditLogBodyDto,

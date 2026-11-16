@@ -1,3 +1,7 @@
+import type { PaymentMethod, StaffRole } from "./types"
+
+export type { PaymentMethod, StaffRole }
+
 export const getBase = () => (import.meta.env.VITE_API_URL as string) ?? ""
 
 let authExpiredHandler: (() => void) | null = null
@@ -40,8 +44,6 @@ export function setRestaurant(restaurant: { id: string; name: string; slug: stri
   localStorage.setItem("terminal_restaurant", JSON.stringify(restaurant))
 }
 
-export type StaffRole = "garson" | "mudur" | "kasiyer"
-
 export interface StaffSession {
   staffId: string
   name: string
@@ -50,8 +52,21 @@ export interface StaffSession {
   expiresAt: number
 }
 
+export interface CloseCheckBody {
+  method: "cash" | "credit-card" | "meal-card" | "multinet" | "split" | "ledger"
+  discountAmount?: number
+  paidAmount?: number
+  customerName?: string
+}
+
 const STAFF_SESSION_KEY = "terminal_staff_session"
 const STAFF_SESSION_MS = 12 * 60 * 60 * 1000 // 12 hours
+
+export function normalizeStaffRole(role: string): StaffRole {
+  if (role === "manager") return "manager"
+  if (role === "cashier") return "cashier"
+  return "waiter"
+}
 
 export function getStaffSession(): StaffSession | null {
   if (typeof window === "undefined") return null
@@ -70,7 +85,13 @@ export function getStaffSession(): StaffSession | null {
       localStorage.removeItem(STAFF_SESSION_KEY)
       return null
     }
-    return data as StaffSession
+    return {
+      staffId: data.staffId,
+      name: data.name,
+      role: normalizeStaffRole(data.role),
+      staffToken: data.staffToken,
+      expiresAt: data.expiresAt,
+    }
   } catch {
     localStorage.removeItem(STAFF_SESSION_KEY)
     return null
@@ -80,6 +101,7 @@ export function getStaffSession(): StaffSession | null {
 export function setStaffSession(session: Omit<StaffSession, "expiresAt">): StaffSession {
   const data: StaffSession = {
     ...session,
+    role: normalizeStaffRole(session.role),
     expiresAt: Date.now() + STAFF_SESSION_MS,
   }
   localStorage.setItem(STAFF_SESSION_KEY, JSON.stringify(data))
@@ -88,6 +110,12 @@ export function setStaffSession(session: Omit<StaffSession, "expiresAt">): Staff
 
 export function clearStaffSession() {
   localStorage.removeItem(STAFF_SESSION_KEY)
+}
+
+function isStaffAuthError(status: number, message: unknown): boolean {
+  if (status !== 401 || typeof message !== "string") return false
+  const lower = message.toLowerCase()
+  return lower.includes("personel") || lower.includes("staff")
 }
 
 async function request<T>(
@@ -118,11 +146,13 @@ async function request<T>(
     const body = await res.text()
     let message = body
     try {
-      const j = JSON.parse(body)
-      message = Array.isArray(j.message) ? j.message.join(", ") : (j.message ?? body)
-    } catch {}
+      const parsed = JSON.parse(body)
+      message = Array.isArray(parsed.message) ? parsed.message.join(", ") : (parsed.message ?? body)
+    } catch {
+      // Use raw response text when body is not JSON
+    }
     if ((res.status === 401 || res.status === 403) && token && !skipAuthExpired) {
-      if (res.status === 401 && typeof message === "string" && message.toLowerCase().includes("personel")) {
+      if (isStaffAuthError(res.status, message)) {
         staffExpiredHandler?.()
       } else {
         authExpiredHandler?.()
@@ -141,29 +171,19 @@ export const api = {
         accessToken: string
         restaurant: { id: string; name: string; slug: string }
         user: { id: string; email: string; name: string; role: "root" | "terminal" }
-      }>(
-        "/restaurant/auth/login",
-        { method: "POST", body: JSON.stringify({ email, password }) }
-      ),
+      }>("/restaurant/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      }),
   },
   tables: {
     list: (token: string) =>
-      request<
-        {
-          id: string
-          name: string
-          section: string
-          status: string
-          sessionStaffId?: string | null
-          sessionStaffName?: string | null
-          sessionLockedAt?: string | null
-        }[]
-      >("/restaurant/tables", { token }),
+      request<RawTableDto[]>("/restaurant/tables", { token }),
     presence: (token: string) =>
       request<Record<string, { staffId: string; staffName: string }>>("/restaurant/tables/presence", { token }),
     sessionLock: async (
       token: string,
-      tableId: string,
+      tableId: string
     ): Promise<{ ok: true } | { ok: false; holderName: string }> => {
       const staffSession = getStaffSession()
       if (!staffSession?.staffToken) {
@@ -181,29 +201,31 @@ export const api = {
         body: JSON.stringify({}),
       })
       if (res.status === 409) {
-        const j = (await res.json().catch(() => ({}))) as {
+        const parsed = (await res.json().catch(() => ({}))) as {
           holderName?: string
           message?: unknown
         }
         const holderName =
-          typeof j.holderName === "string"
-            ? j.holderName
-            : typeof j.message === "object" &&
-                j.message !== null &&
-                typeof (j.message as { holderName?: string }).holderName === "string"
-              ? (j.message as { holderName: string }).holderName
+          typeof parsed.holderName === "string"
+            ? parsed.holderName
+            : typeof parsed.message === "object" &&
+                parsed.message !== null &&
+                typeof (parsed.message as { holderName?: string }).holderName === "string"
+              ? (parsed.message as { holderName: string }).holderName
               : "Garson"
         return { ok: false, holderName }
       }
       if (!res.ok) {
-        const t = await res.text()
-        let message = t
+        const rawText = await res.text()
+        let message = rawText
         try {
-          const j = JSON.parse(t)
-          message = j.message ?? t
-        } catch {}
+          const parsed = JSON.parse(rawText)
+          message = parsed.message ?? rawText
+        } catch {
+          // Keep raw text when response is not JSON
+        }
         if (res.status === 401) {
-          if (typeof message === "string" && message.toLowerCase().includes("personel")) {
+          if (isStaffAuthError(res.status, message)) {
             staffExpiredHandler?.()
           } else {
             authExpiredHandler?.()
@@ -219,18 +241,24 @@ export const api = {
         token,
         body: JSON.stringify({}),
       }),
+    closeCheck: (token: string, tableId: string, body: CloseCheckBody) =>
+      request<{ ok: boolean }>(`/restaurant/tables/${encodeURIComponent(tableId)}/close-check`, {
+        method: "POST",
+        token,
+        body: JSON.stringify(body),
+      }),
   },
   orders: {
     list: (token: string, tableId?: string) => {
-      const q = tableId ? `?tableId=${encodeURIComponent(tableId)}` : ""
-      return request<OrderDto[]>(`/restaurant/orders${q}`, { token })
+      const query = tableId ? `?tableId=${encodeURIComponent(tableId)}` : ""
+      return request<OrderDto[]>(`/restaurant/orders${query}`, { token })
     },
     create: (
       token: string,
       body: {
         tableId: string
         items: { productId: string; quantity: number; note?: string }[]
-      },
+      }
     ) =>
       request<OrderDto>("/restaurant/orders", { method: "POST", token, body: JSON.stringify(body) }),
     move: (token: string, fromTableId: string, toTableId: string) =>
@@ -245,13 +273,22 @@ export const api = {
         fromTableId: string
         toTableId: string
         itemIds: string[]
-      },
+      }
     ) =>
       request<OrderDto>("/restaurant/orders/move-items", {
         method: "POST",
         token,
         body: JSON.stringify(body),
       }),
+    cancelItem: (token: string, orderId: string, itemId: string) =>
+      request<OrderDto>(
+        `/restaurant/orders/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/cancel`,
+        {
+          method: "PATCH",
+          token,
+          body: JSON.stringify({}),
+        }
+      ),
     printReceipt: (
       token: string,
       body:
@@ -261,7 +298,7 @@ export const api = {
             waiterName?: string
             items: { productName: string; quantity: number; price: number; note?: string }[]
             total: number
-          },
+          }
     ) =>
       request<{ ok: true; jobId: string }>("/restaurant/orders/print-receipt", {
         method: "POST",
@@ -278,7 +315,7 @@ export const api = {
       request<{
         staffId: string
         name: string
-        role: StaffRole
+        role: "manager" | "cashier" | "waiter"
         staffToken: string
       }>("/restaurant/staff/verify-pin", {
         method: "POST",
@@ -288,6 +325,17 @@ export const api = {
         body: JSON.stringify({ pin }),
       }),
   },
+}
+
+export interface RawTableDto {
+  id: string
+  name: string
+  section: string
+  status: string
+  capacity?: number
+  sessionStaffId?: string | null
+  sessionStaffName?: string | null
+  sessionLockedAt?: string | null
 }
 
 export interface OrderItemDto {
@@ -317,7 +365,14 @@ export type MenuCategoryTree = {
   id: string
   name: string
   slug: string
-  products: { id: string; name: string; description?: string; price: number; imageUrl?: string; inStock: boolean }[]
+  products: {
+    id: string
+    name: string
+    description?: string
+    price: number
+    imageUrl?: string
+    inStock: boolean
+  }[]
   children?: MenuCategoryTree[]
 }
 

@@ -49,7 +49,7 @@ export class CampaignService {
 
   async update(restaurantId: string, id: string, dto: UpdateCampaignDto): Promise<CampaignEntity> {
     const entity = await this.repo.findOne({ where: { id, restaurantId } });
-    if (!entity) throw new NotFoundException('Kampanya bulunamadı.');
+    if (!entity) throw new NotFoundException('Campaign not found.');
     if (dto.title !== undefined) entity.title = dto.title;
     if (dto.description !== undefined) entity.description = dto.description;
     if (dto.imageUrl !== undefined) entity.imageUrl = dto.imageUrl;
@@ -63,7 +63,7 @@ export class CampaignService {
 
   async remove(restaurantId: string, id: string): Promise<void> {
     const entity = await this.repo.findOne({ where: { id, restaurantId } });
-    if (!entity) throw new NotFoundException('Kampanya bulunamadı.');
+    if (!entity) throw new NotFoundException('Campaign not found.');
     await this.repo.delete(entity.id);
   }
 
@@ -79,7 +79,6 @@ export class CampaignService {
         map.delete(id);
       }
     });
-    // append any missing campaigns at the end
     Array.from(map.values()).forEach((c) => {
       c.order = ordered.length + 1;
       ordered.push(c);
@@ -88,4 +87,3 @@ export class CampaignService {
     return ordered;
   }
 }
-

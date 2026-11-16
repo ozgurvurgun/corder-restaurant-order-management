@@ -8,12 +8,12 @@ const translations: Record<string, Record<Locale, string>> = {
   tables: { tr: "Masalar", en: "Tables" },
   liveOrders: { tr: "Tamamlanan Siparisler", en: "Completed Orders" },
   completedOrders: { tr: "Tamamlanan Siparisler", en: "Completed Orders" },
-  kasa: { tr: "Kasa", en: "Cash Register" },
+  cashRegister: { tr: "Kasa", en: "Cash Register" },
   products: { tr: "Urun Yonetimi", en: "Product Management" },
   stock: { tr: "Stok Yonetimi", en: "Stock Management" },
   users: { tr: "Kullanicilar", en: "Users" },
   reports: { tr: "Raporlar", en: "Reports" },
-  teknik: { tr: "Teknik", en: "Technical" },
+  technical: { tr: "Teknik", en: "Technical" },
   settings: { tr: "Ayarlar", en: "Settings" },
   operations: { tr: "Operasyon", en: "Operations" },
   management: { tr: "Yonetim", en: "Management" },
@@ -56,7 +56,7 @@ const translations: Record<string, Record<Locale, string>> = {
   totalAmount: { tr: "Toplam Tutar", en: "Total Amount" },
   netAmount: { tr: "Net Tutar", en: "Net Amount" },
   discount: { tr: "Indirim", en: "Discount" },
-  discountIkram: { tr: "Indirim / Ikram", en: "Discount / Complimentary" },
+  discountComplimentary: { tr: "Indirim / Ikram", en: "Discount / Complimentary" },
   percent: { tr: "Yuzde", en: "Percent" },
   amount: { tr: "Tutar", en: "Amount" },
   reason: { tr: "Sebep", en: "Reason" },
@@ -78,14 +78,14 @@ const translations: Record<string, Record<Locale, string>> = {
   paySelected: { tr: "Secileni Ode", en: "Pay Selected" },
 
   // Discount / Complimentary
-  patronIkram: { tr: "Patron Ikrami", en: "Owner's Complimentary" },
+  ownerComplimentary: { tr: "Patron Ikrami", en: "Owner's Complimentary" },
   customerComplaint: { tr: "Musteri Sikayeti", en: "Customer Complaint" },
   staffDiscount: { tr: "Personel Indirimi", en: "Staff Discount" },
   campaign: { tr: "Kampanya", en: "Campaign" },
   other: { tr: "Diger", en: "Other" },
   applyDiscount: { tr: "Indirim Uygula", en: "Apply Discount" },
-  ikram: { tr: "Ikram", en: "Complimentary" },
-  fullIkram: { tr: "Tam Ikram", en: "Full Complimentary" },
+  complimentary: { tr: "Ikram", en: "Complimentary" },
+  fullComplimentary: { tr: "Tam Ikram", en: "Full Complimentary" },
 
   // Notifications
   notifications: { tr: "Bildirimler", en: "Notifications" },
@@ -105,7 +105,7 @@ const translations: Record<string, Record<Locale, string>> = {
   reprint: { tr: "Tekrar Bas", en: "Reprint" },
   move: { tr: "Tasi", en: "Move" },
   cancelItem: { tr: "Iptal Et", en: "Cancel Item" },
-  adisyon: { tr: "Adisyon", en: "Check" },
+  check: { tr: "Adisyon", en: "Check" },
 }
 
 interface I18nContextType {

@@ -17,7 +17,9 @@ export type AuditCategory =
   | 'user'
   | 'settings'
   | 'stock'
-  | 'kasa'
+  | 'cash-register'
+  | 'register'
+  | 'shift'
   | 'table';
 
 @Entity('restaurant_audit_logs')

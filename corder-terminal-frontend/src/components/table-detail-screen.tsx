@@ -17,7 +17,7 @@ interface TableDetailScreenProps {
   onBack: () => void
   onNewOrder: () => void
   onMoveTable: () => void
-  onViewAdisyonlar: () => void
+  onViewOpenOrders: () => void
 }
 
 export function TableDetailScreen({
@@ -25,7 +25,7 @@ export function TableDetailScreen({
   onBack,
   onNewOrder,
   onMoveTable,
-  onViewAdisyonlar,
+  onViewOpenOrders,
 }: TableDetailScreenProps) {
   const { showToast } = useToast()
   const { tables, getTableOrders, getTableTotal, printReceipt, currentUser } = useApp()
@@ -38,7 +38,7 @@ export function TableDetailScreen({
   const tableOrders = getTableOrders(tableId)
   const total = getTableTotal(tableId)
   const orderCount = tableOrders.length
-  const isCheckoutLocked = table.status === "checkout"
+  const isBillRequested = table.status === "bill-requested"
 
   const handleMoveConfirmed = () => {
     setShowMoveConfirm(false)
@@ -62,14 +62,14 @@ export function TableDetailScreen({
 
         {/* Waiter + Check Count - Clickable */}
         <button
-          onClick={onViewAdisyonlar}
+          onClick={onViewOpenOrders}
           className="flex items-center gap-3 text-white/70 mt-2 mb-1 active:text-white transition-colors py-2"
           disabled={orderCount === 0}
         >
           <div className="flex items-center gap-1.5">
             <User className="h-4 w-4" />
             <span className="text-[15px] font-medium capitalize">
-              {table.waiter || currentUser?.name || "-"}
+              {table.activeWaiter || currentUser?.name || "-"}
             </span>
           </div>
           <span className="text-[15px] font-medium">{orderCount} Adisyon</span>
@@ -77,7 +77,8 @@ export function TableDetailScreen({
         </button>
 
         <p className="text-white text-[22px] font-bold mt-1 mb-10">
-          {"Hesap ₺"}{formatCurrency(total)}
+          {"Hesap ₺"}
+          {formatCurrency(total)}
         </p>
 
         {/* iOS-style Action List */}
@@ -86,14 +87,14 @@ export function TableDetailScreen({
             icon={<Plus className="h-[20px] w-[20px]" />}
             label="Yeni Adisyon"
             onClick={onNewOrder}
-            disabled={isCheckoutLocked}
+            disabled={isBillRequested}
             color="text-[#e63462]"
           />
           <ActionRow
             icon={<ArrowRightLeft className="h-[20px] w-[20px]" />}
             label="Masayi Tasi"
             onClick={() => setShowMoveConfirm(true)}
-            disabled={isCheckoutLocked}
+            disabled={isBillRequested}
             color="text-[#e63462]"
           />
           <ActionRow
@@ -104,7 +105,7 @@ export function TableDetailScreen({
             color="text-[#e63462]"
           />
         </div>
-        {isCheckoutLocked && (
+        {isBillRequested && (
           <p className="mt-3 text-[12px] font-medium text-white/90 bg-[#0a84ff]/30 border border-white/25 rounded-xl px-3 py-2">
             Bu masada hesap kesme penceresi acik. Pencere kapanana kadar terminalden yeni siparis alinamaz.
           </p>
@@ -117,7 +118,7 @@ export function TableDetailScreen({
         className="flex items-center justify-center gap-2 text-white/80 active:text-white py-4 mx-6 transition-colors"
       >
         <ArrowLeft className="h-[18px] w-[18px]" />
-        <span className="font-semibold text-[15px]">{"Masalara Don"}</span>
+        <span className="font-semibold text-[15px]">Masalara Don</span>
       </button>
 
       {/* Footer */}

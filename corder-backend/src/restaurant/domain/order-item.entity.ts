@@ -7,6 +7,7 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
+import { BadRequestException } from '@nestjs/common';
 import { OrderEntity } from './order.entity';
 
 @Entity('order_items')
@@ -51,4 +52,69 @@ export class OrderItemEntity {
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  isBillable(): boolean {
+    return this.status !== 'cancelled' && this.status !== 'ledger';
+  }
+
+  cancel(reason?: string | null, cancelledBy?: string | null, now: Date = new Date()): void {
+    if (this.status === 'ledger') {
+      throw new BadRequestException('Cannot cancel an order item assigned to ledger');
+    }
+    if (this.status === 'cancelled') {
+      throw new BadRequestException('Order item is already cancelled');
+    }
+    this.status = 'cancelled';
+    this.cancelReason = (reason ?? '').trim() || null;
+    this.cancelledBy = (cancelledBy ?? '').trim() || null;
+    this.cancelledAt = now;
+  }
+
+  assignToLedger(requestedQuantity?: number): {
+    fullAssignment: boolean;
+    assignedQuantity: number;
+    unitPrice: number;
+    lineTotal: number;
+  } {
+    if (this.status === 'cancelled') {
+      throw new BadRequestException('Order item is cancelled');
+    }
+    if (this.status === 'ledger') {
+      throw new BadRequestException('Order item is already assigned to ledger');
+    }
+    const available = this.quantity;
+    const reqQ =
+      requestedQuantity != null ? Math.floor(Number(requestedQuantity)) : available;
+    if (!Number.isInteger(reqQ) || reqQ < 1 || reqQ > available) {
+      throw new BadRequestException('Invalid item quantity');
+    }
+    const unitPrice = Number(this.price);
+    const lineTotal = unitPrice * reqQ;
+    if (reqQ < available) {
+      this.quantity = available - reqQ;
+      return {
+        fullAssignment: false,
+        assignedQuantity: reqQ,
+        unitPrice,
+        lineTotal,
+      };
+    }
+    this.status = 'ledger';
+    this.cancelReason = null;
+    this.cancelledBy = null;
+    this.cancelledAt = null;
+    return {
+      fullAssignment: true,
+      assignedQuantity: reqQ,
+      unitPrice,
+      lineTotal,
+    };
+  }
+
+  revertFromLedger(): void {
+    if (this.status !== 'ledger') {
+      throw new BadRequestException('Only ledger-assigned order items can be reverted');
+    }
+    this.status = 'sent';
+  }
 }

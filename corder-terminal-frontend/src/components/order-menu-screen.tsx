@@ -3,16 +3,9 @@ import { ChevronLeft, ShoppingCart, Search, X, Utensils, AlertTriangle } from "l
 import { useApp } from "@/lib/store"
 import { formatCurrency } from "@/lib/format"
 import { useToast } from "@/components/ios-toast"
-import { api, getToken } from "@/lib/api"
-import type { MenuBusinessDto, MenuCategoryTree } from "@/lib/api"
+import type { TerminalCategory, TerminalProduct } from "@/lib/types"
 
-/** Shows the same data without waiting for refetch when switching cart ↔ menu (reduces header jump). */
-const menuBusinessByRestaurantId: Partial<Record<string, MenuBusinessDto>> = {}
-
-/** Avoid a one-frame "Menu" flash when `tables` lags; keep the last known table name. */
 const tableTitleByTableId: Record<string, string> = {}
-
-type CartProduct = { id: string; name: string; price: number; inStock: boolean }
 
 function OrderMenuHeaderBar(props: {
   onBack: () => void
@@ -69,11 +62,11 @@ function ProductCard({
   onAdd,
   disabled = false,
 }: {
-  product: { id: string; name: string; price: number; image?: string; inStock: boolean }
+  product: TerminalProduct
   onAdd: () => void
   disabled?: boolean
 }) {
-  const outOfStock = !product.inStock
+  const outOfStock = !product.isAvailable
   const actionDisabled = outOfStock || disabled
 
   return (
@@ -86,8 +79,8 @@ function ProductCard({
       }`}
     >
       <div className="aspect-square bg-muted relative overflow-hidden">
-        {product.image ? (
-          <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+        {product.imageUrl ? (
+          <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <Utensils className="h-8 w-8 text-muted-foreground/30" />
@@ -104,52 +97,56 @@ function ProductCard({
           {product.name}
         </span>
         <span className="text-[12px] font-bold text-[#e63462] text-left">
-          ₺{formatCurrency(product.price)}
+          {"₺"}{formatCurrency(product.price)}
         </span>
       </div>
     </button>
   )
 }
 
-function SubTreeProducts(props: {
-  node: MenuCategoryTree
+function CategoryProductSection(props: {
+  category: TerminalCategory
+  allCategories: TerminalCategory[]
+  allProducts: TerminalProduct[]
   depth: number
-  isCheckoutLocked: boolean
-  onAdd: (p: CartProduct) => void
+  isBillRequested: boolean
+  onAdd: (product: TerminalProduct) => void
 }) {
-  const { node, depth, isCheckoutLocked, onAdd } = props
-  const hasBlock = node.products.length > 0 || (node.children ?? []).length > 0
-  if (!hasBlock) return null
+  const { category, allCategories, allProducts, depth, isBillRequested, onAdd } = props
+  const directProducts = allProducts.filter((p) => p.categoryId === category.id)
+  const childCategories = allCategories.filter((c) => c.parentId === category.id)
+
+  if (directProducts.length === 0 && childCategories.length === 0) return null
 
   return (
     <div className={depth > 0 ? "mt-4" : ""}>
       {depth > 0 && (
-        <h4
-          className={`text-[12px] font-semibold text-muted-foreground mb-2 px-1 ${depth > 1 ? "text-[11px]" : ""}`}
-        >
-          {node.name}
+        <h4 className={`text-[12px] font-semibold text-muted-foreground mb-2 px-1 ${depth > 1 ? "text-[11px]" : ""}`}>
+          {category.name}
         </h4>
       )}
-      {node.products.length > 0 && (
+      {directProducts.length > 0 && (
         <div className="grid grid-cols-3 gap-2.5 mb-2">
-          {node.products.map((p) => (
+          {directProducts.map((product) => (
             <ProductCard
-              key={p.id}
-              product={{
-                id: p.id,
-                name: p.name,
-                price: p.price,
-                image: p.imageUrl,
-                inStock: p.inStock,
-              }}
-              onAdd={() => onAdd({ id: p.id, name: p.name, price: p.price, inStock: p.inStock })}
-              disabled={isCheckoutLocked}
+              key={product.id}
+              product={product}
+              onAdd={() => onAdd(product)}
+              disabled={isBillRequested}
             />
           ))}
         </div>
       )}
-      {(node.children ?? []).map((ch) => (
-        <SubTreeProducts key={ch.id} node={ch} depth={depth + 1} isCheckoutLocked={isCheckoutLocked} onAdd={onAdd} />
+      {childCategories.map((child) => (
+        <CategoryProductSection
+          key={child.id}
+          category={child}
+          allCategories={allCategories}
+          allProducts={allProducts}
+          depth={depth + 1}
+          isBillRequested={isBillRequested}
+          onAdd={onAdd}
+        />
       ))}
     </div>
   )
@@ -162,130 +159,76 @@ interface OrderMenuScreenProps {
 }
 
 export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreenProps) {
-  const { restaurant, tables, cart, addToCart } = useApp()
+  const {
+    tables,
+    categories,
+    products,
+    selectedCategory,
+    selectCategory,
+    addToCart,
+    getCartItemCount,
+    isLoading,
+    error,
+  } = useApp()
   const { showToast } = useToast()
-  const [menu, setMenu] = useState<MenuBusinessDto | null>(() => {
-    const rid = restaurant?.id
-    return rid && menuBusinessByRestaurantId[rid] ? menuBusinessByRestaurantId[rid]! : null
-  })
-  const [menuLoadError, setMenuLoadError] = useState<string | null>(null)
-  const [activeCategory, setActiveCategory] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [showSearch, setShowSearch] = useState(false)
 
-  useEffect(() => {
-    const rid = restaurant?.id
-    const token = getToken()
-    if (!rid || !token) return
-    const cached = menuBusinessByRestaurantId[rid] ?? null
-    setMenu(cached)
-    setMenuLoadError(null)
-    const hadCache = !!cached
-    let cancelled = false
-    api.menu
-      .terminal(token)
-      .then((m) => {
-        if (cancelled) return
-        menuBusinessByRestaurantId[rid] = m
-        setMenu(m)
-      })
-      .catch((e) => {
-        if (cancelled) return
-        if (!hadCache) setMenuLoadError(e instanceof Error ? e.message : "Menu yuklenemedi")
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [restaurant?.id])
-
-  const roots = useMemo(() => menu?.categories ?? [], [menu])
-
-  const allProducts = useMemo(() => {
-    const acc: (CartProduct & { image?: string; description?: string })[] = []
-    const walk = (n: MenuCategoryTree) => {
-      for (const p of n.products) {
-        acc.push({
-          id: p.id,
-          name: p.name,
-          price: p.price,
-          inStock: p.inStock,
-          image: p.imageUrl,
-          description: p.description,
-        })
-      }
-      for (const ch of n.children ?? []) walk(ch)
-    }
-    roots.forEach(walk)
-    return acc
-  }, [roots])
+  const rootCategories = useMemo(() => categories.filter((c) => !c.parentId), [categories])
 
   useEffect(() => {
-    if (roots.length > 0 && !activeCategory) setActiveCategory(roots[0].id)
-  }, [roots, activeCategory])
-
-  const activeRootNode = useMemo(() => roots.find((r) => r.id === activeCategory), [roots, activeCategory])
-
-  const filteredProducts = useMemo(() => {
-    if (searchQuery) {
-      return allProducts.filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    if (rootCategories.length > 0 && !selectedCategory) {
+      selectCategory(rootCategories[0].id)
     }
-    const acc: (CartProduct & { image?: string })[] = []
-    const walk = (n: MenuCategoryTree) => {
-      for (const p of n.products) {
-        acc.push({
-          id: p.id,
-          name: p.name,
-          price: p.price,
-          inStock: p.inStock,
-          image: p.imageUrl,
-        })
-      }
-      for (const ch of n.children ?? []) walk(ch)
-    }
-    if (activeRootNode) walk(activeRootNode)
-    return acc
-  }, [searchQuery, allProducts, activeRootNode])
+  }, [rootCategories, selectedCategory, selectCategory])
+
+  const activeCategoryId = selectedCategory ?? rootCategories[0]?.id ?? ""
+  const activeRootCategory = useMemo(
+    () => rootCategories.find((c) => c.id === activeCategoryId) ?? null,
+    [rootCategories, activeCategoryId]
+  )
+
+  const searchedProducts = useMemo(() => {
+    if (!searchQuery.trim()) return []
+    const query = searchQuery.toLowerCase()
+    return products.filter((p) => p.name.toLowerCase().includes(query))
+  }, [searchQuery, products])
 
   const table = tables.find((t) => t.id === tableId)
-  const isCheckoutLocked = table?.status === "checkout"
+  const isBillRequested = table?.status === "bill-requested"
 
   useEffect(() => {
     if (table?.name) tableTitleByTableId[tableId] = table.name
   }, [table?.name, tableId])
-  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
 
-  const handleAddProduct = (product: CartProduct) => {
-    if (isCheckoutLocked) {
+  const cartCount = getCartItemCount()
+  const headerTitle = table?.name ?? tableTitleByTableId[tableId] ?? "Menu"
+
+  const handleAddProduct = (product: TerminalProduct) => {
+    if (isBillRequested) {
       showToast("Masa hesap kesiminde. Modal kapanana kadar siparis eklenemez.", "error")
       return
     }
-    if (!product.inStock) {
+    if (!product.isAvailable) {
       showToast(`${product.name} stokta yok`, "error")
       return
     }
-    addToCart({
-      productId: product.id,
-      productName: product.name,
-      price: product.price,
-      quantity: 1,
-    })
+    addToCart(product, 1)
     showToast(`${product.name} sepete eklendi`)
   }
 
-  const headerTitle = table?.name ?? tableTitleByTableId[tableId] ?? "Menu"
-
-  if (menuLoadError) {
+  if (error && categories.length === 0) {
     return (
       <div className="h-dvh flex flex-col bg-background">
         <OrderMenuHeaderBar onBack={onBack} title={headerTitle} actions="none" />
         <div className="flex-1 flex items-center justify-center p-6 text-center text-muted-foreground">
-          {menuLoadError}
+          {error}
         </div>
       </div>
     )
   }
 
-  if (!menu) {
+  if (isLoading && categories.length === 0) {
     return (
       <div className="h-dvh flex flex-col bg-background">
         <OrderMenuHeaderBar onBack={onBack} title={headerTitle} actions="none" />
@@ -303,10 +246,10 @@ export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreen
         title={headerTitle}
         actions="full"
         cartCount={cartCount}
-        onSearchToggle={() => setShowSearch((v) => !v)}
+        onSearchToggle={() => setShowSearch((prev) => !prev)}
         onCartOpen={onCartOpen}
       />
-      {isCheckoutLocked && (
+      {isBillRequested && (
         <div className="mx-3 mt-2 rounded-xl border border-[#0a84ff]/35 bg-[#0a84ff]/10 px-3 py-2 text-[12px] text-[#0a4f99]">
           Hesap Kes penceresi acik. Bu masa icin yeni siparis ekleme gecici olarak kilitlendi.
         </div>
@@ -342,17 +285,17 @@ export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreen
 
       {!searchQuery && (
         <div className="flex bg-background overflow-x-auto flex-shrink-0 px-2 ios-scroll border-b border-border">
-          {roots.map((cat) => (
+          {rootCategories.map((category) => (
             <button
               type="button"
-              key={cat.id}
-              onClick={() => setActiveCategory(cat.id)}
+              key={category.id}
+              onClick={() => selectCategory(category.id)}
               className={`px-4 py-2.5 text-[13px] font-semibold whitespace-nowrap transition-colors relative ${
-                activeCategory === cat.id ? "text-[#e63462]" : "text-muted-foreground"
+                activeCategoryId === category.id ? "text-[#e63462]" : "text-muted-foreground"
               }`}
             >
-              {cat.name}
-              {activeCategory === cat.id && (
+              {category.name}
+              {activeCategoryId === category.id && (
                 <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#e63462] rounded-full" />
               )}
             </button>
@@ -361,31 +304,39 @@ export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreen
       )}
 
       <div className="flex-1 overflow-auto p-3 ios-scroll">
-        {filteredProducts.length === 0 ? (
+        {searchQuery ? (
+          searchedProducts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+              <Search className="h-8 w-8 mb-2 opacity-40" />
+              <p className="text-[15px]">Urun bulunamadi</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2.5">
+              {searchedProducts.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  onAdd={() => handleAddProduct(product)}
+                  disabled={isBillRequested}
+                />
+              ))}
+            </div>
+          )
+        ) : activeRootCategory && activeRootCategory.productCount > 0 ? (
+          <CategoryProductSection
+            category={activeRootCategory}
+            allCategories={categories}
+            allProducts={products}
+            depth={0}
+            isBillRequested={isBillRequested}
+            onAdd={handleAddProduct}
+          />
+        ) : (
           <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
             <Search className="h-8 w-8 mb-2 opacity-40" />
             <p className="text-[15px]">Urun bulunamadi</p>
           </div>
-        ) : searchQuery ? (
-          <div className="grid grid-cols-3 gap-2.5">
-            {filteredProducts.map((product) => (
-              <ProductCard
-                key={product.id}
-                product={{
-                  id: product.id,
-                  name: product.name,
-                  price: product.price,
-                  image: product.image,
-                  inStock: product.inStock,
-                }}
-                onAdd={() => handleAddProduct(product)}
-                disabled={isCheckoutLocked}
-              />
-            ))}
-          </div>
-        ) : activeRootNode ? (
-          <SubTreeProducts node={activeRootNode} depth={0} isCheckoutLocked={isCheckoutLocked} onAdd={handleAddProduct} />
-        ) : null}
+        )}
       </div>
     </div>
   )

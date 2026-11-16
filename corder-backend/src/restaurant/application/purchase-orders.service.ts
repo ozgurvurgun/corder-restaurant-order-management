@@ -59,7 +59,7 @@ export class PurchaseOrdersService {
         where: { id, restaurantId },
         lock: { mode: 'pessimistic_write' },
       });
-      if (!po) throw new NotFoundException('Satın alma kaydı bulunamadı.');
+      if (!po) throw new NotFoundException('Purchase order not found.');
       if (po.status === 'received') return po;
 
       for (const item of po.items) {
@@ -74,7 +74,7 @@ export class PurchaseOrdersService {
           totalCost: qty * unitCost,
           supplierId: po.supplierId,
           createdBy: userName,
-          reason: `Satın alma: ${po.supplierName}`,
+          reason: `Purchase order: ${po.supplierName}`,
         });
       }
 

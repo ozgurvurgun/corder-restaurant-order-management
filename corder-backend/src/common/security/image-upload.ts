@@ -58,3 +58,4 @@ export function contentTypeForUploadPath(filePath: string): string {
   const ext = extname(filePath || '').toLowerCase();
   return ALLOWED_IMAGE_CONTENT_TYPES[ext] ?? 'application/octet-stream';
 }
+

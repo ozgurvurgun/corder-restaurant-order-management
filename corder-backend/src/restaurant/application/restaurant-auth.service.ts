@@ -48,7 +48,6 @@ export class RestaurantAuthService {
     const jwtSecret = requireConfigSecret(this.config, 'JWT_SECRET');
     const expiresIn = this.config.get('JWT_EXPIRES_IN', DEFAULT_JWT_EXPIRES_IN);
 
-    // Panel: root admin (email + password)
     const admin = await this.rootAdminRepo.findOne({
       where: { email },
       relations: ['restaurant'],
@@ -56,7 +55,7 @@ export class RestaurantAuthService {
     if (admin?.restaurant) {
       if (await bcrypt.compare(dto.password, admin.passwordHash)) {
         if (admin.restaurant.status !== 'active') {
-          throw new UnauthorizedException('Restoran aktif degil');
+          throw new UnauthorizedException('Restaurant is not active');
         }
         const payload: RestaurantTokenPayload = {
           sub: admin.id,
@@ -88,7 +87,6 @@ export class RestaurantAuthService {
       }
     }
 
-    // Terminal: restaurant's own login (role: 'terminal' in both JWT and response)
     const restaurant = await this.restaurantRepo.findOne({
       where: { terminalEmail: email },
     });
@@ -97,7 +95,7 @@ export class RestaurantAuthService {
       (await bcrypt.compare(dto.password, restaurant.terminalPasswordHash))
     ) {
       if (restaurant.status !== 'active') {
-        throw new UnauthorizedException('Restoran aktif degil');
+        throw new UnauthorizedException('Restaurant is not active');
       }
       const payload: RestaurantTokenPayload = {
         sub: restaurant.id,

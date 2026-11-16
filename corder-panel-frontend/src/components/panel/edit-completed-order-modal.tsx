@@ -1,7 +1,10 @@
 import { useMemo, useState } from "react"
-import type { ClosedTable, PanelOrder, PaymentMethod } from "@/lib/panel-types"
+import type { ClosedTable, PanelOrder, PanelPaymentMethod } from "@/lib/panel-types"
 import { itemCountsTowardBill, itemIsLedgerLike } from "@/lib/panel-types"
-import type { CompletedOrderSnapshotDto, CompletedPaymentSnapshotDto } from "@/lib/api"
+import type {
+  CompletedOrderSnapshotDto,
+  CompletedPaymentSnapshotDto,
+} from "@/lib/api"
 import { usePanelStore } from "@/lib/panel-store"
 import { usePanelToast } from "./panel-toast"
 import { X } from "lucide-react"
@@ -51,7 +54,9 @@ function ordersToSnapshots(orders: PanelOrder[]): CompletedOrderSnapshotDto[] {
   }))
 }
 
-function paymentToSnapshot(p: ClosedTable["payment"]): CompletedPaymentSnapshotDto {
+function paymentToSnapshot(
+  p: ClosedTable["payment"],
+): CompletedPaymentSnapshotDto {
   return {
     id: p.id,
     tableId: p.tableId,
@@ -65,18 +70,21 @@ function paymentToSnapshot(p: ClosedTable["payment"]): CompletedPaymentSnapshotD
     processedBy: p.processedBy,
     createdAt: p.createdAt.toISOString(),
     ...(p.ledgerCustomerId || p.ledgerCustomerName
-      ? { ledgerCustomerId: p.ledgerCustomerId, ledgerCustomerName: p.ledgerCustomerName }
+      ? {
+          ledgerCustomerId: p.ledgerCustomerId,
+          ledgerCustomerName: p.ledgerCustomerName,
+        }
       : {}),
   }
 }
 
-const METHODS: { value: PaymentMethod; label: string }[] = [
-  { value: "nakit", label: "Nakit" },
-  { value: "kredi-karti", label: "Kredi karti" },
-  { value: "yemek-karti", label: "Yemek karti" },
+const METHODS: { value: PanelPaymentMethod; label: string }[] = [
+  { value: "cash", label: "Nakit" },
+  { value: "credit-card", label: "Kredi karti" },
+  { value: "meal-card", label: "Yemek karti" },
   { value: "multinet", label: "Multinet" },
-  { value: "coklu", label: "Coklu odeme" },
-  { value: "cari", label: "Cari" },
+  { value: "split", label: "Coklu odeme" },
+  { value: "ledger", label: "Cari" },
 ]
 
 type Props = {
@@ -87,15 +95,21 @@ type Props = {
 export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
   const { updateCompletedOrder, currentUser } = usePanelStore()
   const { showToast } = usePanelToast()
-  const [draftOrders, setDraftOrders] = useState<PanelOrder[]>(() => cloneOrders(closedTable.orders))
-  const [method, setMethod] = useState<PaymentMethod>(closedTable.payment.method)
+  const [draftOrders, setDraftOrders] = useState<PanelOrder[]>(() =>
+    cloneOrders(closedTable.orders),
+  )
+  const [method, setMethod] = useState<PanelPaymentMethod>(
+    closedTable.payment.method,
+  )
   const [saving, setSaving] = useState(false)
 
   const rawTotal = useMemo(() => {
     return draftOrders.reduce(
       (s, o) =>
         s +
-        o.items.filter(itemCountsTowardBill).reduce((a, i) => a + i.price * i.quantity, 0),
+        o.items
+          .filter(itemCountsTowardBill)
+          .reduce((a, i) => a + i.price * i.quantity, 0),
       0,
     )
   }, [draftOrders])
@@ -120,7 +134,9 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
           ? o
           : {
               ...o,
-              items: o.items.map((i) => (i.id === itemId ? { ...i, quantity: q } : i)),
+              items: o.items.map((i) =>
+                i.id === itemId ? { ...i, quantity: q } : i,
+              ),
             },
       ),
     )
@@ -177,69 +193,101 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40">
       <div className="w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col bg-white rounded-2xl shadow-xl border border-[#d1d1d6]/60">
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#e8e8ed]">
-          <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Tamamlanan hesabi duzenle</h3>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#f5f5f7]">
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f]">
+            Tamamlanan hesabi duzenle
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-[#f5f5f7]"
+          >
             <X className="w-4 h-4 text-[#86868b]" />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-3 text-[13px]">
           <p className="text-[11px] text-[#86868b] mb-3">
-            {closedTable.tableName} — miktar ve odeme yontemi; satirlari iptal edebilirsiniz. Toplamlar sunucuda hesaplanir.
+            {closedTable.tableName} — miktar ve odeme yontemi; satirlari iptal
+            edebilirsiniz. Toplamlar sunucuda hesaplanir.
           </p>
           {draftOrders.map((order, oi) => (
             <div key={order.id} className="mb-4">
-              <p className="text-[11px] font-semibold text-[#86868b] mb-1">Adisyon #{oi + 1}</p>
+              <p className="text-[11px] font-semibold text-[#86868b] mb-1">
+                Adisyon #{oi + 1}
+              </p>
               <div className="rounded-lg border border-[#e8e8ed] divide-y divide-[#f0f0f0]">
                 {order.items.map((item) => {
                   const ledgerLike = itemIsLedgerLike(item)
                   const voidLine = item.status === "cancelled" && !ledgerLike
                   const billable = itemCountsTowardBill(item)
                   return (
-                  <div key={item.id} className="px-3 py-2 flex flex-wrap items-center gap-2">
-                    <div className="flex-1 min-w-[120px]">
-                      <span className={voidLine ? "line-through text-[#86868b]" : ledgerLike ? "text-amber-950" : "text-[#1d1d1f]"}>
-                        {item.productName}
-                      </span>
-                      {ledgerLike && (
-                        <span className="block text-[10px] text-amber-800 font-medium">Cariye yazildi</span>
-                      )}
-                      {voidLine && item.cancelReason && (
-                        <span className="block text-[10px] text-red-600">Iptal: {item.cancelReason}</span>
-                      )}
-                    </div>
-                    {billable ? (
-                      <>
-                        <label className="flex items-center gap-1 text-[11px] text-[#86868b]">
-                          Adet
-                          <input
-                            type="number"
-                            min={1}
-                            className="w-14 h-8 px-2 rounded-md border border-[#d1d1d6] text-right"
-                            value={item.quantity}
-                            onChange={(e) => setQty(order.id, item.id, Number(e.target.value))}
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => cancelLine(order.id, item.id)}
-                          className="text-[11px] font-medium text-red-600 hover:underline"
+                    <div
+                      key={item.id}
+                      className="px-3 py-2 flex flex-wrap items-center gap-2"
+                    >
+                      <div className="flex-1 min-w-[120px]">
+                        <span
+                          className={
+                            voidLine
+                              ? "line-through text-[#86868b]"
+                              : ledgerLike
+                                ? "text-amber-950"
+                                : "text-[#1d1d1f]"
+                          }
                         >
-                          Iptal
-                        </button>
-                      </>
-                    ) : null}
-                  </div>
+                          {item.productName}
+                        </span>
+                        {ledgerLike && (
+                          <span className="block text-[10px] text-amber-800 font-medium">
+                            Cariye yazildi
+                          </span>
+                        )}
+                        {voidLine && item.cancelReason && (
+                          <span className="block text-[10px] text-red-600">
+                            Iptal: {item.cancelReason}
+                          </span>
+                        )}
+                      </div>
+                      {billable ? (
+                        <>
+                          <label className="flex items-center gap-1 text-[11px] text-[#86868b]">
+                            Adet
+                            <input
+                              type="number"
+                              min={1}
+                              className="w-14 h-8 px-2 rounded-md border border-[#d1d1d6] text-right"
+                              value={item.quantity}
+                              onChange={(e) =>
+                                setQty(
+                                  order.id,
+                                  item.id,
+                                  Number(e.target.value),
+                                )
+                              }
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => cancelLine(order.id, item.id)}
+                            className="text-[11px] font-medium text-red-600 hover:underline"
+                          >
+                            Iptal
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
                   )
                 })}
               </div>
             </div>
           ))}
           <div className="mt-2">
-            <label className="block text-[11px] font-medium text-[#86868b] mb-1">Odeme yontemi</label>
+            <label className="block text-[11px] font-medium text-[#86868b] mb-1">
+              Odeme yontemi
+            </label>
             <select
               className="w-full h-10 px-3 rounded-lg border border-[#d1d1d6] bg-white"
               value={method}
-              onChange={(e) => setMethod(e.target.value as PaymentMethod)}
+              onChange={(e) => setMethod(e.target.value as PanelPaymentMethod)}
             >
               {METHODS.map((m) => (
                 <option key={m.value} value={m.value}>
@@ -251,17 +299,26 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
           <div className="mt-4 p-3 rounded-lg bg-[#f5f5f7] text-[12px] space-y-1">
             <div className="flex justify-between">
               <span className="text-[#86868b]">Ara toplam (onizleme)</span>
-              <span>{"₺"}{formatCurrency(rawTotal)}</span>
+              <span>
+                {"₺"}
+                {formatCurrency(rawTotal)}
+              </span>
             </div>
             {previewDiscount > 0 && (
               <div className="flex justify-between text-amber-700">
                 <span>Indirim (mevcut)</span>
-                <span>-{"₺"}{formatCurrency(previewDiscount)}</span>
+                <span>
+                  -{"₺"}
+                  {formatCurrency(previewDiscount)}
+                </span>
               </div>
             )}
             <div className="flex justify-between font-semibold pt-1 border-t border-[#e0e0e0]">
               <span>Net (onizleme)</span>
-              <span>{"₺"}{formatCurrency(previewNet)}</span>
+              <span>
+                {"₺"}
+                {formatCurrency(previewNet)}
+              </span>
             </div>
           </div>
         </div>

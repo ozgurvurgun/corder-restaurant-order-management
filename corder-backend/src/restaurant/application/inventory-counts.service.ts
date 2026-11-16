@@ -53,12 +53,12 @@ export class InventoryCountsService {
   ) {
     const actualNum = Number(actual);
     if (!Number.isFinite(actualNum)) {
-      throw new BadRequestException('Sayim miktari gecersiz.');
+      throw new BadRequestException('Invalid inventory count quantity.');
     }
     const count = await this.repo.findOne({ where: { id: countId, restaurantId } });
-    if (!count) throw new NotFoundException('Sayım kaydı bulunamadı.');
+    if (!count) throw new NotFoundException('Inventory count record not found.');
     if (count.status === 'completed') {
-      throw new BadRequestException('Tamamlanmis sayim guncellenemez.');
+      throw new BadRequestException('Completed inventory count cannot be updated.');
     }
     const items = count.items.map((it) =>
       it.materialId === materialId
@@ -79,7 +79,7 @@ export class InventoryCountsService {
         where: { id: countId, restaurantId },
         lock: { mode: 'pessimistic_write' },
       });
-      if (!count) throw new NotFoundException('Sayım kaydı bulunamadı.');
+      if (!count) throw new NotFoundException('Inventory count record not found.');
       if (count.status === 'completed') return count;
 
       const updatedItems = [];
@@ -96,7 +96,7 @@ export class InventoryCountsService {
           type: 'count-adjustment',
           quantity: diff,
           createdBy: userName,
-          reason: `Sayım farkı: ${diff > 0 ? '+' : ''}${diff}`,
+          reason: `Inventory count adjustment: ${diff > 0 ? '+' : ''}${diff}`,
         });
       }
 

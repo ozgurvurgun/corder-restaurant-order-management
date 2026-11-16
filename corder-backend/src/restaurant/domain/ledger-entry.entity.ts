@@ -31,7 +31,7 @@ export class LedgerEntryEntity {
   @JoinColumn({ name: 'customer_id' })
   customer: LedgerCustomerEntity;
 
-  /** borc = table to ledger; tahsilat = payment; credit = debt reversal (unassign from check) */
+  /** debt = table/item assigned to ledger; payment = collection; credit = debt reversal (unassign from check) */
   @Column({ name: 'entry_type', type: 'varchar', length: 20 })
   entryType: 'debt' | 'payment' | 'credit';
 

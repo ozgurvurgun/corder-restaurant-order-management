@@ -2,29 +2,10 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CashShiftEntity } from '../domain/cash-shift.entity';
-import { fromKurus, toKurus } from '../../common/money/kurus';
+import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
+import { serializeCashShift } from './orders/order.mapper';
 
-export function serializeCashShift(shift: CashShiftEntity) {
-  return {
-    id: shift.id,
-    openedBy: shift.openedBy,
-    openedAt: shift.openedAt,
-    closedAt: shift.closedAt,
-    closedBy: shift.closedBy,
-    status: shift.status,
-    openingBalance: Number(shift.openingBalance),
-    closingBalance: shift.closingBalance != null ? Number(shift.closingBalance) : null,
-    notes: shift.notes,
-    cashIn: Number(shift.cashIn ?? 0),
-    cashOut: Number(shift.cashOut ?? 0),
-    totalRevenue: Number(shift.totalRevenue ?? 0),
-    totalNakit: Number(shift.totalNakit ?? 0),
-    totalKart: Number(shift.totalKart ?? 0),
-    totalYemekKarti: Number(shift.totalYemekKarti ?? 0),
-    totalMultinet: Number(shift.totalMultinet ?? 0),
-    transactionCount: shift.transactionCount ?? 0,
-  };
-}
+export { serializeCashShift };
 
 @Injectable()
 export class CashShiftService {
@@ -40,8 +21,12 @@ export class CashShiftService {
     });
   }
 
-  async open(restaurantId: string, openedBy: string, openingBalance: number): Promise<CashShiftEntity> {
-    const openingKurus = Math.max(0, toKurus(openingBalance));
+  async open(
+    restaurantId: string,
+    openedBy: string,
+    openingBalance: number,
+  ): Promise<CashShiftEntity> {
+    const openingMinorUnits = Math.max(0, toMinorUnits(openingBalance));
     return this.repo.manager.transaction(async (em) => {
       const current = await em.findOne(CashShiftEntity, {
         where: { restaurantId, status: 'open' },
@@ -49,20 +34,22 @@ export class CashShiftService {
         lock: { mode: 'pessimistic_write' },
       });
       if (current) {
-        throw new BadRequestException('Zaten açık bir kasa var. Önce kasayı kapatın.');
+        throw new BadRequestException(
+          'A cash shift is already open. Please close the current shift first.',
+        );
       }
       const shift = em.create(CashShiftEntity, {
         restaurantId,
         openedBy,
         openedAt: new Date(),
         status: 'open',
-        openingBalance: fromKurus(openingKurus),
+        openingBalance: fromMinorUnits(openingMinorUnits),
         cashIn: 0,
         cashOut: 0,
         totalRevenue: 0,
-        totalNakit: 0,
-        totalKart: 0,
-        totalYemekKarti: 0,
+        totalCash: 0,
+        totalCard: 0,
+        totalMealCard: 0,
         totalMultinet: 0,
         transactionCount: 0,
       });
@@ -77,21 +64,17 @@ export class CashShiftService {
     closingBalance: number,
     notes?: string,
   ): Promise<CashShiftEntity> {
-    const closingKurus = Math.max(0, toKurus(closingBalance));
+    const closingMinorUnits = Math.max(0, toMinorUnits(closingBalance));
     return this.repo.manager.transaction(async (em) => {
       const shift = await em.findOne(CashShiftEntity, {
         where: { id, restaurantId },
         lock: { mode: 'pessimistic_write' },
       });
-      if (!shift) throw new NotFoundException('Vardiya bulunamadı.');
+      if (!shift) throw new NotFoundException('Cash shift not found.');
       if (shift.status !== 'open') {
-        throw new BadRequestException('Bu vardiya zaten kapalı.');
+        throw new BadRequestException('This cash shift is already closed.');
       }
-      shift.closedAt = new Date();
-      shift.closedBy = closedBy;
-      shift.closingBalance = fromKurus(closingKurus);
-      shift.notes = notes ?? null;
-      shift.status = 'closed';
+      shift.closeShift(closedBy, closingMinorUnits, notes);
       return em.save(CashShiftEntity, shift);
     });
   }
@@ -107,7 +90,9 @@ export class CashShiftService {
   async requireCurrent(restaurantId: string): Promise<CashShiftEntity> {
     const current = await this.getCurrent(restaurantId);
     if (!current) {
-      throw new BadRequestException('Kasa açılmadan işlem yapılamaz. Önce kasayı açın.');
+      throw new BadRequestException(
+        'Cannot process transaction without an open cash shift. Please open a shift first.',
+      );
     }
     return current;
   }

@@ -2,13 +2,15 @@ import { useState } from "react"
 import { Menu, UtensilsCrossed, Wine, Hash, Wifi, WifiOff, LogOut } from "lucide-react"
 import { useApp } from "@/lib/store"
 import { formatCurrency } from "@/lib/format"
-import type { Table } from "@/lib/types"
+import type { TerminalTable, TerminalUser } from "@/lib/types"
 
-/** On the tables grid, show only the first word of the name (e.g. "Selma Elden" → "Selma"). */
+const ALL_SECTIONS = "all"
+
+/** On the tables grid, show only the first word of the name (e.g. "Selma Elden" -> "Selma"). */
 function waiterDisplayName(waiter: string | undefined): string {
-  const w = waiter?.trim()
-  if (!w) return ""
-  return w.split(/\s+/)[0] ?? ""
+  const trimmed = waiter?.trim()
+  if (!trimmed) return ""
+  return trimmed.split(/\s+/)[0] ?? ""
 }
 
 interface TablesScreenProps {
@@ -20,16 +22,17 @@ type FilterMode = "all" | "open" | "number"
 
 export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
   const { tables, currentUser, isOffline, toggleOffline } = useApp()
-  const [activeSection, setActiveSection] = useState<string>("Tumu")
+  const [activeSection, setActiveSection] = useState<string>(ALL_SECTIONS)
   const [filterMode, setFilterMode] = useState<FilterMode>("all")
   const [menuOpen, setMenuOpen] = useState(false)
   const [tableNumber, setTableNumber] = useState("")
 
-  const sections = ["Tumu", ...Array.from(new Set(tables.map((t) => t.section).filter(Boolean)))]
+  const sectionNames = Array.from(new Set(tables.map((t) => t.section).filter(Boolean)))
+  const sections = [ALL_SECTIONS, ...sectionNames]
 
   const filteredTables = tables
     .filter((t) => {
-      if (activeSection !== "Tumu" && t.section !== activeSection) return false
+      if (activeSection !== ALL_SECTIONS && t.section !== activeSection) return false
       if (filterMode === "open" && t.status === "empty") return false
       return true
     })
@@ -47,14 +50,21 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
   return (
     <div className="h-dvh flex flex-col bg-background relative overflow-hidden">
       {/* Fixed Header */}
-      <header className="bg-[#e63462] text-white px-4 flex items-center justify-between flex-shrink-0 safe-top" style={{ minHeight: 44 }}>
+      <header
+        className="bg-[#e63462] text-white px-4 flex items-center justify-between flex-shrink-0 safe-top"
+        style={{ minHeight: 44 }}
+      >
         <div className="flex items-center gap-2.5 py-2.5">
           <div className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center">
             <UtensilsCrossed className="h-4 w-4" />
           </div>
           <h1 className="text-[17px] font-semibold tracking-tight">Corder</h1>
         </div>
-        <button onClick={() => setMenuOpen(!menuOpen)} className="p-2 -mr-2 active:opacity-60" aria-label="Menu">
+        <button
+          onClick={() => setMenuOpen(!menuOpen)}
+          className="p-2 -mr-2 active:opacity-60"
+          aria-label="Menu"
+        >
           <Menu className="h-[22px] w-[22px]" />
         </button>
       </header>
@@ -63,31 +73,56 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
       {menuOpen && (
         <>
           <div className="absolute inset-0 z-40" onClick={() => setMenuOpen(false)} />
-          <div className="absolute left-3 right-3 z-50 bg-card rounded-2xl shadow-xl border border-border overflow-hidden" style={{ top: 56 }}>
+          <div
+            className="absolute left-3 right-3 z-50 bg-card rounded-2xl shadow-xl border border-border overflow-hidden"
+            style={{ top: 56 }}
+          >
             <div className="p-4 flex flex-col">
               <div className="flex items-center gap-3 pb-3 mb-3 border-b border-border">
                 <div className="h-10 w-10 rounded-full bg-[#e63462]/10 flex items-center justify-center">
-                  <span className="text-[15px] font-semibold text-[#e63462] capitalize">{currentUser?.name?.charAt(0)}</span>
+                  <span className="text-[15px] font-semibold text-[#e63462] capitalize">
+                    {currentUser?.name?.charAt(0)}
+                  </span>
                 </div>
                 <div>
-                  <p className="text-[15px] font-semibold text-card-foreground capitalize">{currentUser?.name}</p>
-                  <p className="text-[12px] text-muted-foreground">{"Acik: "}{openTableCount}{" / "}{tables.length}{" masa"}</p>
+                  <p className="text-[15px] font-semibold text-card-foreground capitalize">
+                    {currentUser?.name}
+                  </p>
+                  <p className="text-[12px] text-muted-foreground">
+                    {"Acik: "}
+                    {openTableCount}
+                    {" / "}
+                    {tables.length}
+                    {" masa"}
+                  </p>
                 </div>
               </div>
               <button
-                onClick={() => { toggleOffline(); setMenuOpen(false) }}
+                onClick={() => {
+                  toggleOffline()
+                  setMenuOpen(false)
+                }}
                 className="flex items-center gap-3 py-3 active:bg-muted/50 -mx-1 px-1 rounded-lg"
               >
-                {isOffline ? <WifiOff className="h-[20px] w-[20px] text-orange-500" /> : <Wifi className="h-[20px] w-[20px] text-muted-foreground" />}
-                <span className="text-[15px] text-card-foreground">{isOffline ? "Cevrimdisi Mod (Aktif)" : "Cevrimdisi Mod"}</span>
+                {isOffline ? (
+                  <WifiOff className="h-[20px] w-[20px] text-orange-500" />
+                ) : (
+                  <Wifi className="h-[20px] w-[20px] text-muted-foreground" />
+                )}
+                <span className="text-[15px] text-card-foreground">
+                  {isOffline ? "Cevrimdisi Mod (Aktif)" : "Cevrimdisi Mod"}
+                </span>
               </button>
               <div className="border-t border-border mt-1 pt-1">
                 <button
-                  onClick={() => { onLogout(); setMenuOpen(false) }}
+                  onClick={() => {
+                    onLogout()
+                    setMenuOpen(false)
+                  }}
                   className="flex items-center gap-3 py-3 active:bg-muted/50 -mx-1 px-1 rounded-lg w-full"
                 >
                   <LogOut className="h-[20px] w-[20px] text-destructive" />
-                  <span className="text-[15px] text-destructive">{"Cikis Yap"}</span>
+                  <span className="text-[15px] text-destructive">Cikis Yap</span>
                 </button>
               </div>
             </div>
@@ -108,7 +143,7 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
                   : "text-muted-foreground"
               }`}
             >
-              {section}
+              {section === ALL_SECTIONS ? "Tumu" : section}
             </button>
           ))}
         </div>
@@ -150,7 +185,14 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
       </div>
 
       {/* Fixed Tab Bar */}
-      <nav className="flex-shrink-0 border-t border-border safe-bottom" style={{ backgroundColor: "rgba(249,249,249,0.94)", backdropFilter: "saturate(180%) blur(20px)", WebkitBackdropFilter: "saturate(180%) blur(20px)" }}>
+      <nav
+        className="flex-shrink-0 border-t border-border safe-bottom"
+        style={{
+          backgroundColor: "rgba(249,249,249,0.94)",
+          backdropFilter: "saturate(180%) blur(20px)",
+          WebkitBackdropFilter: "saturate(180%) blur(20px)",
+        }}
+      >
         <div className="flex">
           <TabBarButton
             icon={<UtensilsCrossed className="h-[22px] w-[22px]" />}
@@ -181,14 +223,15 @@ function TableCard({
   currentUser,
   onClick,
 }: {
-  table: Table
-  currentUser: { id: string; name: string } | null
+  table: TerminalTable
+  currentUser: TerminalUser | null
   onClick: () => void
 }) {
   const isOccupied = table.status !== "empty"
-  const isCheckout = table.status === "checkout"
-  const lockedByOther =
-    Boolean(table.focusLock && currentUser && table.focusLock.staffId !== currentUser.id)
+  const isBillRequested = table.status === "bill-requested"
+  const lockedByOther = Boolean(
+    table.lockedByStaffId && currentUser && table.lockedByStaffId !== currentUser.id
+  )
 
   return (
     <button
@@ -196,7 +239,7 @@ function TableCard({
       className={`rounded-2xl p-3 flex flex-col items-center gap-0.5 min-h-[110px] transition-all active:scale-[0.96] ${
         lockedByOther
           ? "bg-[#2563eb] text-white shadow-md shadow-[#2563eb]/25"
-          : isCheckout
+          : isBillRequested
             ? "bg-[#0a84ff] text-white shadow-md shadow-[#0a84ff]/25"
             : isOccupied
               ? "bg-[#e63462] text-white shadow-md shadow-[#e63462]/20"
@@ -205,38 +248,42 @@ function TableCard({
     >
       <div
         className={`w-10 h-1 rounded-full mb-1.5 ${
-          lockedByOther || isOccupied || isCheckout ? "bg-white/30" : "bg-muted"
+          lockedByOther || isOccupied || isBillRequested ? "bg-white/30" : "bg-muted"
         }`}
       />
       <span className="font-semibold text-[13px]">{table.name}</span>
       {lockedByOther ? (
         <>
           <span className="text-[15px] font-semibold text-white mt-auto pt-1 capitalize">
-            {waiterDisplayName(table.focusLock?.staffName) || "Garson"}
+            {waiterDisplayName(table.lockedByStaffName) || "Garson"}
           </span>
           {isOccupied ? (
             <span className="text-[11px] text-white/65 mt-0.5">
               {"₺"}
-              {formatCurrency(table.totalAmount)}
+              {formatCurrency(table.currentTotal)}
             </span>
           ) : null}
         </>
       ) : isOccupied ? (
         <>
           <span className="text-[12px] font-semibold text-white/90 mt-0.5">
-            {"₺"}{formatCurrency(table.totalAmount)}
+            {"₺"}
+            {formatCurrency(table.currentTotal)}
           </span>
           <div className="flex items-center justify-between w-full text-[11px] text-white/60 mt-auto pt-1">
-            <span className="capitalize">{waiterDisplayName(table.waiter)}</span>
+            <span className="capitalize">{waiterDisplayName(table.activeWaiter)}</span>
             <span>
-              {table.lastUpdated
-                ? table.lastUpdated.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
+              {table.openedAt
+                ? new Date(table.openedAt).toLocaleTimeString("tr-TR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
                 : ""}
             </span>
           </div>
         </>
       ) : (
-        <span className="text-[12px] text-muted-foreground mt-0.5">{"Bos"}</span>
+        <span className="text-[12px] text-muted-foreground mt-0.5">Bos</span>
       )}
     </button>
   )

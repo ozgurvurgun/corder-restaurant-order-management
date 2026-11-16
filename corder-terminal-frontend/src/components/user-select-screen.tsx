@@ -10,7 +10,7 @@ const MIN_PIN_LENGTH = 4
 const MAX_PIN_LENGTH = 8
 
 export function UserSelectScreen({ onSelect }: UserSelectScreenProps) {
-  const { verifyStaffPin, logout, restaurant } = useApp()
+  const { loginWithPin, logoutRestaurant, restaurant } = useApp()
   const [pin, setPin] = useState("")
   const [error, setError] = useState("")
   const [shake, setShake] = useState(false)
@@ -28,7 +28,7 @@ export function UserSelectScreen({ onSelect }: UserSelectScreenProps) {
       setError("")
       setPin("")
       try {
-        const res = await verifyStaffPin(candidate)
+        const res = await loginWithPin(candidate)
         if (res.ok) {
           onSelect()
         } else {
@@ -39,7 +39,7 @@ export function UserSelectScreen({ onSelect }: UserSelectScreenProps) {
         setSubmitting(false)
       }
     },
-    [submitting, verifyStaffPin, onSelect, triggerShake]
+    [submitting, loginWithPin, onSelect, triggerShake]
   )
 
   const handlePinInput = useCallback(
@@ -64,7 +64,7 @@ export function UserSelectScreen({ onSelect }: UserSelectScreenProps) {
       <div className="px-4 pt-4 flex items-center justify-between relative z-50">
         <button
           type="button"
-          onClick={logout}
+          onClick={logoutRestaurant}
           className="flex items-center gap-1.5 text-white/70 active:text-white transition-colors py-2 px-2 touch-manipulation cursor-pointer"
         >
           <LogOut className="h-4 w-4" />
@@ -86,7 +86,9 @@ export function UserSelectScreen({ onSelect }: UserSelectScreenProps) {
 
         {/* PIN dots */}
         <div
-          className={`flex items-center gap-3 mt-8 mb-3 transition-transform ${shake ? "animate-[shake_0.5s_ease-in-out]" : ""}`}
+          className={`flex items-center gap-3 mt-8 mb-3 transition-transform ${
+            shake ? "animate-[shake_0.5s_ease-in-out]" : ""
+          }`}
         >
           {Array.from({ length: dotCount }).map((_, i) => (
             <div

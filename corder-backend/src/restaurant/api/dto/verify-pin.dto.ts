@@ -7,3 +7,4 @@ export class VerifyPinDto {
   @Matches(/^\d+$/, { message: 'PIN must contain only digits' })
   pin!: string;
 }
+

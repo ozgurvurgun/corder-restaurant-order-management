@@ -1,11 +1,12 @@
 import { IsString, IsOptional, IsIn, MinLength, MaxLength, Matches } from 'class-validator';
+import { STAFF_ROLES, StaffRole } from '../../domain/restaurant-staff.entity';
 
 export class CreateStaffDto {
   @IsString()
   name: string;
 
-  @IsIn(['mudur', 'kasiyer', 'garson'])
-  role: 'mudur' | 'kasiyer' | 'garson';
+  @IsIn(STAFF_ROLES)
+  role: StaffRole;
 
   @IsOptional()
   @IsString()
