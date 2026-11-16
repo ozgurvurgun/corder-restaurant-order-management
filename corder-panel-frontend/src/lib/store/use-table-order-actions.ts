@@ -8,48 +8,35 @@ import {
 import { api, type CloseCheckResponseDto } from "../api"
 import { mapApiOrdersToPanel, mapApiTablesToPanel } from "../mappers/orders-tables.mapper"
 import { showPanelToast } from "@/components/panel/panel-toast"
-import { genId } from "./panel-local-storage"
+import { genId, getStoredCustomSections, setStoredCustomSections } from "./panel-local-storage"
 import type { LogActivityFn } from "./panel-store-context"
 
 export function useTableOrderActions(params: {
-  token: string | null
-  currentUser: PanelUser | null
-  currentShift: CashShift | null
-  tables: PanelTable[]
-  orders: PanelOrder[]
+  token: string | null; currentUser: PanelUser | null; currentShift: CashShift | null
+  tables: PanelTable[]; orders: PanelOrder[]; sections: PanelSection[]
   setTables: (v: PanelTable[] | ((prev: PanelTable[]) => PanelTable[])) => void
   setOrders: (v: PanelOrder[] | ((prev: PanelOrder[]) => PanelOrder[])) => void
   setSections: (v: PanelSection[] | ((prev: PanelSection[]) => PanelSection[])) => void
   setCancelledItems: (v: CancelledItem[] | ((prev: CancelledItem[]) => CancelledItem[])) => void
   applyCloseCheckResult: (res: CloseCheckResponseDto) => ClosedTable
-  ledgerRefresh: () => Promise<void>
-  logActivity: LogActivityFn
+  ledgerRefresh: () => Promise<void>; logActivity: LogActivityFn
   addAuditLog: (log: Omit<AuditLog, "id" | "createdAt">) => void
 }) {
   const {
-    token, currentUser, currentShift, tables, orders,
+    token, currentUser, currentShift, tables, orders, sections,
     setTables, setOrders, setSections, setCancelledItems,
     applyCloseCheckResult, ledgerRefresh, logActivity, addAuditLog,
   } = params
 
-  const getTableOrders = useCallback(
-    (tableId: string) => orders.filter((o) => o.tableId === tableId && o.status === "active"),
-    [orders],
-  )
-
+  const getTableOrders = useCallback((tableId: string) => orders.filter((o) => o.tableId === tableId && o.status === "active"), [orders])
   const getTableTotal = useCallback(
-    (tableId: string) =>
-      orders
-        .filter((o) => o.tableId === tableId && o.status === "active")
-        .reduce((sum, o) => sum + o.items.filter(itemCountsTowardBill).reduce((s, i) => s + i.price * i.quantity, 0), 0),
+    (tableId: string) => orders.filter((o) => o.tableId === tableId && o.status === "active").reduce((sum, o) => sum + o.items.filter(itemCountsTowardBill).reduce((s, i) => s + i.price * i.quantity, 0), 0),
     [orders],
   )
 
   const moveTable = useCallback(async (fromId: string, toId: string): Promise<boolean> => {
     if (!token) return false
-    try {
-      await api.orders.move(token, fromId, toId)
-    } catch (err) {
+    try { await api.orders.move(token, fromId, toId) } catch (err) {
       showPanelToast(err instanceof Error ? err.message : "Masa taşınamadı", "error")
       return false
     }
@@ -85,8 +72,7 @@ export function useTableOrderActions(params: {
   }, [token, logActivity])
 
   const closeTableWithPayment = useCallback(async (
-    tableId: string,
-    method: PanelPaymentMethod,
+    tableId: string, method: PanelPaymentMethod,
     discount?: { type: PanelDiscountType; value: number; reason: string },
     splitDetails?: { method: CloseCheckSplitMethod; amount: number }[],
     opts?: { ledgerCustomerId?: string; ledgerDebtAmount?: number; tip?: number; lines?: { itemId: string; quantity: number }[] },
@@ -98,16 +84,13 @@ export function useTableOrderActions(params: {
 
     const effectiveDiscount: { type: "percent" | "amount"; value: number; reason: string } | undefined =
       discount && (discount.type === "complimentary" || discount.value > 0)
-        ? discount.type === "complimentary"
-          ? { type: "percent", value: 100, reason: discount.reason }
-          : { type: discount.type, value: discount.value, reason: discount.reason }
+        ? discount.type === "complimentary" ? { type: "percent", value: 100, reason: discount.reason } : { type: discount.type, value: discount.value, reason: discount.reason }
         : undefined
 
     try {
       const res = await api.orders.closeCheck(token, {
-        tableId,
+        tableId, method,
         ...(opts?.lines?.length ? { lines: opts.lines } : {}),
-        method,
         ...(effectiveDiscount ? { discount: effectiveDiscount } : {}),
         ...(splitDetails?.length ? { splitDetails } : {}),
         ...(opts?.ledgerCustomerId ? { ledgerCustomerId: opts.ledgerCustomerId } : {}),
@@ -120,22 +103,17 @@ export function useTableOrderActions(params: {
           const lineMap = new Map(opts.lines.map((l) => [l.itemId, l.quantity]))
           setOrders((prev) => prev.map((o) => {
             if (o.tableId !== tableId || o.status !== "active") return o
-            const nextItems = o.items
-              .map((item) => {
-                const paidQty = lineMap.get(item.id)
-                if (!paidQty) return item
-                const rem = item.quantity - paidQty
-                return rem > 0 ? { ...item, quantity: rem } : null
-              })
-              .filter((x): x is NonNullable<typeof x> => x !== null)
+            const nextItems = o.items.map((item) => {
+              const paidQty = lineMap.get(item.id)
+              if (!paidQty) return item
+              const rem = item.quantity - paidQty
+              return rem > 0 ? { ...item, quantity: rem } : null
+            }).filter((x): x is NonNullable<typeof x> => x !== null)
             return { ...o, items: nextItems, status: nextItems.some(itemCountsTowardBill) ? "active" : "closed" }
           }))
         }
         setTables((prev) => prev.map((t) => (t.id === tableId ? { ...t, status: "occupied" as const, splitInfo: undefined, totalAmount: Math.max(0, (t.totalAmount || 0) - mapped.netAmount) } : t)))
-        const [freshOrdersDto, freshTablesDto] = await Promise.all([
-          api.orders.list(token).catch(() => null),
-          api.tables.list(token).catch(() => null),
-        ])
+        const [freshOrdersDto, freshTablesDto] = await Promise.all([api.orders.list(token).catch(() => null), api.tables.list(token).catch(() => null)])
         if (freshOrdersDto) {
           const freshOrders = mapApiOrdersToPanel(freshOrdersDto)
           setOrders(freshOrders)
@@ -152,8 +130,7 @@ export function useTableOrderActions(params: {
       }
       if (opts?.ledgerCustomerId) void ledgerRefresh()
       logActivity({
-        action: res.tableFullyClosed === false ? "table_partial_checkout" : "table_closed_with_payment",
-        category: "payment",
+        action: res.tableFullyClosed === false ? "table_partial_checkout" : "table_closed_with_payment", category: "payment",
         details: `${mapped.tableName} ${res.tableFullyClosed === false ? "kısmi ödeme alındı" : "kapatıldı"}. Yöntem: ${method}, Net: ${mapped.netAmount}`,
         metadata: { tableId, tableName: mapped.tableName, method, rawTotal: mapped.totalAmount, discountAmount: mapped.discountAmount, netAmount: mapped.netAmount, orderCount: mapped.orders.length, tableFullyClosed: res.tableFullyClosed !== false },
       })
@@ -258,9 +235,47 @@ export function useTableOrderActions(params: {
     }
   }, [token, ledgerRefresh, logActivity])
 
-  const addSection = useCallback((name: string) => setSections((prev) => [...prev, { id: genId("ps"), name }]), [setSections])
-  const updateSection = useCallback((id: string, name: string) => setSections((prev) => prev.map((s) => (s.id === id ? { ...s, name } : s))), [setSections])
-  const deleteSection = useCallback((id: string) => setSections((prev) => prev.filter((s) => s.id !== id)), [setSections])
+  const addSection = useCallback((name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    setSections((prev) => {
+      if (prev.some((s) => s.name === trimmed)) return prev
+      setStoredCustomSections([...getStoredCustomSections(), trimmed])
+      return [...prev, { id: genId("ps"), name: trimmed }]
+    })
+    showPanelToast(`Bölüm eklendi: ${trimmed}`, "success")
+  }, [setSections])
+
+  const updateSection = useCallback((id: string, name: string) => {
+    const trimmed = name.trim()
+    const oldSec = sections.find((s) => s.id === id)
+    if (!trimmed || !oldSec || oldSec.name === trimmed) return
+    const sectionTables = tables.filter((t) => t.section === oldSec.name)
+    setSections((prev) => prev.map((s) => (s.id === id ? { ...s, name: trimmed } : s)))
+    setTables((prev) => prev.map((t) => (t.section === oldSec.name ? { ...t, section: trimmed } : t)))
+    setStoredCustomSections(getStoredCustomSections().map((n) => (n === oldSec.name ? trimmed : n)))
+    if (token && sectionTables.length > 0) {
+      void Promise.all(sectionTables.map((t) => api.tables.update(token, t.id, { section: trimmed }))).catch((err) => showPanelToast(err instanceof Error ? err.message : "Bölüm masaları güncellenemedi", "error"))
+    }
+    showPanelToast("Bölüm güncellendi", "success")
+  }, [sections, tables, token, setSections, setTables])
+
+  const deleteSection = useCallback((id: string) => {
+    const oldSec = sections.find((s) => s.id === id)
+    if (!oldSec) return
+    const sectionTables = tables.filter((t) => t.section === oldSec.name)
+    if (sectionTables.some((t) => t.status === "occupied" || t.orderCount > 0)) {
+      showPanelToast("Dolu masası olan bölüm silinemez", "error")
+      return
+    }
+    setSections((prev) => prev.filter((s) => s.id !== id))
+    setTables((prev) => prev.filter((t) => t.section !== oldSec.name))
+    setStoredCustomSections(getStoredCustomSections().filter((n) => n !== oldSec.name))
+    if (token && sectionTables.length > 0) {
+      void Promise.all(sectionTables.map((t) => api.tables.delete(token, t.id))).catch((err) => showPanelToast(err instanceof Error ? err.message : "Bölüm masaları silinemedi", "error"))
+    }
+    showPanelToast("Bölüm silindi", "info")
+  }, [sections, tables, token, setSections, setTables])
 
   const addTable = useCallback((name: string, section: string) => {
     if (!token) return
@@ -301,18 +316,11 @@ export function useTableOrderActions(params: {
     const nextTotal = Math.max(0, rawTotal - discountAmount)
     setTables((prev) => prev.map((t) => {
       if (t.id !== tableId) return t
-      const nextSplit = t.splitInfo?.type === "person" && t.splitInfo.personCount
-        ? { ...t.splitInfo, perPersonAmount: Math.round((nextTotal / t.splitInfo.personCount) * 100) / 100 }
-        : t.splitInfo
+      const nextSplit = t.splitInfo?.type === "person" && t.splitInfo.personCount ? { ...t.splitInfo, perPersonAmount: Math.round((nextTotal / t.splitInfo.personCount) * 100) / 100 } : t.splitInfo
       return { ...t, discount: { type: discount.type, value: discount.value, amount: discountAmount, reason: discount.reason }, totalAmount: nextTotal, ...(nextSplit ? { splitInfo: nextSplit } : {}) }
     }))
-    if (token) {
-      try { await api.tables.update(token, tableId, { discount }) } catch (err) { showPanelToast(err instanceof Error ? err.message : "İndirim kaydedilemedi", "error") }
-    }
-    addAuditLog({
-      userId: currentUser?.id || "system", userName: currentUser?.name || "Sistem", action: "discount_applied", category: "payment",
-      details: `${table.name}: ${discount.type === "percent" ? `%${discount.value}` : discount.type === "complimentary" ? "Tam İkram" : `${discount.value} TL`} indirim uygulandı. Neden: ${discount.reason}`,
-    })
+    if (token) { try { await api.tables.update(token, tableId, { discount }) } catch (err) { showPanelToast(err instanceof Error ? err.message : "İndirim kaydedilemedi", "error") } }
+    addAuditLog({ userId: currentUser?.id || "system", userName: currentUser?.name || "Sistem", action: "discount_applied", category: "payment", details: `${table.name}: ${discount.type === "percent" ? `%${discount.value}` : discount.type === "complimentary" ? "Tam İkram" : `${discount.value} TL`} indirim uygulandı. Neden: ${discount.reason}` })
   }, [token, tables, orders, currentUser, setTables, addAuditLog])
 
   const clearDiscount = useCallback(async (tableId: string) => {
@@ -320,14 +328,10 @@ export function useTableOrderActions(params: {
     const table = tables.find((t) => t.id === tableId)
     setTables((prev) => prev.map((t) => {
       if (t.id !== tableId) return t
-      const nextSplit = t.splitInfo?.type === "person" && t.splitInfo.personCount
-        ? { ...t.splitInfo, perPersonAmount: Math.round((rawTotal / t.splitInfo.personCount) * 100) / 100 }
-        : t.splitInfo
+      const nextSplit = t.splitInfo?.type === "person" && t.splitInfo.personCount ? { ...t.splitInfo, perPersonAmount: Math.round((rawTotal / t.splitInfo.personCount) * 100) / 100 } : t.splitInfo
       return { ...t, discount: undefined, totalAmount: rawTotal, ...(nextSplit ? { splitInfo: nextSplit } : {}) }
     }))
-    if (token) {
-      try { await api.tables.update(token, tableId, { discount: null }) } catch (err) { showPanelToast(err instanceof Error ? err.message : "İndirim kaldırılamadı", "error") }
-    }
+    if (token) { try { await api.tables.update(token, tableId, { discount: null }) } catch (err) { showPanelToast(err instanceof Error ? err.message : "İndirim kaldırılamadı", "error") } }
     if (table) addAuditLog({ userId: currentUser?.id || "system", userName: currentUser?.name || "Sistem", action: "discount_cleared", category: "payment", details: `${table.name}: İndirim kaldırıldı` })
   }, [token, orders, tables, currentUser, setTables, addAuditLog])
 
@@ -337,9 +341,7 @@ export function useTableOrderActions(params: {
     const perPersonAmount = Math.round(((table.totalAmount || 0) / personCount) * 100) / 100
     const splitInfo: NonNullable<PanelTable["splitInfo"]> = { type: "person", personCount, perPersonAmount, paidShares: [] }
     setTables((prev) => prev.map((t) => (t.id === tableId ? { ...t, splitInfo } : t)))
-    if (token) {
-      try { await api.tables.update(token, tableId, { splitInfo }) } catch (err) { showPanelToast(err instanceof Error ? err.message : "Hesap bölme kaydedilemedi", "error") }
-    }
+    if (token) { try { await api.tables.update(token, tableId, { splitInfo }) } catch (err) { showPanelToast(err instanceof Error ? err.message : "Hesap bölme kaydedilemedi", "error") } }
     addAuditLog({ userId: currentUser?.id || "system", userName: currentUser?.name || "Sistem", action: "bill_split", category: "payment", details: `${table.name}: Hesap ${personCount} kişiye bölündü` })
   }, [token, tables, currentUser, setTables, addAuditLog])
 
@@ -353,18 +355,14 @@ export function useTableOrderActions(params: {
     }, 0) * 100) / 100
     const splitInfo: NonNullable<PanelTable["splitInfo"]> = { type: "items", itemIds, amounts, selectedTotal }
     setTables((prev) => prev.map((t) => (t.id === tableId ? { ...t, splitInfo } : t)))
-    if (token) {
-      try { await api.tables.update(token, tableId, { splitInfo }) } catch (err) { showPanelToast(err instanceof Error ? err.message : "Ürün ayırma kaydedilemedi", "error") }
-    }
+    if (token) { try { await api.tables.update(token, tableId, { splitInfo }) } catch (err) { showPanelToast(err instanceof Error ? err.message : "Ürün ayırma kaydedilemedi", "error") } }
     addAuditLog({ userId: currentUser?.id || "system", userName: currentUser?.name || "Sistem", action: "bill_split_items", category: "payment", details: `${table.name}: ${itemIds.length} ürün ayrı hesaba ayrıldı. Tutar: ${selectedTotal} TL` })
   }, [token, tables, orders, currentUser, setTables, addAuditLog])
 
   const clearSplitBill = useCallback(async (tableId: string) => {
     const table = tables.find((t) => t.id === tableId)
     setTables((prev) => prev.map((t) => (t.id === tableId ? { ...t, splitInfo: undefined } : t)))
-    if (token) {
-      try { await api.tables.update(token, tableId, { splitInfo: null }) } catch (err) { showPanelToast(err instanceof Error ? err.message : "Hesap bölme kaldırılamadı", "error") }
-    }
+    if (token) { try { await api.tables.update(token, tableId, { splitInfo: null }) } catch (err) { showPanelToast(err instanceof Error ? err.message : "Hesap bölme kaldırılamadı", "error") } }
     if (table) addAuditLog({ userId: currentUser?.id || "system", userName: currentUser?.name || "Sistem", action: "bill_split_cleared", category: "payment", details: `${table.name}: Hesap bölme kaldırıldı` })
   }, [token, tables, currentUser, setTables, addAuditLog])
 

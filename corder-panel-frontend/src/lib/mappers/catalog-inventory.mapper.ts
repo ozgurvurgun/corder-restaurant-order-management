@@ -28,7 +28,7 @@ export function mapApiCategoriesToPanel(cats: CategoryDto[]): PanelCategory[] {
     parentId: c.parentId?.trim() || undefined,
     showInTerminal: c.showInTerminal,
     showInMenu: c.showInMenu,
-    showInQuickSale: true,
+    showInQuickSale: c.showInQuickSale !== false,
   }))
 }
 
@@ -68,8 +68,10 @@ export function mapApiProductsToPanel(
       id: p.id,
       name: p.name,
       price: Number(p.price),
+      costPrice: p.costPrice != null ? Number(p.costPrice) : undefined,
       categoryId: p.categoryId,
       inStock: p.inStock,
+      order: p.order,
       description: p.description ?? undefined,
       image: p.imageUrl ?? undefined,
       ...(ing?.length ? { ingredients: ing } : {}),

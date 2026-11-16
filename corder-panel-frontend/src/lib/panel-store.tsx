@@ -131,6 +131,8 @@ export function PanelProvider({ children }: { children: ReactNode }) {
     setOpenAccounts,
     setCampaigns,
     setLedgerCustomers,
+    setCancelledItems,
+    setNotifications,
   )
 
   const currentShift = cashShifts.find((s) => s.status === "open") || null
@@ -174,6 +176,7 @@ export function PanelProvider({ children }: { children: ReactNode }) {
     currentShift,
     tables,
     orders,
+    sections,
     setTables,
     setOrders,
     setSections,

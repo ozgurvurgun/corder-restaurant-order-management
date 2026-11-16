@@ -1,12 +1,12 @@
 import { useEffect, useRef } from "react"
 import { io, type Socket } from "socket.io-client"
 import {
-  itemCountsTowardBill,
-  type AuditLog, type Campaign, type CashShift, type CashTransaction, type ClosedTable,
-  type InventoryCount, type LedgerCustomer, type OpenAccount, type PanelCategory,
-  type PanelOrder, type PanelProduct, type PanelSection, type PanelTable, type PanelUser,
-  type PrinterConfig, type PurchaseOrder, type RestaurantSettings, type StockMaterial,
-  type StockMovement, type Supplier,
+  itemCountsTowardBill, itemIsLedgerLike,
+  type AuditLog, type Campaign, type CancelledItem, type CashShift, type CashTransaction,
+  type ClosedTable, type InventoryCount, type LedgerCustomer, type OpenAccount,
+  type PanelCategory, type PanelNotification, type PanelOrder, type PanelProduct,
+  type PanelSection, type PanelTable, type PanelUser, type PrinterConfig,
+  type PurchaseOrder, type RestaurantSettings, type StockMaterial, type StockMovement, type Supplier,
 } from "../panel-types"
 import {
   api, getBase, getSessionUser,
@@ -27,7 +27,7 @@ import {
   mapInventoryCountDtoToPanel, mapPurchaseOrderDtoToPanel,
   mapStockMaterialDtoToPanel, mapStockMovementDtoToPanel, mapSupplierDtoToPanel,
 } from "../mappers/catalog-inventory.mapper"
-import { DEFAULT_SETTINGS } from "./panel-local-storage"
+import { DEFAULT_SETTINGS, getReadNotifIds } from "./panel-local-storage"
 
 export function usePanelApiSync(
   token: string | null,
@@ -48,6 +48,8 @@ export function usePanelApiSync(
   setOpenAccounts?: (v: OpenAccount[] | ((prev: OpenAccount[]) => OpenAccount[])) => void,
   setCampaigns?: (v: Campaign[] | ((prev: Campaign[]) => Campaign[])) => void,
   setLedgerCustomers?: (v: LedgerCustomer[] | ((prev: LedgerCustomer[]) => LedgerCustomer[])) => void,
+  setCancelledItems?: (v: CancelledItem[] | ((prev: CancelledItem[]) => CancelledItem[])) => void,
+  setNotifications?: (v: PanelNotification[] | ((prev: PanelNotification[]) => PanelNotification[])) => void,
 ) {
   const socketRef = useRef<Socket | null>(null)
   const loadRef = useRef<() => Promise<void>>(null!)
@@ -92,6 +94,8 @@ export function usePanelApiSync(
           ? [mapShiftDtoToPanel(currentShiftRes), ...shiftsListRes.filter((s) => s.id !== currentShiftRes.id).map(mapShiftDtoToPanel)]
           : shiftsListRes.map(mapShiftDtoToPanel)
 
+        const closed = completedOrdersRes.map(mapCompletedOrderDtoToClosedTable)
+
         setOrders(orders)
         setCategories(categories)
         setProducts(products)
@@ -99,7 +103,7 @@ export function usePanelApiSync(
         setSections(sections)
         setUsers(users)
         setCashShifts(shifts)
-        setClosedTables(completedOrdersRes.map(mapCompletedOrderDtoToClosedTable))
+        setClosedTables(closed)
         setStockMaterials?.(mats)
         setSuppliers?.((suppliersRes as SupplierDto[]).map(mapSupplierDtoToPanel))
         setStockMovements?.((movementsRes as StockMovementDto[]).map(mapStockMovementDtoToPanel))
@@ -108,6 +112,55 @@ export function usePanelApiSync(
         setOpenAccounts?.((openAccountsRes as OpenAccountDto[]).map(mapOpenAccountDtoToPanel))
         setLedgerCustomers?.((ledgerCustomersRes as LedgerCustomerDto[]).map(mapLedgerCustomerDtoToPanel))
         setCampaigns?.((campaignsRes as CampaignDto[]).map(mapCampaignDtoToPanel))
+
+        const hydratedCancelled: CancelledItem[] = []
+        const seenCancelIds = new Set<string>()
+        for (const o of orders) {
+          const tName = tables.find((t) => t.id === o.tableId)?.name || o.tableId
+          for (const it of o.items) {
+            if (it.status === "cancelled" && !itemIsLedgerLike(it) && !seenCancelIds.has(it.id)) {
+              seenCancelIds.add(it.id)
+              hydratedCancelled.push({
+                id: `ci-${it.id}`, orderItem: it, tableName: tName, orderId: o.id,
+                reason: it.cancelReason || "İptal", cancelledBy: it.cancelledBy || o.userName || "Sistem",
+                cancelledAt: it.cancelledAt || o.updatedAt,
+              })
+            }
+          }
+        }
+        for (const ct of closed) {
+          for (const o of ct.orders) {
+            for (const it of o.items) {
+              if (it.status === "cancelled" && !itemIsLedgerLike(it) && !seenCancelIds.has(it.id)) {
+                seenCancelIds.add(it.id)
+                hydratedCancelled.push({
+                  id: `ci-${it.id}`, orderItem: it, tableName: ct.tableName, orderId: o.id,
+                  reason: it.cancelReason || "İptal", cancelledBy: it.cancelledBy || ct.closedBy || "Sistem",
+                  cancelledAt: it.cancelledAt || ct.closedAt,
+                })
+              }
+            }
+          }
+        }
+        hydratedCancelled.sort((a, b) => new Date(b.cancelledAt).getTime() - new Date(a.cancelledAt).getTime())
+        setCancelledItems?.(hydratedCancelled)
+
+        if (setNotifications) {
+          const readIds = getReadNotifIds()
+          const lowStockNotifs: PanelNotification[] = mats
+            .filter((m) => m.currentStock <= m.minStock)
+            .map((m) => ({
+              id: `notif-stock-${m.id}`, type: "stock-low", title: "Kritik Stok Uyarısı",
+              message: `${m.name} kritik seviyede (${m.currentStock} ${m.unit} / Min: ${m.minStock} ${m.unit})`,
+              read: readIds.has(`notif-stock-${m.id}`), createdAt: m.lastUpdated,
+            }))
+          const cancelNotifs: PanelNotification[] = hydratedCancelled.slice(0, 20).map((ci) => ({
+            id: `notif-cancel-${ci.id}`, type: "kitchen-alert", title: "Sipariş İptali",
+            message: `${ci.tableName} — ${ci.orderItem.productName} iptal edildi (${ci.reason})`,
+            read: readIds.has(`notif-cancel-${ci.id}`), createdAt: ci.cancelledAt,
+          }))
+          setNotifications([...lowStockNotifs, ...cancelNotifs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
+        }
 
         if (setCashTransactions && currentShiftRes?.id) {
           try {
@@ -124,7 +177,7 @@ export function usePanelApiSync(
     token, setTables, setOrders, setCategories, setProducts, setSections, setUsers,
     setCashShifts, setClosedTables, setOpenAccounts, setLedgerCustomers,
     setStockMaterials, setSuppliers, setStockMovements, setPurchaseOrders,
-    setInventoryCounts, setCashTransactions, setCampaigns,
+    setInventoryCounts, setCashTransactions, setCampaigns, setCancelledItems, setNotifications,
   ])
 
   useEffect(() => {

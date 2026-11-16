@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ProductEntity } from '../domain/product.entity';
@@ -7,13 +7,19 @@ import { CreateProductDto } from '../api/dto/create-product.dto';
 import { UpdateProductDto } from '../api/dto/update-product.dto';
 
 @Injectable()
-export class ProductService {
+export class ProductService implements OnModuleInit {
   constructor(
     @InjectRepository(ProductEntity)
     private readonly repo: Repository<ProductEntity>,
     @InjectRepository(CategoryEntity)
     private readonly categoryRepo: Repository<CategoryEntity>,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    await this.repo
+      .query(`ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "cost_price" numeric(10,2)`)
+      .catch(() => undefined);
+  }
 
   async findByRestaurant(restaurantId: string): Promise<ProductEntity[]> {
     return this.repo
@@ -59,6 +65,7 @@ export class ProductService {
     entity.name = dto.name.trim();
     entity.description = dto.description?.trim() ?? null;
     entity.price = dto.price;
+    entity.costPrice = dto.costPrice ?? null;
     entity.imageUrl = dto.imageUrl ?? null;
     entity.inStock = dto.inStock ?? true;
     entity.order = dto.order ?? 0;
@@ -79,6 +86,7 @@ export class ProductService {
     if (dto.name !== undefined) entity.name = dto.name.trim();
     if (dto.description !== undefined) entity.description = dto.description?.trim() ?? null;
     if (dto.price !== undefined) entity.price = dto.price;
+    if (dto.costPrice !== undefined) entity.costPrice = dto.costPrice;
     if (dto.imageUrl !== undefined) entity.imageUrl = dto.imageUrl;
     if (dto.inStock !== undefined) entity.inStock = dto.inStock;
     if (dto.order !== undefined) entity.order = dto.order;

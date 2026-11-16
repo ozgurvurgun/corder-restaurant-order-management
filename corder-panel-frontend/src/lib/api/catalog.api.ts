@@ -16,6 +16,7 @@ export const categoriesApi = {
       name: string
       showInTerminal?: boolean
       showInMenu?: boolean
+      showInQuickSale?: boolean
       parentId?: string | null
     },
   ) =>
@@ -31,6 +32,7 @@ export const categoriesApi = {
       name?: string
       showInTerminal?: boolean
       showInMenu?: boolean
+      showInQuickSale?: boolean
       parentId?: string | null
     },
   ) =>

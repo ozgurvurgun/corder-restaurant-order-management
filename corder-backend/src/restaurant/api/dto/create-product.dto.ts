@@ -1,5 +1,16 @@
 import { Type } from 'class-transformer';
-import { IsString, IsUUID, IsOptional, IsNumber, IsBoolean, IsArray, ValidateNested, Min, MinLength } from 'class-validator';
+import {
+  IsString,
+  IsUUID,
+  IsOptional,
+  IsNumber,
+  IsBoolean,
+  IsArray,
+  ValidateNested,
+  ValidateIf,
+  Min,
+  MinLength,
+} from 'class-validator';
 import { ProductIngredientInputDto } from './product-ingredient-input.dto';
 
 export class CreateProductDto {
@@ -17,6 +28,12 @@ export class CreateProductDto {
   @IsNumber()
   @Min(0)
   price: number;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsNumber()
+  @Min(0)
+  costPrice?: number | null;
 
   @IsOptional()
   @IsString()

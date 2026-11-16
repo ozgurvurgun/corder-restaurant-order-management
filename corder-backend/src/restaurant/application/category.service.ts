@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -26,11 +27,19 @@ function toSlug(name: string): string {
 }
 
 @Injectable()
-export class CategoryService {
+export class CategoryService implements OnModuleInit {
   constructor(
     @InjectRepository(CategoryEntity)
     private readonly repo: Repository<CategoryEntity>,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    await this.repo
+      .query(
+        `ALTER TABLE "categories" ADD COLUMN IF NOT EXISTS "show_in_quick_sale" boolean NOT NULL DEFAULT true`,
+      )
+      .catch(() => undefined);
+  }
 
   async findByRestaurant(restaurantId: string): Promise<CategoryEntity[]> {
     return this.repo.find({
@@ -116,6 +125,7 @@ export class CategoryService {
       slug,
       showInTerminal: dto.showInTerminal ?? true,
       showInMenu: dto.showInMenu ?? true,
+      showInQuickSale: dto.showInQuickSale ?? true,
       order,
     });
     return this.repo.save(entity);
@@ -138,6 +148,7 @@ export class CategoryService {
     }
     if (dto.showInTerminal !== undefined) entity.showInTerminal = dto.showInTerminal;
     if (dto.showInMenu !== undefined) entity.showInMenu = dto.showInMenu;
+    if (dto.showInQuickSale !== undefined) entity.showInQuickSale = dto.showInQuickSale;
     if (dto.order !== undefined) entity.order = dto.order;
     const effectiveParent = entity.parentId ?? null;
     if (await this.slugInUse(restaurantId, effectiveParent, entity.slug, entity.id)) {

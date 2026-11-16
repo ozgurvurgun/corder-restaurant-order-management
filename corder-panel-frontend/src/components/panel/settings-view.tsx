@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { usePanelStore } from "@/lib/panel-store"
 import { Plus, Pencil, Trash2, MapPin, Store, X, Globe, Instagram, MessageCircle, Monitor, Type, LayoutGrid, Image, ToggleLeft, ToggleRight, Zap } from "lucide-react"
 
@@ -22,6 +22,22 @@ export default function SettingsView() {
   const [tableCardSize, setTableCardSize] = useState<"compact" | "normal" | "large">(settings.tableCardSize || "normal")
   const [showProductImages, setShowProductImages] = useState(settings.showProductImages !== false)
   const [quickActionsEnabled, setQuickActionsEnabled] = useState(settings.quickActionsEnabled !== false)
+
+  useEffect(() => {
+    setName(settings.name || "")
+    setAddress(settings.address || "")
+    setPhone(settings.phone || "")
+    setTaxId(settings.taxId || "")
+    setWhatsapp(settings.whatsapp || "")
+    setInstagram(settings.instagram || "")
+    setFacebook(settings.facebook || "")
+    setWebsite(settings.website || "")
+    setWorkingHours(settings.workingHours || "")
+    setFontSize(settings.fontSize || "medium")
+    setTableCardSize(settings.tableCardSize || "normal")
+    setShowProductImages(settings.showProductImages !== false)
+    setQuickActionsEnabled(settings.quickActionsEnabled !== false)
+  }, [settings])
 
   const [showAddSection, setShowAddSection] = useState(false)
   const [newSectionName, setNewSectionName] = useState("")

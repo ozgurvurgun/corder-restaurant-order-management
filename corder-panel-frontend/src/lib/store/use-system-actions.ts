@@ -10,7 +10,7 @@ import type {
 } from "../panel-types"
 import { api } from "../api"
 import { showPanelToast } from "@/components/panel/panel-toast"
-import { genId } from "./panel-local-storage"
+import { genId, getReadNotifIds, saveAppearanceSettings, saveReadNotifIds } from "./panel-local-storage"
 import type { LogActivityFn } from "./panel-store-context"
 
 type StateSetter<T> = (v: T | ((prev: T) => T)) => void
@@ -198,6 +198,14 @@ export function useSystemActions(params: {
   const updateSettings = useCallback(
     (s: Partial<RestaurantSettings>) => {
       setSettings((prev) => ({ ...prev, ...s }))
+      const appearanceFields = ["fontSize", "tableCardSize", "showProductImages", "quickActionsEnabled", "sidebarCollapsed"] as const
+      const hasAppearanceField = appearanceFields.some((k) => s[k] !== undefined)
+      if (hasAppearanceField) {
+        saveAppearanceSettings(s)
+        if (s.fontSize !== undefined || s.tableCardSize !== undefined || s.showProductImages !== undefined || s.quickActionsEnabled !== undefined) {
+          showPanelToast("Görünüm ayarları kaydedildi", "success")
+        }
+      }
       if (!token) return
       const serverFields = ["name", "address", "phone", "taxId", "whatsapp", "instagram", "facebook", "website", "workingHours"] as const
       const hasServerField = serverFields.some((k) => s[k] !== undefined)
@@ -229,11 +237,23 @@ export function useSystemActions(params: {
   )
 
   const markNotificationRead = useCallback(
-    (id: string) => setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n))),
+    (id: string) => {
+      const readSet = getReadNotifIds()
+      readSet.add(id)
+      saveReadNotifIds(readSet)
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
+    },
     [setNotifications],
   )
   const markAllNotificationsRead = useCallback(
-    () => setNotifications((prev) => prev.map((n) => ({ ...n, read: true }))),
+    () => {
+      setNotifications((prev) => {
+        const readSet = getReadNotifIds()
+        prev.forEach((n) => readSet.add(n.id))
+        saveReadNotifIds(readSet)
+        return prev.map((n) => ({ ...n, read: true }))
+      })
+    },
     [setNotifications],
   )
   const addNotification = useCallback(
@@ -332,10 +352,19 @@ export function useSystemActions(params: {
       const pr = printers.find((p) => p.id === id)
       if (!pr || !token) return
       setPrinters((prev) => prev.map((p) => (p.id === id ? { ...p, status: "online" } : p)))
+      void api.technical.updatePrinter(token, id, { status: "online" }).catch(() => {})
+      void api.orders
+        .printReceipt(token, {
+          tableName: "YAZICI TEST",
+          waiterName: currentUser?.name || "Sistem",
+          items: [{ productName: `${pr.name} Test Baskısı`, quantity: 1, price: 0 }],
+          total: 0,
+        })
+        .catch(() => {})
       logActivity({ action: "printer_tested", category: "settings", details: `Yazıcı test edildi: ${pr.name}`, metadata: { printerId: id } })
       showPanelToast(`${pr.name} test bağlantısı başarılı`, "success")
     },
-    [printers, token, setPrinters, logActivity],
+    [printers, token, currentUser?.name, setPrinters, logActivity],
   )
 
   const addPrinterDepartment = useCallback(

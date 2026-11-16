@@ -293,6 +293,17 @@ export function useInventoryActions(params: {
     [setPurchaseOrders],
   )
 
+  const refreshMaterialsAndMovements = useCallback(() => {
+    if (!token) return
+    void Promise.all([
+      api.stock.materials.list(token).catch(() => null),
+      api.stock.movements.list(token, 200).catch(() => null),
+    ]).then(([mats, movs]) => {
+      if (mats) setStockMaterials(mats.map(mapStockMaterialDtoToPanel))
+      if (movs) setStockMovements(movs.map(mapStockMovementDtoToPanel))
+    })
+  }, [token, setStockMaterials, setStockMovements])
+
   const receivePurchaseOrder = useCallback(
     (id: string) => {
       if (!token) return
@@ -304,11 +315,12 @@ export function useInventoryActions(params: {
           setPurchaseOrders((prev) =>
             prev.map((p) => (p.id === id ? mapPurchaseOrderDtoToPanel(updated) : p)),
           )
+          refreshMaterialsAndMovements()
           showPanelToast("Sipariş teslim alındı", "success")
         })
         .catch((err) => showPanelToast(err instanceof Error ? err.message : "Sipariş teslim alınamadı", "error"))
     },
-    [purchaseOrders, token, setPurchaseOrders],
+    [purchaseOrders, token, setPurchaseOrders, refreshMaterialsAndMovements],
   )
 
   const startInventoryCount = useCallback(() => {
@@ -346,11 +358,12 @@ export function useInventoryActions(params: {
           setInventoryCounts((prev) =>
             prev.map((c) => (c.id === countId ? mapInventoryCountDtoToPanel(updated) : c)),
           )
+          refreshMaterialsAndMovements()
           showPanelToast("Stok sayımı tamamlandı", "success")
         })
         .catch((err) => showPanelToast(err instanceof Error ? err.message : "Stok sayımı tamamlanamadı", "error"))
     },
-    [token, setInventoryCounts],
+    [token, setInventoryCounts, refreshMaterialsAndMovements],
   )
 
   return {

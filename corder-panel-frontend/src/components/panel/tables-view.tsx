@@ -8,10 +8,19 @@ function formatCurrency(n: number) {
 }
 
 export default function TablesView() {
-  const { tables, sections } = usePanelStore()
+  const { tables, sections, settings } = usePanelStore()
   const [activeSection, setActiveSection] = useState("Tumu")
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null)
   const [search, setSearch] = useState("")
+
+  const cardSize = settings.tableCardSize || "normal"
+  const gridClass =
+    cardSize === "compact"
+      ? "grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
+      : cardSize === "large"
+        ? "grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+        : "grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+  const cardPadding = cardSize === "compact" ? "p-3" : cardSize === "large" ? "p-5" : "p-4"
 
   const allSections = ["Tumu", ...sections.map((s) => s.name)]
 
@@ -70,7 +79,7 @@ export default function TablesView() {
 
         {/* Grid */}
         <div className="flex-1 overflow-auto p-5">
-          <div className="grid grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+          <div className={`grid ${gridClass} gap-3`}>
             {filteredTables.map((table) => {
               const isOccupied = table.status === "occupied"
               const isSelected = selectedTableId === table.id
@@ -78,7 +87,7 @@ export default function TablesView() {
                 <button
                   key={table.id}
                   onClick={() => setSelectedTableId(table.id)}
-                  className={`relative rounded-xl border p-4 text-left transition-all hover:shadow-md ${
+                  className={`relative rounded-xl border ${cardPadding} text-left transition-all hover:shadow-md ${
                     isSelected
                       ? "border-[#e63462] ring-2 ring-[#e63462]/20 bg-white shadow-md"
                       : isOccupied

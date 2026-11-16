@@ -6,6 +6,7 @@ import {
   type PanelUser,
 } from "../panel-types"
 import type { OrderDto, RawTableDto } from "../api"
+import { getStoredCustomSections } from "../store/panel-local-storage"
 
 export function mapOrderItem(i: OrderDto["items"][0]): PanelOrder["items"][0] {
   return {
@@ -167,7 +168,9 @@ export function mapApiTablesToPanel(
 export function deriveSectionsFromTables(
   apiTables: { id: string; name: string; section: string }[],
 ): PanelSection[] {
-  const names = Array.from(new Set(apiTables.map((t) => t.section).filter(Boolean)))
+  const fromTables = apiTables.map((t) => t.section).filter(Boolean)
+  const stored = getStoredCustomSections()
+  const names = Array.from(new Set([...fromTables, ...stored]))
   return names.map((name, i) => ({ id: `section-${i}`, name }))
 }
 

@@ -159,6 +159,7 @@ export interface PanelStore {
     opts?: {
       showInTerminal?: boolean
       showInMenu?: boolean
+      showInQuickSale?: boolean
       parentId?: string | null
     },
   ) => void

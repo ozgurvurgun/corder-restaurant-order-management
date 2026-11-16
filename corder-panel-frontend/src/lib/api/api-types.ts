@@ -70,6 +70,7 @@ export interface CategoryDto {
   parentId?: string | null
   showInTerminal: boolean
   showInMenu: boolean
+  showInQuickSale?: boolean
   order: number
   createdAt: string
 }
@@ -85,6 +86,7 @@ export interface ProductDto {
   name: string
   description: string | null
   price: number
+  costPrice?: number | null
   imageUrl: string | null
   inStock: boolean
   order: number
@@ -98,6 +100,7 @@ export interface CreateProductBody {
   name: string
   description?: string
   price: number
+  costPrice?: number | null
   imageUrl?: string
   inStock?: boolean
   order?: number
@@ -108,6 +111,7 @@ export interface UpdateProductBody {
   name?: string
   description?: string
   price?: number
+  costPrice?: number | null
   imageUrl?: string
   inStock?: boolean
   order?: number

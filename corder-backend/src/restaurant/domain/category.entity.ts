@@ -47,6 +47,9 @@ export class CategoryEntity {
   @Column({ name: 'show_in_menu', default: true })
   showInMenu: boolean;
 
+  @Column({ name: 'show_in_quick_sale', default: true })
+  showInQuickSale: boolean;
+
   @Column({ default: 0 })
   order: number;
 

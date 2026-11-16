@@ -12,6 +12,68 @@ export function genId(prefix: string): string {
   return `${prefix}-${++idCounter}`
 }
 
+const CUSTOM_SECTIONS_KEY = "corder-panel-custom-sections"
+const APPEARANCE_KEY = "corder-panel-appearance"
+const READ_NOTIFS_KEY = "corder-panel-read-notifs"
+
+export function getStoredCustomSections(): string[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_SECTIONS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.filter((s): s is string => typeof s === "string" && s.trim().length > 0) : []
+  } catch {
+    return []
+  }
+}
+
+export function setStoredCustomSections(names: string[]): void {
+  try {
+    const unique = Array.from(new Set(names.map((n) => n.trim()).filter(Boolean)))
+    localStorage.setItem(CUSTOM_SECTIONS_KEY, JSON.stringify(unique))
+  } catch {}
+}
+
+export function loadAppearanceSettings(): Partial<RestaurantSettings> {
+  try {
+    const raw = localStorage.getItem(APPEARANCE_KEY)
+    if (!raw) return {}
+    return JSON.parse(raw) as Partial<RestaurantSettings>
+  } catch {
+    return {}
+  }
+}
+
+export function saveAppearanceSettings(s: Partial<RestaurantSettings>): void {
+  try {
+    const current = loadAppearanceSettings()
+    const next: Partial<RestaurantSettings> = { ...current }
+    if (s.fontSize !== undefined) next.fontSize = s.fontSize
+    if (s.tableCardSize !== undefined) next.tableCardSize = s.tableCardSize
+    if (s.showProductImages !== undefined) next.showProductImages = s.showProductImages
+    if (s.quickActionsEnabled !== undefined) next.quickActionsEnabled = s.quickActionsEnabled
+    if (s.sidebarCollapsed !== undefined) next.sidebarCollapsed = s.sidebarCollapsed
+    localStorage.setItem(APPEARANCE_KEY, JSON.stringify(next))
+  } catch {}
+}
+
+export function getReadNotifIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(READ_NOTIFS_KEY)
+    if (!raw) return new Set()
+    const parsed = JSON.parse(raw)
+    return new Set(Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string") : [])
+  } catch {
+    return new Set()
+  }
+}
+
+export function saveReadNotifIds(ids: Iterable<string>): void {
+  try {
+    localStorage.setItem(READ_NOTIFS_KEY, JSON.stringify(Array.from(new Set(ids))))
+  } catch {}
+}
+
 export const DEFAULT_SETTINGS: RestaurantSettings = {
   name: "",
   currency: "TRY",
@@ -21,6 +83,7 @@ export const DEFAULT_SETTINGS: RestaurantSettings = {
   showProductImages: true,
   sidebarCollapsed: false,
   quickActionsEnabled: true,
+  ...loadAppearanceSettings(),
 }
 
 export function computeDailyReport(

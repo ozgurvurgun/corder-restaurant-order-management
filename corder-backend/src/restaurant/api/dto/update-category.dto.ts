@@ -20,6 +20,10 @@ export class UpdateCategoryDto {
   showInMenu?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  showInQuickSale?: boolean;
+
+  @IsOptional()
   @IsNumber()
   order?: number;
 }

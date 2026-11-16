@@ -31,6 +31,9 @@ export class ProductEntity {
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   price: number;
 
+  @Column({ name: 'cost_price', type: 'numeric', precision: 10, scale: 2, nullable: true, default: null })
+  costPrice: number | null;
+
   @Column({ name: 'image_url', type: 'varchar', length: 512, nullable: true })
   imageUrl: string | null;
 

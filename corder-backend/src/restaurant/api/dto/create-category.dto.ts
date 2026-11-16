@@ -19,6 +19,10 @@ export class CreateCategoryDto {
   showInMenu?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  showInQuickSale?: boolean;
+
+  @IsOptional()
   @IsNumber()
   order?: number;
 }

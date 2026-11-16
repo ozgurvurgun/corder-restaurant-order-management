@@ -32,6 +32,7 @@ export function useCatalogActions(params: {
           categoryId: p.categoryId,
           name: p.name.trim(),
           price: p.price,
+          costPrice: p.costPrice ?? null,
           description: p.description?.trim() || undefined,
           imageUrl: p.image || undefined,
           inStock: p.inStock ?? true,
@@ -60,6 +61,7 @@ export function useCatalogActions(params: {
       if (data.name !== undefined) body.name = data.name.trim()
       if (data.description !== undefined) body.description = data.description
       if (data.price !== undefined) body.price = data.price
+      if (data.costPrice !== undefined) body.costPrice = data.costPrice
       if (data.image !== undefined) body.imageUrl = data.image
       if (data.inStock !== undefined) body.inStock = data.inStock
       if (data.ingredients !== undefined) {
@@ -145,17 +147,24 @@ export function useCatalogActions(params: {
   const addCategory = useCallback(
     (
       name: string,
-      opts?: { showInTerminal?: boolean; showInMenu?: boolean; parentId?: string | null },
+      opts?: {
+        showInTerminal?: boolean
+        showInMenu?: boolean
+        showInQuickSale?: boolean
+        parentId?: string | null
+      },
     ) => {
       if (!token) return
       const showInTerminal = opts?.showInTerminal ?? true
       const showInMenu = opts?.showInMenu ?? true
+      const showInQuickSale = opts?.showInQuickSale ?? true
       const parentId = opts?.parentId?.trim() || undefined
       api.categories
         .create(token, {
           name: name.trim(),
           showInTerminal,
           showInMenu,
+          showInQuickSale,
           ...(parentId ? { parentId } : {}),
         })
         .then((created) => {
@@ -186,22 +195,20 @@ export function useCatalogActions(params: {
         name?: string
         showInTerminal?: boolean
         showInMenu?: boolean
+        showInQuickSale?: boolean
         parentId?: string | null
       } = {}
       if (data.name !== undefined) payload.name = data.name.trim()
       if (data.showInTerminal !== undefined) payload.showInTerminal = data.showInTerminal
       if (data.showInMenu !== undefined) payload.showInMenu = data.showInMenu
+      if (data.showInQuickSale !== undefined) payload.showInQuickSale = Boolean(data.showInQuickSale)
       if (data.parentId !== undefined) payload.parentId = data.parentId?.trim() || null
       if (Object.keys(payload).length === 0) return
       api.categories
         .update(token, id, payload)
         .then((updated) => {
           setCategories((prev) =>
-            prev.map((c) =>
-              c.id === id
-                ? { ...mapApiCategoriesToPanel([updated])[0], showInQuickSale: c.showInQuickSale }
-                : c,
-            ),
+            prev.map((c) => (c.id === id ? mapApiCategoriesToPanel([updated])[0] : c)),
           )
           logActivity({
             action: "category_updated",
