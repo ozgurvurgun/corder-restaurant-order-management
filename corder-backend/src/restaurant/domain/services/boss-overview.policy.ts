@@ -32,6 +32,11 @@ export interface ConsolidatedOverviewMetricsDto {
   criticalStockCount: number;
   staffCount: number;
   openLedgerBalance: number;
+  totalBranchesCount?: number;
+  companyOwnedCount?: number;
+  franchiseBranchCount?: number;
+  todayEstimatedRoyalty?: number;
+  monthEstimatedRoyalty?: number;
   paymentBreakdown: PaymentMethodBreakdownDto;
 }
 
@@ -42,6 +47,15 @@ export interface BranchLivePulseDto extends ConsolidatedOverviewMetricsDto {
   address: string | null;
   phone: string | null;
   status: string;
+  brandName?: string | null;
+  branchType?: string;
+  franchiseeCompanyName?: string | null;
+  royaltyRate?: number;
+  estimatedTodayRoyalty?: number;
+  estimatedMonthRoyalty?: number;
+  monthlyFee?: number;
+  billingStatus?: string;
+  isAccessSuspended?: boolean;
   panelStaffCount: number;
   terminalStaffCount: number;
   activeShift: {
@@ -77,6 +91,8 @@ export class BossOverviewPolicy {
       todayDiscountTotal: 0, todayCancelCount: 0, todayCancelAmount: 0,
       occupiedTableCount: 0, totalTableCount: 0, openChecksTotal: 0,
       openOrderCount: 0, criticalStockCount: 0, staffCount: 0, openLedgerBalance: 0,
+      totalBranchesCount: 0, companyOwnedCount: 0, franchiseBranchCount: 0,
+      todayEstimatedRoyalty: 0, monthEstimatedRoyalty: 0,
       paymentBreakdown: { cash: 0, creditCard: 0, mealCard: 0, multinet: 0, ledger: 0 },
     };
   }
@@ -95,6 +111,16 @@ export class BossOverviewPolicy {
 
     const activeStats = summarizeActiveOrders(bActiveOrders, itemsByOrderId, startOfToday);
     const todayStats = summarizeCompletedToday(bCompletedToday);
+    const monthRev = sumNetAmount(bCompletedMonth);
+    const royaltyPct = Number(branch.royaltyRate || 0);
+    const estimatedTodayRoyalty =
+      branch.branchType === 'franchise' && royaltyPct > 0
+        ? Math.round(todayStats.todayRevenue * (royaltyPct / 100) * 100) / 100
+        : 0;
+    const estimatedMonthRoyalty =
+      branch.branchType === 'franchise' && royaltyPct > 0
+        ? Math.round(monthRev * (royaltyPct / 100) * 100) / 100
+        : 0;
 
     return {
       id: branch.id,
@@ -103,9 +129,18 @@ export class BossOverviewPolicy {
       address: branch.address ?? null,
       phone: branch.phone ?? null,
       status: branch.status,
+      brandName: branch.brandName ?? null,
+      branchType: branch.branchType || 'independent',
+      franchiseeCompanyName: branch.franchiseeCompanyName ?? null,
+      royaltyRate: royaltyPct,
+      estimatedTodayRoyalty,
+      estimatedMonthRoyalty,
+      monthlyFee: Number(branch.monthlyFee || 0),
+      billingStatus: branch.billingStatus || 'paid',
+      isAccessSuspended: Boolean(branch.isAccessSuspended),
       todayRevenue: todayStats.todayRevenue,
       weekRevenue: sumNetAmount(bCompletedWeek),
-      monthRevenue: sumNetAmount(bCompletedMonth),
+      monthRevenue: monthRev,
       todayOrderCount: bCompletedToday.length,
       todayDiscountTotal: todayStats.todayDiscountTotal,
       todayCancelCount: activeStats.cancelCount + todayStats.cancelCount,
@@ -150,6 +185,14 @@ export class BossOverviewPolicy {
       acc.criticalStockCount += b.criticalStockCount;
       acc.staffCount += b.staffCount;
       acc.openLedgerBalance += b.openLedgerBalance;
+      acc.totalBranchesCount = (acc.totalBranchesCount ?? 0) + 1;
+      if (b.branchType === 'franchise') {
+        acc.franchiseBranchCount = (acc.franchiseBranchCount ?? 0) + 1;
+      } else {
+        acc.companyOwnedCount = (acc.companyOwnedCount ?? 0) + 1;
+      }
+      acc.todayEstimatedRoyalty = (acc.todayEstimatedRoyalty ?? 0) + (b.estimatedTodayRoyalty ?? 0);
+      acc.monthEstimatedRoyalty = (acc.monthEstimatedRoyalty ?? 0) + (b.estimatedMonthRoyalty ?? 0);
       acc.paymentBreakdown.cash += b.paymentBreakdown.cash;
       acc.paymentBreakdown.creditCard += b.paymentBreakdown.creditCard;
       acc.paymentBreakdown.mealCard += b.paymentBreakdown.mealCard;

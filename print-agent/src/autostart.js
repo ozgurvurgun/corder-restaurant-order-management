@@ -103,3 +103,4 @@ async function applyAutoStartSetting(enabled, electronApp = null) {
 }
 
 module.exports = { applyAutoStartSetting }
+

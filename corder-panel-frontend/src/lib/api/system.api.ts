@@ -14,10 +14,46 @@ export interface PanelAuthLoginUserDto {
   staffRole?: string
   roleLabel?: string
   isBoss?: boolean
+  bossTier?: string
+  brandName?: string | null
   permissions?: string[]
   limits?: {
     maxDiscountPercent: number
     maxDiscountAmount: number | null
+  }
+}
+
+export interface MerchantBillingInfoDto {
+  restaurantId: string
+  restaurantName: string
+  slug: string
+  brandName: string | null
+  branchType: string
+  monthlyFee: number
+  billingStatus: "paid" | "pending" | "overdue" | "suspended" | string
+  isAccessSuspended: boolean
+  suspensionReason: string | null
+  lastPaymentDate: string | null
+  lastPaidPeriod: string | null
+  billingNotes: string | null
+  paymentHistory: Array<{
+    id: string
+    period: string
+    amount: number
+    paidAt: string
+    note?: string | null
+    recordedBy?: string | null
+  }>
+  paymentAccount: {
+    receiverName: string
+    iban: string
+    bankName: string
+    collectionStartDay: number
+    collectionEndDay: number
+    supportPhone: string | null
+    supportEmail: string | null
+    paymentInstructions: string | null
+    suggestedTransferNote: string
   }
 }
 
@@ -50,6 +86,8 @@ export const restaurantApi = {
     }),
   getSettings: (token: string) =>
     request<RestaurantSettingsDto>("/restaurant/settings", { token }),
+  getBillingInfo: (token: string) =>
+    request<MerchantBillingInfoDto>("/restaurant/settings/billing", { token }),
   updateSettings: (token: string, body: Partial<RestaurantSettingsDto>) =>
     request<RestaurantSettingsDto>("/restaurant/settings", {
       method: "PUT",
@@ -72,6 +110,10 @@ export interface StaffApiItemDto {
   hasPin?: boolean
   hasPassword?: boolean
   permissions?: string[]
+  grantedPermissions?: string[]
+  revokedPermissions?: string[]
+  maxDiscountPercentOverride?: number | null
+  maxDiscountAmountOverride?: number | null
   limits?: {
     maxDiscountPercent: number
     maxDiscountAmount: number | null
@@ -93,6 +135,10 @@ export const staffApi = {
       password?: string
       canAccessPanel?: boolean
       canAccessTerminal?: boolean
+      grantedPermissions?: string[]
+      revokedPermissions?: string[]
+      maxDiscountPercentOverride?: number | null
+      maxDiscountAmountOverride?: number | null
     },
   ) =>
     request<StaffApiItemDto>("/restaurant/staff", {
@@ -113,6 +159,10 @@ export const staffApi = {
       isActive?: boolean
       canAccessPanel?: boolean
       canAccessTerminal?: boolean
+      grantedPermissions?: string[]
+      revokedPermissions?: string[]
+      maxDiscountPercentOverride?: number | null
+      maxDiscountAmountOverride?: number | null
     },
   ) =>
     request<StaffApiItemDto>(`/restaurant/staff/${id}`, {
@@ -122,6 +172,88 @@ export const staffApi = {
     }),
   delete: (token: string, id: string) =>
     request<void>(`/restaurant/staff/${id}`, { method: "DELETE", token }),
+}
+
+export interface PanelRoleDefinitionDto {
+  id: string
+  restaurantId: string
+  key: string
+  name: string
+  description: string | null
+  color: string
+  isSystem: boolean
+  canAccessPanel: boolean
+  canAccessTerminal: boolean
+  permissions: string[]
+  maxDiscountPercent: number
+  maxDiscountAmount: number | null
+  updatedAt: string
+}
+
+export interface PanelPermissionCatalogDto {
+  categories: Record<string, { title: string; description: string }>
+  permissions: Array<{
+    key: string
+    category: string
+    title: string
+    description: string
+    scope: "terminal" | "panel" | "both"
+    isCritical?: boolean
+  }>
+}
+
+export const rolesApi = {
+  catalog: (token: string) =>
+    request<PanelPermissionCatalogDto>("/restaurant/roles/catalog", { token }),
+  list: (token: string) =>
+    request<PanelRoleDefinitionDto[]>("/restaurant/roles", { token }),
+  create: (
+    token: string,
+    body: {
+      name: string
+      description?: string
+      color?: string
+      canAccessPanel?: boolean
+      canAccessTerminal?: boolean
+      permissions: string[]
+      maxDiscountPercent?: number
+      maxDiscountAmount?: number | null
+    },
+  ) =>
+    request<PanelRoleDefinitionDto>("/restaurant/roles", {
+      method: "POST",
+      token,
+      body: JSON.stringify(body),
+    }),
+  update: (
+    token: string,
+    idOrKey: string,
+    body: {
+      name?: string
+      description?: string
+      color?: string
+      canAccessPanel?: boolean
+      canAccessTerminal?: boolean
+      permissions?: string[]
+      maxDiscountPercent?: number
+      maxDiscountAmount?: number | null
+    },
+  ) =>
+    request<PanelRoleDefinitionDto>(`/restaurant/roles/${idOrKey}`, {
+      method: "PUT",
+      token,
+      body: JSON.stringify(body),
+    }),
+  reset: (token: string, idOrKey: string) =>
+    request<PanelRoleDefinitionDto>(`/restaurant/roles/${idOrKey}/reset`, {
+      method: "POST",
+      token,
+    }),
+  delete: (token: string, idOrKey: string) =>
+    request<void>(`/restaurant/roles/${idOrKey}`, {
+      method: "DELETE",
+      token,
+    }),
 }
 
 export const technicalApi = {

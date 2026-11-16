@@ -7,11 +7,16 @@ import { PlatformAdminEntity } from './domain/platform-admin.entity';
 import { RestaurantEntity } from './domain/restaurant.entity';
 import { RootAdminEntity } from './domain/root-admin.entity';
 import { BossRestaurantEntity } from './domain/boss-restaurant.entity';
+import { PlatformBillingConfigEntity } from './domain/platform-billing-config.entity';
 import { PlatformAuthService } from './application/platform-auth.service';
 import { RestaurantService } from './application/restaurant.service';
+import { PlatformBillingService } from './application/platform-billing.service';
 import { RootAdminService } from './application/root-admin.service';
 import { PlatformAuthController } from './api/platform-auth.controller';
-import { RestaurantsController } from './api/restaurants.controller';
+import {
+  PlatformBillingController,
+  RestaurantsController,
+} from './api/restaurants.controller';
 import {
   PlatformBossesController,
   RootAdminsController,
@@ -32,6 +37,7 @@ import {
       RestaurantEntity,
       RootAdminEntity,
       BossRestaurantEntity,
+      PlatformBillingConfigEntity,
     ]),
     PassportModule.register({ defaultStrategy: 'platform-jwt' }),
     JwtModule.registerAsync({
@@ -46,16 +52,18 @@ import {
   controllers: [
     PlatformAuthController,
     RestaurantsController,
+    PlatformBillingController,
     RootAdminsController,
     PlatformBossesController,
   ],
   providers: [
     PlatformAuthService,
     RestaurantService,
+    PlatformBillingService,
     RootAdminService,
     PlatformJwtStrategy,
     PlatformAdminSeed,
   ],
-  exports: [PlatformAuthService, RestaurantService, RootAdminService],
+  exports: [PlatformAuthService, RestaurantService, PlatformBillingService, RootAdminService],
 })
 export class PlatformModule {}

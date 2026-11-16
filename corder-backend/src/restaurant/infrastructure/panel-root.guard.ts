@@ -33,10 +33,12 @@ function inferPermissionsForRequest(method: string, path: string): PermissionKey
   const p = path.toLowerCase();
 
   if (p.includes('/restaurant/roles')) {
-    return m === 'GET' ? ['roles.manage', 'staff.view', 'staff.manage'] : ['roles.manage'];
+    return m === 'GET'
+      ? ['roles.manage', 'staff.view', 'staff.manage']
+      : ['roles.manage', 'staff.manage'];
   }
   if (p.includes('/restaurant/staff')) {
-    return m === 'GET' ? ['staff.view', 'staff.manage'] : ['staff.manage'];
+    return m === 'GET' ? ['staff.view', 'staff.manage', 'roles.manage'] : ['staff.manage', 'roles.manage'];
   }
   if (p.includes('/restaurant/tables')) {
     if (m === 'GET') return ['order.view', 'system.manage_tables'];
@@ -128,6 +130,22 @@ function inferPermissionsForRequest(method: string, path: string): PermissionKey
     if (m === 'GET') return ['reports.view_audit_logs'];
     return ['order.view', 'reports.view_audit_logs'];
   }
+  if (p.includes('/restaurant/settings/billing')) {
+    return [
+      'order.view',
+      'system.manage_settings',
+      'cash.view',
+      'billing.close_check',
+      'reports.view_operational',
+      'reports.view_financial',
+      'staff.view',
+      'staff.manage',
+      'roles.manage',
+      'catalog.view',
+      'inventory.view',
+      'ledger.view',
+    ];
+  }
   if (p.includes('/restaurant/settings')) {
     if (m === 'GET') return ['order.view', 'system.manage_settings'];
     return ['system.manage_settings'];
@@ -171,9 +189,13 @@ export class PanelRootGuard implements CanActivate {
       context.getClass(),
     ]);
     const userPermissions = user.permissions ?? [];
-    if (bossOnly && !userPermissions.includes('roles.manage')) {
+    if (
+      bossOnly &&
+      !userPermissions.includes('roles.manage') &&
+      !userPermissions.includes('staff.manage')
+    ) {
       throw new ForbiddenException(
-        'This action can only be performed by the Owner (Boss)',
+        'This action can only be performed by the Business Owner (Boss) or an authorized Branch Manager.',
       );
     }
 

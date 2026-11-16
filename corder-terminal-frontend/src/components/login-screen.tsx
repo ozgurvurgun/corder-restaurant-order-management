@@ -52,9 +52,22 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
           </div>
 
           {error && (
-            <p className="text-white/90 text-[13px] text-center bg-white/10 backdrop-blur-xl rounded-xl py-2.5 px-4">
-              {error}
-            </p>
+            <div
+              className={`rounded-2xl py-3 px-4 text-center backdrop-blur-xl ${
+                error.toLowerCase().includes("ödeme alınmadığı") ||
+                error.toLowerCase().includes("access suspended")
+                  ? "bg-red-950/80 border-2 border-red-400/80 text-white"
+                  : "bg-white/10 text-white/90"
+              }`}
+            >
+              {(error.toLowerCase().includes("ödeme alınmadığı") ||
+                error.toLowerCase().includes("access suspended")) && (
+                <p className="text-[14px] font-extrabold text-red-200 mb-1">
+                  Ödeme Alınmadığı İçin Erişim Durduruldu
+                </p>
+              )}
+              <p className="text-[13px] leading-relaxed">{error}</p>
+            </div>
           )}
 
           <button

@@ -1,3 +1,12 @@
+import type {
+  BossTier,
+  PlatformBillingConfig,
+  RestaurantBillingStatus,
+  RestaurantBossSummary,
+  RestaurantBranchType,
+  RestaurantPaymentRecord,
+} from "./types"
+
 const BASE = (import.meta.env.VITE_API_URL as string) ?? "http://localhost:4000"
 
 const PLATFORM_TOKEN_KEY = "corder-platform-token"
@@ -57,8 +66,47 @@ export interface BossDto {
   email: string
   name: string
   phone?: string | null
+  bossTier?: BossTier
+  brandName?: string | null
   isActive?: boolean
-  restaurants?: Array<{ id: string; name: string; slug: string; status: string }>
+  restaurants?: Array<{
+    id: string
+    name: string
+    slug: string
+    status: string
+    brandName?: string | null
+    branchType?: RestaurantBranchType
+    billingStatus?: RestaurantBillingStatus
+    isAccessSuspended?: boolean
+  }>
+  createdAt: string
+}
+
+export interface PlatformRestaurantDto {
+  id: string
+  name: string
+  slug: string
+  address?: string
+  phone?: string
+  email?: string
+  status: string
+  brandName?: string | null
+  branchType?: RestaurantBranchType
+  franchiseeCompanyName?: string | null
+  royaltyRate?: number
+  monthlyFee?: number
+  billingStatus?: RestaurantBillingStatus
+  isAccessSuspended?: boolean
+  suspensionReason?: string | null
+  suspendedAt?: string | null
+  lastPaymentDate?: string | null
+  lastPaidPeriod?: string | null
+  billingNotes?: string | null
+  paymentHistory?: RestaurantPaymentRecord[]
+  bosses?: RestaurantBossSummary[]
+  rootAdminId?: string | null
+  terminalEmail?: string | null
+  printAgentUsername?: string | null
   createdAt: string
 }
 
@@ -84,34 +132,10 @@ export const platform = {
   },
   restaurants: {
     async list() {
-      return platformFetch<Array<{
-        id: string
-        name: string
-        slug: string
-        address?: string
-        phone?: string
-        email?: string
-        status: string
-        rootAdminId?: string | null
-        terminalEmail?: string | null
-        printAgentUsername?: string | null
-        createdAt: string
-      }>>("/platform/restaurants")
+      return platformFetch<PlatformRestaurantDto[]>("/platform/restaurants")
     },
     async one(id: string) {
-      return platformFetch<{
-        id: string
-        name: string
-        slug: string
-        address?: string
-        phone?: string
-        email?: string
-        status: string
-        rootAdminId?: string | null
-        terminalEmail?: string | null
-        printAgentUsername?: string | null
-        createdAt: string
-      }>(`/platform/restaurants/${id}`)
+      return platformFetch<PlatformRestaurantDto>(`/platform/restaurants/${id}`)
     },
     async categories(restaurantId: string) {
       return platformFetch<
@@ -126,58 +150,131 @@ export const platform = {
         }>
       >(`/platform/restaurants/${restaurantId}/categories`)
     },
-    async create(body: { name: string; slug: string; address?: string; phone?: string; email?: string; status?: "active" | "inactive"; printAgentUsername?: string; printAgentPassword?: string }) {
-      const payload = {
-        name: body.name,
-        slug: body.slug,
-        ...(body.address !== undefined ? { address: body.address } : {}),
-        ...(body.phone !== undefined ? { phone: body.phone } : {}),
-        ...(body.email !== undefined ? { email: body.email } : {}),
-        ...(body.status !== undefined ? { status: body.status } : {}),
-        ...(body.printAgentUsername !== undefined ? { printAgentUsername: body.printAgentUsername } : {}),
-        ...(body.printAgentPassword !== undefined ? { printAgentPassword: body.printAgentPassword } : {}),
+    async create(body: {
+      name: string
+      slug: string
+      address?: string
+      phone?: string
+      email?: string
+      status?: "active" | "inactive"
+      brandName?: string | null
+      branchType?: RestaurantBranchType
+      franchiseeCompanyName?: string | null
+      royaltyRate?: number
+      monthlyFee?: number
+      billingStatus?: RestaurantBillingStatus
+      isAccessSuspended?: boolean
+      billingNotes?: string | null
+      printAgentUsername?: string
+      printAgentPassword?: string
+    }) {
+      return platformFetch<PlatformRestaurantDto>("/platform/restaurants", {
+        method: "POST",
+        body: JSON.stringify(body),
+      })
+    },
+    async update(
+      id: string,
+      body: {
+        name?: string
+        slug?: string
+        address?: string
+        phone?: string
+        email?: string
+        status?: "active" | "inactive"
+        brandName?: string | null
+        branchType?: RestaurantBranchType
+        franchiseeCompanyName?: string | null
+        royaltyRate?: number
+        monthlyFee?: number
+        billingStatus?: RestaurantBillingStatus
+        isAccessSuspended?: boolean
+        billingNotes?: string | null
+        terminalEmail?: string | null
+        terminalPassword?: string
+        printAgentUsername?: string | null
+        printAgentPassword?: string
       }
-      return platformFetch<{ id: string; name: string; slug: string; address?: string; phone?: string; email?: string; status: string; rootAdminId?: string | null; printAgentUsername?: string | null; createdAt: string }>(
-        "/platform/restaurants",
-        { method: "POST", body: JSON.stringify(payload) }
+    ) {
+      return platformFetch<PlatformRestaurantDto>(`/platform/restaurants/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(body),
+      })
+    },
+    async updateBilling(
+      id: string,
+      body: {
+        billingStatus: RestaurantBillingStatus
+        monthlyFee?: number
+        period?: string
+        note?: string | null
+      }
+    ) {
+      return platformFetch<PlatformRestaurantDto>(
+        `/platform/restaurants/${id}/billing`,
+        { method: "PUT", body: JSON.stringify(body) }
       )
     },
-    async update(id: string, body: { name?: string; slug?: string; address?: string; phone?: string; email?: string; status?: "active" | "inactive"; terminalEmail?: string | null; terminalPassword?: string; printAgentUsername?: string | null; printAgentPassword?: string }) {
-      const payload = {
-        ...(body.name !== undefined ? { name: body.name } : {}),
-        ...(body.slug !== undefined ? { slug: body.slug } : {}),
-        ...(body.address !== undefined ? { address: body.address } : {}),
-        ...(body.phone !== undefined ? { phone: body.phone } : {}),
-        ...(body.email !== undefined ? { email: body.email } : {}),
-        ...(body.status !== undefined ? { status: body.status } : {}),
-        ...(body.terminalEmail !== undefined ? { terminalEmail: body.terminalEmail } : {}),
-        ...(body.terminalPassword !== undefined ? { terminalPassword: body.terminalPassword } : {}),
-        ...(body.printAgentUsername !== undefined ? { printAgentUsername: body.printAgentUsername } : {}),
-        ...(body.printAgentPassword !== undefined ? { printAgentPassword: body.printAgentPassword } : {}),
-      }
-      return platformFetch<{ id: string; name: string; slug: string; address?: string; phone?: string; email?: string; status: string; rootAdminId?: string | null; terminalEmail?: string | null; printAgentUsername?: string | null; createdAt: string }>(
-        `/platform/restaurants/${id}`,
-        { method: "PUT", body: JSON.stringify(payload) }
+    async markPaid(
+      id: string,
+      body?: { amount?: number; period?: string; note?: string }
+    ) {
+      return platformFetch<PlatformRestaurantDto>(
+        `/platform/restaurants/${id}/billing/mark-paid`,
+        { method: "POST", body: JSON.stringify(body ?? {}) }
+      )
+    },
+    async suspendUnpaid(id: string, body?: { note?: string }) {
+      return platformFetch<PlatformRestaurantDto>(
+        `/platform/restaurants/${id}/billing/suspend-unpaid`,
+        { method: "POST", body: JSON.stringify(body ?? {}) }
       )
     },
     async delete(id: string) {
       return platformFetch<void>(`/platform/restaurants/${id}`, { method: "DELETE" })
     },
   },
+  billing: {
+    async getConfig() {
+      return platformFetch<PlatformBillingConfig>("/platform/billing/config")
+    },
+    async updateConfig(body: Partial<PlatformBillingConfig>) {
+      return platformFetch<PlatformBillingConfig>("/platform/billing/config", {
+        method: "PUT",
+        body: JSON.stringify(body),
+      })
+    },
+    async startCollectionCycle(period?: string) {
+      return platformFetch<{ period: string; updatedCount: number }>(
+        "/platform/billing/start-collection-cycle",
+        { method: "POST", body: JSON.stringify({ period }) }
+      )
+    },
+    async suspendAllUnpaid() {
+      return platformFetch<{ suspendedCount: number }>(
+        "/platform/billing/suspend-all-unpaid",
+        { method: "POST", body: JSON.stringify({}) }
+      )
+    },
+  },
   rootAdmins: {
     async list(restaurantId: string) {
       return platformFetch<BossDto[]>(`/platform/restaurants/${restaurantId}/root-admins`)
     },
-    async create(restaurantId: string, body: { name: string; email: string; phone?: string; password: string }) {
-      const payload = {
-        name: body.name,
-        email: body.email,
-        ...(body.phone !== undefined ? { phone: body.phone } : {}),
-        password: body.password,
+    async create(
+      restaurantId: string,
+      body: {
+        name: string
+        email: string
+        phone?: string
+        bossTier?: BossTier
+        brandName?: string | null
+        password: string
       }
+    ) {
       return platformFetch<BossDto>(
         `/platform/restaurants/${restaurantId}/root-admins`,
-        { method: "POST", body: JSON.stringify(payload) }
+        { method: "POST", body: JSON.stringify(body) }
       )
     },
     async linkExisting(restaurantId: string, bossId: string) {
@@ -186,18 +283,23 @@ export const platform = {
         { method: "POST" }
       )
     },
-    async update(restaurantId: string, id: string, body: { name?: string; email?: string; phone?: string | null; password?: string; isActive?: boolean; restaurantIds?: string[] }) {
-      const payload = {
-        ...(body.name !== undefined ? { name: body.name } : {}),
-        ...(body.email !== undefined ? { email: body.email } : {}),
-        ...(body.phone !== undefined ? { phone: body.phone } : {}),
-        ...(body.password !== undefined ? { password: body.password } : {}),
-        ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
-        ...(body.restaurantIds !== undefined ? { restaurantIds: body.restaurantIds } : {}),
+    async update(
+      restaurantId: string,
+      id: string,
+      body: {
+        name?: string
+        email?: string
+        phone?: string | null
+        bossTier?: BossTier
+        brandName?: string | null
+        password?: string
+        isActive?: boolean
+        restaurantIds?: string[]
       }
+    ) {
       return platformFetch<BossDto>(
         `/platform/restaurants/${restaurantId}/root-admins/${id}`,
-        { method: "PUT", body: JSON.stringify(payload) }
+        { method: "PUT", body: JSON.stringify(body) }
       )
     },
     async delete(restaurantId: string, id: string) {
@@ -212,19 +314,14 @@ export const platform = {
       name: string
       email: string
       phone?: string
+      bossTier?: BossTier
+      brandName?: string | null
       password: string
       restaurantIds?: string[]
     }) {
-      const payload = {
-        name: body.name,
-        email: body.email,
-        ...(body.phone !== undefined ? { phone: body.phone } : {}),
-        password: body.password,
-        ...(body.restaurantIds !== undefined ? { restaurantIds: body.restaurantIds } : {}),
-      }
       return platformFetch<BossDto>("/platform/bosses", {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify(body),
       })
     },
     async update(
@@ -233,22 +330,16 @@ export const platform = {
         name?: string
         email?: string
         phone?: string | null
+        bossTier?: BossTier
+        brandName?: string | null
         password?: string
         isActive?: boolean
         restaurantIds?: string[]
       }
     ) {
-      const payload = {
-        ...(body.name !== undefined ? { name: body.name } : {}),
-        ...(body.email !== undefined ? { email: body.email } : {}),
-        ...(body.phone !== undefined ? { phone: body.phone } : {}),
-        ...(body.password !== undefined ? { password: body.password } : {}),
-        ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
-        ...(body.restaurantIds !== undefined ? { restaurantIds: body.restaurantIds } : {}),
-      }
       return platformFetch<BossDto>(`/platform/bosses/${id}`, {
         method: "PUT",
-        body: JSON.stringify(payload),
+        body: JSON.stringify(body),
       })
     },
     async delete(id: string) {

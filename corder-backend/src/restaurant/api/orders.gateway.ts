@@ -6,6 +6,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
+  isRestaurantPaymentSuspended,
   RestaurantAuthService,
   RestaurantTokenPayload,
 } from '../application/restaurant-auth.service';
@@ -71,9 +72,19 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
       const activeRestaurant = await this.restaurantRepo.findOne({
         where: { id: targetRestId },
-        select: { id: true, status: true, printAgentUsername: true },
+        select: {
+          id: true,
+          status: true,
+          printAgentUsername: true,
+          isAccessSuspended: true,
+          billingStatus: true,
+        },
       });
-      if (!activeRestaurant || activeRestaurant.status !== 'active') {
+      if (
+        !activeRestaurant ||
+        activeRestaurant.status !== 'active' ||
+        isRestaurantPaymentSuspended(activeRestaurant)
+      ) {
         client.disconnect(true);
         return;
       }

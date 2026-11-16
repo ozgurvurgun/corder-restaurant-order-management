@@ -72,6 +72,11 @@ export interface BranchSummary {
   address?: string | null
   phone?: string | null
   status: string
+  brandName?: string | null
+  branchType?: "independent" | "company_owned" | "franchise" | string
+  monthlyFee?: number
+  billingStatus?: string
+  isAccessSuspended?: boolean
 }
 
 export interface BranchLivePulse {
@@ -81,6 +86,15 @@ export interface BranchLivePulse {
   address: string | null
   phone: string | null
   status: string
+  brandName?: string | null
+  branchType?: "independent" | "company_owned" | "franchise" | string
+  franchiseeCompanyName?: string | null
+  royaltyRate?: number
+  estimatedTodayRoyalty?: number
+  estimatedMonthRoyalty?: number
+  monthlyFee?: number
+  billingStatus?: string
+  isAccessSuspended?: boolean
   todayRevenue: number
   weekRevenue: number
   monthRevenue: number
@@ -117,7 +131,19 @@ export interface BranchLivePulse {
 
 export interface BossOverviewResponse {
   branches: BranchLivePulse[]
-  allOwnedBranches: Array<{ id: string; name: string; slug: string; status: string }>
+  allOwnedBranches: Array<{
+    id: string
+    name: string
+    slug: string
+    status: string
+    brandName?: string | null
+    branchType?: string
+    franchiseeCompanyName?: string | null
+    royaltyRate?: number
+    monthlyFee?: number
+    billingStatus?: string
+    isAccessSuspended?: boolean
+  }>
   consolidated: {
     todayRevenue: number
     weekRevenue: number
@@ -133,6 +159,11 @@ export interface BossOverviewResponse {
     criticalStockCount: number
     staffCount: number
     openLedgerBalance: number
+    totalBranchesCount?: number
+    companyOwnedCount?: number
+    franchiseBranchCount?: number
+    todayEstimatedRoyalty?: number
+    monthEstimatedRoyalty?: number
     paymentBreakdown: {
       cash: number
       creditCard: number
@@ -213,6 +244,23 @@ export interface CatalogCategoryDto {
   id: string
   name: string
   slug: string
+}
+
+export interface SubBossItemDto {
+  id: string
+  name: string
+  email: string
+  phone: string | null
+  bossTier: "brand_owner" | "franchise_owner" | "regional_manager" | string
+  brandName: string | null
+  isSelf: boolean
+  branches: Array<{
+    id: string
+    name: string
+    slug: string
+    branchType: string
+    title: string
+  }>
 }
 
 export type BossTabId =

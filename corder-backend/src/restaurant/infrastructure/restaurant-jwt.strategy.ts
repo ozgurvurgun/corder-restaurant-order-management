@@ -11,7 +11,11 @@ import { BossRestaurantEntity } from '../../platform/domain/boss-restaurant.enti
 import { RestaurantStaffEntity } from '../domain/restaurant-staff.entity';
 import { PERMISSION_KEYS } from '../domain/permissions.catalog';
 import { RolesService } from '../application/roles.service';
-import { RestaurantTokenPayload } from '../application/restaurant-auth.service';
+import {
+  buildPaymentSuspendedErrorMessage,
+  isRestaurantPaymentSuspended,
+  RestaurantTokenPayload,
+} from '../application/restaurant-auth.service';
 import { requireConfigSecret } from '../../common/security/env.validation';
 
 @Injectable()
@@ -63,6 +67,19 @@ export class RestaurantJwtStrategy extends PassportStrategy(Strategy, 'restauran
         });
         if (link || admin.restaurantId === requestedId) {
           targetRestaurantId = requestedId;
+        } else if (admin.bossTier === 'brand_owner' && admin.brandName) {
+          const targetRest = await this.restaurantRepo.findOne({
+            where: { id: requestedId },
+            select: { id: true, brandName: true },
+          });
+          if (
+            targetRest?.brandName &&
+            targetRest.brandName.trim().toLowerCase() === admin.brandName.trim().toLowerCase()
+          ) {
+            targetRestaurantId = requestedId;
+          } else {
+            throw new UnauthorizedException('You do not have access to this branch');
+          }
         } else {
           throw new UnauthorizedException('You do not have access to this branch');
         }
@@ -71,9 +88,24 @@ export class RestaurantJwtStrategy extends PassportStrategy(Strategy, 'restauran
 
     const restaurant = await this.restaurantRepo.findOne({
       where: { id: targetRestaurantId },
-      select: { id: true, status: true, slug: true },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        slug: true,
+        isAccessSuspended: true,
+        billingStatus: true,
+      },
     });
-    if (!restaurant || restaurant.status !== 'active') {
+    if (!restaurant) {
+      throw new UnauthorizedException('Restaurant not found');
+    }
+    if (isRestaurantPaymentSuspended(restaurant)) {
+      throw new UnauthorizedException(
+        buildPaymentSuspendedErrorMessage(restaurant.name),
+      );
+    }
+    if (restaurant.status !== 'active') {
       throw new UnauthorizedException('Restaurant is not active');
     }
 

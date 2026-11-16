@@ -4,7 +4,11 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
-import { RestaurantTokenPayload } from '../application/restaurant-auth.service';
+import {
+  buildPaymentSuspendedErrorMessage,
+  isRestaurantPaymentSuspended,
+  RestaurantTokenPayload,
+} from '../application/restaurant-auth.service';
 import { requireConfigSecret } from '../../common/security/env.validation';
 
 export type PrintAgentRequest = {
@@ -45,8 +49,20 @@ export class PrintAgentGuard implements CanActivate {
     }
     const restaurant = await this.restaurantRepo.findOne({
       where: { id: payload.restaurantId },
-      select: { id: true, status: true, printAgentUsername: true },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        printAgentUsername: true,
+        isAccessSuspended: true,
+        billingStatus: true,
+      },
     });
+    if (isRestaurantPaymentSuspended(restaurant)) {
+      throw new UnauthorizedException(
+        buildPaymentSuspendedErrorMessage(restaurant?.name),
+      );
+    }
     if (
       !restaurant ||
       restaurant.status !== 'active' ||

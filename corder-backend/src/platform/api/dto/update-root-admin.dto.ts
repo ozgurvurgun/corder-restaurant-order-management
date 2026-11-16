@@ -2,6 +2,7 @@ import {
   IsArray,
   IsBoolean,
   IsEmail,
+  IsIn,
   IsOptional,
   IsString,
   IsUUID,
@@ -25,6 +26,14 @@ export class UpdateRootAdminDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsIn(['brand_owner', 'franchise_owner', 'regional_manager'])
+  bossTier?: 'brand_owner' | 'franchise_owner' | 'regional_manager';
+
+  @IsOptional()
+  @IsString()
+  brandName?: string | null;
 
   @IsOptional()
   @IsArray()

@@ -12,7 +12,7 @@ export type PanelUserRole =
   | "inventory_manager"
   | "accountant"
   | "manager"
-export type PanelViewId = "dashboard" | "tables" | "cash-register" | "quick-sale" | "live-orders" | "products" | "campaigns" | "stock" | "reports" | "users" | "settings" | "technical"
+export type PanelViewId = "dashboard" | "tables" | "cash-register" | "quick-sale" | "live-orders" | "products" | "campaigns" | "stock" | "reports" | "users" | "billing" | "settings" | "technical"
 export type PanelDiscountType = "percent" | "amount" | "complimentary"
 export type CloseCheckPaymentMethod = "cash" | "credit-card" | "meal-card" | "multinet" | "split" | "ledger"
 export type PanelPaymentMethod = CloseCheckPaymentMethod
@@ -32,6 +32,10 @@ export interface PanelUser {
   canAccessPanel?: boolean
   canAccessTerminal?: boolean
   permissions?: string[]
+  grantedPermissions?: string[]
+  revokedPermissions?: string[]
+  maxDiscountPercentOverride?: number | null
+  maxDiscountAmountOverride?: number | null
   limits?: {
     maxDiscountPercent: number
     maxDiscountAmount: number | null

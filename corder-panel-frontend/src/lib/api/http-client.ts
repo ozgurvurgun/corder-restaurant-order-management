@@ -115,9 +115,6 @@ export async function request<T>(
     headers["x-restaurant-id"] = currentRest.id
   }
   const res = await fetch(url, { ...init, headers })
-  if (res.status === 401 && token) {
-    authExpiredHandler?.()
-  }
   if (!res.ok) {
     const body = await res.text()
     let message = body
@@ -125,6 +122,18 @@ export async function request<T>(
       const j = JSON.parse(body)
       message = Array.isArray(j.message) ? j.message.join(", ") : (j.message ?? body)
     } catch {}
+    if (res.status === 401 && token) {
+      if (
+        message &&
+        (message.includes("ÖDEME ALINMADIĞI İÇİN") ||
+          message.toLowerCase().includes("access suspended"))
+      ) {
+        try {
+          sessionStorage.setItem("panel_suspended_notice", message)
+        } catch {}
+      }
+      authExpiredHandler?.()
+    }
     throw new Error(message || res.statusText)
   }
   if (res.status === 204 || res.headers.get("content-length") === "0") return undefined as T

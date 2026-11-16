@@ -186,6 +186,10 @@ export function mapApiStaffToPanelUser(s: {
   canAccessPanel?: boolean
   canAccessTerminal?: boolean
   permissions?: string[]
+  grantedPermissions?: string[]
+  revokedPermissions?: string[]
+  maxDiscountPercentOverride?: number | null
+  maxDiscountAmountOverride?: number | null
   limits?: {
     maxDiscountPercent: number
     maxDiscountAmount: number | null
@@ -203,6 +207,10 @@ export function mapApiStaffToPanelUser(s: {
     canAccessPanel: s.canAccessPanel,
     canAccessTerminal: s.canAccessTerminal,
     permissions: s.permissions,
+    grantedPermissions: s.grantedPermissions ?? [],
+    revokedPermissions: s.revokedPermissions ?? [],
+    maxDiscountPercentOverride: s.maxDiscountPercentOverride ?? null,
+    maxDiscountAmountOverride: s.maxDiscountAmountOverride ?? null,
     limits: s.limits,
     active: s.isActive,
     createdAt: new Date(s.createdAt),

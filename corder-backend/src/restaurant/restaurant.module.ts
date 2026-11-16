@@ -6,6 +6,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { RootAdminEntity } from '../platform/domain/root-admin.entity';
 import { BossRestaurantEntity } from '../platform/domain/boss-restaurant.entity';
 import { RestaurantEntity } from '../platform/domain/restaurant.entity';
+import { PlatformBillingConfigEntity } from '../platform/domain/platform-billing-config.entity';
 import { TableEntity } from './domain/table.entity';
 import { OrderEntity } from './domain/order.entity';
 import { OrderItemEntity } from './domain/order-item.entity';
@@ -102,6 +103,7 @@ import {
       RootAdminEntity,
       BossRestaurantEntity,
       RestaurantEntity,
+      PlatformBillingConfigEntity,
       RestaurantStaffEntity,
       RestaurantRoleEntity,
       TableEntity,

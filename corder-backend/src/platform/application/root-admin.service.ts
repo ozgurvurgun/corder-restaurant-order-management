@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -7,7 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
-import { RootAdminEntity } from '../domain/root-admin.entity';
+import { BossTier, RootAdminEntity } from '../domain/root-admin.entity';
 import { BossRestaurantEntity } from '../domain/boss-restaurant.entity';
 import { RestaurantEntity } from '../domain/restaurant.entity';
 import { CreateRootAdminDto } from '../api/dto/create-root-admin.dto';
@@ -18,6 +17,8 @@ export interface BossWithRestaurantsDto {
   name: string;
   email: string;
   phone: string | null;
+  bossTier: BossTier;
+  brandName: string | null;
   isActive: boolean;
   restaurantId: string | null;
   restaurants: Array<{
@@ -25,8 +26,18 @@ export interface BossWithRestaurantsDto {
     name: string;
     slug: string;
     status: string;
+    brandName: string | null;
+    branchType: string;
+    billingStatus: string;
+    isAccessSuspended: boolean;
   }>;
   createdAt: Date;
+}
+
+function defaultTitleForTier(tier?: BossTier): string {
+  if (tier === 'brand_owner') return 'Brand Owner (HQ)';
+  if (tier === 'regional_manager') return 'Regional Manager';
+  return 'Franchise / Branch Owner';
 }
 
 @Injectable()
@@ -43,21 +54,32 @@ export class RootAdminService {
   async enrichBosses(admins: RootAdminEntity[]): Promise<BossWithRestaurantsDto[]> {
     if (admins.length === 0) return [];
     const bossIds = admins.map((a) => a.id);
-    const allLinks = await this.bossRestaurantRepo.find({
-      where: { bossId: In(bossIds) },
-      order: { createdAt: 'ASC' },
-    });
+    const [allLinks, allRestaurants] = await Promise.all([
+      this.bossRestaurantRepo.find({
+        where: { bossId: In(bossIds) },
+        order: { createdAt: 'ASC' },
+      }),
+      this.restaurantRepo.find({ order: { createdAt: 'ASC' } }),
+    ]);
 
     const restIdsByBoss = new Map<string, Set<string>>();
-    const allRestIds = new Set<string>();
     for (const admin of admins) {
       const set = new Set<string>();
       if (admin.restaurantId) {
         set.add(admin.restaurantId);
-        allRestIds.add(admin.restaurantId);
+      }
+      // If brand_owner has brandName, automatically include all branches of that brand
+      if (admin.bossTier === 'brand_owner' && admin.brandName) {
+        const brandNorm = admin.brandName.trim().toLowerCase();
+        for (const r of allRestaurants) {
+          if (r.brandName && r.brandName.trim().toLowerCase() === brandNorm) {
+            set.add(r.id);
+          }
+        }
       }
       restIdsByBoss.set(admin.id, set);
     }
+
     for (const link of allLinks) {
       let set = restIdsByBoss.get(link.bossId);
       if (!set) {
@@ -65,17 +87,9 @@ export class RootAdminService {
         restIdsByBoss.set(link.bossId, set);
       }
       set.add(link.restaurantId);
-      allRestIds.add(link.restaurantId);
     }
 
-    const restaurants =
-      allRestIds.size > 0
-        ? await this.restaurantRepo.find({
-            where: { id: In(Array.from(allRestIds)) },
-            order: { createdAt: 'ASC' },
-          })
-        : [];
-    const restaurantById = new Map(restaurants.map((r) => [r.id, r]));
+    const restaurantById = new Map(allRestaurants.map((r) => [r.id, r]));
 
     return admins.map((admin) => {
       const restIds = restIdsByBoss.get(admin.id) ?? new Set<string>();
@@ -88,6 +102,8 @@ export class RootAdminService {
         name: admin.name,
         email: admin.email,
         phone: admin.phone ?? null,
+        bossTier: admin.bossTier || 'franchise_owner',
+        brandName: admin.brandName ?? null,
         isActive: admin.isActive ?? true,
         restaurantId: admin.restaurantId ?? bossRestaurants[0]?.id ?? null,
         restaurants: bossRestaurants.map((r) => ({
@@ -95,6 +111,10 @@ export class RootAdminService {
           name: r.name,
           slug: r.slug,
           status: r.status,
+          brandName: r.brandName ?? null,
+          branchType: r.branchType || 'independent',
+          billingStatus: r.billingStatus || 'paid',
+          isAccessSuspended: Boolean(r.isAccessSuspended),
         })),
         createdAt: admin.createdAt,
       };
@@ -112,14 +132,26 @@ export class RootAdminService {
   }
 
   async findByRestaurantId(restaurantId: string): Promise<BossWithRestaurantsDto[]> {
-    const [links, direct] = await Promise.all([
+    const [links, direct, rest] = await Promise.all([
       this.bossRestaurantRepo.find({ where: { restaurantId } }),
       this.rootAdminRepo.find({ where: { restaurantId } }),
+      this.restaurantRepo.findOne({ where: { id: restaurantId } }),
     ]);
     const bossIds = new Set<string>([
       ...links.map((l) => l.bossId),
       ...direct.map((d) => d.id),
     ]);
+    if (rest?.brandName) {
+      const brandOwners = await this.rootAdminRepo.find({
+        where: { bossTier: 'brand_owner' },
+      });
+      const brandNorm = rest.brandName.trim().toLowerCase();
+      for (const bo of brandOwners) {
+        if (bo.brandName && bo.brandName.trim().toLowerCase() === brandNorm) {
+          bossIds.add(bo.id);
+        }
+      }
+    }
     if (bossIds.size === 0) return [];
     const bosses = await this.rootAdminRepo.find({
       where: { id: In(Array.from(bossIds)) },
@@ -144,7 +176,9 @@ export class RootAdminService {
   private async ensureBossRestaurantLinks(
     bossId: string,
     restaurantIds: string[],
+    bossTier?: BossTier,
   ): Promise<void> {
+    const title = defaultTitleForTier(bossTier);
     for (const rId of restaurantIds) {
       const existing = await this.bossRestaurantRepo.findOne({
         where: { bossId, restaurantId: rId },
@@ -154,19 +188,42 @@ export class RootAdminService {
           this.bossRestaurantRepo.create({
             bossId,
             restaurantId: rId,
-            title: 'Owner',
+            title,
           }),
         );
+      } else if (existing.title !== title) {
+        existing.title = title;
+        await this.bossRestaurantRepo.save(existing);
       }
-      await this.restaurantRepo.update(rId, { rootAdminId: bossId });
+      const rest = await this.restaurantRepo.findOne({ where: { id: rId } });
+      if (rest && (!rest.rootAdminId || bossTier === 'franchise_owner')) {
+        await this.restaurantRepo.update(rId, { rootAdminId: bossId });
+      }
     }
   }
 
+  private async resolveBrandRestaurantIds(brandName?: string | null): Promise<string[]> {
+    if (!brandName || !brandName.trim()) return [];
+    const norm = brandName.trim().toLowerCase();
+    const all = await this.restaurantRepo.find();
+    return all
+      .filter((r) => r.brandName && r.brandName.trim().toLowerCase() === norm)
+      .map((r) => r.id);
+  }
+
   async create(dto: CreateRootAdminDto): Promise<BossWithRestaurantsDto> {
+    const bossTier: BossTier = dto.bossTier ?? 'franchise_owner';
+    const brandName = dto.brandName?.trim() || null;
+    const brandBranchIds =
+      bossTier === 'brand_owner' && brandName
+        ? await this.resolveBrandRestaurantIds(brandName)
+        : [];
+
     const targetRestaurantIds = Array.from(
       new Set([
         ...(dto.restaurantId ? [dto.restaurantId] : []),
         ...(dto.restaurantIds ?? []),
+        ...brandBranchIds,
       ]),
     );
     if (targetRestaurantIds.length > 0) {
@@ -184,11 +241,17 @@ export class RootAdminService {
     // If Boss already exists and a restaurantId is being attached, link them to the new branch!
     if (existingGlobal) {
       if (targetRestaurantIds.length > 0) {
-        await this.ensureBossRestaurantLinks(existingGlobal.id, targetRestaurantIds);
+        if (dto.bossTier) existingGlobal.bossTier = dto.bossTier;
+        if (brandName) existingGlobal.brandName = brandName;
+        await this.ensureBossRestaurantLinks(
+          existingGlobal.id,
+          targetRestaurantIds,
+          existingGlobal.bossTier,
+        );
         if (!existingGlobal.restaurantId) {
           existingGlobal.restaurantId = targetRestaurantIds[0];
-          await this.rootAdminRepo.save(existingGlobal);
         }
+        await this.rootAdminRepo.save(existingGlobal);
         return this.enrichBoss(existingGlobal);
       }
       throw new ConflictException('A Boss account with this email address already exists');
@@ -201,13 +264,15 @@ export class RootAdminService {
       email,
       name: dto.name.trim(),
       phone: dto.phone?.trim() || null,
+      bossTier,
+      brandName,
       isActive: true,
       passwordHash,
     });
     const saved = await this.rootAdminRepo.save(entity);
 
     if (targetRestaurantIds.length > 0) {
-      await this.ensureBossRestaurantLinks(saved.id, targetRestaurantIds);
+      await this.ensureBossRestaurantLinks(saved.id, targetRestaurantIds, bossTier);
     }
 
     if (primaryRestaurantId && dto.terminalEmail?.trim() && dto.terminalPassword) {
@@ -228,7 +293,7 @@ export class RootAdminService {
     if (!boss) throw new NotFoundException('Boss account not found');
     const rest = await this.restaurantRepo.findOne({ where: { id: restaurantId } });
     if (!rest) throw new NotFoundException('Restaurant not found');
-    await this.ensureBossRestaurantLinks(boss.id, [restaurantId]);
+    await this.ensureBossRestaurantLinks(boss.id, [restaurantId], boss.bossTier);
     if (!boss.restaurantId) {
       boss.restaurantId = restaurantId;
       await this.rootAdminRepo.save(boss);
@@ -250,6 +315,16 @@ export class RootAdminService {
       boss.restaurantId = remaining[0]?.restaurantId ?? null;
       await this.rootAdminRepo.save(boss);
     }
+    const rest = await this.restaurantRepo.findOne({ where: { id: restaurantId } });
+    if (rest && rest.rootAdminId === bossId) {
+      const remainingOnBranch = await this.bossRestaurantRepo.find({
+        where: { restaurantId },
+        order: { createdAt: 'ASC' },
+      });
+      await this.restaurantRepo.update(restaurantId, {
+        rootAdminId: remainingOnBranch[0]?.bossId ?? null,
+      });
+    }
   }
 
   async update(id: string, dto: UpdateRootAdminDto): Promise<BossWithRestaurantsDto> {
@@ -259,6 +334,8 @@ export class RootAdminService {
     if (dto.name !== undefined) entity.name = dto.name.trim();
     if (dto.phone !== undefined) entity.phone = dto.phone?.trim() || null;
     if (dto.isActive !== undefined) entity.isActive = Boolean(dto.isActive);
+    if (dto.bossTier !== undefined) entity.bossTier = dto.bossTier;
+    if (dto.brandName !== undefined) entity.brandName = dto.brandName?.trim() || null;
     if (dto.email !== undefined) {
       const email = dto.email.toLowerCase().trim();
       const existing = await this.findOneByEmail(email);
@@ -271,13 +348,24 @@ export class RootAdminService {
       entity.passwordHash = await bcrypt.hash(dto.password, 10);
     }
 
-    if (dto.restaurantIds !== undefined) {
-      const nextIds = Array.from(new Set(dto.restaurantIds));
-      await this.bossRestaurantRepo.delete({ bossId: id });
-      if (nextIds.length > 0) {
-        await this.ensureBossRestaurantLinks(id, nextIds);
+    if (dto.restaurantIds !== undefined || dto.brandName !== undefined || dto.bossTier !== undefined) {
+      const brandBranchIds =
+        entity.bossTier === 'brand_owner' && entity.brandName
+          ? await this.resolveBrandRestaurantIds(entity.brandName)
+          : [];
+      if (dto.restaurantIds !== undefined) {
+        const nextIds = Array.from(new Set([...dto.restaurantIds, ...brandBranchIds]));
+        await this.bossRestaurantRepo.delete({ bossId: id });
+        if (nextIds.length > 0) {
+          await this.ensureBossRestaurantLinks(id, nextIds, entity.bossTier);
+        }
+        entity.restaurantId = nextIds[0] ?? null;
+      } else if (brandBranchIds.length > 0) {
+        await this.ensureBossRestaurantLinks(id, brandBranchIds, entity.bossTier);
+        if (!entity.restaurantId) {
+          entity.restaurantId = brandBranchIds[0] ?? null;
+        }
       }
-      entity.restaurantId = nextIds[0] ?? null;
     }
 
     const saved = await this.rootAdminRepo.save(entity);
@@ -313,10 +401,24 @@ export class RootAdminService {
       }
     }
 
-    if (entity.restaurantId) {
-      await this.restaurantRepo.update(entity.restaurantId, { rootAdminId: null });
-    }
+    const links = await this.bossRestaurantRepo.find({ where: { bossId: id } });
     await this.bossRestaurantRepo.delete({ bossId: id });
+    for (const l of links) {
+      const remaining = await this.bossRestaurantRepo.find({
+        where: { restaurantId: l.restaurantId },
+      });
+      await this.restaurantRepo.update(l.restaurantId, {
+        rootAdminId: remaining[0]?.bossId ?? null,
+      });
+    }
+    if (entity.restaurantId) {
+      const remaining = await this.bossRestaurantRepo.find({
+        where: { restaurantId: entity.restaurantId },
+      });
+      await this.restaurantRepo.update(entity.restaurantId, {
+        rootAdminId: remaining[0]?.bossId ?? null,
+      });
+    }
     await this.rootAdminRepo.remove(entity);
   }
 }

@@ -14,6 +14,7 @@ import ProductManagement from "@/components/panel/product-management"
 import UserManagement from "@/components/panel/user-management"
 import ReportsView from "@/components/panel/reports-view"
 import SettingsView from "@/components/panel/settings-view"
+import BillingView from "@/components/panel/billing-view"
 import CashRegisterView from "@/components/panel/cash-register-view"
 import StockView from "@/components/panel/stock-view"
 import TechnicalView from "@/components/panel/technical-view"
@@ -36,6 +37,8 @@ function renderScreen(
       return <ProductManagement />
     case "users":
       return <UserManagement />
+    case "billing":
+      return <BillingView />
     case "reports":
       return <ReportsView />
     case "settings":

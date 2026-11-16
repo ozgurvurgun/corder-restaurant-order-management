@@ -15,6 +15,7 @@ import {
   ShoppingBag,
   Building2,
   ShieldCheck,
+  CreditCard,
 } from "lucide-react"
 import { usePanelStore } from "@/lib/panel-store"
 import { usePanelI18n } from "@/lib/panel-i18n"
@@ -153,6 +154,12 @@ export default function PanelSidebar({
           label: t("technical"),
           icon: Wrench,
           visible: hasPermission("system.manage_printers", "reports.view_audit_logs"),
+        },
+        {
+          id: "billing" as PanelViewId,
+          label: locale === "tr" ? "Abonelik & Ödeme" : "Subscription & Payment",
+          icon: CreditCard,
+          visible: true,
         },
         {
           id: "settings" as PanelViewId,

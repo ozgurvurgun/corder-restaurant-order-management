@@ -6,9 +6,23 @@ import {
   Index,
 } from 'typeorm';
 
+export type RestaurantBranchType = 'independent' | 'company_owned' | 'franchise';
+export type RestaurantBillingStatus = 'paid' | 'pending' | 'overdue' | 'suspended';
+
+export interface RestaurantPaymentRecord {
+  id: string;
+  period: string;
+  amount: number;
+  paidAt: string;
+  note?: string | null;
+  recordedBy?: string | null;
+}
+
 @Entity('restaurants')
 @Index(['terminalEmail'])
 @Index(['printAgentUsername'], { unique: true })
+@Index(['brandName'])
+@Index(['billingStatus'])
 export class RestaurantEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -30,6 +44,64 @@ export class RestaurantEntity {
 
   @Column({ default: 'active' })
   status: string;
+
+  /** Brand / Franchise network name (e.g., "Burger House Group"). */
+  @Column({ name: 'brand_name', type: 'varchar', length: 120, nullable: true })
+  brandName: string | null;
+
+  /** Branch ownership model: independent, company_owned (HQ branch), or franchise. */
+  @Column({ name: 'branch_type', type: 'varchar', length: 32, default: 'independent' })
+  branchType: RestaurantBranchType;
+
+  /** Legal / commercial name of the franchisee operating this branch. */
+  @Column({ name: 'franchisee_company_name', type: 'varchar', length: 160, nullable: true })
+  franchiseeCompanyName: string | null;
+
+  /** Royalty rate percentage for franchise analytics (0 - 100). */
+  @Column({
+    name: 'royalty_rate',
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    default: 0,
+  })
+  royaltyRate: string;
+
+  /** Monthly subscription fee for this restaurant (configured per branch in Admin Panel). */
+  @Column({
+    name: 'monthly_fee',
+    type: 'numeric',
+    precision: 10,
+    scale: 2,
+    default: 0,
+  })
+  monthlyFee: string;
+
+  /** Current billing status: 'paid' | 'pending' | 'overdue' | 'suspended'. */
+  @Column({ name: 'billing_status', type: 'varchar', length: 32, default: 'paid' })
+  billingStatus: RestaurantBillingStatus;
+
+  /** Whether all system access is halted (e.g. non-payment after 25-30 collection window). */
+  @Column({ name: 'is_access_suspended', type: 'boolean', default: false })
+  isAccessSuspended: boolean;
+
+  @Column({ name: 'suspension_reason', type: 'varchar', length: 160, nullable: true })
+  suspensionReason: string | null;
+
+  @Column({ name: 'suspended_at', type: 'timestamptz', nullable: true })
+  suspendedAt: Date | null;
+
+  @Column({ name: 'last_payment_date', type: 'timestamptz', nullable: true })
+  lastPaymentDate: Date | null;
+
+  @Column({ name: 'last_paid_period', type: 'varchar', length: 16, nullable: true })
+  lastPaidPeriod: string | null;
+
+  @Column({ name: 'billing_notes', type: 'text', nullable: true })
+  billingNotes: string | null;
+
+  @Column({ name: 'payment_history', type: 'jsonb', default: () => "'[]'::jsonb" })
+  paymentHistory: RestaurantPaymentRecord[];
 
   @Column({ name: 'tax_id', type: 'varchar', nullable: true })
   taxId: string | null;

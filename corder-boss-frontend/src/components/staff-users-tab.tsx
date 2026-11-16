@@ -4,6 +4,7 @@ import { bossApi } from "@/lib/api"
 import type { StaffMemberDto } from "@/lib/types"
 import { getRoleDisplayName } from "@/lib/permission-labels"
 import { StaffUserModal } from "./staff-user-modal"
+import { SubBossesSection } from "./sub-bosses-section"
 import {
   Users,
   Plus,
@@ -103,6 +104,9 @@ export function StaffUsersTab() {
 
   return (
     <div className="space-y-4 pb-8">
+      <SubBossesSection />
+
+      {/* Branch Staff & Merchant Panel Users */}
       <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -113,7 +117,7 @@ export function StaffUsersTab() {
               </h2>
             </div>
             <p className="mt-0.5 text-[12px] text-[#86868b]">
-              Şube: <strong className="text-[#1d1d1f]">{effectiveBranch?.name}</strong> — Müdür, kasiyer, garson ve özel yetkili kullanıcıları buradan oluşturun.
+              Şube: <strong className="text-[#1d1d1f]">{effectiveBranch?.name}</strong> — Müdür, kasiyer, garson ve özel yetkili kullanıcıları buradan veya Merchant Panelinden oluşturabilirsiniz.
             </p>
           </div>
 

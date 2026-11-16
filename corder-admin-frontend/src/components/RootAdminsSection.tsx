@@ -1,22 +1,31 @@
 import { useEffect, useState } from "react"
 import { UserPlus, Link2, Crown, Building2 } from "lucide-react"
-import type { RootAdmin } from "@/lib/types"
+import type { BossTier, RootAdmin } from "@/lib/types"
 import { useAdminStore } from "@/lib/store"
 
 interface RootAdminsSectionProps {
   restaurantId: string
+  brandName?: string | null
   rootAdmins: RootAdmin[]
   loading: boolean
   error: string | null
   onAddRootAdmin: (
     restaurantId: string,
-    input: { name: string; email: string; phone?: string; password: string }
+    input: {
+      name: string
+      email: string
+      phone?: string
+      bossTier?: BossTier
+      brandName?: string | null
+      password: string
+    }
   ) => Promise<void>
   onDeleteRootAdmin: (restaurantId: string, adminId: string) => Promise<void>
 }
 
 export function RootAdminsSection({
   restaurantId,
+  brandName,
   rootAdmins,
   loading,
   error,
@@ -28,6 +37,7 @@ export function RootAdminsSection({
   const [adminName, setAdminName] = useState("")
   const [adminEmail, setAdminEmail] = useState("")
   const [adminPhone, setAdminPhone] = useState("")
+  const [adminTier, setAdminTier] = useState<BossTier>("franchise_owner")
   const [adminPassword, setAdminPassword] = useState("")
   const [selectedExistingBossId, setSelectedExistingBossId] = useState("")
   const [adminError, setAdminError] = useState("")
@@ -62,6 +72,8 @@ export function RootAdminsSection({
         name: adminName.trim(),
         email: adminEmail.trim(),
         phone: adminPhone.trim() || undefined,
+        bossTier: adminTier,
+        brandName: adminTier === "brand_owner" ? brandName ?? null : null,
         password: adminPassword,
       })
       setMode("none")
@@ -99,9 +111,11 @@ export function RootAdminsSection({
           <Crown className="h-4 w-4 text-[#e63462]" />
         </div>
         <div>
-          <h2 className="text-lg font-medium text-white">İşletme Sahibi (Boss) Hesapları</h2>
+          <h2 className="text-lg font-medium text-white">
+            Şube &amp; Marka Boss Hesapları
+          </h2>
           <p className="text-xs text-zinc-400">
-            Corder Boss PWA ve Merchant Paneline giriş yapabilecek işletme sahipleri. Bir Boss birden fazla şubeyi yönetebilir.
+            Bu şubeye hem <strong>Marka Sahibi (HQ)</strong> hem de <strong>Şube / Franchise Sahibi</strong> atanabilir. Her biri kendi yetki kapsamında ciro ve analizleri görür.
           </p>
         </div>
       </div>
@@ -118,10 +132,22 @@ export function RootAdminsSection({
                 className="rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] p-4 flex items-start justify-between gap-4"
               >
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <p className="font-medium text-white">{admin.name}</p>
-                    <span className="rounded-md bg-[#e63462]/15 px-2 py-0.5 text-[11px] font-medium text-[#e63462]">
-                      Boss
+                    <span
+                      className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${
+                        admin.bossTier === "brand_owner"
+                          ? "bg-purple-500/20 text-purple-300"
+                          : admin.bossTier === "regional_manager"
+                            ? "bg-blue-500/20 text-blue-300"
+                            : "bg-[#e63462]/15 text-[#e63462]"
+                      }`}
+                    >
+                      {admin.bossTier === "brand_owner"
+                        ? "Marka Sahibi (HQ)"
+                        : admin.bossTier === "regional_manager"
+                          ? "Bölge Yöneticisi"
+                          : "Şube / Franchise Boss"}
                     </span>
                   </div>
                   <p className="text-sm text-zinc-400 mt-0.5">{admin.email}</p>
@@ -149,7 +175,13 @@ export function RootAdminsSection({
                       admin.restaurants && admin.restaurants.length > 1
                         ? "bu şubeden ayırmak"
                         : "kaldırmak"
-                    if (!confirm(`${admin.name} Boss hesabını ${actionText} istediğinize emin misiniz?`)) return
+                    if (
+                      !confirm(
+                        `${admin.name} Boss hesabını ${actionText} istediğinize emin misiniz?`
+                      )
+                    ) {
+                      return
+                    }
                     void onDeleteRootAdmin(restaurantId, admin.id)
                   }}
                   className="text-xs text-red-400 hover:underline flex-shrink-0"
@@ -163,8 +195,32 @@ export function RootAdminsSection({
           </ul>
 
           {mode === "create" && (
-            <form onSubmit={handleAddBoss} className="mt-4 space-y-3 border-t border-[#2a2a2a] pt-4">
-              <h3 className="text-sm font-medium text-white">Yeni Boss (İşletme Sahibi) Oluştur</h3>
+            <form
+              onSubmit={handleAddBoss}
+              className="mt-4 space-y-3 border-t border-[#2a2a2a] pt-4"
+            >
+              <h3 className="text-sm font-medium text-white">
+                Yeni Boss (Şube / Franchise Sahibi veya Marka Sahibi) Oluştur
+              </h3>
+              <div>
+                <label className="mb-1 block text-xs text-zinc-300">
+                  Boss Hiyerarşi Rolü *
+                </label>
+                <select
+                  value={adminTier}
+                  onChange={(e) => setAdminTier(e.target.value as BossTier)}
+                  className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-3.5 py-2 text-sm text-white outline-none focus:border-[#e63462]"
+                  disabled={adminSubmitLoading}
+                >
+                  <option value="franchise_owner">
+                    Şube / Franchise Sahibi (Şube Boss&apos;u)
+                  </option>
+                  <option value="brand_owner">
+                    Marka &amp; Üst Franchise Sahibi (HQ)
+                  </option>
+                  <option value="regional_manager">Bölge Yöneticisi</option>
+                </select>
+              </div>
               <div>
                 <label className="mb-1 block text-xs text-zinc-300">Ad Soyad *</label>
                 <input
@@ -179,7 +235,9 @@ export function RootAdminsSection({
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-xs text-zinc-300">E-posta (Boss giriş) *</label>
+                  <label className="mb-1 block text-xs text-zinc-300">
+                    E-posta (Boss giriş) *
+                  </label>
                   <input
                     type="email"
                     value={adminEmail}
@@ -203,7 +261,9 @@ export function RootAdminsSection({
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-xs text-zinc-300">Parola (en az 8 karakter) *</label>
+                <label className="mb-1 block text-xs text-zinc-300">
+                  Parola (en az 8 karakter) *
+                </label>
                 <input
                   type="password"
                   value={adminPassword}
@@ -236,8 +296,13 @@ export function RootAdminsSection({
           )}
 
           {mode === "link" && (
-            <form onSubmit={handleLinkExisting} className="mt-4 space-y-3 border-t border-[#2a2a2a] pt-4">
-              <h3 className="text-sm font-medium text-white">Mevcut Boss Hesabına Bu Şubeyi Bağla</h3>
+            <form
+              onSubmit={handleLinkExisting}
+              className="mt-4 space-y-3 border-t border-[#2a2a2a] pt-4"
+            >
+              <h3 className="text-sm font-medium text-white">
+                Mevcut Boss Hesabına Bu Şubeyi Bağla
+              </h3>
               <select
                 value={selectedExistingBossId}
                 onChange={(e) => setSelectedExistingBossId(e.target.value)}
@@ -247,7 +312,9 @@ export function RootAdminsSection({
                 <option value="">Boss hesabı seçin...</option>
                 {linkableBosses.map((b) => (
                   <option key={b.id} value={b.id}>
-                    {b.name} ({b.email}) — {b.restaurants?.length ?? 0} şube
+                    {b.name} ({b.email}) —{" "}
+                    {b.bossTier === "brand_owner" ? "Marka HQ" : "Şube Boss"} •{" "}
+                    {b.restaurants?.length ?? 0} şube
                   </option>
                 ))}
               </select>
@@ -282,7 +349,7 @@ export function RootAdminsSection({
                 className="flex items-center gap-2 rounded-lg border border-dashed border-[#2a2a2a] px-4 py-2.5 text-xs text-zinc-300 hover:border-[#e63462]/60 hover:text-[#e63462]"
               >
                 <UserPlus className="h-4 w-4" />
-                Yeni Boss Hesabı Oluştur
+                Yeni Şube / Marka Boss Oluştur
               </button>
               {linkableBosses.length > 0 && (
                 <button

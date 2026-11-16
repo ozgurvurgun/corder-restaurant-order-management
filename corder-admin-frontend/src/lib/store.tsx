@@ -1,20 +1,14 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react"
-import type { Restaurant, RootAdmin } from "./types"
-import { platform, getPlatformToken, type BossDto } from "./api"
+import type {
+  BossTier,
+  PlatformBillingConfig,
+  Restaurant,
+  RestaurantBillingStatus,
+  RootAdmin,
+} from "./types"
+import { platform, getPlatformToken, type BossDto, type PlatformRestaurantDto } from "./api"
 
-function toRestaurant(r: {
-  id: string
-  name: string
-  slug: string
-  address?: string
-  phone?: string
-  email?: string
-  status: string
-  rootAdminId?: string | null
-  terminalEmail?: string | null
-  printAgentUsername?: string | null
-  createdAt: string
-}): Restaurant {
+function toRestaurant(r: PlatformRestaurantDto): Restaurant {
   return {
     id: r.id,
     name: r.name,
@@ -23,6 +17,20 @@ function toRestaurant(r: {
     phone: r.phone ?? undefined,
     email: r.email ?? undefined,
     status: r.status === "inactive" ? "inactive" : "active",
+    brandName: r.brandName ?? null,
+    branchType: r.branchType ?? "independent",
+    franchiseeCompanyName: r.franchiseeCompanyName ?? null,
+    royaltyRate: Number(r.royaltyRate ?? 0),
+    monthlyFee: Number(r.monthlyFee ?? 0),
+    billingStatus: r.billingStatus ?? "paid",
+    isAccessSuspended: Boolean(r.isAccessSuspended),
+    suspensionReason: r.suspensionReason ?? null,
+    suspendedAt: r.suspendedAt ?? null,
+    lastPaymentDate: r.lastPaymentDate ?? null,
+    lastPaidPeriod: r.lastPaidPeriod ?? null,
+    billingNotes: r.billingNotes ?? null,
+    paymentHistory: r.paymentHistory ?? [],
+    bosses: r.bosses ?? [],
     createdAt: typeof r.createdAt === "string" ? r.createdAt : new Date(r.createdAt).toISOString(),
     rootAdminId: r.rootAdminId ?? undefined,
     terminalEmail: r.terminalEmail ?? undefined,
@@ -37,6 +45,8 @@ function toRootAdmin(a: BossDto): RootAdmin {
     email: a.email,
     name: a.name,
     phone: a.phone ?? null,
+    bossTier: a.bossTier ?? "franchise_owner",
+    brandName: a.brandName ?? null,
     isActive: a.isActive ?? true,
     restaurants: a.restaurants ?? [],
     createdAt: typeof a.createdAt === "string" ? a.createdAt : new Date(a.createdAt).toISOString(),
@@ -50,20 +60,54 @@ type StoreContextType = {
   loadRestaurants: () => Promise<void>
   addRestaurant: (r: Omit<Restaurant, "id" | "createdAt" | "rootAdminId"> & { printAgentPassword?: string }) => Promise<void>
   updateRestaurant: (id: string, r: Partial<Restaurant> & { terminalPassword?: string; printAgentPassword?: string }) => Promise<void>
+  updateRestaurantBilling: (
+    id: string,
+    body: { billingStatus: RestaurantBillingStatus; monthlyFee?: number; period?: string; note?: string | null }
+  ) => Promise<void>
+  markRestaurantPaid: (id: string, body?: { amount?: number; period?: string; note?: string }) => Promise<void>
+  suspendRestaurantUnpaid: (id: string, note?: string) => Promise<void>
   deleteRestaurant: (id: string) => Promise<void>
+  billingConfig: PlatformBillingConfig | null
+  loadBillingConfig: () => Promise<void>
+  updateBillingConfig: (body: Partial<PlatformBillingConfig>) => Promise<void>
+  startMonthlyCollectionCycle: (period?: string) => Promise<{ period: string; updatedCount: number }>
+  suspendAllUnpaidRestaurants: () => Promise<{ suspendedCount: number }>
   rootAdminsForRestaurant: RootAdmin[]
   rootAdminsLoading: boolean
   rootAdminsError: string | null
   loadRootAdmins: (restaurantId: string) => Promise<void>
-  addRootAdmin: (restaurantId: string, r: { name: string; email: string; phone?: string; password: string }) => Promise<void>
+  addRootAdmin: (
+    restaurantId: string,
+    r: { name: string; email: string; phone?: string; bossTier?: BossTier; brandName?: string | null; password: string }
+  ) => Promise<void>
   linkExistingBoss: (restaurantId: string, bossId: string) => Promise<void>
   updateRootAdmin: (restaurantId: string, id: string, r: Partial<Pick<RootAdmin, "name" | "email"> & { password?: string }>) => Promise<void>
   deleteRootAdmin: (restaurantId: string, id: string) => Promise<void>
   allBosses: RootAdmin[]
   bossesLoading: boolean
   loadAllBosses: () => Promise<void>
-  createBoss: (body: { name: string; email: string; phone?: string; password: string; restaurantIds: string[] }) => Promise<void>
-  updateBoss: (id: string, body: { name?: string; email?: string; phone?: string | null; password?: string; isActive?: boolean; restaurantIds?: string[] }) => Promise<void>
+  createBoss: (body: {
+    name: string
+    email: string
+    phone?: string
+    bossTier?: BossTier
+    brandName?: string | null
+    password: string
+    restaurantIds: string[]
+  }) => Promise<void>
+  updateBoss: (
+    id: string,
+    body: {
+      name?: string
+      email?: string
+      phone?: string | null
+      bossTier?: BossTier
+      brandName?: string | null
+      password?: string
+      isActive?: boolean
+      restaurantIds?: string[]
+    }
+  ) => Promise<void>
   deleteBoss: (id: string) => Promise<void>
 }
 
@@ -79,6 +123,7 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([])
   const [restaurantsLoading, setRestaurantsLoading] = useState(false)
   const [restaurantsError, setRestaurantsError] = useState<string | null>(null)
+  const [billingConfig, setBillingConfig] = useState<PlatformBillingConfig | null>(null)
   const [rootAdminsForRestaurant, setRootAdminsForRestaurant] = useState<RootAdmin[]>([])
   const [rootAdminsLoading, setRootAdminsLoading] = useState(false)
   const [rootAdminsError, setRootAdminsError] = useState<string | null>(null)
@@ -97,6 +142,21 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
     } finally {
       setRestaurantsLoading(false)
     }
+  }, [])
+
+  const loadBillingConfig = useCallback(async () => {
+    if (!getPlatformToken()) return
+    try {
+      const cfg = await platform.billing.getConfig()
+      setBillingConfig(cfg)
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  const updateBillingConfig = useCallback(async (body: Partial<PlatformBillingConfig>) => {
+    const updated = await platform.billing.updateConfig(body)
+    setBillingConfig(updated)
   }, [])
 
   const loadAllBosses = useCallback(async () => {
@@ -120,11 +180,19 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
       phone: r.phone,
       email: r.email,
       status: r.status,
+      brandName: r.brandName,
+      branchType: r.branchType,
+      franchiseeCompanyName: r.franchiseeCompanyName,
+      royaltyRate: r.royaltyRate,
+      monthlyFee: r.monthlyFee,
+      billingStatus: r.billingStatus,
+      isAccessSuspended: r.isAccessSuspended,
+      billingNotes: r.billingNotes,
       printAgentUsername: r.printAgentUsername ?? undefined,
       printAgentPassword: r.printAgentPassword,
     })
-    await loadRestaurants()
-  }, [loadRestaurants])
+    await Promise.all([loadRestaurants(), loadAllBosses()])
+  }, [loadRestaurants, loadAllBosses])
 
   const updateRestaurant = useCallback(async (id: string, r: Partial<Restaurant> & { terminalPassword?: string; printAgentPassword?: string }) => {
     await platform.restaurants.update(id, {
@@ -134,12 +202,62 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
       phone: r.phone,
       email: r.email,
       status: r.status,
+      brandName: r.brandName,
+      branchType: r.branchType,
+      franchiseeCompanyName: r.franchiseeCompanyName,
+      royaltyRate: r.royaltyRate,
+      monthlyFee: r.monthlyFee,
+      billingStatus: r.billingStatus,
+      isAccessSuspended: r.isAccessSuspended,
+      billingNotes: r.billingNotes,
       terminalEmail: r.terminalEmail,
       terminalPassword: r.terminalPassword,
       printAgentUsername: r.printAgentUsername,
       printAgentPassword: r.printAgentPassword,
     })
+    await Promise.all([loadRestaurants(), loadAllBosses()])
+  }, [loadRestaurants, loadAllBosses])
+
+  const updateRestaurantBilling = useCallback(
+    async (
+      id: string,
+      body: { billingStatus: RestaurantBillingStatus; monthlyFee?: number; period?: string; note?: string | null }
+    ) => {
+      await platform.restaurants.updateBilling(id, body)
+      await loadRestaurants()
+    },
+    [loadRestaurants]
+  )
+
+  const markRestaurantPaid = useCallback(
+    async (id: string, body?: { amount?: number; period?: string; note?: string }) => {
+      await platform.restaurants.markPaid(id, body)
+      await loadRestaurants()
+    },
+    [loadRestaurants]
+  )
+
+  const suspendRestaurantUnpaid = useCallback(
+    async (id: string, note?: string) => {
+      await platform.restaurants.suspendUnpaid(id, { note })
+      await loadRestaurants()
+    },
+    [loadRestaurants]
+  )
+
+  const startMonthlyCollectionCycle = useCallback(
+    async (period?: string) => {
+      const res = await platform.billing.startCollectionCycle(period)
+      await loadRestaurants()
+      return res
+    },
+    [loadRestaurants]
+  )
+
+  const suspendAllUnpaidRestaurants = useCallback(async () => {
+    const res = await platform.billing.suspendAllUnpaid()
     await loadRestaurants()
+    return res
   }, [loadRestaurants])
 
   const deleteRestaurant = useCallback(async (id: string) => {
@@ -165,7 +283,10 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
   }, [loadAllBosses])
 
   const addRootAdmin = useCallback(
-    async (restaurantId: string, r: { name: string; email: string; phone?: string; password: string }) => {
+    async (
+      restaurantId: string,
+      r: { name: string; email: string; phone?: string; bossTier?: BossTier; brandName?: string | null; password: string }
+    ) => {
       await platform.rootAdmins.create(restaurantId, r)
       await Promise.all([loadRootAdmins(restaurantId), loadRestaurants()])
     },
@@ -197,7 +318,15 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
   )
 
   const createBoss = useCallback(
-    async (body: { name: string; email: string; phone?: string; password: string; restaurantIds: string[] }) => {
+    async (body: {
+      name: string
+      email: string
+      phone?: string
+      bossTier?: BossTier
+      brandName?: string | null
+      password: string
+      restaurantIds: string[]
+    }) => {
       await platform.bosses.create(body)
       await Promise.all([loadAllBosses(), loadRestaurants()])
     },
@@ -205,7 +334,19 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
   )
 
   const updateBoss = useCallback(
-    async (id: string, body: { name?: string; email?: string; phone?: string | null; password?: string; isActive?: boolean; restaurantIds?: string[] }) => {
+    async (
+      id: string,
+      body: {
+        name?: string
+        email?: string
+        phone?: string | null
+        bossTier?: BossTier
+        brandName?: string | null
+        password?: string
+        isActive?: boolean
+        restaurantIds?: string[]
+      }
+    ) => {
       await platform.bosses.update(id, body)
       await Promise.all([loadAllBosses(), loadRestaurants()])
     },
@@ -229,7 +370,15 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
         loadRestaurants,
         addRestaurant,
         updateRestaurant,
+        updateRestaurantBilling,
+        markRestaurantPaid,
+        suspendRestaurantUnpaid,
         deleteRestaurant,
+        billingConfig,
+        loadBillingConfig,
+        updateBillingConfig,
+        startMonthlyCollectionCycle,
+        suspendAllUnpaidRestaurants,
         rootAdminsForRestaurant,
         rootAdminsLoading,
         rootAdminsError,

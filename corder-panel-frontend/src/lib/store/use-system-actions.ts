@@ -26,6 +26,10 @@ function mapStaffDtoToPanelUser(dto: {
   canAccessPanel?: boolean
   canAccessTerminal?: boolean
   permissions?: string[]
+  grantedPermissions?: string[]
+  revokedPermissions?: string[]
+  maxDiscountPercentOverride?: number | null
+  maxDiscountAmountOverride?: number | null
   limits?: { maxDiscountPercent: number; maxDiscountAmount: number | null }
   isActive: boolean
   createdAt?: string
@@ -41,6 +45,10 @@ function mapStaffDtoToPanelUser(dto: {
     canAccessPanel: dto.canAccessPanel,
     canAccessTerminal: dto.canAccessTerminal,
     permissions: dto.permissions,
+    grantedPermissions: dto.grantedPermissions ?? [],
+    revokedPermissions: dto.revokedPermissions ?? [],
+    maxDiscountPercentOverride: dto.maxDiscountPercentOverride ?? null,
+    maxDiscountAmountOverride: dto.maxDiscountAmountOverride ?? null,
     limits: dto.limits,
     active: dto.isActive,
     createdAt: dto.createdAt ? new Date(dto.createdAt) : new Date(),
@@ -78,7 +86,7 @@ export function useSystemActions(params: {
           details: log.details,
           metadata: log.metadata,
         })
-        .catch(() => {})
+        .catch(() => { })
     },
     [token, setAuditLogs],
   )
@@ -115,6 +123,14 @@ export function useSystemActions(params: {
           ...(password ? { password } : {}),
           canAccessPanel: u.canAccessPanel,
           canAccessTerminal: u.canAccessTerminal,
+          ...(u.grantedPermissions !== undefined ? { grantedPermissions: u.grantedPermissions } : {}),
+          ...(u.revokedPermissions !== undefined ? { revokedPermissions: u.revokedPermissions } : {}),
+          ...(u.maxDiscountPercentOverride !== undefined
+            ? { maxDiscountPercentOverride: u.maxDiscountPercentOverride }
+            : {}),
+          ...(u.maxDiscountAmountOverride !== undefined
+            ? { maxDiscountAmountOverride: u.maxDiscountAmountOverride }
+            : {}),
         })
         .then((created) => {
           setUsers((prev) => [...prev, mapStaffDtoToPanelUser(created)])
@@ -144,6 +160,10 @@ export function useSystemActions(params: {
         isActive?: boolean
         canAccessPanel?: boolean
         canAccessTerminal?: boolean
+        grantedPermissions?: string[]
+        revokedPermissions?: string[]
+        maxDiscountPercentOverride?: number | null
+        maxDiscountAmountOverride?: number | null
       } = {}
       if (data.name != null) payload.name = data.name.trim()
       if (data.pin != null && data.pin.trim() !== "") payload.pin = data.pin.trim()
@@ -154,6 +174,14 @@ export function useSystemActions(params: {
       if (data.active !== undefined) payload.isActive = data.active
       if (data.canAccessPanel !== undefined) payload.canAccessPanel = data.canAccessPanel
       if (data.canAccessTerminal !== undefined) payload.canAccessTerminal = data.canAccessTerminal
+      if (data.grantedPermissions !== undefined) payload.grantedPermissions = data.grantedPermissions
+      if (data.revokedPermissions !== undefined) payload.revokedPermissions = data.revokedPermissions
+      if (data.maxDiscountPercentOverride !== undefined) {
+        payload.maxDiscountPercentOverride = data.maxDiscountPercentOverride
+      }
+      if (data.maxDiscountAmountOverride !== undefined) {
+        payload.maxDiscountAmountOverride = data.maxDiscountAmountOverride
+      }
       api.staff
         .update(token, id, payload)
         .then((updated) => {
@@ -352,7 +380,7 @@ export function useSystemActions(params: {
       const pr = printers.find((p) => p.id === id)
       if (!pr || !token) return
       setPrinters((prev) => prev.map((p) => (p.id === id ? { ...p, status: "online" } : p)))
-      void api.technical.updatePrinter(token, id, { status: "online" }).catch(() => {})
+      void api.technical.updatePrinter(token, id, { status: "online" }).catch(() => { })
       void api.orders
         .printReceipt(token, {
           tableName: "YAZICI TEST",
@@ -360,7 +388,7 @@ export function useSystemActions(params: {
           items: [{ productName: `${pr.name} Test Baskısı`, quantity: 1, price: 0 }],
           total: 0,
         })
-        .catch(() => {})
+        .catch(() => { })
       logActivity({ action: "printer_tested", category: "settings", details: `Yazıcı test edildi: ${pr.name}`, metadata: { printerId: id } })
       showPanelToast(`${pr.name} test bağlantısı başarılı`, "success")
     },

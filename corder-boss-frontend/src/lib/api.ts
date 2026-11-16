@@ -8,6 +8,7 @@ import type {
   PermissionCatalogResponse,
   RoleDefinition,
   StaffMemberDto,
+  SubBossItemDto,
 } from "./types"
 
 const BASE = (import.meta.env.VITE_API_URL as string) ?? "http://localhost:4000"
@@ -193,6 +194,28 @@ export const bossApi = {
           body: JSON.stringify(payload),
         },
         sourceRestaurantId
+      )
+    },
+    async listSubBosses() {
+      return bossFetch<SubBossItemDto[]>("/restaurant/boss/sub-bosses")
+    },
+    async createSubBoss(body: {
+      name: string
+      email: string
+      phone?: string
+      password?: string
+      bossTier?: "franchise_owner" | "regional_manager"
+      restaurantIds: string[]
+    }) {
+      return bossFetch<SubBossItemDto[]>("/restaurant/boss/sub-bosses", {
+        method: "POST",
+        body: JSON.stringify(body),
+      })
+    },
+    async unlinkSubBoss(subBossId: string, branchId: string) {
+      return bossFetch<SubBossItemDto[]>(
+        `/restaurant/boss/sub-bosses/${subBossId}/branch/${branchId}`,
+        { method: "DELETE" }
       )
     },
   },

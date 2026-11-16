@@ -1,7 +1,7 @@
 import { useEffect } from "react"
 import { Outlet, useNavigate, NavLink } from "react-router-dom"
 import { usePlatformAuth } from "@/lib/auth-context"
-import { LayoutDashboard, UtensilsCrossed, Crown, LogOut } from "lucide-react"
+import { LayoutDashboard, UtensilsCrossed, Crown, CreditCard, LogOut } from "lucide-react"
 
 export function DashboardLayout() {
   const { isAuthenticated, user, logout } = usePlatformAuth()
@@ -15,8 +15,9 @@ export function DashboardLayout() {
 
   const nav = [
     { to: "/dashboard", label: "Özet", icon: LayoutDashboard },
-    { to: "/dashboard/bosses", label: "Patronlar (Boss)", icon: Crown },
-    { to: "/dashboard/restaurants", label: "Restoranlar & Şubeler", icon: UtensilsCrossed },
+    { to: "/dashboard/bosses", label: "Marka & Şube Bossları", icon: Crown },
+    { to: "/dashboard/restaurants", label: "Restoranlar & Franchise", icon: UtensilsCrossed },
+    { to: "/dashboard/billing", label: "Ücretler & Tahsilat (25-30)", icon: CreditCard },
   ]
 
   return (

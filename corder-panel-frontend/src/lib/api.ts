@@ -32,11 +32,12 @@ import {
   uploadFile,
 } from "./api/catalog.api"
 import { stockApi } from "./api/inventory.api"
-import { restaurantApi, staffApi, technicalApi } from "./api/system.api"
+import { restaurantApi, rolesApi, staffApi, technicalApi } from "./api/system.api"
 
 export const api = {
   restaurant: restaurantApi,
   staff: staffApi,
+  roles: rolesApi,
   tables: tablesApi,
   orders: ordersApi,
   categories: categoriesApi,

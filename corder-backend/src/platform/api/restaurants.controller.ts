@@ -10,8 +10,16 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { RestaurantService } from '../application/restaurant.service';
+import { PlatformBillingService } from '../application/platform-billing.service';
 import { CreateRestaurantDto } from './dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto';
+import {
+  RecordRestaurantPaymentDto,
+  StartCollectionCycleDto,
+  SuspendRestaurantBillingDto,
+  UpdatePlatformBillingConfigDto,
+  UpdateRestaurantBillingStatusDto,
+} from './dto/platform-billing.dto';
 import { PlatformJwtGuard } from '../infrastructure/platform-jwt.guard';
 import { CategoryService } from '../../restaurant/application/category.service';
 
@@ -27,6 +35,7 @@ function sanitizeRestaurant<
 export class RestaurantsController {
   constructor(
     private readonly service: RestaurantService,
+    private readonly billingService: PlatformBillingService,
     private readonly categoryService: CategoryService,
   ) {}
 
@@ -45,7 +54,7 @@ export class RestaurantsController {
 
   @Get(':id')
   async findOne(@Param('id', ParseUUIDPipe) id: string) {
-    const r = await this.service.findOne(id);
+    const r = await this.service.findOneEnriched(id);
     return sanitizeRestaurant(r);
   }
 
@@ -64,8 +73,61 @@ export class RestaurantsController {
     return sanitizeRestaurant(updated);
   }
 
+  @Put(':id/billing')
+  async updateBillingStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateRestaurantBillingStatusDto,
+  ) {
+    const updated = await this.billingService.updateBillingStatus(id, dto);
+    return sanitizeRestaurant(updated);
+  }
+
+  @Post(':id/billing/mark-paid')
+  async markPaid(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RecordRestaurantPaymentDto,
+  ) {
+    const updated = await this.billingService.recordPaymentReceived(id, dto);
+    return sanitizeRestaurant(updated);
+  }
+
+  @Post(':id/billing/suspend-unpaid')
+  async suspendUnpaid(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SuspendRestaurantBillingDto,
+  ) {
+    const updated = await this.billingService.suspendForNonPayment(id, dto?.note);
+    return sanitizeRestaurant(updated);
+  }
+
   @Delete(':id')
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.service.remove(id);
+  }
+}
+
+@Controller('platform/billing')
+@UseGuards(PlatformJwtGuard)
+export class PlatformBillingController {
+  constructor(private readonly billingService: PlatformBillingService) {}
+
+  @Get('config')
+  getConfig() {
+    return this.billingService.getBillingConfig();
+  }
+
+  @Put('config')
+  updateConfig(@Body() dto: UpdatePlatformBillingConfigDto) {
+    return this.billingService.updateBillingConfig(dto);
+  }
+
+  @Post('start-collection-cycle')
+  startCollectionCycle(@Body() dto: StartCollectionCycleDto) {
+    return this.billingService.startMonthlyCollectionCycle(dto?.period);
+  }
+
+  @Post('suspend-all-unpaid')
+  suspendAllUnpaid() {
+    return this.billingService.suspendAllUnpaidRestaurants();
   }
 }

@@ -1,6 +1,7 @@
 import {
   IsArray,
   IsEmail,
+  IsIn,
   IsOptional,
   IsString,
   IsUUID,
@@ -27,6 +28,14 @@ export class CreateRootAdminDto {
   @IsOptional()
   @IsString()
   phone?: string;
+
+  @IsOptional()
+  @IsIn(['brand_owner', 'franchise_owner', 'regional_manager'])
+  bossTier?: 'brand_owner' | 'franchise_owner' | 'regional_manager';
+
+  @IsOptional()
+  @IsString()
+  brandName?: string | null;
 
   @IsString()
   @MinLength(8, { message: 'Password must be at least 8 characters' })

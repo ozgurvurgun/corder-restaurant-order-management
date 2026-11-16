@@ -21,14 +21,14 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplateDefinition[] = [
   {
     key: 'branch_manager',
     name: 'Branch Manager',
-    description: 'Manages all branch operations, cash register, menu, inventory, and reporting workflows.',
+    description: 'Manages all branch operations, cash register, menu, inventory, staff accounts, roles/permissions, and reporting workflows.',
     color: '#9333ea',
     isSystem: true,
     canAccessPanel: true,
     canAccessTerminal: true,
     maxDiscountPercent: 50,
     maxDiscountAmount: 2500,
-    permissions: PERMISSION_KEYS.filter((k) => k !== 'roles.manage'),
+    permissions: [...PERMISSION_KEYS],
   },
   {
     key: 'shift_supervisor',
