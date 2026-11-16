@@ -130,14 +130,17 @@ export class OrderQueryService {
       take: 100,
     });
 
+    const staffNameMap = await this.buildStaffNameMap(
+      restaurantId,
+      orders.map((o) => o.userId),
+    );
+    const allRowItems: Array<{ productId?: string; categoryId?: string }> = [];
     const out: Record<string, unknown>[] = [];
     for (const order of orders) {
       const items =
         order.items?.filter((i) => OrderStatusPolicy.isItemOnActiveBill(i.status)) ?? [];
       if (!items.length) continue;
-      const waiter = order.userId
-        ? await this.staffRepo.findOne({ where: { id: order.userId, restaurantId } })
-        : null;
+      const uid = order.userId?.trim() ?? '';
       const snapshot = { ...order, items };
       const row = {
         ...JSON.parse(JSON.stringify(snapshot)),
@@ -145,16 +148,18 @@ export class OrderQueryService {
         tableName: order.table?.name ?? null,
         waiterName:
           (order.userDisplayName && order.userDisplayName.trim()) ||
-          waiter?.name?.trim() ||
-          null,
+          (uid ? staffNameMap.get(uid) ?? null : null),
       } as Record<string, unknown>;
       const rowItems = row.items as
         | Array<{ productId?: string } & Record<string, unknown>>
         | undefined;
       if (rowItems?.length) {
-        await this.attachCategoryIdsToItems(rowItems, restaurantId);
+        allRowItems.push(...rowItems);
       }
       out.push(row);
+    }
+    if (allRowItems.length) {
+      await this.attachCategoryIdsToItems(allRowItems, restaurantId);
     }
     return out;
   }

@@ -69,6 +69,13 @@ export class ProductService {
 
   async update(id: string, restaurantId: string, dto: UpdateProductDto): Promise<ProductEntity> {
     const entity = await this.findOne(id, restaurantId);
+    if (dto.categoryId !== undefined && dto.categoryId !== entity.categoryId) {
+      const cat = await this.categoryRepo.findOne({
+        where: { id: dto.categoryId, restaurantId },
+      });
+      if (!cat) throw new NotFoundException('Category not found');
+      entity.categoryId = dto.categoryId;
+    }
     if (dto.name !== undefined) entity.name = dto.name.trim();
     if (dto.description !== undefined) entity.description = dto.description?.trim() ?? null;
     if (dto.price !== undefined) entity.price = dto.price;

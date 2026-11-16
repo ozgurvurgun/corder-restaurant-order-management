@@ -18,11 +18,11 @@ export default function ImageUpload({ value, onChange, label, placeholder, requi
 
   const handleFile = useCallback((file: File) => {
     if (!file.type.startsWith("image/")) {
-      setError("Sadece resim dosyalari yuklenebilir")
+      setError("Sadece resim dosyaları yüklenebilir")
       return
     }
     if (file.size > 5 * 1024 * 1024) {
-      setError("Dosya boyutu 5MB'dan kucuk olmali")
+      setError("Dosya boyutu 5MB'dan küçük olmalı")
       return
     }
     setIsLoading(true)
@@ -34,7 +34,7 @@ export default function ImageUpload({ value, onChange, label, placeholder, requi
           setIsLoading(false)
         })
         .catch((e) => {
-          setError(e instanceof Error ? e.message : "Yukleme basarisiz")
+          setError(e instanceof Error ? e.message : "Yükleme başarısız")
           setIsLoading(false)
         })
       return
@@ -45,7 +45,7 @@ export default function ImageUpload({ value, onChange, label, placeholder, requi
       setIsLoading(false)
     }
     reader.onerror = () => {
-      setError("Dosya okunamadi")
+      setError("Dosya okunamadı")
       setIsLoading(false)
     }
     reader.readAsDataURL(file)
@@ -100,28 +100,28 @@ export default function ImageUpload({ value, onChange, label, placeholder, requi
       />
 
       {value ? (
-        // Preview with remove button - compact
         <div className="flex items-center gap-3">
           <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-stone-100 border border-[#d1d1d6]/60 flex-shrink-0">
             <img src={value} alt="Preview" className="w-full h-full object-cover" />
           </div>
           <div className="flex gap-2">
             <button
+              type="button"
               onClick={handleClick}
               className="px-3 py-1.5 bg-[#f5f5f7] hover:bg-[#e8e8ed] rounded-lg text-[12px] font-medium text-[#1d1d1f] transition-colors"
             >
-              Degistir
+              Değiştir
             </button>
             <button
+              type="button"
               onClick={handleRemove}
               className="px-3 py-1.5 bg-[#ff3b30]/10 hover:bg-[#ff3b30]/20 rounded-lg text-[12px] font-medium text-[#ff3b30] transition-colors"
             >
-              Kaldir
+              Kaldır
             </button>
           </div>
         </div>
       ) : (
-        // Upload area - compact
         <div
           onClick={handleClick}
           onDrop={handleDrop}
@@ -142,10 +142,10 @@ export default function ImageUpload({ value, onChange, label, placeholder, requi
               </div>
               <div className="text-left">
                 <p className="text-[12px] font-medium text-[#1d1d1f]">
-                  {isDragging ? "Birakin" : "Fotograf Yukle"}
+                  {isDragging ? "Bırakın" : "Fotoğraf Yükle"}
                 </p>
                 <p className="text-[10px] text-[#86868b]">
-                  {placeholder || "PNG, JPG - Max 5MB"}
+                  {placeholder || "PNG, JPG - Maks 5MB"}
                 </p>
               </div>
             </>

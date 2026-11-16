@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { InventoryCountEntity } from '../domain/inventory-count.entity';
 import { StockMaterialEntity } from '../domain/stock-material.entity';
 import { StockMovementsService } from './stock-movements.service';
@@ -13,6 +13,7 @@ export class InventoryCountsService {
     @InjectRepository(StockMaterialEntity)
     private readonly materials: Repository<StockMaterialEntity>,
     private readonly stockMovements: StockMovementsService,
+    private readonly dataSource: DataSource,
   ) {}
 
   list(restaurantId: string) {
@@ -55,26 +56,31 @@ export class InventoryCountsService {
     if (!Number.isFinite(actualNum)) {
       throw new BadRequestException('Invalid inventory count quantity.');
     }
-    const count = await this.repo.findOne({ where: { id: countId, restaurantId } });
-    if (!count) throw new NotFoundException('Inventory count record not found.');
-    if (count.status === 'completed') {
-      throw new BadRequestException('Completed inventory count cannot be updated.');
-    }
-    const items = count.items.map((it) =>
-      it.materialId === materialId
-        ? {
-            ...it,
-            actualStock: actualNum,
-            difference: Number((actualNum - Number(it.expectedStock)).toFixed(3)),
-          }
-        : it,
-    );
-    count.items = items;
-    return this.repo.save(count);
+    return this.dataSource.transaction(async (em) => {
+      const count = await em.findOne(InventoryCountEntity, {
+        where: { id: countId, restaurantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!count) throw new NotFoundException('Inventory count record not found.');
+      if (count.status === 'completed') {
+        throw new BadRequestException('Completed inventory count cannot be updated.');
+      }
+      const items = count.items.map((it) =>
+        it.materialId === materialId
+          ? {
+              ...it,
+              actualStock: actualNum,
+              difference: Number((actualNum - Number(it.expectedStock)).toFixed(3)),
+            }
+          : it,
+      );
+      count.items = items;
+      return em.save(InventoryCountEntity, count);
+    });
   }
 
   async complete(restaurantId: string, countId: string, userName: string) {
-    return this.repo.manager.transaction(async (em) => {
+    return this.dataSource.transaction(async (em) => {
       const count = await em.findOne(InventoryCountEntity, {
         where: { id: countId, restaurantId },
         lock: { mode: 'pessimistic_write' },
@@ -82,21 +88,33 @@ export class InventoryCountsService {
       if (!count) throw new NotFoundException('Inventory count record not found.');
       if (count.status === 'completed') return count;
 
-      const updatedItems = [];
-      for (const item of count.items) {
+      const updatedItems = count.items.map((item) => {
         const diff = Number(
           (Number(item.actualStock) - Number(item.expectedStock)).toFixed(3),
         );
-        updatedItems.push({ ...item, difference: diff });
-        if (diff === 0) continue;
+        return { ...item, difference: diff };
+      });
 
+      const affectedMaterialIds = [
+        ...new Set(updatedItems.filter((i) => i.difference !== 0).map((i) => i.materialId)),
+      ].sort();
+      if (affectedMaterialIds.length > 0) {
+        await em.find(StockMaterialEntity, {
+          where: { id: In(affectedMaterialIds), restaurantId },
+          order: { id: 'ASC' },
+          lock: { mode: 'pessimistic_write' },
+        });
+      }
+
+      for (const item of updatedItems) {
+        if (item.difference === 0) continue;
         await this.stockMovements.applyMovement(em, restaurantId, {
           materialId: item.materialId,
           materialName: item.materialName,
           type: 'count-adjustment',
-          quantity: diff,
+          quantity: item.difference,
           createdBy: userName,
-          reason: `Inventory count adjustment: ${diff > 0 ? '+' : ''}${diff}`,
+          reason: `Inventory count adjustment: ${item.difference > 0 ? '+' : ''}${item.difference}`,
         });
       }
 

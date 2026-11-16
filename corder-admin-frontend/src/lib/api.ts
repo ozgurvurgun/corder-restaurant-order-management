@@ -127,15 +127,34 @@ export const platform = {
       >(`/platform/restaurants/${restaurantId}/categories`)
     },
     async create(body: { name: string; slug: string; address?: string; phone?: string; email?: string; status?: "active" | "inactive" }) {
+      const payload = {
+        name: body.name,
+        slug: body.slug,
+        ...(body.address !== undefined ? { address: body.address } : {}),
+        ...(body.phone !== undefined ? { phone: body.phone } : {}),
+        ...(body.email !== undefined ? { email: body.email } : {}),
+        ...(body.status !== undefined ? { status: body.status } : {}),
+      }
       return platformFetch<{ id: string; name: string; slug: string; address?: string; phone?: string; email?: string; status: string; rootAdminId?: string | null; createdAt: string }>(
         "/platform/restaurants",
-        { method: "POST", body: JSON.stringify(body) }
+        { method: "POST", body: JSON.stringify(payload) }
       )
     },
     async update(id: string, body: { name?: string; slug?: string; address?: string; phone?: string; email?: string; status?: "active" | "inactive"; terminalEmail?: string | null; terminalPassword?: string; printAgentToken?: string | null }) {
+      const payload = {
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.slug !== undefined ? { slug: body.slug } : {}),
+        ...(body.address !== undefined ? { address: body.address } : {}),
+        ...(body.phone !== undefined ? { phone: body.phone } : {}),
+        ...(body.email !== undefined ? { email: body.email } : {}),
+        ...(body.status !== undefined ? { status: body.status } : {}),
+        ...(body.terminalEmail !== undefined ? { terminalEmail: body.terminalEmail } : {}),
+        ...(body.terminalPassword !== undefined ? { terminalPassword: body.terminalPassword } : {}),
+        ...(body.printAgentToken !== undefined ? { printAgentToken: body.printAgentToken } : {}),
+      }
       return platformFetch<{ id: string; name: string; slug: string; address?: string; phone?: string; email?: string; status: string; rootAdminId?: string | null; terminalEmail?: string | null; printAgentToken?: string | null; createdAt: string }>(
         `/platform/restaurants/${id}`,
-        { method: "PUT", body: JSON.stringify(body) }
+        { method: "PUT", body: JSON.stringify(payload) }
       )
     },
     async delete(id: string) {
@@ -147,9 +166,15 @@ export const platform = {
       return platformFetch<BossDto[]>(`/platform/restaurants/${restaurantId}/root-admins`)
     },
     async create(restaurantId: string, body: { name: string; email: string; phone?: string; password: string }) {
+      const payload = {
+        name: body.name,
+        email: body.email,
+        ...(body.phone !== undefined ? { phone: body.phone } : {}),
+        password: body.password,
+      }
       return platformFetch<BossDto>(
         `/platform/restaurants/${restaurantId}/root-admins`,
-        { method: "POST", body: JSON.stringify(body) }
+        { method: "POST", body: JSON.stringify(payload) }
       )
     },
     async linkExisting(restaurantId: string, bossId: string) {
@@ -158,10 +183,18 @@ export const platform = {
         { method: "POST" }
       )
     },
-    async update(restaurantId: string, id: string, body: { name?: string; email?: string; phone?: string; password?: string }) {
+    async update(restaurantId: string, id: string, body: { name?: string; email?: string; phone?: string | null; password?: string; isActive?: boolean; restaurantIds?: string[] }) {
+      const payload = {
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.email !== undefined ? { email: body.email } : {}),
+        ...(body.phone !== undefined ? { phone: body.phone } : {}),
+        ...(body.password !== undefined ? { password: body.password } : {}),
+        ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
+        ...(body.restaurantIds !== undefined ? { restaurantIds: body.restaurantIds } : {}),
+      }
       return platformFetch<BossDto>(
         `/platform/restaurants/${restaurantId}/root-admins/${id}`,
-        { method: "PUT", body: JSON.stringify(body) }
+        { method: "PUT", body: JSON.stringify(payload) }
       )
     },
     async delete(restaurantId: string, id: string) {
@@ -179,9 +212,16 @@ export const platform = {
       password: string
       restaurantIds?: string[]
     }) {
+      const payload = {
+        name: body.name,
+        email: body.email,
+        ...(body.phone !== undefined ? { phone: body.phone } : {}),
+        password: body.password,
+        ...(body.restaurantIds !== undefined ? { restaurantIds: body.restaurantIds } : {}),
+      }
       return platformFetch<BossDto>("/platform/bosses", {
         method: "POST",
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       })
     },
     async update(
@@ -195,9 +235,17 @@ export const platform = {
         restaurantIds?: string[]
       }
     ) {
+      const payload = {
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.email !== undefined ? { email: body.email } : {}),
+        ...(body.phone !== undefined ? { phone: body.phone } : {}),
+        ...(body.password !== undefined ? { password: body.password } : {}),
+        ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
+        ...(body.restaurantIds !== undefined ? { restaurantIds: body.restaurantIds } : {}),
+      }
       return platformFetch<BossDto>(`/platform/bosses/${id}`, {
         method: "PUT",
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       })
     },
     async delete(id: string) {

@@ -26,7 +26,7 @@ const RouterContext = createContext<RouterContextValue>({
   outlet: null,
 })
 
-export function BrowserRouter({ children }: { children: ReactNode }) {
+export function BrowserRouter({ children }: { children?: ReactNode }) {
   const [pathname, setPathname] = useState(() =>
     typeof window !== "undefined" ? window.location.pathname || "/" : "/"
   )
@@ -124,7 +124,7 @@ function matchPath(
   }
 }
 
-export function Routes({ children }: { children: ReactNode }) {
+export function Routes({ children }: { children?: ReactNode }) {
   const ctx = useContext(RouterContext)
   const routeElements = Children.toArray(children).filter(
     isValidElement
@@ -200,7 +200,7 @@ export function Link({
   children,
   onClick,
   ...rest
-}: { to: string; children: ReactNode } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href">) {
+}: { to: string; children?: ReactNode } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href">) {
   const navigate = useNavigate()
   return (
     <a
@@ -228,7 +228,7 @@ export function NavLink({
   to: string
   end?: boolean
   className?: string | ((props: { isActive: boolean }) => string)
-  children: ReactNode
+  children?: ReactNode
 }) {
   const { pathname, navigate } = useContext(RouterContext)
   const isActive = end

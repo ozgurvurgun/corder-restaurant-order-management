@@ -1,27 +1,18 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { OpenAccountEntity } from '../domain/open-account.entity';
 import { OpenAccountItemEntity } from '../domain/open-account-item.entity';
 import { OpenAccountPaymentEntity } from '../domain/open-account-payment.entity';
+import { CashShiftEntity } from '../domain/cash-shift.entity';
+import { CashTransactionEntity } from '../domain/cash-transaction.entity';
 import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
+import {
+  CreateOpenAccountDto,
+  CreateOpenAccountItemDto,
+} from '../api/dto/create-open-account.dto';
 
-export interface CreateOpenAccountItemDto {
-  productName: string;
-  quantity: number;
-  price: number;
-  productId?: string;
-  note?: string;
-}
-
-export interface CreateOpenAccountDto {
-  customerName: string;
-  customerPhone?: string;
-  amount?: number;
-  description?: string;
-  createdBy: string;
-  items?: CreateOpenAccountItemDto[];
-}
+export { CreateOpenAccountDto, CreateOpenAccountItemDto };
 
 @Injectable()
 export class OpenAccountsService {
@@ -32,6 +23,7 @@ export class OpenAccountsService {
     private readonly itemRepo: Repository<OpenAccountItemEntity>,
     @InjectRepository(OpenAccountPaymentEntity)
     private readonly paymentRepo: Repository<OpenAccountPaymentEntity>,
+    private readonly dataSource: DataSource,
   ) {}
 
   private serialize(
@@ -81,82 +73,102 @@ export class OpenAccountsService {
       where: { restaurantId },
       order: { createdAt: 'DESC' },
     });
-    const out = [];
-    for (const acc of rows) {
-      const [items, payments] = await Promise.all([
-        this.itemRepo.find({ where: { openAccountId: acc.id } }),
-        this.paymentRepo.find({ where: { openAccountId: acc.id } }),
-      ]);
-      out.push(this.serialize(acc, items, payments));
+    if (rows.length === 0) return [];
+
+    const accountIds = rows.map((r) => r.id);
+    const [allItems, allPayments] = await Promise.all([
+      this.itemRepo.find({ where: { openAccountId: In(accountIds) } }),
+      this.paymentRepo.find({ where: { openAccountId: In(accountIds) } }),
+    ]);
+
+    const itemsByAccountId = new Map<string, OpenAccountItemEntity[]>();
+    for (const item of allItems) {
+      const list = itemsByAccountId.get(item.openAccountId) ?? [];
+      list.push(item);
+      itemsByAccountId.set(item.openAccountId, list);
     }
-    return out;
+
+    const paymentsByAccountId = new Map<string, OpenAccountPaymentEntity[]>();
+    for (const payment of allPayments) {
+      const list = paymentsByAccountId.get(payment.openAccountId) ?? [];
+      list.push(payment);
+      paymentsByAccountId.set(payment.openAccountId, list);
+    }
+
+    return rows.map((acc) =>
+      this.serialize(
+        acc,
+        itemsByAccountId.get(acc.id) ?? [],
+        paymentsByAccountId.get(acc.id) ?? [],
+      ),
+    );
   }
 
-  async create(restaurantId: string, dto: CreateOpenAccountDto) {
-    const hasItems = dto.items && dto.items.length > 0;
-    let amount: number;
+  async create(
+    restaurantId: string,
+    dto: CreateOpenAccountDto & { createdBy: string },
+  ) {
+    const hasItems = Boolean(dto.items && dto.items.length > 0);
+    let amountMinorUnits = 0;
     let description: string;
 
     if (hasItems) {
-      amount = dto.items!.reduce((sum, it) => {
+      for (const it of dto.items!) {
         const q = Math.max(1, Math.floor(Number(it.quantity) || 0));
-        const p = Number(it.price);
-        if (!Number.isFinite(p) || p < 0) {
+        const unitMinor = toMinorUnits(it.price);
+        if (unitMinor < 0) {
           throw new BadRequestException('Invalid line item price');
         }
         const name = (it.productName || '').trim();
         if (!name) throw new BadRequestException('Product name cannot be empty');
-        return sum + q * p;
-      }, 0);
-      if (amount <= 0) {
+        amountMinorUnits += q * unitMinor;
+      }
+      if (amountMinorUnits <= 0) {
         throw new BadRequestException('Total amount must be greater than zero');
       }
       description = (dto.description ?? '').trim() || 'Check';
     } else {
-      if (
-        dto.amount == null ||
-        !Number.isFinite(Number(dto.amount)) ||
-        Number(dto.amount) <= 0
-      ) {
+      if (dto.amount == null || toMinorUnits(dto.amount) <= 0) {
         throw new BadRequestException('Either amount or item list is required');
       }
-      amount = Number(dto.amount);
+      amountMinorUnits = toMinorUnits(dto.amount);
       description = (dto.description ?? '').trim();
       if (!description) {
         throw new BadRequestException('Description is required when no items are provided');
       }
     }
 
-    const acc = this.repo.create({
-      restaurantId,
-      customerName: dto.customerName.trim(),
-      customerPhone: dto.customerPhone?.trim() || null,
-      amount,
-      paidAmount: 0,
-      status: 'open',
-      description,
-      createdBy: dto.createdBy,
+    return this.dataSource.transaction(async (em) => {
+      const acc = em.create(OpenAccountEntity, {
+        restaurantId,
+        customerName: dto.customerName.trim(),
+        customerPhone: dto.customerPhone?.trim() || null,
+        amount: fromMinorUnits(amountMinorUnits),
+        paidAmount: 0,
+        status: 'open',
+        description,
+        createdBy: dto.createdBy,
+      });
+      const saved = await em.save(OpenAccountEntity, acc);
+
+      let savedItems: OpenAccountItemEntity[] = [];
+      if (hasItems) {
+        const rows = dto.items!.map((it, idx) =>
+          em.create(OpenAccountItemEntity, {
+            openAccountId: saved.id,
+            productId: it.productId?.trim() || null,
+            productName: (it.productName || '').trim(),
+            quantity: Math.max(1, Math.floor(Number(it.quantity) || 1)),
+            price: fromMinorUnits(toMinorUnits(it.price)),
+            note: it.note?.trim() || null,
+            sortOrder: idx,
+          }),
+        );
+        savedItems = await em.save(OpenAccountItemEntity, rows);
+      }
+
+      return this.serialize(saved, savedItems, []);
     });
-    const saved = await this.repo.save(acc);
-
-    if (hasItems) {
-      const rows = dto.items!.map((it, idx) =>
-        this.itemRepo.create({
-          openAccountId: saved.id,
-          productId: it.productId?.trim() || null,
-          productName: (it.productName || '').trim(),
-          quantity: Math.max(1, Math.floor(Number(it.quantity) || 1)),
-          price: Number(it.price),
-          note: it.note?.trim() || null,
-          sortOrder: idx,
-        }),
-      );
-      await this.itemRepo.save(rows);
-    }
-
-    const items = await this.itemRepo.find({ where: { openAccountId: saved.id } });
-    const payments = await this.paymentRepo.find({ where: { openAccountId: saved.id } });
-    return this.serialize(saved, items, payments);
   }
 
   async pay(
@@ -165,17 +177,16 @@ export class OpenAccountsService {
     amount: number,
     receivedBy: string,
     receivedByUserId?: string | null,
+    paymentMethod = 'cash',
   ) {
-    const payAmt = Number(amount);
-    if (!Number.isFinite(payAmt) || payAmt <= 0) {
-      throw new BadRequestException('Invalid payment amount');
-    }
-    const payMinorUnits = toMinorUnits(payAmt);
+    const payMinorUnits = toMinorUnits(amount);
     if (payMinorUnits <= 0) {
       throw new BadRequestException('Invalid payment amount');
     }
+    const normalizedAmount = fromMinorUnits(payMinorUnits);
+    const actorName = receivedBy.trim() || 'Unknown';
 
-    return this.repo.manager.transaction(async (em) => {
+    return this.dataSource.transaction(async (em) => {
       const acc = await em.findOne(OpenAccountEntity, {
         where: { id, restaurantId },
         lock: { mode: 'pessimistic_write' },
@@ -187,12 +198,34 @@ export class OpenAccountsService {
 
       const row = em.create(OpenAccountPaymentEntity, {
         openAccountId: acc.id,
-        amount: fromMinorUnits(payMinorUnits),
-        receivedBy: receivedBy.trim() || 'Unknown',
+        amount: normalizedAmount,
+        receivedBy: actorName,
         receivedByUserId: receivedByUserId?.trim() || null,
         note: null,
       });
       await em.save(OpenAccountPaymentEntity, row);
+
+      if (paymentMethod === 'cash') {
+        const shift = await em.findOne(CashShiftEntity, {
+          where: { restaurantId, status: 'open' },
+          order: { openedAt: 'DESC' },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (shift) {
+          const cashTx = em.create(CashTransactionEntity, {
+            restaurantId,
+            shiftId: shift.id,
+            type: 'cash-in',
+            amount: normalizedAmount,
+            description: `Open account payment: ${acc.customerName}`,
+            reference: acc.id,
+            createdBy: actorName,
+          });
+          await em.save(CashTransactionEntity, cashTx);
+          shift.recordCashMovement('cash-in', payMinorUnits);
+          await em.save(CashShiftEntity, shift);
+        }
+      }
 
       const [items, payments] = await Promise.all([
         em.find(OpenAccountItemEntity, { where: { openAccountId: acc.id } }),

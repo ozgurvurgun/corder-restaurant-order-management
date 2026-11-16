@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { X } from "lucide-react"
 
 interface NewRoleModalProps {
@@ -16,9 +16,17 @@ export function NewRoleModal({ saving, onClose, onSubmit }: NewRoleModalProps) {
   const [roleDescription, setRoleDescription] = useState("")
   const [roleColor, setRoleColor] = useState("#e63462")
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !saving) onClose()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [onClose, saving])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!roleName.trim()) return
+    if (!roleName.trim() || saving) return
     await onSubmit({
       name: roleName.trim(),
       description: roleDescription.trim() || undefined,
@@ -27,8 +35,14 @@ export function NewRoleModal({ saving, onClose, onSubmit }: NewRoleModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-      <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs"
+      onClick={() => !saving && onClose()}
+    >
+      <div
+        className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between border-b border-[#f0f0f0] pb-3">
           <h3 className="text-[16px] font-bold text-[#1d1d1f]">Yeni Özel Rol Oluştur</h3>
           <button

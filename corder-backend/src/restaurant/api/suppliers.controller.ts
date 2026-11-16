@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
 import { PanelRootGuard } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
@@ -24,14 +34,17 @@ export class SuppliersController {
   @Patch(':id')
   update(
     @RestaurantId() restaurantId: string,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() body: UpdateSupplierDto,
   ) {
     return this.suppliers.update(restaurantId, id, body);
   }
 
   @Delete(':id')
-  remove(@RestaurantId() restaurantId: string, @Param('id') id: string) {
+  remove(
+    @RestaurantId() restaurantId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
     return this.suppliers.remove(restaurantId, id);
   }
 }

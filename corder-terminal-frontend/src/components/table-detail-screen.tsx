@@ -37,7 +37,7 @@ export function TableDetailScreen({
     currentUser,
     hasPermission,
   } = useApp()
-  const [printing, setPrinting] = useState(false)
+  const [isPrinting, setIsPrinting] = useState(false)
   const [showMoveConfirm, setShowMoveConfirm] = useState(false)
 
   const table = tables.find((t) => t.id === tableId)
@@ -58,18 +58,19 @@ export function TableDetailScreen({
   }
 
   const handlePrint = async () => {
+    if (isPrinting) return
     if (!canPrintReceipt) {
       showToast("Adisyon yazdırma yetkiniz bulunmuyor", "error")
       return
     }
-    setPrinting(true)
+    setIsPrinting(true)
     try {
       await printReceipt(tableId)
-      showToast("Adisyon yazdirildi")
+      showToast("Adisyon yazdırıldı")
     } catch (e) {
-      showToast(e instanceof Error ? e.message : "Yazdirilamadi", "error")
+      showToast(e instanceof Error ? e.message : "Yazdırılamadı", "error")
     } finally {
-      setPrinting(false)
+      setIsPrinting(false)
     }
   }
 
@@ -125,7 +126,7 @@ export function TableDetailScreen({
           />
           <ActionRow
             icon={<ArrowRightLeft className="h-[20px] w-[20px]" />}
-            label="Masayi Tasi"
+            label="Masayı Taşı"
             locked={!canMoveTable}
             onClick={() => {
               if (!canMoveTable) {
@@ -142,16 +143,16 @@ export function TableDetailScreen({
           />
           <ActionRow
             icon={<Printer className="h-[20px] w-[20px]" />}
-            label="Yazdir"
+            label={isPrinting ? "Yazdırılıyor..." : "Yazdır"}
             locked={!canPrintReceipt}
             onClick={() => void handlePrint()}
-            disabled={printing || total === 0}
+            disabled={isPrinting || total === 0}
             color="text-[#e63462]"
           />
         </div>
         {isBillRequested && (
           <p className="mt-3 text-[12px] font-medium text-white/90 bg-[#0a84ff]/30 border border-white/25 rounded-xl px-3 py-2">
-            Bu masada hesap kesme penceresi acik. Pencere kapanana kadar terminalden yeni siparis alinamaz.
+            Bu masada hesap kesme penceresi açık. Pencere kapanana kadar terminalden yeni sipariş alınamaz.
           </p>
         )}
       </div>
@@ -162,7 +163,7 @@ export function TableDetailScreen({
         className="flex items-center justify-center gap-2 text-white/80 active:text-white py-4 mx-6 transition-colors"
       >
         <ArrowLeft className="h-[18px] w-[18px]" />
-        <span className="font-semibold text-[15px]">Masalara Don</span>
+        <span className="font-semibold text-[15px]">Masalara Dön</span>
       </button>
 
       {/* Footer */}
@@ -176,10 +177,10 @@ export function TableDetailScreen({
       {/* Move Table Confirmation */}
       <ConfirmDialog
         open={showMoveConfirm}
-        title="Masayi Tasi"
-        message={`${table.name} masasini baska bir masaya tasimak istediginize emin misiniz?`}
-        confirmText="Evet, Tasi"
-        cancelText="Vazgec"
+        title="Masayı Taşı"
+        message={`${table.name} masasını başka bir masaya taşımak istediğinize emin misiniz?`}
+        confirmText="Evet, Taşı"
+        cancelText="Vazgeç"
         onConfirm={handleMoveConfirmed}
         onCancel={() => setShowMoveConfirm(false)}
       />

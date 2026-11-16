@@ -120,7 +120,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       }
       setCurrentUser(mapSessionToTerminalUser(getStaffSession()))
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Veri yuklenemedi")
+      setError(err instanceof Error ? err.message : "Veri yüklenemedi")
     } finally {
       setIsLoading(false)
     }
@@ -223,7 +223,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       await refreshData()
       return true
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Giris basarisiz")
+      setError(err instanceof Error ? err.message : "Giriş başarısız")
       return false
     }
   }, [refreshData])
@@ -247,7 +247,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       setActiveScreen("tables")
       return { ok: true }
     } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : "Gecersiz PIN" }
+      return { ok: false, error: err instanceof Error ? err.message : "Geçersiz PIN kodu" }
     }
   }, [])
 
@@ -257,8 +257,8 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     if (isOffline) { lockedTableIdRef.current = tableId; setSelectedTableId(tableId); return { ok: true } }
     const user = currentUserRef.current
     const token = getToken()
-    if (!user) return { ok: false, holderName: "Garson secilmedi" }
-    if (!token) return { ok: false, holderName: "Baglanti yok" }
+    if (!user) return { ok: false, holderName: "Garson seçilmedi" }
+    if (!token) return { ok: false, holderName: "Bağlantı yok" }
     try {
       const res = await api.tables.sessionLock(token, tableId)
       if (!res.ok) return { ok: false, holderName: res.holderName }
@@ -268,7 +268,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       void pullTables()
       return { ok: true }
     } catch (err) {
-      return { ok: false, holderName: err instanceof Error && err.message ? err.message : "Baglanti yok" }
+      return { ok: false, holderName: err instanceof Error && err.message ? err.message : "Bağlantı yok" }
     }
   }, [isOffline, pullTables, releaseTableSession])
 
@@ -298,7 +298,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     const targetTableId = explicitTableId ?? selectedTableId
     if (!targetTableId || cart.length === 0 || submitInFlightRef.current) return false
     if (tables.find((t) => t.id === targetTableId)?.status === "bill-requested") {
-      setError("Masa hesap kesiminde. Hesap penceresi kapatilmadan siparis gonderilemez.")
+      setError("Masa hesap kesiminde. Hesap penceresi kapatılmadan sipariş gönderilemez.")
       return false
     }
     const token = getToken()
@@ -314,7 +314,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       setCart([])
       return true
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Siparis gonderilemedi")
+      setError(err instanceof Error ? err.message : "Sipariş gönderilemedi")
       return false
     } finally {
       submitInFlightRef.current = false

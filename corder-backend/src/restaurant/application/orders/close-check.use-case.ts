@@ -266,7 +266,10 @@ export class CloseCheckUseCase {
   ): Promise<LedgerCustomerEntity | null> {
     if (settlement.ledgerMinorUnits <= 0 && dto.method !== 'ledger') return null;
     if (!dto.ledgerCustomerId) throw new BadRequestException('ledgerCustomerId is required when recording a ledger debt');
-    const customer = await em.findOne(LedgerCustomerEntity, { where: { id: dto.ledgerCustomerId, restaurantId } });
+    const customer = await em.findOne(LedgerCustomerEntity, {
+      where: { id: dto.ledgerCustomerId, restaurantId },
+      lock: { mode: 'pessimistic_write' },
+    });
     if (!customer) throw new NotFoundException('Ledger customer not found');
     return customer;
   }

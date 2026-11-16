@@ -63,7 +63,7 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
         <button
           onClick={() => setMenuOpen(!menuOpen)}
           className="p-2 -mr-2 active:opacity-60"
-          aria-label="Menu"
+          aria-label="Menü"
         >
           <Menu className="h-[22px] w-[22px]" />
         </button>
@@ -89,7 +89,7 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
                     {currentUser?.name}
                   </p>
                   <p className="text-[12px] text-muted-foreground">
-                    {"Acik: "}
+                    {"Açık: "}
                     {openTableCount}
                     {" / "}
                     {tables.length}
@@ -110,7 +110,7 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
                   <Wifi className="h-[20px] w-[20px] text-muted-foreground" />
                 )}
                 <span className="text-[15px] text-card-foreground">
-                  {isOffline ? "Cevrimdisi Mod (Aktif)" : "Cevrimdisi Mod"}
+                  {isOffline ? "Çevrimdışı Mod (Aktif)" : "Çevrimdışı Mod"}
                 </span>
               </button>
               <div className="border-t border-border mt-1 pt-1">
@@ -122,7 +122,7 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
                   className="flex items-center gap-3 py-3 active:bg-muted/50 -mx-1 px-1 rounded-lg w-full"
                 >
                   <LogOut className="h-[20px] w-[20px] text-destructive" />
-                  <span className="text-[15px] text-destructive">Cikis Yap</span>
+                  <span className="text-[15px] text-destructive">Çıkış Yap</span>
                 </button>
               </div>
             </div>
@@ -143,7 +143,7 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
                   : "text-muted-foreground"
               }`}
             >
-              {section === ALL_SECTIONS ? "Tumu" : section}
+              {section === ALL_SECTIONS ? "Tümü" : section}
             </button>
           ))}
         </div>
@@ -154,7 +154,7 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
         <div className="px-4 py-3 flex gap-2 flex-shrink-0 border-b border-border bg-background">
           <input
             type="text"
-            placeholder="Masa adi veya numarasi..."
+            placeholder="Masa adı veya numarası..."
             value={tableNumber}
             onChange={(e) => setTableNumber(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleNumberSearch()}
@@ -196,13 +196,13 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
         <div className="flex">
           <TabBarButton
             icon={<UtensilsCrossed className="h-[22px] w-[22px]" />}
-            label="Tum Masalar"
+            label="Tüm Masalar"
             active={filterMode === "all"}
             onClick={() => setFilterMode("all")}
           />
           <TabBarButton
             icon={<Wine className="h-[22px] w-[22px]" />}
-            label="Acik Masalar"
+            label="Açık Masalar"
             active={filterMode === "open"}
             onClick={() => setFilterMode("open")}
           />
@@ -283,7 +283,7 @@ function TableCard({
           </div>
         </>
       ) : (
-        <span className="text-[12px] text-muted-foreground mt-0.5">Bos</span>
+        <span className="text-[12px] text-muted-foreground mt-0.5">Boş</span>
       )}
     </button>
   )

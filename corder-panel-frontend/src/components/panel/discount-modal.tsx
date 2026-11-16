@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { X, Percent, DollarSign, Gift, ShieldAlert } from "lucide-react"
 import { usePanelStore } from "@/lib/panel-store"
 import { usePanelAuth } from "@/lib/panel-auth"
@@ -14,12 +14,12 @@ interface DiscountModalProps {
 const PRESET_PERCENTS = [5, 10, 15, 20, 25, 50]
 const PRESET_AMOUNTS = [10, 20, 50, 100, 200, 500]
 const REASONS = [
-  { id: "owner", label: "Patron Ikrami" },
-  { id: "complaint", label: "Musteri Sikayeti" },
-  { id: "mistake", label: "Siparis Hatasi" },
+  { id: "owner", label: "Patron İkramı" },
+  { id: "complaint", label: "Müşteri Şikayeti" },
+  { id: "mistake", label: "Sipariş Hatası" },
   { id: "campaign", label: "Kampanya" },
-  { id: "loyalty", label: "Sadik Musteri" },
-  { id: "other", label: "Diger" },
+  { id: "loyalty", label: "Sadık Müşteri" },
+  { id: "other", label: "Diğer" },
 ]
 
 function formatCurrency(n: number) {
@@ -51,6 +51,18 @@ export default function DiscountModal({
   const [customValue, setCustomValue] = useState("")
   const [selectedReason, setSelectedReason] = useState("owner")
   const [customReason, setCustomReason] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const submittingRef = useRef(false)
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !submittingRef.current) {
+        onClose()
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [onClose])
 
   const table = tables.find((t) => t.id === tableId)
 
@@ -65,39 +77,57 @@ export default function DiscountModal({
 
   const calculatedDiscount =
     discountType === "percent"
-      ? (total * value) / 100
+      ? (total * Math.min(100, Math.max(0, value))) / 100
       : discountType === "complimentary"
         ? total
-        : value
+        : Math.max(0, value)
 
   const finalTotal = Math.max(0, total - calculatedDiscount)
 
+  const reasonText =
+    selectedReason === "other"
+      ? customReason.trim()
+      : REASONS.find((r) => r.id === selectedReason)?.label || ""
+
+  const isInvalidInput =
+    isExceedingLimit ||
+    !reasonText ||
+    (discountType !== "complimentary" && (!Number.isFinite(value) || value <= 0)) ||
+    (discountType === "percent" && value > 100)
+
   const handleApply = () => {
+    if (isSubmitting || submittingRef.current) return
     if (isExceedingLimit) {
       showToast("Girilen indirim yetki limitinizi aşıyor!", "error")
       return
     }
-    const reason =
-      selectedReason === "other"
-        ? customReason
-        : REASONS.find((r) => r.id === selectedReason)?.label || ""
+    if (!reasonText) {
+      showToast("Lütfen geçerli bir indirim nedeni girin.", "error")
+      return
+    }
+    if (discountType !== "complimentary" && (!Number.isFinite(value) || value <= 0)) {
+      showToast("Lütfen geçerli bir indirim değeri girin.", "error")
+      return
+    }
+    submittingRef.current = true
+    setIsSubmitting(true)
     const discountValue = discountType === "complimentary" ? 100 : value
 
     applyDiscount(tableId, {
       type: discountType,
       value: discountValue,
-      reason,
+      reason: reasonText,
     })
 
     const discountText =
       discountType === "percent"
         ? `%${value}`
         : discountType === "complimentary"
-          ? "Tam Ikram"
+          ? "Tam İkram"
           : `${formatCurrency(value)} TL`
 
     showToast(
-      `${table?.name}: ${discountText} indirim uygulandi. Yeni toplam: ${formatCurrency(finalTotal)} TL`,
+      `${table?.name}: ${discountText} indirim uygulandı. Yeni toplam: ${formatCurrency(finalTotal)} TL`,
       "success",
     )
     onClose()
@@ -110,18 +140,24 @@ export default function DiscountModal({
 
   const handleCustomChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value
+    if (val === "") {
+      setCustomValue("")
+      setValue(0)
+      return
+    }
+    const parsed = parseFloat(val)
+    if (!Number.isFinite(parsed) || parsed < 0) return
     setCustomValue(val)
-    setValue(parseFloat(val) || 0)
+    setValue(parsed)
   }
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#e5e5ea]">
           <div>
             <h2 className="text-[17px] font-semibold text-[#1d1d1f]">
-              Indirim/Ikram - {table?.name}
+              İndirim / İkram - {table?.name}
             </h2>
             <p className="text-[11px] text-[#86868b]">
               Yetki Limitiniz: Maks %{maxPct}
@@ -129,6 +165,7 @@ export default function DiscountModal({
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-1.5 hover:bg-[#f5f5f7] rounded-lg transition-colors"
           >
@@ -136,32 +173,16 @@ export default function DiscountModal({
           </button>
         </div>
 
-        {/* Content */}
         <div className="p-5 space-y-5">
-          {/* Discount Type Tabs */}
           <div className="flex gap-2">
             {[
-              {
-                type: "percent" as const,
-                icon: Percent,
-                label: "Yuzde",
-                allowed: canPercent,
-              },
-              {
-                type: "amount" as const,
-                icon: DollarSign,
-                label: "Tutar",
-                allowed: canAmount,
-              },
-              {
-                type: "complimentary" as const,
-                icon: Gift,
-                label: "Tam Ikram",
-                allowed: canComplimentary,
-              },
+              { type: "percent" as const, icon: Percent, label: "Yüzde", allowed: canPercent },
+              { type: "amount" as const, icon: DollarSign, label: "Tutar", allowed: canAmount },
+              { type: "complimentary" as const, icon: Gift, label: "Tam İkram", allowed: canComplimentary },
             ].map(({ type, icon: Icon, label, allowed }) => (
               <button
                 key={type}
+                type="button"
                 disabled={!allowed}
                 onClick={() => {
                   setDiscountType(type)
@@ -180,19 +201,15 @@ export default function DiscountModal({
             ))}
           </div>
 
-          {/* Value Selection */}
           {discountType !== "complimentary" && (
             <div className="space-y-3">
               <label className="text-[13px] font-medium text-[#86868b] uppercase tracking-wide">
                 {discountType === "percent"
-                  ? `Indirim Orani (Maks %${maxPct})`
-                  : `Indirim Tutari ${maxAmt != null ? `(Maks ${maxAmt} TL)` : ""}`}
+                  ? `İndirim Oranı (Maks %${maxPct})`
+                  : `İndirim Tutarı ${maxAmt != null ? `(Maks ${maxAmt} TL)` : ""}`}
               </label>
               <div className="grid grid-cols-3 gap-2">
-                {(discountType === "percent"
-                  ? PRESET_PERCENTS
-                  : PRESET_AMOUNTS
-                ).map((preset) => {
+                {(discountType === "percent" ? PRESET_PERCENTS : PRESET_AMOUNTS).map((preset) => {
                   const disabledPreset =
                     !isBoss &&
                     ((discountType === "percent" && preset > maxPct) ||
@@ -200,6 +217,7 @@ export default function DiscountModal({
                   return (
                     <button
                       key={preset}
+                      type="button"
                       disabled={disabledPreset}
                       onClick={() => handlePresetClick(preset)}
                       className={`py-2.5 rounded-lg text-[15px] font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
@@ -215,9 +233,11 @@ export default function DiscountModal({
               </div>
               <input
                 type="number"
+                min={0}
+                max={discountType === "percent" ? 100 : undefined}
                 value={customValue}
                 onChange={handleCustomChange}
-                placeholder="Ozel tutar girin..."
+                placeholder="Özel tutar girin..."
                 className="w-full h-[44px] px-4 text-[15px] bg-[#f5f5f7] rounded-lg border-0 focus:outline-none focus:ring-2 focus:ring-[#e63462]/50 text-[#1d1d1f]"
               />
               {isExceedingLimit && (
@@ -231,15 +251,15 @@ export default function DiscountModal({
             </div>
           )}
 
-          {/* Reason Selection */}
           <div className="space-y-3">
             <label className="text-[13px] font-medium text-[#86868b] uppercase tracking-wide">
-              Indirim Nedeni
+              İndirim Nedeni
             </label>
             <div className="grid grid-cols-2 gap-2">
               {REASONS.map((reason) => (
                 <button
                   key={reason.id}
+                  type="button"
                   onClick={() => setSelectedReason(reason.id)}
                   className={`py-2.5 px-3 rounded-lg text-[14px] font-medium transition-all text-left ${
                     selectedReason === reason.id
@@ -256,52 +276,43 @@ export default function DiscountModal({
                 type="text"
                 value={customReason}
                 onChange={(e) => setCustomReason(e.target.value)}
-                placeholder="Neden yazin..."
+                placeholder="Neden yazın..."
                 className="w-full h-[44px] px-4 text-[15px] bg-[#f5f5f7] rounded-lg border-0 focus:outline-none focus:ring-2 focus:ring-[#e63462]/50 text-[#1d1d1f]"
               />
             )}
           </div>
 
-          {/* Summary */}
           <div className="bg-[#f5f5f7] rounded-xl p-4 space-y-2">
             <div className="flex justify-between text-[14px]">
               <span className="text-[#86868b]">Mevcut Toplam</span>
-              <span className="text-[#1d1d1f] font-medium">
-                {formatCurrency(total)} TL
-              </span>
+              <span className="text-[#1d1d1f] font-medium">{formatCurrency(total)} TL</span>
             </div>
             <div className="flex justify-between text-[14px]">
-              <span className="text-[#86868b]">Indirim</span>
-              <span className="text-[#e63462] font-medium">
-                -{formatCurrency(calculatedDiscount)} TL
-              </span>
+              <span className="text-[#86868b]">İndirim</span>
+              <span className="text-[#e63462] font-medium">-{formatCurrency(calculatedDiscount)} TL</span>
             </div>
             <div className="border-t border-[#d1d1d6] pt-2 flex justify-between text-[17px]">
               <span className="font-semibold text-[#1d1d1f]">Yeni Toplam</span>
-              <span className="font-bold text-[#34c759]">
-                {formatCurrency(finalTotal)} TL
-              </span>
+              <span className="font-bold text-[#34c759]">{formatCurrency(finalTotal)} TL</span>
             </div>
           </div>
         </div>
 
-        {/* Footer */}
         <div className="flex gap-3 px-5 py-4 border-t border-[#e5e5ea]">
           <button
+            type="button"
             onClick={onClose}
             className="flex-1 py-3 rounded-xl text-[15px] font-semibold bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e5e5ea] transition-colors"
           >
-            Iptal
+            İptal
           </button>
           <button
+            type="button"
             onClick={handleApply}
-            disabled={
-              isExceedingLimit ||
-              (discountType !== "complimentary" && value === 0)
-            }
+            disabled={isSubmitting || isInvalidInput}
             className="flex-1 py-3 rounded-xl text-[15px] font-semibold bg-[#e63462] text-white hover:bg-[#d42d58] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Indirimi Uygula
+            İndirimi Uygula
           </button>
         </div>
       </div>

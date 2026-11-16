@@ -1,8 +1,8 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import type { PermissionCatalogResponse, RoleDefinition, StaffMemberDto } from "@/lib/types"
 import { getRoleDisplayName } from "@/lib/permission-labels"
 import { StaffPermissionOverrides } from "./staff-permission-overrides"
-import { Monitor, KeyRound, X } from "lucide-react"
+import { Monitor, KeyRound, AlertCircle, X } from "lucide-react"
 
 interface StaffUserModalProps {
   branchName: string
@@ -70,11 +70,21 @@ export function StaffUserModal({
           editingUser.maxDiscountAmountOverride != null)
     )
   )
+  const [formError, setFormError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !submitting) onClose()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [onClose, submitting])
 
   const selectedRoleDef = roles.find((r) => r.key === role)
 
   const handleRoleChange = (nextRoleKey: string) => {
     setRole(nextRoleKey)
+    setFormError(null)
     const r = roles.find((x) => x.key === nextRoleKey)
     if (r && !editingUser) {
       setCanAccessPanel(r.canAccessPanel)
@@ -99,16 +109,54 @@ export function StaffUserModal({
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name.trim()) return
+    if (submitting) return
+    setFormError(null)
+
+    const trimmedName = name.trim()
+    const trimmedEmail = email.trim()
+    const trimmedPassword = password.trim()
+    const trimmedPin = pin.trim()
+
+    if (trimmedName.length < 2) {
+      setFormError("Lütfen en az 2 karakterli bir ad soyad girin.")
+      return
+    }
+
+    if (canAccessPanel) {
+      const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)
+      if (!emailValid) {
+        setFormError("Merchant Panel giriş yetkisi için geçerli bir e-posta adresi girin.")
+        return
+      }
+      if ((!editingUser || !editingUser.hasPassword) && trimmedPassword.length < 6) {
+        setFormError("Merchant Panel giriş yetkisi için en az 6 karakterli bir parola girin.")
+        return
+      }
+      if (trimmedPassword.length > 0 && trimmedPassword.length < 6) {
+        setFormError("Parola en az 6 karakter olmalıdır.")
+        return
+      }
+    }
+
+    if (canAccessTerminal && !canAccessPanel && !editingUser?.hasPin && !/^\d{4,8}$/.test(trimmedPin)) {
+      setFormError("El Terminali (POS) girişi için 4 ile 8 haneli rakamlardan oluşan bir PIN kodu girin.")
+      return
+    }
+
+    if (trimmedPin.length > 0 && !/^\d{4,8}$/.test(trimmedPin)) {
+      setFormError("PIN kodu 4 ile 8 haneli rakamlardan oluşmalıdır.")
+      return
+    }
+
     await onSubmit({
-      name: name.trim(),
+      name: trimmedName,
       role,
       phone: phone.trim() || undefined,
       canAccessPanel,
       canAccessTerminal,
-      email: email.trim() || undefined,
-      ...(password.trim() ? { password: password.trim() } : {}),
-      ...(pin.trim() ? { pin: pin.trim() } : {}),
+      email: trimmedEmail || undefined,
+      ...(trimmedPassword ? { password: trimmedPassword } : {}),
+      ...(trimmedPin ? { pin: trimmedPin } : {}),
       grantedPermissions,
       revokedPermissions,
       maxDiscountPercentOverride:
@@ -119,8 +167,14 @@ export function StaffUserModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4 backdrop-blur-xs">
-      <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white p-5 shadow-2xl safe-bottom">
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4 backdrop-blur-xs"
+      onClick={() => !submitting && onClose()}
+    >
+      <div
+        className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white p-5 shadow-2xl safe-bottom"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between border-b border-[#f0f0f0] pb-3.5">
           <div>
             <h3 className="text-[16px] font-bold text-[#1d1d1f]">
@@ -133,7 +187,7 @@ export function StaffUserModal({
           </button>
         </div>
 
-        <form onSubmit={handleFormSubmit} className="mt-4 space-y-4">
+        <form onSubmit={handleFormSubmit} noValidate className="mt-4 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-[12px] font-semibold text-[#1d1d1f]">Ad Soyad *</label>
@@ -271,6 +325,13 @@ export function StaffUserModal({
             onChangeMaxAmtOverride={setMaxDiscountAmtOverride}
             onTogglePermissionException={toggleUserPermissionException}
           />
+
+          {formError && (
+            <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-[12px] font-medium text-red-600">
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <span>{formError}</span>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="h-11 rounded-xl border border-[#d1d1d6] px-4 text-[13px] font-semibold text-[#86868b]">

@@ -29,8 +29,8 @@ export function ContactPopover(props: {
             }`}
         >
           <div className="p-4 border-b border-stone-100 bg-gradient-to-r from-rose-50 to-orange-50">
-            <h3 className="font-semibold text-stone-900">Iletisim</h3>
-            <p className="text-xs text-stone-500 mt-0.5">Bize ulasin</p>
+            <h3 className="font-semibold text-stone-900">İletişim</h3>
+            <p className="text-xs text-stone-500 mt-0.5">Bize ulaşın</p>
           </div>
           <div className="p-2">
             {business.phone && (
@@ -63,7 +63,7 @@ export function ContactPopover(props: {
                   <p className="text-sm font-medium text-stone-900 group-hover:text-[#25D366] transition-colors">
                     WhatsApp
                   </p>
-                  <p className="text-xs text-stone-500">Mesaj gonder</p>
+                  <p className="text-xs text-stone-500">Mesaj gönder</p>
                 </div>
               </a>
             )}
@@ -152,25 +152,26 @@ export function MenuSearchOverlay(props: {
               type="text"
               value={searchQuery}
               onChange={(e) => onSearchQueryChange(e.target.value)}
-              placeholder="Urun ara..."
+              placeholder="Ürün ara..."
               autoFocus
               className="flex-1 bg-transparent text-stone-900 text-sm placeholder:text-stone-400 focus:outline-none"
             />
             {searchQuery && (
-              <button onClick={() => onSearchQueryChange("")}>
+              <button onClick={() => onSearchQueryChange("")} aria-label="Temizle">
                 <X className="w-4 h-4 text-stone-400" />
               </button>
             )}
           </div>
           <button onClick={onClose} className="text-stone-600 text-sm font-medium">
-            Iptal
+            İptal
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-4">
           {searchQuery.trim() ? (
             filteredProducts.length === 0 ? (
               <div className="text-center py-16">
-                <p className="text-stone-400">Sonuc bulunamadi</p>
+                <p className="text-stone-500 font-medium">Sonuç bulunamadı</p>
+                <p className="text-stone-400 text-xs mt-1">Farklı bir ürün adı ile tekrar deneyin.</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -183,20 +184,33 @@ export function MenuSearchOverlay(props: {
                         onClose()
                       }
                     }}
-                    className={`flex items-center gap-3 p-3 rounded-xl ${product.inStock ? "hover:bg-stone-50 cursor-pointer" : "opacity-50"
+                    className={`flex items-center gap-3 p-3 rounded-xl border border-stone-100 ${product.inStock ? "hover:bg-stone-50 cursor-pointer" : "opacity-50"
                       }`}
                   >
-                    <div className="flex-1">
-                      <h3 className="font-medium text-stone-900">{product.name}</h3>
-                      <p className="text-sm text-stone-500">{formatCurrency(product.price)} TL</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-medium text-stone-900 truncate">{product.name}</h3>
+                        {!product.inStock && (
+                          <span className="text-[10px] font-medium text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full">
+                            Tükendi
+                          </span>
+                        )}
+                      </div>
+                      {product.description && (
+                        <p className="text-xs text-stone-400 truncate mt-0.5">{product.description}</p>
+                      )}
+                      <p className="text-sm font-semibold text-stone-900 mt-1">{formatCurrency(product.price)} TL</p>
                     </div>
+                    {product.image && (
+                      <img src={product.image} alt={product.name} className="w-14 h-14 rounded-lg object-cover bg-stone-100 flex-shrink-0" />
+                    )}
                   </div>
                 ))}
               </div>
             )
           ) : (
             <div className="text-center py-16">
-              <p className="text-stone-400 text-sm">Aramaya baslayin</p>
+              <p className="text-stone-400 text-sm">Aramaya başlayın</p>
             </div>
           )}
         </div>
@@ -303,7 +317,7 @@ export function CampaignsModal(props: {
             )}
             {currentCampaign.discountPercent && (
               <div className="absolute top-4 left-4 px-3 py-1.5 bg-gradient-to-r from-rose-500 to-orange-500 text-white text-sm font-bold rounded-full shadow-lg">
-                %{currentCampaign.discountPercent} Indirim
+                %{currentCampaign.discountPercent} İndirim
               </div>
             )}
           </div>
@@ -328,7 +342,7 @@ export function CampaignsModal(props: {
             )}
             {currentCampaign.validUntil && (
               <p className="text-xs text-stone-400 mb-4">
-                Gecerlilik: {new Date(currentCampaign.validUntil).toLocaleDateString("tr-TR")}
+                Geçerlilik: {new Date(currentCampaign.validUntil).toLocaleDateString("tr-TR")}
               </p>
             )}
             <div className="flex items-center justify-between pt-4 border-t border-stone-100">
@@ -363,7 +377,7 @@ export function CampaignsModal(props: {
                       <ChevronRight className="w-4 h-4" />
                     </>
                   ) : (
-                    "Menuye Git"
+                    "Menüye Git"
                   )}
                 </button>
               </div>

@@ -6,6 +6,7 @@ import {
   type PanelSection, type PanelTable, type PanelUser,
 } from "../panel-types"
 import { api, type CloseCheckResponseDto } from "../api"
+import { showPanelToast } from "@/components/panel/panel-toast"
 import { genId } from "./panel-local-storage"
 import type { LogActivityFn } from "./panel-store-context"
 
@@ -45,7 +46,12 @@ export function useTableOrderActions(params: {
 
   const moveTable = useCallback(async (fromId: string, toId: string): Promise<boolean> => {
     if (!token) return false
-    try { await api.orders.move(token, fromId, toId) } catch { return false }
+    try {
+      await api.orders.move(token, fromId, toId)
+    } catch (err) {
+      showPanelToast(err instanceof Error ? err.message : "Masa taşınamadı", "error")
+      return false
+    }
     const fromName = tables.find((t) => t.id === fromId)?.name || fromId
     setOrders((prev) => prev.map((o) => (o.tableId === fromId && o.status === "active" ? { ...o, tableId: toId, mergedFrom: fromName } : o)))
     setTables((prev) => {
@@ -61,7 +67,7 @@ export function useTableOrderActions(params: {
         return t
       })
     })
-    logActivity({ action: "table_moved", category: "table", details: `${fromName} masasindaki adisyon ${toId} masaya tasindi`, metadata: { fromId, toId } })
+    logActivity({ action: "table_moved", category: "table", details: `${fromName} masasındaki adisyon ${toId} masaya taşındı`, metadata: { fromId, toId } })
     return true
   }, [token, tables, setOrders, setTables, logActivity])
 
@@ -69,9 +75,12 @@ export function useTableOrderActions(params: {
     if (!token || itemIds.length === 0) return false
     try {
       await api.orders.moveItems(token, { fromTableId, toTableId, itemIds })
-      logActivity({ action: "order_items_moved", category: "order", details: `${itemIds.length} kalem baska masaya tasindi`, metadata: { fromTableId, toTableId, itemIds } })
+      logActivity({ action: "order_items_moved", category: "order", details: `${itemIds.length} kalem başka masaya taşındı`, metadata: { fromTableId, toTableId, itemIds } })
       return true
-    } catch { return false }
+    } catch (err) {
+      showPanelToast(err instanceof Error ? err.message : "Ürünler taşınamadı", "error")
+      return false
+    }
   }, [token, logActivity])
 
   const closeTableWithPayment = useCallback(async (
@@ -83,8 +92,8 @@ export function useTableOrderActions(params: {
   ): Promise<{ ok: boolean; completedOrder?: ClosedTable; error?: string }> => {
     if (!token) return { ok: false, error: "Oturum gerekli" }
     const table = tables.find((t) => t.id === tableId)
-    if (!table) return { ok: false, error: "Masa bulunamadi" }
-    if (method === "ledger" && !opts?.ledgerCustomerId) return { ok: false, error: "Musteri hesabi secilmelidir" }
+    if (!table) return { ok: false, error: "Masa bulunamadı" }
+    if (method === "ledger" && !opts?.ledgerCustomerId) return { ok: false, error: "Müşteri hesabı seçilmelidir" }
 
     const effectiveDiscount: { type: "percent" | "amount"; value: number; reason: string } | undefined =
       discount && (discount.type === "complimentary" || discount.value > 0)
@@ -110,12 +119,14 @@ export function useTableOrderActions(params: {
       logActivity({
         action: "table_closed_with_payment",
         category: "payment",
-        details: `${mapped.tableName} kapatildi. Yontem: ${method}, Net: ${mapped.netAmount}`,
+        details: `${mapped.tableName} kapatıldı. Yöntem: ${method}, Net: ${mapped.netAmount}`,
         metadata: { tableId, tableName: mapped.tableName, method, rawTotal: mapped.totalAmount, discountAmount: mapped.discountAmount, netAmount: mapped.netAmount, orderCount: mapped.orders.length },
       })
       return { ok: true, completedOrder: mapped }
-    } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : "Hesap kapatilamadi" }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Hesap kapatılamadı"
+      showPanelToast(msg, "error")
+      return { ok: false, error: msg }
     }
   }, [token, tables, applyCloseCheckResult, setOrders, setTables, ledgerRefresh, logActivity])
 
@@ -124,17 +135,19 @@ export function useTableOrderActions(params: {
     method: PanelPaymentMethod,
   ): Promise<{ ok: boolean; completedOrder?: ClosedTable; error?: string }> => {
     if (!token) return { ok: false, error: "Oturum gerekli" }
-    if (!currentShift || items.length === 0) return { ok: false, error: "Vardiya acik degil veya sepet bos" }
+    if (!currentShift || items.length === 0) return { ok: false, error: "Vardiya açık değil veya sepet boş" }
     try {
       const res = await api.orders.closeCheck(token, {
         items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, ...(i.note?.trim() ? { note: i.note.trim() } : {}) })),
         method,
       })
       const mapped = applyCloseCheckResult(res)
-      logActivity({ action: "quick_sale_completed", category: "payment", details: `Elden Satis tamamlandi. Yontem: ${method}, Net: ${mapped.netAmount}`, metadata: { completedOrderId: mapped.id, method, netAmount: mapped.netAmount, itemCount: items.length } })
+      logActivity({ action: "quick_sale_completed", category: "payment", details: `Elden Satış tamamlandı. Yöntem: ${method}, Net: ${mapped.netAmount}`, metadata: { completedOrderId: mapped.id, method, netAmount: mapped.netAmount, itemCount: items.length } })
       return { ok: true, completedOrder: mapped }
-    } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : "Satis tamamlanamadi" }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Satış tamamlanamadı"
+      showPanelToast(msg, "error")
+      return { ok: false, error: msg }
     }
   }, [token, currentShift, applyCloseCheckResult, logActivity])
 
@@ -143,35 +156,50 @@ export function useTableOrderActions(params: {
     items: { productId: string; quantity: number; note?: string }[],
   ): Promise<{ ok: boolean; error?: string }> => {
     if (!token) return { ok: false, error: "Oturum gerekli" }
-    if (!currentShift) return { ok: false, error: "Once vardiyayi acin" }
-    if (items.length === 0) return { ok: false, error: "Sepet bos" }
+    if (!currentShift) return { ok: false, error: "Önce vardiyayı açın" }
+    if (items.length === 0) return { ok: false, error: "Sepet boş" }
     const table = tables.find((t) => t.id === tableId)
-    if (table?.status === "checkout") return { ok: false, error: "Masa hesap kesiminde. Hesap penceresi kapatilmadan siparis gonderilemez." }
+    if (table?.status === "checkout") return { ok: false, error: "Masa hesap kesiminde. Hesap penceresi kapatılmadan sipariş gönderilemez." }
     try {
-      await api.orders.create(token, { tableId, items })
-      logActivity({ action: "table_order_created", category: "order", details: `${table?.name ?? tableId} masasina ${items.length} kalemli siparis`, metadata: { tableId, itemCount: items.length } })
+      const cleanItems = items.map((i) => ({
+        productId: i.productId,
+        quantity: i.quantity,
+        ...(i.note?.trim() ? { note: i.note.trim() } : {}),
+      }))
+      await api.orders.create(token, { tableId, items: cleanItems })
+      logActivity({ action: "table_order_created", category: "order", details: `${table?.name ?? tableId} masasına ${items.length} kalemli sipariş`, metadata: { tableId, itemCount: items.length } })
       return { ok: true }
-    } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : "Siparis gonderilemedi" }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Sipariş gönderilemedi"
+      showPanelToast(msg, "error")
+      return { ok: false, error: msg }
     }
   }, [token, currentShift, tables, logActivity])
 
-  const cancelOrderItem = useCallback((orderId: string, itemId: string, reason: string) => {
+  const cancelOrderItem = useCallback(async (orderId: string, itemId: string, reason: string): Promise<boolean> => {
     const order = orders.find((o) => o.id === orderId)
     const item = order?.items.find((i) => i.id === itemId)
-    if (!order || !item) return
+    if (!order || !item || !token) return false
+    const trimmedReason = reason.trim()
+    if (!trimmedReason) return false
+    try {
+      await api.orders.cancelItem(token, { itemId, reason: trimmedReason })
+    } catch (err) {
+      showPanelToast(err instanceof Error ? err.message : "Ürün iptal edilemedi", "error")
+      return false
+    }
     const table = tables.find((t) => t.id === order.tableId)
     const cancelled: CancelledItem = {
       id: genId("ci"),
-      orderItem: { ...item, status: "cancelled", cancelReason: reason, cancelledBy: currentUser?.name, cancelledAt: new Date() },
-      tableName: table?.name || "?", orderId, reason, cancelledBy: currentUser?.name || "Sistem", cancelledAt: new Date(),
+      orderItem: { ...item, status: "cancelled", cancelReason: trimmedReason, cancelledBy: currentUser?.name, cancelledAt: new Date() },
+      tableName: table?.name || "?", orderId, reason: trimmedReason, cancelledBy: currentUser?.name || "Sistem", cancelledAt: new Date(),
     }
     setCancelledItems((prev) => [cancelled, ...prev])
-    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, items: o.items.map((i) => (i.id === itemId ? { ...i, status: "cancelled" as const, cancelReason: reason, cancelledBy: currentUser?.name, cancelledAt: new Date() } : i)) } : o)))
+    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, items: o.items.map((i) => (i.id === itemId ? { ...i, status: "cancelled" as const, cancelReason: trimmedReason, cancelledBy: currentUser?.name, cancelledAt: new Date() } : i)) } : o)))
     const cancelledAmount = item.price * item.quantity
     setTables((prev) => prev.map((t) => (t.id === order.tableId ? { ...t, totalAmount: Math.max(0, t.totalAmount - cancelledAmount) } : t)))
-    if (token) void api.orders.cancelItem(token, { itemId, reason }).catch((err) => console.error("cancel-item API:", err))
-    logActivity({ action: "order_item_cancelled", category: "order", details: `${table?.name || "Masa"} - ${item.productName} iptal edildi (${reason})`, metadata: { orderId, itemId, tableId: order.tableId, quantity: item.quantity, price: item.price, reason } })
+    logActivity({ action: "order_item_cancelled", category: "order", details: `${table?.name || "Masa"} - ${item.productName} iptal edildi (${trimmedReason})`, metadata: { orderId, itemId, tableId: order.tableId, quantity: item.quantity, price: item.price, reason: trimmedReason } })
+    return true
   }, [orders, tables, currentUser, token, setCancelledItems, setOrders, setTables, logActivity])
 
   const assignItemsToLedger = useCallback(async (lines: { itemId: string; quantity?: number }[], ledgerCustomerId: string): Promise<{ ok: boolean; amount?: number }> => {
@@ -179,10 +207,10 @@ export function useTableOrderActions(params: {
     try {
       const res = await api.orders.assignToLedger(token, { lines, ledgerCustomerId })
       void ledgerRefresh()
-      logActivity({ action: "order_items_assigned_to_ledger", category: "payment", details: `${lines.length} kalem musteri hesabina aktarildi`, metadata: { ledgerCustomerId, lineCount: lines.length, amount: res.amount } })
+      logActivity({ action: "order_items_assigned_to_ledger", category: "payment", details: `${lines.length} kalem müşteri hesabına aktarıldı`, metadata: { ledgerCustomerId, lineCount: lines.length, amount: res.amount } })
       return { ok: true, amount: res.amount }
-    } catch (e) {
-      console.error("assign-to-ledger:", e)
+    } catch (err) {
+      showPanelToast(err instanceof Error ? err.message : "Cariye aktarılamadı", "error")
       return { ok: false }
     }
   }, [token, ledgerRefresh, logActivity])
@@ -192,10 +220,10 @@ export function useTableOrderActions(params: {
     try {
       const res = await api.orders.revertLedgerItem(token, { itemId })
       void ledgerRefresh()
-      logActivity({ action: "ledger_item_reverted_to_order", category: "payment", details: "Musteri hesabina yazilan kalem adisyona geri alindi", metadata: { itemId, amount: res.amount } })
+      logActivity({ action: "ledger_item_reverted_to_order", category: "payment", details: "Müşteri hesabına yazılan kalem adisyona geri alındı", metadata: { itemId, amount: res.amount } })
       return { ok: true, amount: res.amount }
-    } catch (e) {
-      console.error("revert-ledger-item:", e)
+    } catch (err) {
+      showPanelToast(err instanceof Error ? err.message : "Cari kalemi geri alınamadı", "error")
       return { ok: false }
     }
   }, [token, ledgerRefresh, logActivity])
@@ -209,7 +237,8 @@ export function useTableOrderActions(params: {
     api.tables.create(token, { name, section }).then((created) => {
       setTables((prev) => [...prev, { id: created.id, name: created.name, section: created.section, status: "empty", totalAmount: 0, orderCount: 0 }])
       logActivity({ action: "table_created", category: "table", details: `Masa eklendi: ${created.name}`, metadata: { tableId: created.id, section: created.section } })
-    }).catch(console.error)
+      showPanelToast(`Masa eklendi: ${created.name}`, "success")
+    }).catch((err) => showPanelToast(err instanceof Error ? err.message : "Masa eklenemedi", "error"))
   }, [token, setTables, logActivity])
 
   const deleteTable = useCallback((id: string) => {
@@ -217,7 +246,8 @@ export function useTableOrderActions(params: {
     api.tables.delete(token, id).then(() => {
       setTables((prev) => prev.filter((t) => t.id !== id))
       logActivity({ action: "table_deleted", category: "table", details: `Masa silindi: ${id}`, metadata: { tableId: id } })
-    }).catch(console.error)
+      showPanelToast("Masa silindi", "info")
+    }).catch((err) => showPanelToast(err instanceof Error ? err.message : "Masa silinemedi", "error"))
   }, [token, setTables, logActivity])
 
   const reprintReceipt = useCallback(async (
@@ -228,7 +258,9 @@ export function useTableOrderActions(params: {
       if (typeof target === "string") await api.orders.printReceipt(token, { tableId: target })
       else if ("orderId" in target) await api.orders.printReceipt(token, { orderId: target.orderId })
       else await api.orders.printReceipt(token, target)
-    } catch (e) { console.error("printReceipt", e) }
+    } catch (err) {
+      showPanelToast(err instanceof Error ? err.message : "Fiş yazdırılamadı", "error")
+    }
   }, [token])
 
   const applyDiscount = useCallback((tableId: string, discount: { type: PanelDiscountType; value: number; reason: string }) => {
@@ -239,7 +271,7 @@ export function useTableOrderActions(params: {
     setTables((prev) => prev.map((t) => (t.id === tableId ? { ...t, discount: { type: discount.type, value: discount.value, amount: discountAmount, reason: discount.reason }, totalAmount: Math.max(0, rawTotal - discountAmount) } : t)))
     addAuditLog({
       userId: currentUser?.id || "system", userName: currentUser?.name || "Sistem", action: "discount_applied", category: "payment",
-      details: `${table.name}: ${discount.type === "percent" ? `%${discount.value}` : discount.type === "complimentary" ? "Tam Ikram" : `${discount.value} TL`} indirim uygulandi. Neden: ${discount.reason}`,
+      details: `${table.name}: ${discount.type === "percent" ? `%${discount.value}` : discount.type === "complimentary" ? "Tam İkram" : `${discount.value} TL`} indirim uygulandı. Neden: ${discount.reason}`,
     })
   }, [tables, orders, currentUser, setTables, addAuditLog])
 
@@ -247,14 +279,14 @@ export function useTableOrderActions(params: {
     const rawTotal = orders.filter((o) => o.tableId === tableId && o.status === "active").reduce((sum, o) => sum + o.items.filter(itemCountsTowardBill).reduce((s, i) => s + i.price * i.quantity, 0), 0)
     const table = tables.find((t) => t.id === tableId)
     setTables((prev) => prev.map((t) => (t.id === tableId ? { ...t, discount: undefined, totalAmount: rawTotal } : t)))
-    if (table) addAuditLog({ userId: currentUser?.id || "system", userName: currentUser?.name || "Sistem", action: "discount_cleared", category: "payment", details: `${table.name}: Indirim kaldirildi` })
+    if (table) addAuditLog({ userId: currentUser?.id || "system", userName: currentUser?.name || "Sistem", action: "discount_cleared", category: "payment", details: `${table.name}: İndirim kaldırıldı` })
   }, [orders, tables, currentUser, setTables, addAuditLog])
 
   const splitBillByPerson = useCallback((tableId: string, personCount: number) => {
     const table = tables.find((t) => t.id === tableId)
     if (!table) return
     setTables((prev) => prev.map((t) => (t.id === tableId ? { ...t, splitInfo: { type: "person", personCount, perPersonAmount: Math.ceil((t.totalAmount || 0) / personCount) } } : t)))
-    addAuditLog({ userId: currentUser?.id || "system", userName: currentUser?.name || "Sistem", action: "bill_split", category: "payment", details: `${table.name}: Hesap ${personCount} kisiye bolundu` })
+    addAuditLog({ userId: currentUser?.id || "system", userName: currentUser?.name || "Sistem", action: "bill_split", category: "payment", details: `${table.name}: Hesap ${personCount} kişiye bölündü` })
   }, [tables, currentUser, setTables, addAuditLog])
 
   const splitBillByItems = useCallback((tableId: string, itemIds: string[], amounts: Record<string, number>) => {
@@ -266,7 +298,7 @@ export function useTableOrderActions(params: {
       return sum + (item ? item.price * qty : 0)
     }, 0)
     setTables((prev) => prev.map((t) => (t.id === tableId ? { ...t, splitInfo: { type: "items", itemIds, amounts, selectedTotal } } : t)))
-    addAuditLog({ userId: currentUser?.id || "system", userName: currentUser?.name || "Sistem", action: "bill_split_items", category: "payment", details: `${table.name}: ${itemIds.length} urun ayri hesaba ayrildi. Tutar: ${selectedTotal} TL` })
+    addAuditLog({ userId: currentUser?.id || "system", userName: currentUser?.name || "Sistem", action: "bill_split_items", category: "payment", details: `${table.name}: ${itemIds.length} ürün ayrı hesaba ayrıldı. Tutar: ${selectedTotal} TL` })
   }, [tables, orders, currentUser, setTables, addAuditLog])
 
   return {

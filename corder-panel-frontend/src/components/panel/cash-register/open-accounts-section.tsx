@@ -19,13 +19,13 @@ export function ShiftOverviewSection(props: {
     return (
       <div className="text-center py-20">
         <Wallet className="w-12 h-12 text-[#d1d1d6] mx-auto mb-3" />
-        <p className="text-[14px] text-[#86868b] mb-4">Kasa kapali. Islem yapabilmek icin kasayi acin.</p>
+        <p className="text-[14px] text-[#86868b] mb-4">Kasa kapalı. İşlem yapabilmek için kasayı açın.</p>
         <button onClick={onOpenShiftModal} className="h-[40px] px-6 bg-[#34c759] text-white rounded-xl text-[14px] font-semibold hover:bg-[#2db84e] transition-colors">
-          Kasa Ac
+          Kasa Aç
         </button>
         {closedShifts.length > 0 && (
           <div className="mt-8 max-w-2xl mx-auto">
-            <h3 className="text-[13px] font-semibold text-[#1d1d1f] mb-3">Onceki Vardiyalar</h3>
+            <h3 className="text-[13px] font-semibold text-[#1d1d1f] mb-3">Önceki Vardiyalar</h3>
             <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
               {closedShifts.slice(0, 5).map((s, idx) => (
                 <div key={s.id} className={`flex items-center justify-between px-4 py-3 ${idx > 0 ? "border-t border-[#f0f0f0]" : ""}`}>
@@ -35,7 +35,7 @@ export function ShiftOverviewSection(props: {
                   </div>
                   <div className="text-right">
                     <p className="text-[13px] font-bold text-[#e63462]">{"\u20BA"}{formatCurrency(s.totalRevenue)}</p>
-                    <p className="text-[10px] text-[#86868b]">{s.transactionCount} islem</p>
+                    <p className="text-[10px] text-[#86868b]">{s.transactionCount} işlem</p>
                   </div>
                 </div>
               ))}
@@ -52,8 +52,8 @@ export function ShiftOverviewSection(props: {
         {[
           { label: "Toplam Ciro", value: shiftTotals.totalRevenue, icon: DollarSign, color: "#34c759" },
           { label: "Nakit", value: shiftTotals.totalCash, icon: Banknote, color: "#007aff" },
-          { label: "Kredi Karti", value: shiftTotals.totalCard, icon: CreditCard, color: "#ff9500" },
-          { label: "Yemek Karti", value: shiftTotals.totalMealCard + shiftTotals.totalMultinet, icon: UtensilsCrossed, color: "#af52de" },
+          { label: "Kredi Kartı", value: shiftTotals.totalCard, icon: CreditCard, color: "#ff9500" },
+          { label: "Yemek Kartı", value: shiftTotals.totalMealCard + shiftTotals.totalMultinet, icon: UtensilsCrossed, color: "#af52de" },
         ].map((card) => {
           const Icon = card.icon
           return (
@@ -73,11 +73,11 @@ export function ShiftOverviewSection(props: {
       <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4">
         <h3 className="text-[13px] font-semibold text-[#1d1d1f] mb-3">Vardiya Bilgisi</h3>
         <div className="grid grid-cols-3 gap-4 text-[12px]">
-          <div><span className="text-[#86868b]">Acan: </span><span className="text-[#1d1d1f] font-medium">{currentShift.openedBy}</span></div>
-          <div><span className="text-[#86868b]">Acilis: </span><span className="text-[#1d1d1f] font-medium">{formatTime(currentShift.openedAt)}</span></div>
-          <div><span className="text-[#86868b]">Acilis Bakiye: </span><span className="text-[#1d1d1f] font-medium">{"\u20BA"}{formatCurrency(currentShift.openingBalance)}</span></div>
-          <div><span className="text-[#86868b]">Nakit Giris: </span><span className="text-green-600 font-medium">+{"\u20BA"}{formatCurrency(currentShift.cashIn)}</span></div>
-          <div><span className="text-[#86868b]">Nakit Cikis: </span><span className="text-red-500 font-medium">-{"\u20BA"}{formatCurrency(currentShift.cashOut)}</span></div>
+          <div><span className="text-[#86868b]">Açan: </span><span className="text-[#1d1d1f] font-medium">{currentShift.openedBy}</span></div>
+          <div><span className="text-[#86868b]">Açılış: </span><span className="text-[#1d1d1f] font-medium">{formatTime(currentShift.openedAt)}</span></div>
+          <div><span className="text-[#86868b]">Açılış Bakiye: </span><span className="text-[#1d1d1f] font-medium">{"\u20BA"}{formatCurrency(currentShift.openingBalance)}</span></div>
+          <div><span className="text-[#86868b]">Nakit Giriş: </span><span className="text-green-600 font-medium">+{"\u20BA"}{formatCurrency(currentShift.cashIn)}</span></div>
+          <div><span className="text-[#86868b]">Nakit Çıkış: </span><span className="text-red-500 font-medium">-{"\u20BA"}{formatCurrency(currentShift.cashOut)}</span></div>
           <div><span className="text-[#86868b]">Beklenen Kasa: </span><span className="text-[#1d1d1f] font-bold">{"\u20BA"}{formatCurrency(currentShift.openingBalance + currentShift.cashIn - currentShift.cashOut)}</span></div>
         </div>
       </div>
@@ -87,15 +87,15 @@ export function ShiftOverviewSection(props: {
           <ArrowUpCircle className="w-4 h-4 text-red-500" /> Gider Ekle
         </button>
         <button onClick={() => onOpenAddTransaction("cash-in")} className="flex-1 flex items-center justify-center gap-2 h-[40px] bg-white border border-[#d1d1d6]/60 rounded-xl text-[13px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors">
-          <ArrowDownCircle className="w-4 h-4 text-green-500" /> Nakit Giris
+          <ArrowDownCircle className="w-4 h-4 text-green-500" /> Nakit Giriş
         </button>
         <button onClick={() => onOpenAddTransaction("cash-out")} className="flex-1 flex items-center justify-center gap-2 h-[40px] bg-white border border-[#d1d1d6]/60 rounded-xl text-[13px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors">
-          <ArrowUpCircle className="w-4 h-4 text-amber-500" /> Nakit Cikis
+          <ArrowUpCircle className="w-4 h-4 text-amber-500" /> Nakit Çıkış
         </button>
       </div>
 
       <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
-        <h3 className="text-[13px] font-semibold text-[#1d1d1f] px-4 pt-4 pb-2">Son Islemler</h3>
+        <h3 className="text-[13px] font-semibold text-[#1d1d1f] px-4 pt-4 pb-2">Son İşlemler</h3>
         <div className="max-h-[300px] overflow-auto">
           {shiftTransactions.slice(0, 10).map((tx, idx) => (
             <div key={tx.id} className={`flex items-center justify-between px-4 py-2.5 ${idx > 0 ? "border-t border-[#f0f0f0]" : ""}`}>
@@ -130,10 +130,10 @@ export function CashTransactionsSection(props: {
   return (
     <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-[#f0f0f0]">
-        <h3 className="text-[13px] font-semibold text-[#1d1d1f]">Tum Islemler</h3>
+        <h3 className="text-[13px] font-semibold text-[#1d1d1f]">Tüm İşlemler</h3>
         {currentShift && (
           <button onClick={onOpenAddTransaction} className="h-[28px] px-3 flex items-center gap-1.5 bg-[#e63462]/10 text-[#e63462] rounded-lg text-[11px] font-medium hover:bg-[#e63462]/20">
-            <Plus className="w-3 h-3" /> Islem Ekle
+            <Plus className="w-3 h-3" /> İşlem Ekle
           </button>
         )}
       </div>
@@ -141,9 +141,9 @@ export function CashTransactionsSection(props: {
         <thead>
           <tr className="bg-[#f9f9f9] border-b border-[#f0f0f0]">
             <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Saat</th>
-            <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Tur</th>
-            <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Aciklama</th>
-            <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Isleyen</th>
+            <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Tür</th>
+            <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Açıklama</th>
+            <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">İşleyen</th>
             <th className="text-right px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Tutar</th>
           </tr>
         </thead>
@@ -153,7 +153,7 @@ export function CashTransactionsSection(props: {
               <td className="px-4 py-2 text-[12px] text-[#86868b]">{formatTime(tx.createdAt)}</td>
               <td className="px-4 py-2">
                 <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${tx.type === "sale" ? "bg-green-50 text-green-600" : tx.type === "expense" ? "bg-red-50 text-red-500" : tx.type === "cash-in" ? "bg-blue-50 text-blue-600" : tx.type === "refund" ? "bg-amber-50 text-amber-600" : "bg-gray-50 text-gray-500"}`}>
-                  {tx.type === "sale" ? "Satis" : tx.type === "expense" ? "Gider" : tx.type === "cash-in" ? "Giris" : tx.type === "cash-out" ? "Cikis" : "Iade"}
+                  {tx.type === "sale" ? "Satış" : tx.type === "expense" ? "Gider" : tx.type === "cash-in" ? "Giriş" : tx.type === "cash-out" ? "Çıkış" : "İade"}
                 </span>
               </td>
               <td className="px-4 py-2 text-[12px] text-[#1d1d1f]">{tx.description}</td>

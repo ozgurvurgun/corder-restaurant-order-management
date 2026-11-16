@@ -39,7 +39,7 @@ export function HistoryTab(props: {
           className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#f9f9fb] transition-colors"
         >
           <h3 className="text-[13px] font-semibold text-[#1d1d1f]">
-            Kapanmis Masalar ({closedTables.length})
+            Kapanmış Masalar ({closedTables.length})
           </h3>
           {showClosedDetail ? (
             <ChevronUp className="w-4 h-4 text-[#86868b]" />
@@ -61,13 +61,13 @@ export function HistoryTab(props: {
                   Tutar
                 </th>
                 <th className="text-right px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
-                  Indirim
+                  İndirim
                 </th>
                 <th className="text-right px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
                   Net
                 </th>
                 <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
-                  Odeme
+                  Ödeme
                 </th>
                 <th className="text-right px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
                   Saat
@@ -123,7 +123,7 @@ export function HistoryTab(props: {
           className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#f9f9fb] transition-colors"
         >
           <h3 className="text-[13px] font-semibold text-[#1d1d1f]">
-            Iptal Edilen Urunler ({cancelledItems.length})
+            İptal Edilen Ürünler ({cancelledItems.length})
           </h3>
           {showCancelledDetail ? (
             <ChevronUp className="w-4 h-4 text-[#86868b]" />
@@ -136,7 +136,7 @@ export function HistoryTab(props: {
             <thead>
               <tr className="border-t border-b border-[#f0f0f0] bg-[#f9f9f9]">
                 <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
-                  Urun
+                  Ürün
                 </th>
                 <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
                   Masa
@@ -145,7 +145,7 @@ export function HistoryTab(props: {
                   Sebep
                 </th>
                 <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
-                  Iptal Eden
+                  İptal Eden
                 </th>
                 <th className="text-right px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
                   Tutar

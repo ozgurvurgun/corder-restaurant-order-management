@@ -1,9 +1,9 @@
-import { IsString } from 'class-validator';
+import { IsUUID } from 'class-validator';
 
 export class MoveOrdersDto {
-  @IsString()
+  @IsUUID()
   fromTableId!: string;
 
-  @IsString()
+  @IsUUID()
   toTableId!: string;
 }

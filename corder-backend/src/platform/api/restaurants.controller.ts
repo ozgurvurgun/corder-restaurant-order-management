@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { RestaurantService } from '../application/restaurant.service';
 import { CreateRestaurantDto } from './dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto';
@@ -28,13 +38,13 @@ export class RestaurantsController {
 
   /** Product categories defined in the panel (IDs for printer mapping, etc.). */
   @Get(':id/categories')
-  async listCategories(@Param('id') id: string) {
+  async listCategories(@Param('id', ParseUUIDPipe) id: string) {
     await this.service.findOne(id);
     return this.categoryService.findByRestaurant(id);
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: string) {
+  async findOne(@Param('id', ParseUUIDPipe) id: string) {
     const r = await this.service.findOne(id);
     return sanitizeRestaurant(r);
   }
@@ -46,13 +56,16 @@ export class RestaurantsController {
   }
 
   @Put(':id')
-  async update(@Param('id') id: string, @Body() dto: UpdateRestaurantDto) {
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateRestaurantDto,
+  ) {
     const updated = await this.service.update(id, dto);
     return sanitizeRestaurant(updated);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
+  remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.service.remove(id);
   }
 }

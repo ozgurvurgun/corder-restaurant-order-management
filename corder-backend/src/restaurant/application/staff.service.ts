@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcryptjs';
 import { Repository } from 'typeorm';
 import { RestaurantStaffEntity } from '../domain/restaurant-staff.entity';
+import { RestaurantRoleEntity } from '../domain/restaurant-role.entity';
 import {
   EffectivePolicyLimits,
   normalizeRoleKey,
@@ -53,8 +54,11 @@ export class StaffService {
     private readonly rolesService: RolesService,
   ) {}
 
-  private async toPublicDto(s: RestaurantStaffEntity): Promise<StaffPublicDto> {
-    const resolved = await this.rolesService.resolveForStaff(s);
+  private async toPublicDto(
+    s: RestaurantStaffEntity,
+    preloadedRoles?: RestaurantRoleEntity[],
+  ): Promise<StaffPublicDto> {
+    const resolved = await this.rolesService.resolveForStaff(s, preloadedRoles);
     return {
       id: s.id,
       restaurantId: s.restaurantId,
@@ -85,12 +89,12 @@ export class StaffService {
   }
 
   async list(restaurantId: string): Promise<StaffPublicDto[]> {
-    await this.rolesService.ensureDefaultRoles(restaurantId);
+    const roles = await this.rolesService.ensureDefaultRoles(restaurantId);
     const list = await this.staffRepo.find({
       where: { restaurantId },
       order: { createdAt: 'ASC' },
     });
-    return Promise.all(list.map((s) => this.toPublicDto(s)));
+    return Promise.all(list.map((s) => this.toPublicDto(s, roles)));
   }
 
   private async assertUniquePinInRestaurant(

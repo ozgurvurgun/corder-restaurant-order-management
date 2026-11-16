@@ -12,6 +12,7 @@ import { OrderEntity } from './order.entity';
 
 @Entity('order_items')
 @Index(['orderId'])
+@Index(['orderId', 'status'])
 export class OrderItemEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;

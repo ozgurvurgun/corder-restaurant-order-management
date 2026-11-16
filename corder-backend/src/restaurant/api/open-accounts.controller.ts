@@ -1,9 +1,19 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { OpenAccountsService } from '../application/open-accounts.service';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
 import { PanelRootGuard } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
+import { CreateOpenAccountDto } from './dto/create-open-account.dto';
+import { PayOpenAccountDto } from './dto/pay-open-account.dto';
 
 @Controller('restaurant/open-accounts')
 @UseGuards(RestaurantJwtGuard, PanelRootGuard)
@@ -19,21 +29,7 @@ export class OpenAccountsController {
   create(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { id: string; name: string },
-    @Body()
-    body: {
-      customerName: string;
-      customerPhone?: string;
-      amount?: number;
-      description?: string;
-      createdBy?: string;
-      items?: Array<{
-        productName: string;
-        quantity: number;
-        price: number;
-        productId?: string;
-        note?: string;
-      }>;
-    },
+    @Body() body: CreateOpenAccountDto,
   ) {
     return this.service.create(restaurantId, {
       customerName: body.customerName,
@@ -47,11 +43,18 @@ export class OpenAccountsController {
 
   @Post(':id/pay')
   pay(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { id: string; name: string },
-    @Body() body: { amount: number },
+    @Body() body: PayOpenAccountDto,
   ) {
-    return this.service.pay(restaurantId, id, body.amount, user.name, user.id);
+    return this.service.pay(
+      restaurantId,
+      id,
+      body.amount,
+      user.name,
+      user.id,
+      body.paymentMethod ?? 'cash',
+    );
   }
 }

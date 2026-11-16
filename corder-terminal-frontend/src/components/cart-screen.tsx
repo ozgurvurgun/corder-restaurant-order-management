@@ -15,15 +15,17 @@ export function CartScreen({ tableId, onBack, onOrderSent }: CartScreenProps) {
   const { showToast } = useToast()
   const {
     cart, tables, updateCartQuantity, removeFromCart, updateCartNote,
-    getCartTotal, submitOrder, getTableOrders,
+    getCartTotal, submitOrder, getTableOrders, hasPermission,
   } = useApp()
-  const [sending, setSending] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [showSentItems, setShowSentItems] = useState(false)
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [noteValue, setNoteValue] = useState("")
 
   const table = tables.find((t) => t.id === tableId)
   const isBillRequested = table?.status === "bill-requested"
+  const canCreateOrder = hasPermission("order.create")
+  const canAddNote = hasPermission("order.add_note")
   const cartTotal = getCartTotal()
   const tableOrders = getTableOrders(tableId)
   const sentItems = tableOrders.flatMap((o) => o.items.filter((i) => i.status !== "cancelled"))
@@ -31,19 +33,26 @@ export function CartScreen({ tableId, onBack, onOrderSent }: CartScreenProps) {
   const grandTotal = cartTotal + sentTotal
 
   const handleSend = async () => {
-    if (isBillRequested) {
-      showToast("Masa hesap kesiminde. Siparis gonderilemez.", "error")
+    if (isSubmitting || cart.length === 0) return
+    if (!canCreateOrder) {
+      showToast("Sipariş oluşturma yetkiniz bulunmuyor.", "error")
       return
     }
-    if (cart.length === 0) return
-    setSending(true)
-    const success = await submitOrder(tableId)
-    setSending(false)
-    if (success) {
-      showToast("Siparis mutfaga gonderildi!")
-      onOrderSent()
-    } else {
-      showToast("Siparis gonderilemedi", "error")
+    if (isBillRequested) {
+      showToast("Masa hesap kesiminde. Sipariş gönderilemez.", "error")
+      return
+    }
+    setIsSubmitting(true)
+    try {
+      const success = await submitOrder(tableId)
+      if (success) {
+        showToast("Sipariş mutfağa gönderildi!")
+        onOrderSent()
+      } else {
+        showToast("Sipariş gönderilemedi", "error")
+      }
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -72,7 +81,7 @@ export function CartScreen({ tableId, onBack, onOrderSent }: CartScreenProps) {
           <button
             onClick={() => setShowSentItems(!showSentItems)}
             className={`p-2 active:opacity-60 ${showSentItems ? "text-white/60" : "text-white"}`}
-            aria-label="Gonderilen siparisler"
+            aria-label="Gönderilen siparişler"
           >
             <ListOrdered className="h-[20px] w-[20px]" />
           </button>
@@ -86,7 +95,7 @@ export function CartScreen({ tableId, onBack, onOrderSent }: CartScreenProps) {
           </h2>
           {isBillRequested && (
             <p className="mt-1 text-[12px] font-medium" style={{ color: "#0a4f99" }}>
-              Hesap Kes penceresi acik oldugu icin yeni siparis gonderimi kilitli.
+              Hesap Kes penceresi açık olduğu için yeni sipariş gönderimi kilitli.
             </p>
           )}
         </div>
@@ -100,7 +109,7 @@ export function CartScreen({ tableId, onBack, onOrderSent }: CartScreenProps) {
         ) : (
           <div className="mt-4 px-4 pb-4">
             <p className="text-[13px] font-normal uppercase tracking-wide mb-1.5 px-4" style={{ color: "#8e8e93" }}>
-              Yeni Siparis
+              Yeni Sipariş
             </p>
             <div className="rounded-[10px] overflow-hidden" style={{ backgroundColor: "#fff" }}>
               {cart.map((item, idx) => (
@@ -108,10 +117,15 @@ export function CartScreen({ tableId, onBack, onOrderSent }: CartScreenProps) {
                   key={item.id}
                   item={item}
                   hasBottomBorder={idx < cart.length - 1}
+                  canAddNote={canAddNote}
                   isEditingNote={editingNoteId === item.product.id}
                   noteValue={noteValue}
                   onNoteValueChange={setNoteValue}
                   onToggleEditNote={() => {
+                    if (!canAddNote) {
+                      showToast("Sipariş notu ekleme yetkiniz bulunmuyor", "error")
+                      return
+                    }
                     if (editingNoteId === item.product.id) {
                       setEditingNoteId(null)
                     } else {
@@ -146,18 +160,18 @@ export function CartScreen({ tableId, onBack, onOrderSent }: CartScreenProps) {
             </span>
           </div>
           <button
-            onClick={handleSend}
-            disabled={cart.length === 0 || sending || isBillRequested}
+            onClick={() => void handleSend()}
+            disabled={cart.length === 0 || isSubmitting || isBillRequested || !canCreateOrder}
             className="w-full font-semibold text-[17px] text-white flex items-center justify-center gap-2 active:brightness-90 disabled:opacity-40 transition-opacity mb-3"
             style={{ backgroundColor: "#34c759", height: 50, borderRadius: 12 }}
           >
-            {sending ? (
+            {isSubmitting ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                Gonderiliyor...
+                Gönderiliyor...
               </>
             ) : (
-              "Siparisi Gonder"
+              "Siparişi Gönder"
             )}
           </button>
         </div>
@@ -170,7 +184,7 @@ function SentItemsSection({ sentItems, sentTotal }: { sentItems: TerminalOrderIt
   return (
     <div className="mt-4 px-4">
       <p className="text-[13px] font-normal uppercase tracking-wide mb-1.5 px-4" style={{ color: "#8e8e93" }}>
-        Gonderilen Siparisler
+        Gönderilen Siparişler
       </p>
       <div className="rounded-[10px] overflow-hidden" style={{ backgroundColor: "#fff" }}>
         {sentItems.map((item, idx) => (
@@ -211,18 +225,19 @@ function EmptyCartState() {
       >
         <ShoppingCart className="h-7 w-7" style={{ color: "#c7c7cc" }} />
       </div>
-      <p className="text-[17px] font-semibold" style={{ color: "#1c1c1e" }}>Sepet bos</p>
-      <p className="text-[15px] mt-1" style={{ color: "#8e8e93" }}>Menudan urun ekleyin</p>
+      <p className="text-[17px] font-semibold" style={{ color: "#1c1c1e" }}>Sepet boş</p>
+      <p className="text-[15px] mt-1" style={{ color: "#8e8e93" }}>Menüden ürün ekleyin</p>
     </div>
   )
 }
 
 function CartItemRow({
-  item, hasBottomBorder, isEditingNote, noteValue, onNoteValueChange,
+  item, hasBottomBorder, canAddNote, isEditingNote, noteValue, onNoteValueChange,
   onToggleEditNote, onSaveNote, onRemove, onUpdateQuantity,
 }: {
   item: TerminalOrderItem
   hasBottomBorder: boolean
+  canAddNote: boolean
   isEditingNote: boolean
   noteValue: string
   onNoteValueChange: (val: string) => void
@@ -234,7 +249,7 @@ function CartItemRow({
   return (
     <div style={{ borderBottom: hasBottomBorder ? "0.5px solid rgba(60,60,67,0.12)" : "none" }}>
       <div className="flex items-center px-4" style={{ minHeight: 56 }}>
-        <button onClick={onRemove} className="mr-3 flex-shrink-0 active:opacity-60" aria-label="Kaldir">
+        <button onClick={onRemove} className="mr-3 flex-shrink-0 active:opacity-60" aria-label="Kaldır">
           <div
             className="h-[22px] w-[22px] rounded-full flex items-center justify-center"
             style={{ backgroundColor: "#ff3b30" }}
@@ -252,8 +267,12 @@ function CartItemRow({
       </div>
 
       <div className="flex items-center justify-between px-4 pb-2.5 pl-[52px]">
-        <button onClick={onToggleEditNote} className="text-[13px] active:opacity-60" style={{ color: "#007aff" }}>
-          {item.note ? "Notu Duzenle" : "Not Ekle"}
+        <button
+          onClick={onToggleEditNote}
+          className={`text-[13px] active:opacity-60 ${canAddNote ? "" : "opacity-50"}`}
+          style={{ color: "#007aff" }}
+        >
+          {item.note ? "Notu Düzenle" : "Not Ekle"}
         </button>
         <div
           className="flex items-center rounded-[8px] overflow-hidden"
@@ -282,7 +301,7 @@ function CartItemRow({
             onClick={() => onUpdateQuantity(item.quantity + 1)}
             className="flex items-center justify-center active:bg-black/5"
             style={{ width: 40, height: "100%", color: "#007aff", borderLeft: "0.5px solid rgba(60,60,67,0.18)" }}
-            aria-label="Arttir"
+            aria-label="Arttır"
           >
             <Plus className="h-[14px] w-[14px]" strokeWidth={2.5} />
           </button>
@@ -299,7 +318,7 @@ function CartItemRow({
               type="text"
               value={noteValue}
               onChange={(e) => onNoteValueChange(e.target.value)}
-              placeholder="Ornegin: acisiz, az piskin..."
+              placeholder="Örneğin: acısız, az pişmiş..."
               className="flex-1 min-w-0 bg-transparent px-3 text-[15px] focus:outline-none"
               style={{ color: "#1c1c1e" }}
               autoFocus

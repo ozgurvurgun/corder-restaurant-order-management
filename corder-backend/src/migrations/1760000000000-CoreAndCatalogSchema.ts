@@ -61,7 +61,7 @@ export class CoreAndCatalogSchema1760000000000 implements MigrationInterface {
         "created_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
         CONSTRAINT "PK_root_admins" PRIMARY KEY ("id"),
         CONSTRAINT "UQ_root_admins_email" UNIQUE ("email"),
-        CONSTRAINT "FK_root_admins_restaurant" FOREIGN KEY ("restaurant_id") REFERENCES "restaurants"("id") ON DELETE CASCADE
+        CONSTRAINT "FK_root_admins_restaurant" FOREIGN KEY ("restaurant_id") REFERENCES "restaurants"("id") ON DELETE SET NULL
       )
     `);
     await queryRunner.query(
@@ -139,6 +139,9 @@ export class CoreAndCatalogSchema1760000000000 implements MigrationInterface {
     `);
     await queryRunner.query(
       `CREATE INDEX "IDX_restaurant_staff_restaurant_id" ON "restaurant_staff" ("restaurant_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_restaurant_staff_restaurant_active" ON "restaurant_staff" ("restaurant_id", "is_active")`,
     );
     await queryRunner.query(
       `CREATE INDEX "IDX_restaurant_staff_email" ON "restaurant_staff" ("email")`,
@@ -228,6 +231,9 @@ export class CoreAndCatalogSchema1760000000000 implements MigrationInterface {
       `CREATE INDEX "IDX_orders_restaurant_status" ON "orders" ("restaurant_id", "status")`,
     );
     await queryRunner.query(
+      `CREATE INDEX "IDX_orders_restaurant_table_status" ON "orders" ("restaurant_id", "table_id", "status")`,
+    );
+    await queryRunner.query(
       `CREATE INDEX "IDX_orders_restaurant_created" ON "orders" ("restaurant_id", "created_at")`,
     );
 
@@ -251,6 +257,9 @@ export class CoreAndCatalogSchema1760000000000 implements MigrationInterface {
     `);
     await queryRunner.query(
       `CREATE INDEX "IDX_order_items_order_id" ON "order_items" ("order_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_order_items_order_status" ON "order_items" ("order_id", "status")`,
     );
 
     await queryRunner.query(`

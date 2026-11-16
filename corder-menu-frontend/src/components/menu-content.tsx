@@ -52,7 +52,7 @@ function MenuProductItem(props: {
             <h3 className="font-semibold text-stone-900">{product.name}</h3>
             {!product.inStock && (
               <span className="text-[10px] font-medium text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full">
-                Tukendi
+                Tükendi
               </span>
             )}
           </div>
@@ -146,7 +146,13 @@ export function MenuContent({ slug }: { slug: string }) {
     image: resolveImageUrl(p.imageUrl),
   }))
   const filteredProducts = searchQuery.trim()
-    ? allProducts.filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    ? allProducts.filter((p) => {
+        const q = searchQuery.toLowerCase()
+        return (
+          p.name.toLowerCase().includes(q) ||
+          (p.description?.toLowerCase().includes(q) ?? false)
+        )
+      })
     : []
   const hasTreeContent = roots.some(categoryHasProducts)
 
@@ -160,15 +166,31 @@ export function MenuContent({ slug }: { slug: string }) {
     setActiveCategory((prev) => (prev && list.some((r) => r.id === prev) ? prev : list[0].id))
   }, [data])
 
-  const scrollToCategory = (categoryId: string) => {
+  useEffect(() => {
+    if (!showSearch && !selectedProduct && !showCampaigns && !showContact) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return
+      if (selectedProduct) setSelectedProduct(null)
+      else if (showSearch) {
+        setShowSearch(false)
+        setSearchQuery("")
+      } else if (showCampaigns) setShowCampaigns(false)
+      else if (showContact) setShowContact(false)
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [showSearch, selectedProduct, showCampaigns, showContact])
+
+  const scrollToCategory = (categoryId: string, buttonEl?: HTMLButtonElement | null) => {
     setActiveCategory(categoryId)
+    buttonEl?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" })
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
   if (loading) {
     return (
       <div className="min-h-dvh bg-stone-50 flex items-center justify-center">
-        <div className="animate-pulse text-stone-400">Yukleniyor...</div>
+        <div className="animate-pulse text-stone-400">Yükleniyor...</div>
       </div>
     )
   }
@@ -180,9 +202,9 @@ export function MenuContent({ slug }: { slug: string }) {
           <div className="w-16 h-16 rounded-full bg-stone-100 flex items-center justify-center mx-auto mb-4">
             <Search className="w-6 h-6 text-stone-400" />
           </div>
-          <h1 className="text-xl font-semibold text-stone-900 mb-2">Menu Bulunamadi</h1>
+          <h1 className="text-xl font-semibold text-stone-900 mb-2">Menü Bulunamadı</h1>
           <p className="text-stone-500 text-sm">
-            {error ?? "Bu isletmeye ait menu mevcut degil."}
+            {error ?? "Bu işletmeye ait menü mevcut değil."}
           </p>
         </div>
       </div>
@@ -235,7 +257,7 @@ export function MenuContent({ slug }: { slug: string }) {
             {roots.map((cat) => (
               <button
                 key={cat.id}
-                onClick={() => scrollToCategory(cat.id)}
+                onClick={(e) => scrollToCategory(cat.id, e.currentTarget)}
                 className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all ${
                   activeCategory === cat.id
                     ? "bg-stone-900 text-white"
@@ -252,7 +274,7 @@ export function MenuContent({ slug }: { slug: string }) {
       <main className="px-5 py-6 pb-28">
         {!hasTreeContent ? (
           <div className="text-center py-16">
-            <p className="text-stone-400">Sonuc bulunamadi</p>
+            <p className="text-stone-400">Sonuç bulunamadı</p>
           </div>
         ) : !activeRoot ? null : !categoryHasProducts(activeRoot) ? (
           <div className="text-center py-16">

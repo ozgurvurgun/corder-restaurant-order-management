@@ -15,7 +15,7 @@ export function ConfirmDialog({
   title,
   message,
   confirmText = "Evet",
-  cancelText = "Vazgec",
+  cancelText = "Vazgeç",
   onConfirm,
   onCancel,
   loading = false,
@@ -42,7 +42,7 @@ export function ConfirmDialog({
                   destructive ? "text-destructive" : "text-[#e63462]"
                 }`}
               >
-                {loading ? "Isleniyor..." : confirmText}
+                {loading ? "İşleniyor..." : confirmText}
               </button>
             </div>
           </div>

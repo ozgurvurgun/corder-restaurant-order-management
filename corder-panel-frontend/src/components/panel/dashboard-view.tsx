@@ -71,7 +71,7 @@ export default function DashboardView(_props: DashboardViewProps) {
           : p.method === "meal-card"
             ? "Yemek K."
             : p.method === "split"
-              ? "Coklu"
+              ? "Çoklu"
               : p.method === "ledger"
                 ? "Cari"
                 : p.method,
@@ -339,7 +339,7 @@ export default function DashboardView(_props: DashboardViewProps) {
                       {w.name}
                     </p>
                     <p className="text-[11px] text-[var(--panel-text-secondary)]">
-                      {w.tables} masa / {w.orders} siparis
+                      {w.tables} masa / {w.orders} sipariş
                     </p>
                   </div>
                   <span className="text-[13px] font-semibold text-[var(--panel-text)]">

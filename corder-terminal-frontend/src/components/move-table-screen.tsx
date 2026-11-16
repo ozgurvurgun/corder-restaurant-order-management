@@ -18,10 +18,10 @@ type FilterMode = "all" | "open" | "number"
 
 export function MoveTableScreen({ fromTableId, onBack, onMoved }: MoveTableScreenProps) {
   const { showToast } = useToast()
-  const { tables, moveTable } = useApp()
+  const { tables, moveTable, hasPermission } = useApp()
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null)
   const [showConfirm, setShowConfirm] = useState(false)
-  const [moving, setMoving] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [activeSection, setActiveSection] = useState<string>(ALL_SECTIONS)
   const [filterMode, setFilterMode] = useState<FilterMode>("all")
   const [tableNumber, setTableNumber] = useState("")
@@ -43,26 +43,34 @@ export function MoveTableScreen({ fromTableId, onBack, onMoved }: MoveTableScree
     .sort((a, b) => a.name.localeCompare(b.name, "tr", { numeric: true, sensitivity: "base" }))
 
   const handleSelectTarget = (toTableId: string) => {
+    if (isSubmitting) return
     setSelectedTargetId(toTableId)
     setShowConfirm(true)
   }
 
   const handleMoveConfirmed = async () => {
-    if (!selectedTargetId) return
-    setMoving(true)
-    const ok = await moveTable(fromTableId, selectedTargetId)
-    setMoving(false)
-    if (!ok) {
-      showToast("Masa tasinamadi", "error")
+    if (!selectedTargetId || isSubmitting) return
+    if (!hasPermission("table.move")) {
+      showToast("Masa taşıma yetkiniz bulunmuyor", "error")
       return
     }
-    if (isTargetOccupied) {
-      showToast(`${fromTable?.name} -> ${selectedTarget?.name} birlestirildi`)
-    } else {
-      showToast(`${fromTable?.name} -> ${selectedTarget?.name} tasindi`)
+    setIsSubmitting(true)
+    try {
+      const ok = await moveTable(fromTableId, selectedTargetId)
+      if (!ok) {
+        showToast("Masa taşınamadı", "error")
+        return
+      }
+      if (isTargetOccupied) {
+        showToast(`${fromTable?.name} -> ${selectedTarget?.name} birleştirildi`)
+      } else {
+        showToast(`${fromTable?.name} -> ${selectedTarget?.name} taşındı`)
+      }
+      setShowConfirm(false)
+      onMoved()
+    } finally {
+      setIsSubmitting(false)
     }
-    setShowConfirm(false)
-    onMoved()
   }
 
   const handleNumberSearch = () => {
@@ -73,7 +81,7 @@ export function MoveTableScreen({ fromTableId, onBack, onMoved }: MoveTableScree
     if (found) {
       handleSelectTarget(found.id)
     } else {
-      showToast("Masa bulunamadi", "error")
+      showToast("Masa bulunamadı", "error")
     }
     setTableNumber("")
   }
@@ -94,7 +102,7 @@ export function MoveTableScreen({ fromTableId, onBack, onMoved }: MoveTableScree
           <span className="text-[17px]">Geri</span>
         </button>
         <h1 className="text-[17px] font-semibold absolute left-1/2 -translate-x-1/2 truncate max-w-[200px]">
-          {fromTable?.name} Tasi
+          {fromTable?.name} Taşı
         </h1>
       </header>
 
@@ -111,7 +119,7 @@ export function MoveTableScreen({ fromTableId, onBack, onMoved }: MoveTableScree
                   : "text-muted-foreground"
               }`}
             >
-              {section === ALL_SECTIONS ? "Tumu" : section}
+              {section === ALL_SECTIONS ? "Tümü" : section}
             </button>
           ))}
         </div>
@@ -122,7 +130,7 @@ export function MoveTableScreen({ fromTableId, onBack, onMoved }: MoveTableScree
         <div className="px-4 py-3 flex gap-2 flex-shrink-0 border-b border-border bg-background">
           <input
             type="text"
-            placeholder="Masa adi veya numarasi..."
+            placeholder="Masa adı veya numarası..."
             value={tableNumber}
             onChange={(e) => setTableNumber(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleNumberSearch()}
@@ -142,7 +150,7 @@ export function MoveTableScreen({ fromTableId, onBack, onMoved }: MoveTableScree
       <div className="flex-1 overflow-auto px-4 py-3 ios-scroll">
         {filteredTables.length === 0 ? (
           <div className="flex items-center justify-center py-20">
-            <p className="text-[15px] text-muted-foreground">Uygun masa bulunamadi</p>
+            <p className="text-[15px] text-muted-foreground">Uygun masa bulunamadı</p>
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-2.5">
@@ -169,13 +177,13 @@ export function MoveTableScreen({ fromTableId, onBack, onMoved }: MoveTableScree
         <div className="flex">
           <TabBarButton
             icon={<UtensilsCrossed className="h-[22px] w-[22px]" />}
-            label="Tum Masalar"
+            label="Tüm Masalar"
             active={filterMode === "all"}
             onClick={() => setFilterMode("all")}
           />
           <TabBarButton
             icon={<Wine className="h-[22px] w-[22px]" />}
-            label="Acik Masalar"
+            label="Açık Masalar"
             active={filterMode === "open"}
             onClick={() => setFilterMode("open")}
           />
@@ -191,17 +199,18 @@ export function MoveTableScreen({ fromTableId, onBack, onMoved }: MoveTableScree
       {/* Confirmation Dialog */}
       <ConfirmDialog
         open={showConfirm}
-        title={isTargetOccupied ? "Masalari Birlestir" : "Masayi Tasi"}
+        title={isTargetOccupied ? "Masaları Birleştir" : "Masayı Taşı"}
         message={
           isTargetOccupied
-            ? `${fromTable?.name} siparisleri ${selectedTarget?.name} masasiyla birlestirilecek. Adisyonlar birlesik gorunecektir. Devam etmek istiyor musunuz?`
-            : `${fromTable?.name} masasini ${selectedTarget?.name} masasina tasimak istediginize emin misiniz?`
+            ? `${fromTable?.name} siparişleri ${selectedTarget?.name} masasıyla birleştirilecek. Adisyonlar birleşik görünecektir. Devam etmek istiyor musunuz?`
+            : `${fromTable?.name} masasını ${selectedTarget?.name} masasına taşımak istediğinize emin misiniz?`
         }
-        confirmText={isTargetOccupied ? "Birlestir" : "Tasi"}
-        cancelText="Vazgec"
-        loading={moving}
-        onConfirm={handleMoveConfirmed}
+        confirmText={isTargetOccupied ? "Birleştir" : "Taşı"}
+        cancelText="Vazgeç"
+        loading={isSubmitting}
+        onConfirm={() => void handleMoveConfirmed()}
         onCancel={() => {
+          if (isSubmitting) return
           setShowConfirm(false)
           setSelectedTargetId(null)
         }}
@@ -235,7 +244,7 @@ function MoveTableCard({ table, onClick }: { table: TerminalTable; onClick: () =
           </div>
         </>
       ) : (
-        <span className="text-[12px] text-muted-foreground mt-0.5">Bos</span>
+        <span className="text-[12px] text-muted-foreground mt-0.5">Boş</span>
       )}
     </button>
   )

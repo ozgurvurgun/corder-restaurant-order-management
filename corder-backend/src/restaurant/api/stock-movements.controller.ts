@@ -4,6 +4,7 @@ import { PanelRootGuard } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
 import { StockMovementsService } from '../application/stock-movements.service';
+import { CreateStockMovementBodyDto } from './dto/create-stock-movement.dto';
 
 @Controller('restaurant/stock/movements')
 @UseGuards(RestaurantJwtGuard, PanelRootGuard)
@@ -23,18 +24,7 @@ export class StockMovementsController {
   create(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { name: string },
-    @Body()
-    body: {
-      materialId: string;
-      materialName?: string;
-      type: 'in' | 'out' | 'waste' | 'count-adjustment';
-      quantity: number;
-      unitCost?: number;
-      totalCost?: number;
-      supplierId?: string;
-      reason?: string;
-      createdBy?: string;
-    },
+    @Body() body: CreateStockMovementBodyDto,
   ) {
     return this.movements.create(restaurantId, {
       ...body,

@@ -202,11 +202,11 @@ export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreen
   }, [table?.name, tableId])
 
   const cartCount = getCartItemCount()
-  const headerTitle = table?.name ?? tableTitleByTableId[tableId] ?? "Menu"
+  const headerTitle = table?.name ?? tableTitleByTableId[tableId] ?? "Menü"
 
   const handleAddProduct = (product: TerminalProduct) => {
     if (isBillRequested) {
-      showToast("Masa hesap kesiminde. Modal kapanana kadar siparis eklenemez.", "error")
+      showToast("Masa hesap kesiminde. Modal kapanana kadar sipariş eklenemez.", "error")
       return
     }
     if (!product.isAvailable) {
@@ -233,7 +233,7 @@ export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreen
       <div className="h-dvh flex flex-col bg-background">
         <OrderMenuHeaderBar onBack={onBack} title={headerTitle} actions="none" />
         <div className="flex-1 flex items-center justify-center text-muted-foreground">
-          Yukleniyor...
+          Yükleniyor...
         </div>
       </div>
     )
@@ -251,7 +251,7 @@ export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreen
       />
       {isBillRequested && (
         <div className="mx-3 mt-2 rounded-xl border border-[#0a84ff]/35 bg-[#0a84ff]/10 px-3 py-2 text-[12px] text-[#0a4f99]">
-          Hesap Kes penceresi acik. Bu masa icin yeni siparis ekleme gecici olarak kilitlendi.
+          Hesap Kes penceresi açık. Bu masa için yeni sipariş ekleme geçici olarak kilitlendi.
         </div>
       )}
 
@@ -261,7 +261,7 @@ export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreen
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Urun ara..."
+              placeholder="Ürün ara..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-muted rounded-xl pl-9 pr-9 py-2 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none"
@@ -308,7 +308,7 @@ export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreen
           searchedProducts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
               <Search className="h-8 w-8 mb-2 opacity-40" />
-              <p className="text-[15px]">Urun bulunamadi</p>
+              <p className="text-[15px]">Ürün bulunamadı</p>
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-2.5">
@@ -334,7 +334,7 @@ export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreen
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
             <Search className="h-8 w-8 mb-2 opacity-40" />
-            <p className="text-[15px]">Urun bulunamadi</p>
+            <p className="text-[15px]">Ürün bulunamadı</p>
           </div>
         )}
       </div>

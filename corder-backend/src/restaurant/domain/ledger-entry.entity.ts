@@ -13,6 +13,7 @@ import { LedgerCustomerEntity } from './ledger-customer.entity';
 @Entity('ledger_entries')
 @Index(['restaurantId'])
 @Index(['customerId'])
+@Index(['restaurantId', 'customerId', 'createdAt'])
 export class LedgerEntryEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;

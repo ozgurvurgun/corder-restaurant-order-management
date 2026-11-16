@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { X, ArrowRightLeft, Merge, Loader2 } from "lucide-react"
 import { usePanelStore } from "@/lib/panel-store"
 import { usePanelToast } from "./panel-toast"
@@ -18,6 +18,17 @@ export default function MoveOrderItemModal({ sourceTableId, itemIds, productHint
   const [selectedTable, setSelectedTable] = useState<string | null>(null)
   const [showConfirm, setShowConfirm] = useState(false)
   const [moving, setMoving] = useState(false)
+  const movingRef = useRef(false)
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || moving || movingRef.current) return
+      if (showConfirm) setShowConfirm(false)
+      else onClose()
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [moving, showConfirm, onClose])
 
   const currentTable = tables.find((t) => t.id === sourceTableId)
   const targetTable = tables.find((t) => t.id === selectedTable)
@@ -37,20 +48,22 @@ export default function MoveOrderItemModal({ sourceTableId, itemIds, productHint
   )
 
   const handleConfirm = async () => {
-    if (!selectedTable) return
+    if (!selectedTable || moving || movingRef.current) return
+    movingRef.current = true
     setMoving(true)
-    const ok = await moveOrderItems(sourceTableId, selectedTable, itemIds)
-    setMoving(false)
-    if (!ok) {
-      showToast("Urunler tasinamadi", "error")
-      return
+    try {
+      const ok = await moveOrderItems(sourceTableId, selectedTable, itemIds)
+      if (!ok) return
+      showToast(
+        `${productHint ? `"${productHint}" ` : ""}${targetTable?.name} masasında yeni adisyon olarak açıldı`,
+        "success",
+      )
+      setShowConfirm(false)
+      onClose()
+    } finally {
+      movingRef.current = false
+      setMoving(false)
     }
-    showToast(
-      `${productHint ? `"${productHint}" ` : ""}${targetTable?.name} masasinda yeni adisyon olarak acildi`,
-      "success",
-    )
-    setShowConfirm(false)
-    onClose()
   }
 
   return (
@@ -58,13 +71,13 @@ export default function MoveOrderItemModal({ sourceTableId, itemIds, productHint
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#e5e5ea]">
           <div>
-            <h2 className="text-[17px] font-semibold text-[#1d1d1f]">Urunu Masaya Tası</h2>
+            <h2 className="text-[17px] font-semibold text-[#1d1d1f]">Ürünü Masaya Taşı</h2>
             <p className="text-[13px] text-[#86868b]">
-              {currentTable?.name} — hedef masada <span className="font-medium">yeni adisyon</span> olarak acilir
+              {currentTable?.name} — hedef masada <span className="font-medium">yeni adisyon</span> olarak açılır
               {productHint ? ` (${productHint})` : ""}
             </p>
           </div>
-          <button type="button" onClick={onClose} className="p-1.5 hover:bg-[#f5f5f7] rounded-lg transition-colors">
+          <button type="button" disabled={moving} onClick={onClose} className="p-1.5 hover:bg-[#f5f5f7] rounded-lg transition-colors disabled:opacity-50">
             <X className="h-5 w-5 text-[#86868b]" />
           </button>
         </div>
@@ -78,7 +91,7 @@ export default function MoveOrderItemModal({ sourceTableId, itemIds, productHint
                 selectedSection === "all" ? "bg-[#e63462] text-white" : "bg-[#f5f5f7] text-[#1d1d1f]"
               }`}
             >
-              Tumu
+              Tümü
             </button>
             {sections.map((section) => (
               <button
@@ -96,12 +109,13 @@ export default function MoveOrderItemModal({ sourceTableId, itemIds, productHint
 
           {emptyTables.length > 0 && (
             <div className="space-y-2">
-              <p className="text-[12px] font-medium text-[#86868b] uppercase tracking-wide">Bos Masalar</p>
+              <p className="text-[12px] font-medium text-[#86868b] uppercase tracking-wide">Boş Masalar</p>
               <div className="grid grid-cols-3 gap-2">
                 {emptyTables.map((table) => (
                   <button
                     key={table.id}
                     type="button"
+                    disabled={moving}
                     onClick={() => setSelectedTable(table.id)}
                     className={`p-3 rounded-xl text-center ${
                       selectedTable === table.id
@@ -125,6 +139,7 @@ export default function MoveOrderItemModal({ sourceTableId, itemIds, productHint
                   <button
                     key={table.id}
                     type="button"
+                    disabled={moving}
                     onClick={() => setSelectedTable(table.id)}
                     className={`p-3 rounded-xl text-center ${
                       selectedTable === table.id
@@ -144,22 +159,23 @@ export default function MoveOrderItemModal({ sourceTableId, itemIds, productHint
           )}
 
           {emptyTables.length === 0 && occupiedTables.length === 0 && (
-            <div className="py-8 text-center text-[13px] text-[#86868b] bg-[#f5f5f7] rounded-xl">Bu bolgede uygun masa yok</div>
+            <div className="py-8 text-center text-[13px] text-[#86868b] bg-[#f5f5f7] rounded-xl">Bu bölgede uygun masa yok</div>
           )}
         </div>
 
         <div className="flex gap-3 px-5 py-4 border-t border-[#e5e5ea]">
           <button
             type="button"
+            disabled={moving}
             onClick={onClose}
-            className="flex-1 py-3 rounded-xl text-[15px] font-semibold bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e5e5ea]"
+            className="flex-1 py-3 rounded-xl text-[15px] font-semibold bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e5e5ea] disabled:opacity-50"
           >
-            Iptal
+            İptal
           </button>
           <button
             type="button"
             onClick={() => selectedTable && setShowConfirm(true)}
-            disabled={!selectedTable}
+            disabled={!selectedTable || moving}
             className="flex-1 py-3 rounded-xl text-[15px] font-semibold bg-[#e63462] text-white hover:bg-[#d42d58] disabled:opacity-50"
           >
             Devam
@@ -182,7 +198,7 @@ export default function MoveOrderItemModal({ sourceTableId, itemIds, productHint
                   <ArrowRightLeft className="w-6 h-6 text-blue-600" />
                 )}
               </div>
-              <h3 className="text-[17px] font-semibold text-[#1d1d1f] mb-2">Yeni adisyon olarak tasi</h3>
+              <h3 className="text-[17px] font-semibold text-[#1d1d1f] mb-2">Yeni adisyon olarak taşı</h3>
               <p className="text-[14px] text-[#86868b]">
                 {productHint ? (
                   <>
@@ -190,25 +206,26 @@ export default function MoveOrderItemModal({ sourceTableId, itemIds, productHint
                     {" "}
                   </>
                 ) : null}
-                {currentTable?.name} masasindan {targetTable?.name} masasina tasinacak. Hedefte ayri bir adisyon
-                satiri olusur; kaynak masa adi etiket olarak gorunur.
+                {currentTable?.name} masasından {targetTable?.name} masasına taşınacak. Hedefte ayrı bir adisyon
+                satırı oluşur; kaynak masa adı etiket olarak görünür.
               </p>
             </div>
             <div className="flex border-t border-[#e5e5ea]">
               <button
                 type="button"
+                disabled={moving}
                 onClick={() => setShowConfirm(false)}
-                className="flex-1 py-3.5 text-[15px] font-medium text-[#007aff] border-r border-[#e5e5ea] hover:bg-[#f5f5f7]"
+                className="flex-1 py-3.5 text-[15px] font-medium text-[#007aff] border-r border-[#e5e5ea] hover:bg-[#f5f5f7] disabled:opacity-50"
               >
-                Vazgec
+                Vazgeç
               </button>
               <button
                 type="button"
-                onClick={handleConfirm}
+                onClick={() => void handleConfirm()}
                 disabled={moving}
                 className="flex-1 py-3.5 text-[15px] font-semibold text-[#e63462] hover:bg-[#f5f5f7] disabled:opacity-60"
               >
-                {moving ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Tasi"}
+                {moving ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Taşı"}
               </button>
             </div>
           </div>

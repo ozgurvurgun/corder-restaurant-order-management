@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { X, Users, ShoppingBag } from "lucide-react"
 import { usePanelStore } from "@/lib/panel-store"
 import { itemCountsTowardBill } from "@/lib/panel-types"
@@ -20,12 +20,25 @@ export default function SplitBillModal({ tableId, total, onClose }: SplitBillMod
   const [mode, setMode] = useState<"select" | "person" | "items">("select")
   const [personCount, setPersonCount] = useState(2)
   const [selectedItems, setSelectedItems] = useState<Record<string, number>>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const submittingRef = useRef(false)
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !submittingRef.current) {
+        onClose()
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [onClose])
 
   const table = tables.find((t) => t.id === tableId)
   const tableOrders = getTableOrders(tableId)
   const allItems = tableOrders.flatMap((o) => o.items.filter(itemCountsTowardBill))
 
-  const perPersonAmount = Math.ceil(total / personCount)
+  const safePersonCount = Math.max(2, Math.min(20, Math.floor(personCount) || 2))
+  const perPersonAmount = Math.ceil(total / safePersonCount)
 
   const selectedTotal = Object.entries(selectedItems).reduce((sum, [itemId, qty]) => {
     const item = allItems.find((i) => i.id === itemId)
@@ -45,34 +58,40 @@ export default function SplitBillModal({ tableId, total, onClose }: SplitBillMod
   }
 
   const handleSplitByPerson = () => {
-    splitBillByPerson(tableId, personCount)
-    showToast(`${table?.name}: Hesap ${personCount} kisiye bolundu. Kisi basi: ${formatCurrency(perPersonAmount)} TL`, "success")
+    if (isSubmitting || submittingRef.current || safePersonCount < 2) return
+    submittingRef.current = true
+    setIsSubmitting(true)
+    splitBillByPerson(tableId, safePersonCount)
+    showToast(`${table?.name}: Hesap ${safePersonCount} kişiye bölündü. Kişi başı: ${formatCurrency(perPersonAmount)} TL`, "success")
     onClose()
   }
 
   const handleSplitByItems = () => {
+    if (isSubmitting || submittingRef.current || selectedTotal <= 0) return
     const itemIds = Object.keys(selectedItems)
+    if (itemIds.length === 0) return
+    submittingRef.current = true
+    setIsSubmitting(true)
     splitBillByItems(tableId, itemIds, selectedItems)
-    showToast(`${table?.name}: ${itemIds.length} urun ayri hesaba ayrildi. Tutar: ${formatCurrency(selectedTotal)} TL`, "success")
+    showToast(`${table?.name}: ${itemIds.length} ürün ayrı hesaba ayrıldı. Tutar: ${formatCurrency(selectedTotal)} TL`, "success")
     onClose()
   }
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden mx-4">
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#e5e5ea]">
-          <h2 className="text-[17px] font-semibold text-[#1d1d1f]">Hesap Bol - {table?.name}</h2>
-          <button onClick={onClose} className="p-1.5 hover:bg-[#f5f5f7] rounded-lg transition-colors">
+          <h2 className="text-[17px] font-semibold text-[#1d1d1f]">Hesap Böl - {table?.name}</h2>
+          <button type="button" onClick={onClose} className="p-1.5 hover:bg-[#f5f5f7] rounded-lg transition-colors">
             <X className="h-5 w-5 text-[#86868b]" />
           </button>
         </div>
 
-        {/* Content */}
         <div className="p-5">
           {mode === "select" && (
             <div className="flex flex-col gap-3">
               <button
+                type="button"
                 onClick={() => setMode("person")}
                 className="flex items-center gap-4 p-4 bg-[#f5f5f7] rounded-xl hover:bg-[#e8e8ed] transition-colors text-left"
               >
@@ -80,11 +99,12 @@ export default function SplitBillModal({ tableId, total, onClose }: SplitBillMod
                   <Users className="h-6 w-6 text-[#e63462]" />
                 </div>
                 <div>
-                  <p className="text-[15px] font-semibold text-[#1d1d1f]">Kisi Basina Bol</p>
-                  <p className="text-[13px] text-[#86868b]">Toplam tutari esit parcalara bol</p>
+                  <p className="text-[15px] font-semibold text-[#1d1d1f]">Kişi Başına Böl</p>
+                  <p className="text-[13px] text-[#86868b]">Toplam tutarı eşit parçalara böl</p>
                 </div>
               </button>
               <button
+                type="button"
                 onClick={() => setMode("items")}
                 className="flex items-center gap-4 p-4 bg-[#f5f5f7] rounded-xl hover:bg-[#e8e8ed] transition-colors text-left"
               >
@@ -92,8 +112,8 @@ export default function SplitBillModal({ tableId, total, onClose }: SplitBillMod
                   <ShoppingBag className="h-6 w-6 text-[#007aff]" />
                 </div>
                 <div>
-                  <p className="text-[15px] font-semibold text-[#1d1d1f]">Urun Bazinda Bol</p>
-                  <p className="text-[13px] text-[#86868b]">Belirli urunleri ayri hesaba tasi</p>
+                  <p className="text-[15px] font-semibold text-[#1d1d1f]">Ürün Bazında Böl</p>
+                  <p className="text-[13px] text-[#86868b]">Belirli ürünleri ayrı hesaba taşı</p>
                 </div>
               </button>
             </div>
@@ -102,17 +122,19 @@ export default function SplitBillModal({ tableId, total, onClose }: SplitBillMod
           {mode === "person" && (
             <div className="flex flex-col gap-5">
               <div className="text-center">
-                <p className="text-[13px] text-[#86868b] mb-3">Kisi Sayisi</p>
+                <p className="text-[13px] text-[#86868b] mb-3">Kişi Sayısı</p>
                 <div className="flex items-center justify-center gap-4">
                   <button
-                    onClick={() => setPersonCount(Math.max(2, personCount - 1))}
+                    type="button"
+                    onClick={() => setPersonCount(Math.max(2, safePersonCount - 1))}
                     className="w-12 h-12 rounded-full bg-[#f5f5f7] text-[20px] font-semibold hover:bg-[#e8e8ed] transition-colors"
                   >
                     -
                   </button>
-                  <span className="text-[40px] font-bold text-[#e63462] w-16 text-center">{personCount}</span>
+                  <span className="text-[40px] font-bold text-[#e63462] w-16 text-center">{safePersonCount}</span>
                   <button
-                    onClick={() => setPersonCount(Math.min(20, personCount + 1))}
+                    type="button"
+                    onClick={() => setPersonCount(Math.min(20, safePersonCount + 1))}
                     className="w-12 h-12 rounded-full bg-[#f5f5f7] text-[20px] font-semibold hover:bg-[#e8e8ed] transition-colors"
                   >
                     +
@@ -125,15 +147,15 @@ export default function SplitBillModal({ tableId, total, onClose }: SplitBillMod
                   <span>{formatCurrency(total)} TL</span>
                 </div>
                 <div className="flex justify-between text-[17px] font-semibold text-[#1d1d1f]">
-                  <span>Kisi Basi</span>
+                  <span>Kişi Başı</span>
                   <span className="text-[#e63462]">{formatCurrency(perPersonAmount)} TL</span>
                 </div>
               </div>
               <div className="flex gap-3">
-                <button onClick={() => setMode("select")} className="flex-1 h-[44px] rounded-xl bg-[#f5f5f7] text-[15px] font-semibold text-[#1d1d1f] hover:bg-[#e8e8ed] transition-colors">
+                <button type="button" onClick={() => setMode("select")} className="flex-1 h-[44px] rounded-xl bg-[#f5f5f7] text-[15px] font-semibold text-[#1d1d1f] hover:bg-[#e8e8ed] transition-colors">
                   Geri
                 </button>
-                <button onClick={handleSplitByPerson} className="flex-1 h-[44px] rounded-xl bg-[#e63462] text-[15px] font-semibold text-white hover:bg-[#d42d58] transition-colors">
+                <button type="button" disabled={isSubmitting} onClick={handleSplitByPerson} className="flex-1 h-[44px] rounded-xl bg-[#e63462] text-[15px] font-semibold text-white hover:bg-[#d42d58] transition-colors disabled:opacity-50">
                   Onayla
                 </button>
               </div>
@@ -153,6 +175,7 @@ export default function SplitBillModal({ tableId, total, onClose }: SplitBillMod
                       </div>
                       <div className="flex items-center gap-2">
                         <button
+                          type="button"
                           onClick={() => toggleItem(item.id, item.quantity, -1)}
                           className="w-8 h-8 rounded-lg bg-white border border-[#e5e5ea] text-[14px] font-semibold"
                         >
@@ -162,6 +185,7 @@ export default function SplitBillModal({ tableId, total, onClose }: SplitBillMod
                           {selected}
                         </span>
                         <button
+                          type="button"
                           onClick={() => toggleItem(item.id, item.quantity, 1)}
                           className="w-8 h-8 rounded-lg bg-white border border-[#e5e5ea] text-[14px] font-semibold"
                         >
@@ -174,20 +198,21 @@ export default function SplitBillModal({ tableId, total, onClose }: SplitBillMod
               </div>
               <div className="bg-[#f5f5f7] rounded-xl p-4">
                 <div className="flex justify-between text-[15px] font-semibold text-[#1d1d1f]">
-                  <span>Secilen Tutar</span>
+                  <span>Seçilen Tutar</span>
                   <span className="text-[#e63462]">{formatCurrency(selectedTotal)} TL</span>
                 </div>
               </div>
               <div className="flex gap-3">
-                <button onClick={() => setMode("select")} className="flex-1 h-[44px] rounded-xl bg-[#f5f5f7] text-[15px] font-semibold text-[#1d1d1f] hover:bg-[#e8e8ed] transition-colors">
+                <button type="button" onClick={() => setMode("select")} className="flex-1 h-[44px] rounded-xl bg-[#f5f5f7] text-[15px] font-semibold text-[#1d1d1f] hover:bg-[#e8e8ed] transition-colors">
                   Geri
                 </button>
                 <button
+                  type="button"
                   onClick={handleSplitByItems}
-                  disabled={selectedTotal === 0}
+                  disabled={isSubmitting || selectedTotal === 0}
                   className="flex-1 h-[44px] rounded-xl bg-[#e63462] text-[15px] font-semibold text-white hover:bg-[#d42d58] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Ayir ve Ode
+                  Ayır ve Öde
                 </button>
               </div>
             </div>

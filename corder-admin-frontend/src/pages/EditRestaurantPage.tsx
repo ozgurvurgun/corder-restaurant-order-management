@@ -36,6 +36,7 @@ export function EditRestaurantPage() {
   const [status, setStatus] = useState<"active" | "inactive">("active")
   const [error, setError] = useState("")
   const [saveLoading, setSaveLoading] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     void loadRestaurants()
@@ -118,14 +119,18 @@ export function EditRestaurantPage() {
   }
 
   const handleDeleteRestaurant = async () => {
+    if (deleting) return
     if (!confirm("Bu restoranı ve ilişkili root admin kaydını silmek istediğinize emin misiniz?")) {
       return
     }
+    setDeleting(true)
     try {
       await deleteRestaurant(id)
       navigate("/dashboard/restaurants")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Silinemedi")
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -142,11 +147,12 @@ export function EditRestaurantPage() {
         <h1 className="text-2xl font-semibold text-white">{restaurant.name}</h1>
         <button
           type="button"
-          onClick={handleDeleteRestaurant}
-          className="flex items-center gap-2 rounded-lg border border-red-500/50 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10"
+          onClick={() => void handleDeleteRestaurant()}
+          disabled={deleting}
+          className="flex items-center gap-2 rounded-lg border border-red-500/50 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 disabled:opacity-50"
         >
           <Trash2 className="h-4 w-4" />
-          Restoranı sil
+          {deleting ? "Siliniyor…" : "Restoranı sil"}
         </button>
       </div>
 

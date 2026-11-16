@@ -14,7 +14,7 @@ function getHeatColor(value: number, max: number) {
 const DAYS = [
   { key: "monday" as const, label: "Pzt" },
   { key: "tuesday" as const, label: "Sal" },
-  { key: "wednesday" as const, label: "Car" },
+  { key: "wednesday" as const, label: "Çar" },
   { key: "thursday" as const, label: "Per" },
   { key: "friday" as const, label: "Cum" },
   { key: "saturday" as const, label: "Cmt" },
@@ -131,13 +131,13 @@ export function PeriodComparisonTab(props: { allPeriodReports: { weekly: PeriodR
       <div className="flex items-center gap-2">
         {(["weekly", "monthly", "yearly"] as const).map((type) => (
           <button key={type} onClick={() => setSelectedPeriodType(type)} className={`h-[30px] px-3.5 rounded-lg text-[12px] font-medium transition-colors ${selectedPeriodType === type ? "bg-[#e63462] text-white" : "bg-white border border-[#d1d1d6]/60 text-[#86868b] hover:bg-[#f5f5f7]"}`}>
-            {type === "weekly" ? "Haftalik" : type === "monthly" ? "Aylik" : "Yillik"}
+            {type === "weekly" ? "Haftalık" : type === "monthly" ? "Aylık" : "Yıllık"}
           </button>
         ))}
       </div>
 
       <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4">
-        <h3 className="text-[13px] font-semibold text-[#1d1d1f] mb-3">Ciro Karsilastirmasi</h3>
+        <h3 className="text-[13px] font-semibold text-[#1d1d1f] mb-3">Ciro Karşılaştırması</h3>
         <ResponsiveContainer width="100%" height={250}>
           <BarChart data={filteredPeriodReports}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -145,7 +145,7 @@ export function PeriodComparisonTab(props: { allPeriodReports: { weekly: PeriodR
             <YAxis tick={{ fontSize: 10, fill: "#86868b" }} />
             <Tooltip formatter={(v: number) => [`\u20BA${formatCurrency(v)}`]} contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #f0f0f0" }} />
             <Bar dataKey="totalRevenue" fill="#e63462" radius={[4, 4, 0, 0]} barSize={28} name="Ciro" />
-            <Bar dataKey="comparisonRevenue" fill="#d1d1d6" radius={[4, 4, 0, 0]} barSize={28} name="Onceki Donem" />
+            <Bar dataKey="comparisonRevenue" fill="#d1d1d6" radius={[4, 4, 0, 0]} barSize={28} name="Önceki Dönem" />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -154,12 +154,12 @@ export function PeriodComparisonTab(props: { allPeriodReports: { weekly: PeriodR
         <table className="w-full">
           <thead>
             <tr className="bg-[#f9f9f9] border-b border-[#f0f0f0]">
-              <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Donem</th>
+              <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Dönem</th>
               <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Ciro</th>
-              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Siparis</th>
+              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Sipariş</th>
               <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Ort. Adisyon</th>
-              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Iptal</th>
-              <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Degisim</th>
+              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">İptal</th>
+              <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Değişim</th>
             </tr>
           </thead>
           <tbody>
@@ -208,7 +208,7 @@ export function ProductTrendsTab(props: { productTrends: ProductTrend[] }) {
       {selectedTrend && (
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4">
-            <h3 className="text-[13px] font-semibold text-[#1d1d1f] mb-3">{selectedTrend.productName} - Satis Adedi</h3>
+            <h3 className="text-[13px] font-semibold text-[#1d1d1f] mb-3">{selectedTrend.productName} - Satış Adedi</h3>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={selectedTrend.data}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -253,7 +253,7 @@ export function HourlyDensityTab(props: { hourlyDensity: HourlyDensity[] }) {
 
   return (
     <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-5">
-      <h3 className="text-[13px] font-semibold text-[#1d1d1f] mb-4">Haftalik Yogunluk Haritasi (Siparis Sayisi)</h3>
+      <h3 className="text-[13px] font-semibold text-[#1d1d1f] mb-4">Haftalık Yoğunluk Haritası (Sipariş Sayısı)</h3>
       <div className="overflow-auto">
         <table className="w-full">
           <thead>
@@ -286,7 +286,7 @@ export function HourlyDensityTab(props: { hourlyDensity: HourlyDensity[] }) {
       <div className="flex items-center gap-2 mt-4 justify-end">
         <span className="text-[10px] text-[#86868b]">Az</span>
         {HEATMAP_COLORS.map((color, i) => <div key={i} className="w-5 h-3 rounded-sm" style={{ backgroundColor: color }} />)}
-        <span className="text-[10px] text-[#86868b]">Cok</span>
+        <span className="text-[10px] text-[#86868b]">Çok</span>
       </div>
     </div>
   )
@@ -299,13 +299,13 @@ export function WaitersTab(props: { dailyReport: DailyReport }) {
   return (
     <>
       <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
-        <h3 className="text-[13px] font-semibold text-[#1d1d1f] px-4 pt-4 pb-2">Garson Performansi</h3>
+        <h3 className="text-[13px] font-semibold text-[#1d1d1f] px-4 pt-4 pb-2">Garson Performansı</h3>
         <table className="w-full">
           <thead>
             <tr className="border-b border-[#f0f0f0] bg-[#f9f9f9]">
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Garson</th>
               <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Masa</th>
-              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Siparis</th>
+              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Sipariş</th>
               <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Ciro</th>
               <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Ort. Adisyon</th>
             </tr>
@@ -324,7 +324,7 @@ export function WaitersTab(props: { dailyReport: DailyReport }) {
         </table>
       </div>
       <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4">
-        <h3 className="text-[13px] font-semibold text-[#1d1d1f] mb-3">Garson Bazli Ciro</h3>
+        <h3 className="text-[13px] font-semibold text-[#1d1d1f] mb-3">Garson Bazlı Ciro</h3>
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={waiterMetrics}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />

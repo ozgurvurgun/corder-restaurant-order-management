@@ -12,6 +12,7 @@ import { StockMaterialEntity } from './stock-material.entity';
 import { SupplierEntity } from './supplier.entity';
 
 @Entity('stock_movements')
+@Index(['restaurantId', 'materialId'])
 @Index(['restaurantId', 'materialId', 'createdAt'])
 export class StockMovementEntity {
   @PrimaryGeneratedColumn('uuid')

@@ -48,20 +48,20 @@ export default function ReportsView() {
   }, [filteredClosedTables])
 
   const TABS = [
-    { id: "daily" as const, label: "Gunluk Rapor" },
-    { id: "period" as const, label: "Donem Karsilastirma" },
-    { id: "trends" as const, label: "Urun Trendleri" },
-    { id: "density" as const, label: "Yogunluk Analizi" },
-    { id: "waiters" as const, label: "Garson Performansi" },
-    { id: "history" as const, label: "Gecmis Kayitlar" },
+    { id: "daily" as const, label: "Günlük Rapor" },
+    { id: "period" as const, label: "Dönem Karşılaştırma" },
+    { id: "trends" as const, label: "Ürün Trendleri" },
+    { id: "density" as const, label: "Yoğunluk Analizi" },
+    { id: "waiters" as const, label: "Garson Performansı" },
+    { id: "history" as const, label: "Geçmiş Kayıtlar" },
   ]
 
   const summaryCards = [
     { label: "Toplam Ciro", value: `\u20BA${formatCurrency(computedDailyReport.totalRevenue)}`, icon: TrendingUp, color: "#34c759" },
-    { label: "Siparis Sayisi", value: computedDailyReport.totalOrders.toString(), icon: ShoppingCart, color: "#007aff" },
+    { label: "Sipariş Sayısı", value: computedDailyReport.totalOrders.toString(), icon: ShoppingCart, color: "#007aff" },
     { label: "Kapanan Masa", value: computedDailyReport.totalTables.toString(), icon: Receipt, color: "#e63462" },
-    { label: "Iptal Tutari", value: `\u20BA${formatCurrency(computedDailyReport.cancelledAmount)}`, icon: Ban, color: "#ff3b30" },
-    { label: "Indirim Tutari", value: `\u20BA${formatCurrency(computedDailyReport.discountAmount)}`, icon: Percent, color: "#ff9500" },
+    { label: "İptal Tutarı", value: `\u20BA${formatCurrency(computedDailyReport.cancelledAmount)}`, icon: Ban, color: "#ff3b30" },
+    { label: "İndirim Tutarı", value: `\u20BA${formatCurrency(computedDailyReport.discountAmount)}`, icon: Percent, color: "#ff9500" },
   ]
 
   const handleExport = () => {
@@ -101,27 +101,27 @@ export default function ReportsView() {
         <div className="flex items-center gap-3">
           <Filter className="w-3.5 h-3.5 text-[#86868b]" />
           <select value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="h-[30px] px-2.5 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 appearance-none pr-7 cursor-pointer">
-            <option value="today">Bugun</option>
-            <option value="yesterday">Dun</option>
-            <option value="week">Son 7 Gun</option>
-            <option value="month">Son 30 Gun</option>
-            <option value="custom">Ozel Tarih</option>
-            <option value="all">Tumu</option>
+            <option value="today">Bugün</option>
+            <option value="yesterday">Dün</option>
+            <option value="week">Son 7 Gün</option>
+            <option value="month">Son 30 Gün</option>
+            <option value="custom">Özel Tarih</option>
+            <option value="all">Tümü</option>
           </select>
           {filterDate === "custom" && (
             <>
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-[#86868b]">Baslangic:</span>
+                <span className="text-[10px] text-[#86868b]">Başlangıç:</span>
                 <input type="datetime-local" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="h-[30px] px-2 text-[11px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-[#86868b]">Bitis:</span>
+                <span className="text-[10px] text-[#86868b]">Bitiş:</span>
                 <input type="datetime-local" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="h-[30px] px-2 text-[11px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
               </div>
             </>
           )}
           <span className="text-[11px] text-[#86868b] ml-2">
-            {filteredClosedTables.length} siparis | {"\u20BA"}{formatCurrency(computedDailyReport.totalRevenue)}
+            {filteredClosedTables.length} sipariş | {"\u20BA"}{formatCurrency(computedDailyReport.totalRevenue)}
           </span>
         </div>
       </div>
@@ -176,7 +176,7 @@ export default function ReportsView() {
                 </div>
 
                 <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4">
-                  <h3 className="text-[13px] font-semibold text-[#1d1d1f] mb-3">Odeme Yontemi Dagilimi</h3>
+                  <h3 className="text-[13px] font-semibold text-[#1d1d1f] mb-3">Ödeme Yöntemi Dağılımı</h3>
                   <ResponsiveContainer width="100%" height={220}>
                     <PieChart>
                       <Pie data={dailyReport.paymentBreakdown} dataKey="total" nameKey="method" cx="50%" cy="50%" outerRadius={75} innerRadius={40} label={({ method, percent }) => `${method} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
@@ -189,7 +189,7 @@ export default function ReportsView() {
               </div>
 
               <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4">
-                <h3 className="text-[13px] font-semibold text-[#1d1d1f] mb-3">En Cok Satan Urunler</h3>
+                <h3 className="text-[13px] font-semibold text-[#1d1d1f] mb-3">En Çok Satan Ürünler</h3>
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={dailyReport.topProducts} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />

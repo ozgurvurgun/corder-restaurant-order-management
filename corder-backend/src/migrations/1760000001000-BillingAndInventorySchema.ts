@@ -30,6 +30,7 @@ export class BillingAndInventorySchema1760000001000 implements MigrationInterfac
     `);
     await queryRunner.query(`CREATE INDEX "IDX_cash_shifts_restaurant_id" ON "cash_shifts" ("restaurant_id")`);
     await queryRunner.query(`CREATE INDEX "IDX_cash_shifts_restaurant_status" ON "cash_shifts" ("restaurant_id", "status")`);
+    await queryRunner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "IDX_cash_shifts_one_open_per_restaurant" ON "cash_shifts" ("restaurant_id") WHERE "status" = 'open'`);
 
     await queryRunner.query(`
       CREATE TABLE "cash_transactions" (
@@ -95,6 +96,7 @@ export class BillingAndInventorySchema1760000001000 implements MigrationInterfac
       )
     `);
     await queryRunner.query(`CREATE INDEX "IDX_open_accounts_restaurant_id" ON "open_accounts" ("restaurant_id")`);
+    await queryRunner.query(`CREATE INDEX "IDX_open_accounts_restaurant_status" ON "open_accounts" ("restaurant_id", "status")`);
 
     await queryRunner.query(`
       CREATE TABLE "open_account_items" (
@@ -164,6 +166,7 @@ export class BillingAndInventorySchema1760000001000 implements MigrationInterfac
     `);
     await queryRunner.query(`CREATE INDEX "IDX_ledger_entries_restaurant_id" ON "ledger_entries" ("restaurant_id")`);
     await queryRunner.query(`CREATE INDEX "IDX_ledger_entries_customer_id" ON "ledger_entries" ("customer_id")`);
+    await queryRunner.query(`CREATE INDEX "IDX_ledger_entries_restaurant_customer_created" ON "ledger_entries" ("restaurant_id", "customer_id", "created_at")`);
 
     await queryRunner.query(`
       CREATE TABLE "suppliers" (
@@ -224,6 +227,7 @@ export class BillingAndInventorySchema1760000001000 implements MigrationInterfac
         CONSTRAINT "FK_stock_movements_supplier" FOREIGN KEY ("supplier_id") REFERENCES "suppliers"("id") ON DELETE SET NULL
       )
     `);
+    await queryRunner.query(`CREATE INDEX "IDX_stock_movements_restaurant_material" ON "stock_movements" ("restaurant_id", "material_id")`);
     await queryRunner.query(`CREATE INDEX "IDX_stock_movements_restaurant_material_created" ON "stock_movements" ("restaurant_id", "material_id", "created_at")`);
 
     await queryRunner.query(`
@@ -316,6 +320,7 @@ export class BillingAndInventorySchema1760000001000 implements MigrationInterfac
     await queryRunner.query(`DROP TABLE IF EXISTS "open_accounts"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "completed_orders"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "cash_transactions"`);
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_cash_shifts_one_open_per_restaurant"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "cash_shifts"`);
   }
 }

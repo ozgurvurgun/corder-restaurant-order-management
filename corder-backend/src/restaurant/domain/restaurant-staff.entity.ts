@@ -24,6 +24,7 @@ export type StaffRole = string;
 
 @Entity('restaurant_staff')
 @Index(['restaurantId'])
+@Index(['restaurantId', 'isActive'])
 @Index(['email'])
 export class RestaurantStaffEntity {
   @PrimaryGeneratedColumn('uuid')

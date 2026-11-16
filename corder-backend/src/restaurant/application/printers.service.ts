@@ -1,30 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { PrinterConfigEntity, PrinterConnection, PrinterStatus } from '../domain/printer-config.entity';
+import { PrinterConfigEntity } from '../domain/printer-config.entity';
+import { CreatePrinterDto } from '../api/dto/create-printer.dto';
+import { UpdatePrinterDto } from '../api/dto/update-printer.dto';
 
-export interface CreatePrinterDto {
-  name: string;
-  type: string;
-  connection: PrinterConnection;
-  ipAddress?: string;
-  port?: number;
-  department?: string;
-  paperWidth?: number;
-  autoCut?: boolean;
-}
-
-export interface UpdatePrinterDto {
-  name?: string;
-  type?: string;
-  connection?: PrinterConnection;
-  ipAddress?: string | null;
-  port?: number | null;
-  department?: string | null;
-  status?: PrinterStatus;
-  paperWidth?: number;
-  autoCut?: boolean;
-}
+export { CreatePrinterDto, UpdatePrinterDto };
 
 @Injectable()
 export class PrintersService {

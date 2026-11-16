@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react"
 import { usePanelStore } from "@/lib/panel-store"
+import { usePanelToast } from "./panel-toast"
 import {
   Package,
   AlertTriangle,
@@ -39,6 +40,7 @@ export default function StockView() {
     categories,
     addNotification,
   } = usePanelStore()
+  const { showToast } = usePanelToast()
 
   const [activeTab, setActiveTab] = useState<
     "materials" | "movements" | "suppliers" | "inventory" | "cost" | "link"
@@ -131,14 +133,18 @@ export default function StockView() {
   }, [products, stockMaterials])
 
   const handleAddMaterial = () => {
-    if (!matName || !matCost) return
+    const cost = parseFloat(matCost)
+    if (!matName.trim() || !Number.isFinite(cost) || cost < 0) {
+      showToast("Geçerli bir malzeme adı ve birim maliyet girin.", "error")
+      return
+    }
     addMaterial({
-      name: matName,
+      name: matName.trim(),
       unit: matUnit,
-      currentStock: parseFloat(matStock) || 0,
-      minStock: parseFloat(matMin) || 0,
-      costPerUnit: parseFloat(matCost),
-      category: matCategory || "Diger",
+      currentStock: Math.max(0, parseFloat(matStock) || 0),
+      minStock: Math.max(0, parseFloat(matMin) || 0),
+      costPerUnit: cost,
+      category: matCategory.trim() || "Diğer",
       supplierId: matSupplier || undefined,
     })
     setMatName("")
@@ -150,16 +156,22 @@ export default function StockView() {
   }
 
   const handleAddMovement = () => {
-    if (!mvMatId || !mvQty) return
+    const qty = parseFloat(mvQty)
+    if (!mvMatId || !Number.isFinite(qty) || qty <= 0) {
+      showToast("Lütfen malzeme seçin ve 0'dan büyük bir miktar girin.", "error")
+      return
+    }
     const material = stockMaterials.find((m) => m.id === mvMatId)
+    const unitCostVal = parseFloat(mvCost)
+    const unitCost = Number.isFinite(unitCostVal) && unitCostVal >= 0 ? unitCostVal : undefined
     void addStockMovement({
       materialId: mvMatId,
       materialName: material?.name || "",
       type: mvType,
-      quantity: parseFloat(mvQty),
-      unitCost: parseFloat(mvCost) || undefined,
-      totalCost: (parseFloat(mvCost) || 0) * parseFloat(mvQty),
-      reason: mvReason || undefined,
+      quantity: qty,
+      unitCost,
+      totalCost: (unitCost || 0) * qty,
+      reason: mvReason.trim() || undefined,
       createdBy: currentUser?.name || "Sistem",
     })
     setMvMatId("")
@@ -188,9 +200,9 @@ export default function StockView() {
       } else {
         addNotification({
           type: "system",
-          title: "Tedarikci eklenemedi",
+          title: "Tedarikçi eklenemedi",
           message:
-            "Sunucu yaniti alinamadi veya yetki hatasi. API adresini ve giris bilgilerinizi kontrol edin.",
+            "Sunucu yanıtı alınamadı veya yetki hatası. API adresini ve giriş bilgilerinizi kontrol edin.",
         })
       }
     } finally {
@@ -200,29 +212,27 @@ export default function StockView() {
 
   const TABS = [
     { id: "materials" as const, label: "Malzemeler", icon: Package },
-    { id: "link" as const, label: "Urun Eslestir", icon: Link2 },
+    { id: "link" as const, label: "Ürün Eşleştir", icon: Link2 },
     { id: "movements" as const, label: "Hareketler", icon: RotateCcw },
-    { id: "suppliers" as const, label: "Tedarikciler", icon: Truck },
-    { id: "inventory" as const, label: "Sayim", icon: ClipboardList },
+    { id: "suppliers" as const, label: "Tedarikçiler", icon: Truck },
+    { id: "inventory" as const, label: "Sayım", icon: ClipboardList },
     { id: "cost" as const, label: "Maliyet", icon: TrendingUp },
   ]
 
   return (
     <div className="h-full flex flex-col">
-      {/* Toolbar */}
       <div className="flex-shrink-0 h-[52px] border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl flex items-center justify-between px-5">
         <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
-          Stok Yonetimi
+          Stok Yönetimi
         </h2>
         {lowStockItems.length > 0 && (
           <div className="flex items-center gap-1.5 text-[11px] text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full font-medium">
-            <AlertTriangle className="w-3 h-3" /> {lowStockItems.length} urun
+            <AlertTriangle className="w-3 h-3" /> {lowStockItems.length} ürün
             kritik seviyede
           </div>
         )}
       </div>
 
-      {/* Tabs */}
       <div className="flex-shrink-0 bg-white/50 border-b border-[#d1d1d6]/40 px-5 py-2.5 flex gap-1.5 overflow-x-auto">
         {TABS.map((tab) => (
           <button

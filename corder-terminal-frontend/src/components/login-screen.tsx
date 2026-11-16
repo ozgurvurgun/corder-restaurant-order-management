@@ -62,13 +62,13 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
             disabled={loading}
             className="w-full bg-white text-[#e63462] font-semibold py-[14px] rounded-[14px] text-[17px] shadow-lg active:scale-[0.98] active:opacity-90 transition-all disabled:opacity-70"
           >
-            {loading ? "Giris yapiliyor..." : "Giris Yap"}
+            {loading ? "Giriş yapılıyor..." : "Giriş Yap"}
           </button>
         </form>
 
         <button className="flex items-center gap-2 text-white/70 active:text-white transition-colors">
           <Phone className="h-[18px] w-[18px]" />
-          <span className="text-[15px] font-medium">Musteri Hizmetleri</span>
+          <span className="text-[15px] font-medium">Müşteri Hizmetleri</span>
         </button>
       </div>
 

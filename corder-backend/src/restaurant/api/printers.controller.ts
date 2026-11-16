@@ -1,12 +1,20 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
 import { PanelRootGuard } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
-import {
-  CreatePrinterDto,
-  PrintersService,
-  UpdatePrinterDto,
-} from '../application/printers.service';
+import { PrintersService } from '../application/printers.service';
+import { CreatePrinterDto } from './dto/create-printer.dto';
+import { UpdatePrinterDto } from './dto/update-printer.dto';
 
 @Controller('restaurant/printers')
 @UseGuards(RestaurantJwtGuard, PanelRootGuard)
@@ -26,14 +34,17 @@ export class PrintersController {
   @Put(':id')
   update(
     @RestaurantId() restaurantId: string,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() body: UpdatePrinterDto,
   ) {
     return this.printers.update(restaurantId, id, body);
   }
 
   @Delete(':id')
-  remove(@RestaurantId() restaurantId: string, @Param('id') id: string) {
+  remove(
+    @RestaurantId() restaurantId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
     return this.printers.remove(restaurantId, id);
   }
 }

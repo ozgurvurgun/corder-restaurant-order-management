@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { CashShiftService, serializeCashShift } from '../application/cash-shift.service';
 import { OpenShiftDto } from './dto/open-shift.dto';
 import { CloseShiftDto } from './dto/close-shift.dto';
@@ -41,7 +51,7 @@ export class ShiftsController {
 
   @Put(':id/close')
   async close(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { id: string; name: string },
     @Body() dto: CloseShiftDto,

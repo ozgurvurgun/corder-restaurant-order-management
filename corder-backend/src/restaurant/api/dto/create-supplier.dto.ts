@@ -2,7 +2,7 @@ import { IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateSupplierDto {
   @IsString()
-  @MinLength(1, { message: 'Firma adi zorunludur.' })
+  @MinLength(1, { message: 'Supplier name is required.' })
   name: string;
 
   @IsOptional()

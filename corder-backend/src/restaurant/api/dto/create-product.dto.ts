@@ -27,6 +27,7 @@ export class CreateProductDto {
   inStock?: boolean;
 
   @IsOptional()
+  @IsNumber()
   order?: number;
 
   @IsOptional()

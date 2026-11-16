@@ -16,41 +16,25 @@ import {
   mapStockMovementDtoToPanel,
   mapSupplierDtoToPanel,
 } from "../mappers/catalog-inventory.mapper"
+import { showPanelToast } from "@/components/panel/panel-toast"
 import type { LogActivityFn, StockMovementInput } from "./panel-store-context"
 
 export function useInventoryActions(params: {
   token: string | null
   stockMaterials: StockMaterial[]
   purchaseOrders: PurchaseOrder[]
-  setStockMaterials: (
-    v: StockMaterial[] | ((prev: StockMaterial[]) => StockMaterial[]),
-  ) => void
+  setStockMaterials: (v: StockMaterial[] | ((prev: StockMaterial[]) => StockMaterial[])) => void
   setSuppliers: (v: Supplier[] | ((prev: Supplier[]) => Supplier[])) => void
-  setStockMovements: (
-    v: StockMovement[] | ((prev: StockMovement[]) => StockMovement[]),
-  ) => void
-  setPurchaseOrders: (
-    v: PurchaseOrder[] | ((prev: PurchaseOrder[]) => PurchaseOrder[]),
-  ) => void
-  setInventoryCounts: (
-    v: InventoryCount[] | ((prev: InventoryCount[]) => InventoryCount[]),
-  ) => void
-  setProducts: (
-    v: PanelProduct[] | ((prev: PanelProduct[]) => PanelProduct[]),
-  ) => void
+  setStockMovements: (v: StockMovement[] | ((prev: StockMovement[]) => StockMovement[])) => void
+  setPurchaseOrders: (v: PurchaseOrder[] | ((prev: PurchaseOrder[]) => PurchaseOrder[])) => void
+  setInventoryCounts: (v: InventoryCount[] | ((prev: InventoryCount[]) => InventoryCount[])) => void
+  setProducts: (v: PanelProduct[] | ((prev: PanelProduct[]) => PanelProduct[])) => void
   logActivity: LogActivityFn
 }) {
   const {
-    token,
-    stockMaterials,
-    purchaseOrders,
-    setStockMaterials,
-    setSuppliers,
-    setStockMovements,
-    setPurchaseOrders,
-    setInventoryCounts,
-    setProducts,
-    logActivity,
+    token, stockMaterials, purchaseOrders,
+    setStockMaterials, setSuppliers, setStockMovements,
+    setPurchaseOrders, setInventoryCounts, setProducts, logActivity,
   } = params
 
   const addMaterial = useCallback(
@@ -58,7 +42,7 @@ export function useInventoryActions(params: {
       if (!token) return
       api.stock.materials
         .create(token, {
-          name: m.name,
+          name: m.name.trim(),
           unit: m.unit,
           currentStock: m.currentStock,
           minStock: m.minStock,
@@ -67,22 +51,16 @@ export function useInventoryActions(params: {
           category: m.category,
         })
         .then((created) => {
-          setStockMaterials((prev) => [
-            ...prev,
-            mapStockMaterialDtoToPanel(created),
-          ])
+          setStockMaterials((prev) => [...prev, mapStockMaterialDtoToPanel(created)])
           logActivity({
             action: "material_created",
             category: "stock",
             details: `Malzeme eklendi: ${created.name}`,
-            metadata: {
-              materialId: created.id,
-              stock: created.currentStock,
-              unit: created.unit,
-            },
+            metadata: { materialId: created.id, stock: created.currentStock, unit: created.unit },
           })
+          showPanelToast(`Malzeme eklendi: ${created.name}`, "success")
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Malzeme eklenemedi", "error"))
     },
     [token, setStockMaterials, logActivity],
   )
@@ -103,18 +81,17 @@ export function useInventoryActions(params: {
         .update(token, id, body)
         .then((updated) => {
           setStockMaterials((prev) =>
-            prev.map((m) =>
-              m.id === id ? mapStockMaterialDtoToPanel(updated) : m,
-            ),
+            prev.map((m) => (m.id === id ? mapStockMaterialDtoToPanel(updated) : m)),
           )
           logActivity({
             action: "material_updated",
             category: "stock",
-            details: `Malzeme guncellendi: ${updated.name}`,
+            details: `Malzeme güncellendi: ${updated.name}`,
             metadata: { materialId: id, fields: Object.keys(body) },
           })
+          showPanelToast("Malzeme güncellendi", "success")
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Malzeme güncellenemedi", "error"))
     },
     [token, setStockMaterials, logActivity],
   )
@@ -132,8 +109,9 @@ export function useInventoryActions(params: {
             details: `Malzeme silindi: ${id}`,
             metadata: { materialId: id },
           })
+          showPanelToast("Malzeme silindi", "info")
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Malzeme silinemedi", "error"))
     },
     [token, setStockMaterials, logActivity],
   )
@@ -156,61 +134,42 @@ export function useInventoryActions(params: {
           createdBy: m.createdBy,
         })
         .then((created) => {
-          setStockMovements((prev) => [
-            mapStockMovementDtoToPanel(created),
-            ...prev,
-          ])
+          setStockMovements((prev) => [mapStockMovementDtoToPanel(created), ...prev])
           setStockMaterials((mats) =>
             mats.map((sm) =>
               sm.id === created.materialId
-                ? {
-                    ...sm,
-                    currentStock: created.newStock,
-                    lastUpdated: new Date(created.createdAt),
-                  }
+                ? { ...sm, currentStock: created.newStock, lastUpdated: new Date(created.createdAt) }
                 : sm,
             ),
           )
           logActivity({
             action: "stock_movement_created",
             category: "stock",
-            details: `${created.materialName} icin ${created.type} hareketi (${created.quantity})`,
-            metadata: {
-              movementId: created.id,
-              materialId: created.materialId,
-              type: created.type,
-              quantity: created.quantity,
-            },
+            details: `${created.materialName} için ${created.type} hareketi (${created.quantity})`,
+            metadata: { movementId: created.id, materialId: created.materialId, type: created.type, quantity: created.quantity },
           })
+          showPanelToast("Stok hareketi kaydedildi", "success")
         })
-        .catch((e) => {
-          console.error(e)
-          throw e
+        .catch((err) => {
+          showPanelToast(err instanceof Error ? err.message : "Stok hareketi kaydedilemedi", "error")
+          throw err
         })
     },
     [stockMaterials, token, setStockMovements, setStockMaterials, logActivity],
   )
 
   const setProductIngredients = useCallback(
-    (
-      productId: string,
-      ingredients: { materialId: string; quantity: number }[],
-    ) => {
+    (productId: string, ingredients: { materialId: string; quantity: number }[]) => {
       if (!token) return
       const payload = ingredients.filter((i) => i.materialId && i.quantity > 0)
       void api.products
         .update(token, productId, {
-          ingredients: payload.map((i) => ({
-            materialId: i.materialId,
-            quantity: i.quantity,
-          })),
+          ingredients: payload.map((i) => ({ materialId: i.materialId, quantity: i.quantity })),
         })
         .then((updated) =>
           setProducts((prev) =>
             prev.map((p) =>
-              p.id === productId
-                ? mapApiProductsToPanel([updated], stockMaterials)[0]
-                : p,
+              p.id === productId ? mapApiProductsToPanel([updated], stockMaterials)[0] : p,
             ),
           ),
         )
@@ -218,11 +177,12 @@ export function useInventoryActions(params: {
           logActivity({
             action: "product_ingredients_updated",
             category: "stock",
-            details: "Urun-malzeme eslestirmesi guncellendi",
+            details: "Ürün-malzeme eşleştirmesi güncellendi",
             metadata: { productId, ingredientCount: payload.length },
           })
+          showPanelToast("Ürün reçetesi güncellendi", "success")
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Ürün reçetesi güncellenemedi", "error"))
     },
     [stockMaterials, token, setProducts, logActivity],
   )
@@ -232,7 +192,7 @@ export function useInventoryActions(params: {
       if (!token) return Promise.resolve(false)
       return api.stock.suppliers
         .create(token, {
-          name: s.name,
+          name: s.name.trim(),
           contactPerson: s.contactPerson,
           phone: s.phone,
           email: s.email,
@@ -244,16 +204,14 @@ export function useInventoryActions(params: {
           logActivity({
             action: "supplier_created",
             category: "stock",
-            details: `Tedarikci eklendi: ${created.name}`,
-            metadata: {
-              supplierId: created.id,
-              phone: created.phone ?? undefined,
-            },
+            details: `Tedarikçi eklendi: ${created.name}`,
+            metadata: { supplierId: created.id, phone: created.phone ?? undefined },
           })
+          showPanelToast(`Tedarikçi eklendi: ${created.name}`, "success")
           return true
         })
-        .catch((e) => {
-          console.error(e)
+        .catch((err) => {
+          showPanelToast(err instanceof Error ? err.message : "Tedarikçi eklenemedi", "error")
           return false
         })
     },
@@ -274,19 +232,16 @@ export function useInventoryActions(params: {
           active: data.active,
         })
         .then((updated) => {
-          setSuppliers((prev) =>
-            prev.map((s) =>
-              s.id === id ? mapSupplierDtoToPanel(updated) : s,
-            ),
-          )
+          setSuppliers((prev) => prev.map((s) => (s.id === id ? mapSupplierDtoToPanel(updated) : s)))
           logActivity({
             action: "supplier_updated",
             category: "stock",
-            details: `Tedarikci guncellendi: ${updated.name}`,
+            details: `Tedarikçi güncellendi: ${updated.name}`,
             metadata: { supplierId: id, fields: Object.keys(data) },
           })
+          showPanelToast("Tedarikçi güncellendi", "success")
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Tedarikçi güncellenemedi", "error"))
     },
     [token, setSuppliers, logActivity],
   )
@@ -301,11 +256,12 @@ export function useInventoryActions(params: {
           logActivity({
             action: "supplier_deleted",
             category: "stock",
-            details: `Tedarikci silindi: ${id}`,
+            details: `Tedarikçi silindi: ${id}`,
             metadata: { supplierId: id },
           })
+          showPanelToast("Tedarikçi silindi", "info")
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Tedarikçi silinemedi", "error"))
     },
     [token, setSuppliers, logActivity],
   )
@@ -322,21 +278,17 @@ export function useInventoryActions(params: {
           status: po.status === "draft" ? "draft" : "ordered",
         })
         .then((created) => {
-          setPurchaseOrders((prev) => [
-            mapPurchaseOrderDtoToPanel(created),
-            ...prev,
-          ])
+          setPurchaseOrders((prev) => [mapPurchaseOrderDtoToPanel(created), ...prev])
+          showPanelToast("Satın alma siparişi oluşturuldu", "success")
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Satın alma siparişi oluşturulamadı", "error"))
     },
     [token, setPurchaseOrders],
   )
 
   const updatePurchaseOrder = useCallback(
     (id: string, data: Partial<PurchaseOrder>) => {
-      setPurchaseOrders((prev) =>
-        prev.map((po) => (po.id === id ? { ...po, ...data } : po)),
-      )
+      setPurchaseOrders((prev) => prev.map((po) => (po.id === id ? { ...po, ...data } : po)))
     },
     [setPurchaseOrders],
   )
@@ -350,12 +302,11 @@ export function useInventoryActions(params: {
         .receive(token, id)
         .then((updated) => {
           setPurchaseOrders((prev) =>
-            prev.map((p) =>
-              p.id === id ? mapPurchaseOrderDtoToPanel(updated) : p,
-            ),
+            prev.map((p) => (p.id === id ? mapPurchaseOrderDtoToPanel(updated) : p)),
           )
+          showPanelToast("Sipariş teslim alındı", "success")
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Sipariş teslim alınamadı", "error"))
     },
     [purchaseOrders, token, setPurchaseOrders],
   )
@@ -365,12 +316,10 @@ export function useInventoryActions(params: {
     api.stock.inventoryCounts
       .start(token)
       .then((created) => {
-        setInventoryCounts((prev) => [
-          mapInventoryCountDtoToPanel(created),
-          ...prev,
-        ])
+        setInventoryCounts((prev) => [mapInventoryCountDtoToPanel(created), ...prev])
+        showPanelToast("Yeni stok sayımı başlatıldı", "success")
       })
-      .catch(console.error)
+      .catch((err) => showPanelToast(err instanceof Error ? err.message : "Stok sayımı başlatılamadı", "error"))
   }, [token, setInventoryCounts])
 
   const updateInventoryItem = useCallback(
@@ -380,12 +329,10 @@ export function useInventoryActions(params: {
         .updateItem(token, countId, { materialId, actual })
         .then((updated) => {
           setInventoryCounts((prev) =>
-            prev.map((c) =>
-              c.id === countId ? mapInventoryCountDtoToPanel(updated) : c,
-            ),
+            prev.map((c) => (c.id === countId ? mapInventoryCountDtoToPanel(updated) : c)),
           )
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Sayım kalemi güncellenemedi", "error"))
     },
     [token, setInventoryCounts],
   )
@@ -397,30 +344,19 @@ export function useInventoryActions(params: {
         .complete(token, countId)
         .then((updated) => {
           setInventoryCounts((prev) =>
-            prev.map((c) =>
-              c.id === countId ? mapInventoryCountDtoToPanel(updated) : c,
-            ),
+            prev.map((c) => (c.id === countId ? mapInventoryCountDtoToPanel(updated) : c)),
           )
+          showPanelToast("Stok sayımı tamamlandı", "success")
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Stok sayımı tamamlanamadı", "error"))
     },
     [token, setInventoryCounts],
   )
 
   return {
-    addMaterial,
-    updateMaterial,
-    deleteMaterial,
-    addStockMovement,
-    setProductIngredients,
-    addSupplier,
-    updateSupplier,
-    deleteSupplier,
-    addPurchaseOrder,
-    updatePurchaseOrder,
-    receivePurchaseOrder,
-    startInventoryCount,
-    updateInventoryItem,
-    completeInventoryCount,
+    addMaterial, updateMaterial, deleteMaterial, addStockMovement,
+    setProductIngredients, addSupplier, updateSupplier, deleteSupplier,
+    addPurchaseOrder, updatePurchaseOrder, receivePurchaseOrder,
+    startInventoryCount, updateInventoryItem, completeInventoryCount,
   }
 }

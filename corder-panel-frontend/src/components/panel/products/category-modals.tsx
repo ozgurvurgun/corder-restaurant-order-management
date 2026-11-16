@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import {
   AlertTriangle,
   Menu,
@@ -57,7 +58,7 @@ export function AddCategoryInlineForm(props: {
   return (
     <div className="px-3 py-2 border-t border-[#d1d1d6]/40">
       <label className="block text-[10px] font-medium text-[#86868b] mb-0.5">
-        Ust kategori
+        Üst kategori
       </label>
       <select
         value={newCategoryParentId}
@@ -76,7 +77,7 @@ export function AddCategoryInlineForm(props: {
         type="text"
         value={catName}
         onChange={(e) => setCatName(e.target.value)}
-        placeholder="Kategori adi"
+        placeholder="Kategori adı"
         autoFocus
         onKeyDown={(e) => {
           if (e.key === "Enter") onSubmit()
@@ -90,9 +91,10 @@ export function AddCategoryInlineForm(props: {
           onClick={onCancel}
           className="flex-1 h-[28px] text-[11px] font-medium text-[#86868b] rounded-lg border border-[#d1d1d6]/60 hover:bg-[#f5f5f7]"
         >
-          Iptal
+          İptal
         </button>
         <button
+          type="button"
           onClick={onSubmit}
           className="flex-1 h-[28px] text-[11px] font-medium text-white bg-[#e63462] rounded-lg hover:bg-[#d42d56]"
         >
@@ -110,6 +112,15 @@ export function DeleteCategoryConfirmModal(props: {
   onConfirmDelete: () => void
 }) {
   const { categoryDeleteStep, onCancel, onNextStep, onConfirmDelete } = props
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel()
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [onCancel])
+
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[400px]">
@@ -119,19 +130,19 @@ export function DeleteCategoryConfirmModal(props: {
           </div>
           <div>
             <h3 className="text-[15px] font-semibold text-[#1d1d1f]">
-              {categoryDeleteStep.step === 1 ? "Kategoriyi sil" : "Son onay"}
+              {categoryDeleteStep.step === 1 ? "Kategoriyi Sil" : "Son Onay"}
             </h3>
             {categoryDeleteStep.step === 1 ? (
               <p className="text-[13px] text-[#86868b] mt-1.5 leading-relaxed">
                 <span className="font-medium text-[#1d1d1f]">
                   {categoryDeleteStep.name}
                 </span>{" "}
-                kategorisini silmek istediginize emin misiniz?
+                kategorisini silmek istediğinize emin misiniz?
               </p>
             ) : (
               <p className="text-[13px] text-[#86868b] mt-1.5 leading-relaxed">
                 Alt kategoriler ve bu kategorideki kalemler de silinebilir. Son
-                kez onayliyor musunuz?
+                kez onaylıyor musunuz?
               </p>
             )}
           </div>
@@ -142,7 +153,7 @@ export function DeleteCategoryConfirmModal(props: {
             onClick={onCancel}
             className="h-[38px] px-4 text-[13px] font-medium text-[#86868b] rounded-xl border border-[#d1d1d6]/60 hover:bg-[#f5f5f7]"
           >
-            Iptal
+            İptal
           </button>
           {categoryDeleteStep.step === 1 ? (
             <button
@@ -158,7 +169,7 @@ export function DeleteCategoryConfirmModal(props: {
               onClick={onConfirmDelete}
               className="h-[38px] px-4 text-[13px] font-medium text-white bg-red-500 rounded-xl hover:bg-red-600"
             >
-              Kategoriyi sil
+              Kategoriyi Sil
             </button>
           )}
         </div>
@@ -180,14 +191,23 @@ export function CategorySettingsModal(props: {
     updateCategory,
   } = props
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setEditingCatSettings(null)
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [setEditingCatSettings])
+
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl w-[360px]">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#e8e8ed]">
           <h3 className="text-[15px] font-semibold text-[#1d1d1f]">
-            Kategori Ayarlari
+            Kategori Ayarları
           </h3>
           <button
+            type="button"
             onClick={() => setEditingCatSettings(null)}
             className="w-8 h-8 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed]"
           >
@@ -207,14 +227,15 @@ export function CategorySettingsModal(props: {
                 </div>
                 <div>
                   <div className="text-[13px] font-medium text-[#1d1d1f]">
-                    Terminalde Goster
+                    Terminalde Göster
                   </div>
                   <div className="text-[11px] text-[#86868b]">
-                    Personel siparis ekraninda gorunur
+                    Personel sipariş ekranında görünür
                   </div>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => {
                   const nextVal = !editingCatSettings.showInTerminal
                   updateCategory(editingCatSettings.id, {
@@ -241,14 +262,15 @@ export function CategorySettingsModal(props: {
                 </div>
                 <div>
                   <div className="text-[13px] font-medium text-[#1d1d1f]">
-                    Menude Goster
+                    Menüde Göster
                   </div>
                   <div className="text-[11px] text-[#86868b]">
-                    QR menu ve web menude gorunur
+                    QR menü ve web menüde görünür
                   </div>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => {
                   const nextVal = !editingCatSettings.showInMenu
                   updateCategory(editingCatSettings.id, { showInMenu: nextVal })
@@ -273,14 +295,15 @@ export function CategorySettingsModal(props: {
                 </div>
                 <div>
                   <div className="text-[13px] font-medium text-[#1d1d1f]">
-                    Hizli Satista Goster
+                    Hızlı Satışta Göster
                   </div>
                   <div className="text-[11px] text-[#86868b]">
-                    Hizli satis ekraninda gorunur
+                    Hızlı satış ekranında görünür
                   </div>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => {
                   const nextVal = !editingCatSettings.showInQuickSale
                   updateCategory(editingCatSettings.id, {
@@ -303,7 +326,7 @@ export function CategorySettingsModal(props: {
 
           <div className="mt-4">
             <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
-              Ust kategori
+              Üst kategori
             </label>
             <select
               className="w-full h-[38px] px-3 text-[13px] bg-[#f5f5f7] rounded-xl border border-transparent focus:border-[#e63462]/50 focus:outline-none"

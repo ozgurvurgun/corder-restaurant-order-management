@@ -70,13 +70,13 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
 
   const handlePrint = () => {
     void reprintReceipt(tableId)
-    showToast(`${table.name} masasi — konsolide fis yaziciya gonderildi`, "success")
+    showToast(`${table.name} masası — konsolide fiş yazıcıya gönderildi`, "success")
   }
 
   const handlePrintActiveOrder = () => {
     if (!activeOrder || !activeOrder.items.some((i) => itemCountsTowardBill(i))) return
     void reprintReceipt({ orderId: activeOrder.id })
-    showToast("Secili adisyon fisi (notlarla) yaziciya gonderildi", "success")
+    showToast("Seçili adisyon fişi (notlarla) yazıcıya gönderildi", "success")
   }
 
   return (
@@ -105,12 +105,12 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
             <div className="mt-2 flex items-center flex-wrap gap-2 text-[12px]">
               <span className="flex items-center gap-1 px-2 py-1 bg-[#e63462]/10 text-[#e63462] rounded-md font-medium">
                 {discount.type === "complimentary" ? <Gift className="w-3 h-3" /> : <Tag className="w-3 h-3" />}
-                {discount.type === "percent" ? `%${discount.value}` : discount.type === "complimentary" ? "Tam Ikram" : `${formatCurrency(discount.value)} TL`} Indirim
+                {discount.type === "percent" ? `%${discount.value}` : discount.type === "complimentary" ? "Tam İkram" : `${formatCurrency(discount.value)} TL`} İndirim
               </span>
               <span className="text-[#86868b]">{discount.reason}</span>
               {canRemoveDiscount && (
                 <button type="button" onClick={() => clearDiscount(tableId)} className="text-[11px] font-medium text-[#86868b] hover:text-[#ff3b30] underline underline-offset-2">
-                  Indirimi kaldir
+                  İndirimi kaldır
                 </button>
               )}
             </div>
@@ -121,7 +121,7 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
               <div className="flex items-center gap-2 text-[12px] mb-2">
                 <span className="flex items-center gap-1 px-2 py-1 bg-[#007aff]/10 text-[#007aff] rounded-md font-medium">
                   <Users className="w-3 h-3" />
-                  {table.splitInfo.type === "person" ? `${table.splitInfo.personCount} Kisiye Bolundu` : `${table.splitInfo.itemIds?.length} Urun Ayrildi`}
+                  {table.splitInfo.type === "person" ? `${table.splitInfo.personCount} Kişiye Bölündü` : `${table.splitInfo.itemIds?.length} Ürün Ayrıldı`}
                 </span>
               </div>
               {table.splitInfo.type === "person" && table.splitInfo.personCount && (
@@ -139,7 +139,7 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
                   <button onClick={() => setShowPayment(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#007aff]/10 rounded-lg text-[12px] font-medium hover:bg-[#007aff]/20 transition-colors border border-[#007aff]/30">
                     <span className="w-5 h-5 rounded-full bg-[#007aff] text-white text-[10px] flex items-center justify-center">1</span>
                     <span className="text-[#007aff]">{formatCurrency(table.splitInfo.selectedTotal)} TL</span>
-                    <span className="text-[10px] text-[#007aff]/70">(Ayrilan)</span>
+                    <span className="text-[10px] text-[#007aff]/70">(Ayrılan)</span>
                   </button>
                   <button onClick={() => setShowPayment(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f5f5f7] rounded-lg text-[12px] font-medium hover:bg-[#e8e8ed] transition-colors">
                     <span className="w-5 h-5 rounded-full bg-[#86868b] text-white text-[10px] flex items-center justify-center">2</span>
@@ -171,9 +171,9 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
         <div className="flex-1 overflow-auto">
           {!activeOrder && (
             <div className="flex flex-col items-center justify-center h-full px-6 text-center">
-              <p className="text-[13px] text-[#86868b] mb-3">Bu masada henuz adisyon yok</p>
+              <p className="text-[13px] text-[#86868b] mb-3">Bu masada henüz adisyon yok</p>
               <button type="button" onClick={() => setShowAddOrder(true)} disabled={table.status === "checkout"} className="flex items-center gap-1.5 px-4 h-[36px] rounded-xl bg-[#e63462] text-white text-[13px] font-semibold hover:bg-[#d12d57] disabled:opacity-45 disabled:pointer-events-none transition-colors">
-                <Plus className="w-4 h-4" /> Siparis Gir
+                <Plus className="w-4 h-4" /> Sipariş Gir
               </button>
             </div>
           )}
@@ -184,7 +184,7 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
                 <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {formatTime(activeOrder.createdAt)}</span>
                 {activeOrder.mergedFrom && (
                   <span className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded">
-                    <ArrowRightLeft className="w-3 h-3" /> {activeOrder.mergedFrom} masasindan
+                    <ArrowRightLeft className="w-3 h-3" /> {activeOrder.mergedFrom} masasından
                   </span>
                 )}
               </div>
@@ -202,8 +202,8 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
                             {item.productName}
                           </span>
                           {item.note && <p className="text-[11px] text-[#86868b] italic mt-0.5">* {item.note}</p>}
-                          {ledgerLike && <p className="text-[11px] text-amber-800 mt-0.5 font-medium">Cariye yazildi</p>}
-                          {struck && item.cancelledBy && <p className="text-[11px] text-red-600 mt-0.5">Iptal eden: {item.cancelledBy}</p>}
+                          {ledgerLike && <p className="text-[11px] text-amber-800 mt-0.5 font-medium">Cariye yazıldı</p>}
+                          {struck && item.cancelledBy && <p className="text-[11px] text-red-600 mt-0.5">İptal eden: {item.cancelledBy}</p>}
                           {struck && item.cancelReason && <p className="text-[11px] text-red-600 mt-0.5">Sebep: {item.cancelReason}</p>}
                         </div>
                         <div className="flex items-start gap-1 flex-shrink-0">
@@ -217,8 +217,7 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
                                 setRevertLedgerItemId(item.id)
                                 const res = await revertLedgerOrderItem(item.id)
                                 setRevertLedgerItemId(null)
-                                if (res.ok) showToast(`Satir adisyona alindi (${formatCurrency(res.amount ?? 0)} TL hesaptan dusuldu)`, "success")
-                                else showToast("Geri alinamadi (kayit veya vardiya)", "error")
+                                if (res.ok) showToast(`Satır adisyona alındı (${formatCurrency(res.amount ?? 0)} TL hesaptan düşüldü)`, "success")
                               }}
                               className="mt-0.5 p-1 rounded-full text-amber-900 hover:bg-amber-200/90 disabled:opacity-45 transition-colors"
                             >
@@ -237,7 +236,7 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
                         <div className="mt-1 flex flex-wrap gap-2">
                           {canMoveItems && (
                             <button type="button" onClick={() => setMoveItem({ orderId: activeOrder.id, itemId: item.id, itemName: item.productName })} className="text-[11px] text-[#007aff] hover:text-[#0051d5] font-medium inline-flex items-center gap-0.5">
-                              <CornerUpRight className="w-3 h-3" /> Baska masaya
+                              <CornerUpRight className="w-3 h-3" /> Başka masaya
                             </button>
                           )}
                           {token && canAssignLedger && (
@@ -247,7 +246,7 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
                           )}
                           {canCancelItem && (
                             <button type="button" onClick={() => setCancelItem({ orderId: activeOrder.id, itemId: item.id, itemName: item.productName })} className="text-[11px] text-red-500 hover:text-red-600 font-medium">
-                              Iptal Et
+                              İptal Et
                             </button>
                           )}
                         </div>
@@ -267,7 +266,7 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
               <span className="text-[#1d1d1f]">{"₺"}{formatCurrency(rawTotal)}</span>
             </div>
             <div className="flex justify-between text-[13px] text-[#e63462]">
-              <span>Indirim ({discount.reason})</span>
+              <span>İndirim ({discount.reason})</span>
               <span>-{"₺"}{formatCurrency(discountAmount)}</span>
             </div>
             <div className="flex justify-between text-[15px] font-bold mt-1 pt-1 border-t border-[#e63462]/20">
@@ -279,37 +278,37 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
 
         <div className="flex-shrink-0 border-t border-[#d1d1d6]/60 p-4 flex flex-col gap-2">
           <button type="button" onClick={() => setShowAddOrder(true)} disabled={!canCreateOrder || table.status === "checkout"} className="flex items-center justify-center gap-2 w-full h-[40px] bg-[#e63462] hover:bg-[#d12d57] disabled:opacity-45 disabled:pointer-events-none text-white rounded-xl text-[14px] font-semibold transition-colors">
-            <Plus className="w-4 h-4" /> Siparis Gir
+            <Plus className="w-4 h-4" /> Sipariş Gir
           </button>
           <button onClick={() => setShowPayment(true)} disabled={!canCloseCheck || tableOrders.length === 0} className="flex items-center justify-center gap-2 w-full h-[40px] bg-[#34c759] hover:bg-[#2db84e] disabled:opacity-45 disabled:pointer-events-none text-white rounded-xl text-[14px] font-semibold transition-colors">
             <CreditCard className="w-4 h-4" /> Hesap Kes
           </button>
           <div className="flex gap-2">
             <button onClick={() => setShowSplitBill(true)} disabled={!canSplitBill || tableOrders.length === 0} className={`flex-1 flex items-center justify-center gap-1.5 h-[36px] rounded-xl text-[13px] font-medium transition-colors disabled:opacity-45 disabled:pointer-events-none ${table.splitInfo ? "bg-[#007aff]/10 text-[#007aff] border border-[#007aff]/30" : "bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f]"}`}>
-              <Users className="w-3.5 h-3.5" /> Hesap Bol
+              <Users className="w-3.5 h-3.5" /> Hesap Böl
             </button>
             <button onClick={() => setShowDiscount(true)} disabled={!canDiscount || tableOrders.length === 0} className={`flex-1 flex items-center justify-center gap-1.5 h-[36px] rounded-xl text-[13px] font-medium transition-colors disabled:opacity-45 disabled:pointer-events-none ${discount ? "bg-[#e63462]/10 text-[#e63462] border border-[#e63462]/30" : "bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f]"}`}>
-              <Percent className="w-3.5 h-3.5" /> Indirim
+              <Percent className="w-3.5 h-3.5" /> İndirim
             </button>
           </div>
           <div className="flex flex-col gap-2">
             <div className="flex gap-2">
               <button type="button" onClick={handlePrint} disabled={!canPrintReceipt || tableOrders.length === 0} className="flex-1 flex items-center justify-center gap-1.5 h-[36px] bg-[#f5f5f7] hover:bg-[#e8e8ed] disabled:opacity-45 disabled:pointer-events-none rounded-xl text-[12px] font-medium text-[#1d1d1f] transition-colors">
-                <Printer className="w-3.5 h-3.5" /> Masa fisi
+                <Printer className="w-3.5 h-3.5" /> Masa fişi
               </button>
               <button type="button" onClick={handlePrintActiveOrder} disabled={!canPrintReceipt || !activeOrder || !activeOrderHasPrintableLines} className="flex-1 flex items-center justify-center gap-1.5 h-[36px] bg-[#f5f5f7] hover:bg-[#e8e8ed] disabled:pointer-events-none disabled:opacity-45 disabled:cursor-not-allowed rounded-xl text-[12px] font-medium text-[#1d1d1f] transition-colors">
-                <Printer className="w-3.5 h-3.5" /> Adisyon fisi
+                <Printer className="w-3.5 h-3.5" /> Adisyon fişi
               </button>
             </div>
             <button type="button" onClick={() => setShowMoveTable(true)} disabled={!canMoveTable || tableOrders.length === 0} className="w-full flex items-center justify-center gap-1.5 h-[36px] bg-[#f5f5f7] hover:bg-[#e8e8ed] disabled:opacity-45 disabled:pointer-events-none rounded-xl text-[13px] font-medium text-[#1d1d1f] transition-colors">
-              <ArrowRightLeft className="w-3.5 h-3.5" /> Tasi
+              <ArrowRightLeft className="w-3.5 h-3.5" /> Taşı
             </button>
           </div>
         </div>
       </div>
 
-      {showAddOrder && <AddTableOrderModal tableId={tableId} tableName={table.name} onClose={() => setShowAddOrder(false)} onSuccess={() => { setShowAddOrder(false); showToast(`${table.name} — siparis gonderildi`, "success") }} />}
-      {showPayment && <PaymentModal tableId={tableId} total={rawTotal} onClose={() => setShowPayment(false)} />}
+      {showAddOrder && <AddTableOrderModal tableId={tableId} tableName={table.name} onClose={() => setShowAddOrder(false)} onSuccess={() => { setShowAddOrder(false); showToast(`${table.name} — sipariş gönderildi`, "success") }} />}
+      {showPayment && <PaymentModal tableId={tableId} total={rawTotal} onClose={() => setShowPayment(false)} onOpenSplitBill={() => { setShowPayment(false); setShowSplitBill(true) }} />}
       {showSplitBill && <SplitBillModal tableId={tableId} total={total} onClose={() => setShowSplitBill(false)} />}
       {showDiscount && <DiscountModal tableId={tableId} total={rawTotal} onClose={() => setShowDiscount(false)} />}
       {showMoveTable && <MoveTableModal tableId={tableId} onClose={() => setShowMoveTable(false)} />}
@@ -321,8 +320,8 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
           ledgerCustomers={ledgerCustomers}
           assignItemsToLedger={assignItemsToLedger}
           onClose={() => setAssignLedger(null)}
-          onAssigned={(itemName, amount) => { showToast(`${itemName} Cariye yazildi (${formatCurrency(amount)} TL)`, "success"); setAssignLedger(null) }}
-          onError={() => showToast("Cariye atanamadi", "error")}
+          onAssigned={(itemName, amount) => { showToast(`${itemName} Cariye yazıldı (${formatCurrency(amount)} TL)`, "success"); setAssignLedger(null) }}
+          onError={() => {}}
         />
       )}
     </>

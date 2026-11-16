@@ -1,7 +1,7 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react"
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
 import { X, CheckCircle2, AlertCircle, Info, AlertTriangle } from "lucide-react"
 
-type ToastType = "success" | "error" | "info" | "warning"
+export type ToastType = "success" | "error" | "info" | "warning"
 
 interface Toast {
   id: string
@@ -15,6 +15,16 @@ interface ToastContextType {
 }
 
 const ToastContext = createContext<ToastContextType | null>(null)
+
+let globalShowToast: ((message: string, type?: ToastType, duration?: number) => void) | null = null
+
+export function showPanelToast(
+  message: string,
+  type: ToastType = "success",
+  duration: number = 3500,
+) {
+  globalShowToast?.(message, type, duration)
+}
 
 export function usePanelToast() {
   const ctx = useContext(ToastContext)
@@ -37,6 +47,15 @@ export function PanelToastProvider({ children }: { children: ReactNode }) {
       }, duration)
     }
   }, [])
+
+  useEffect(() => {
+    globalShowToast = showToast
+    return () => {
+      if (globalShowToast === showToast) {
+        globalShowToast = null
+      }
+    }
+  }, [showToast])
 
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id))

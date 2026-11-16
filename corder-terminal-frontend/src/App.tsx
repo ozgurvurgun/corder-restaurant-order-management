@@ -47,7 +47,7 @@ export default function App() {
     const res = await selectTable(tableId)
     if (!res.ok) {
       showToast(
-        res.holderName ? `Bu masada su an ${res.holderName} calisiyor.` : "Masa baska garsonda acik.",
+        res.holderName ? `Bu masada şu an ${res.holderName} çalışıyor.` : "Masa başka garsonda açık.",
         "error"
       )
       return

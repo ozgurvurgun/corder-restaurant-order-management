@@ -31,30 +31,30 @@ export default function SettingsView() {
 
   const handleSaveSettings = () => {
     updateSettings({
-      name, address: address || undefined, phone: phone || undefined, taxId: taxId || undefined,
-      whatsapp: whatsapp || undefined, instagram: instagram || undefined, facebook: facebook || undefined,
-      website: website || undefined, workingHours: workingHours || undefined,
+      name: name.trim(), address: address.trim() || undefined, phone: phone.trim() || undefined, taxId: taxId.trim() || undefined,
+      whatsapp: whatsapp.trim() || undefined, instagram: instagram.trim() || undefined, facebook: facebook.trim() || undefined,
+      website: website.trim() || undefined, workingHours: workingHours.trim() || undefined,
     })
   }
 
   const handleAddSection = () => {
     if (!newSectionName.trim()) return
-    addSection(newSectionName)
+    addSection(newSectionName.trim())
     setNewSectionName("")
     setShowAddSection(false)
   }
 
   const handleAddTable = (section: string) => {
     if (!newTableName.trim()) return
-    addTable(newTableName, section)
+    addTable(newTableName.trim(), section)
     setNewTableName("")
     setShowAddTable(null)
   }
 
   const TABS: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
     { id: "general", label: "Genel Bilgiler", icon: Store },
-    { id: "sections-tables", label: "Bolum & Masalar", icon: MapPin },
-    { id: "appearance", label: "Gorunum", icon: Monitor },
+    { id: "sections-tables", label: "Bölüm & Masalar", icon: MapPin },
+    { id: "appearance", label: "Görünüm", icon: Monitor },
     { id: "social", label: "Sosyal Medya", icon: Globe },
   ]
 
@@ -91,7 +91,7 @@ export default function SettingsView() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] text-[#86868b] font-medium mb-1 block">Isletme Adi</label>
+                  <label className="text-[11px] text-[#86868b] font-medium mb-1 block">İşletme Adı</label>
                   <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
                 </div>
                 <div>
@@ -107,7 +107,7 @@ export default function SettingsView() {
                   <input type="text" value={taxId} onChange={(e) => setTaxId(e.target.value)} className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
                 </div>
                 <div>
-                  <label className="text-[11px] text-[#86868b] font-medium mb-1 block">Calisma Saatleri</label>
+                  <label className="text-[11px] text-[#86868b] font-medium mb-1 block">Çalışma Saatleri</label>
                   <input type="text" value={workingHours} onChange={(e) => setWorkingHours(e.target.value)} placeholder="09:00 - 23:00" className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
                 </div>
               </div>
@@ -122,17 +122,17 @@ export default function SettingsView() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-[#e63462]" />
-                  <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Bolum & Masa Yonetimi</h3>
+                  <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Bölüm &amp; Masa Yönetimi</h3>
                 </div>
                 <button onClick={() => { setShowAddSection(true); setNewSectionName("") }} className="h-[28px] px-3 flex items-center gap-1.5 bg-[#e63462]/10 text-[#e63462] rounded-lg text-[11px] font-medium hover:bg-[#e63462]/20 transition-colors">
-                  <Plus className="w-3 h-3" /> Bolum Ekle
+                  <Plus className="w-3 h-3" /> Bölüm Ekle
                 </button>
               </div>
 
               {showAddSection && (
                 <div className="flex items-center gap-2 mb-4 p-3 bg-[#f5f5f7] rounded-lg">
-                  <input type="text" value={newSectionName} onChange={(e) => setNewSectionName(e.target.value)} placeholder="Bolum adi" autoFocus onKeyDown={(e) => { if (e.key === "Enter") handleAddSection() }} className="flex-1 h-[30px] px-2.5 text-[12px] bg-white rounded border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
-                  <button onClick={() => setShowAddSection(false)} className="h-[30px] px-3 text-[11px] font-medium text-[#86868b] rounded border border-[#d1d1d6]/60 hover:bg-white">Iptal</button>
+                  <input type="text" value={newSectionName} onChange={(e) => setNewSectionName(e.target.value)} placeholder="Bölüm adı" autoFocus onKeyDown={(e) => { if (e.key === "Enter") handleAddSection() }} className="flex-1 h-[30px] px-2.5 text-[12px] bg-white rounded border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
+                  <button onClick={() => setShowAddSection(false)} className="h-[30px] px-3 text-[11px] font-medium text-[#86868b] rounded border border-[#d1d1d6]/60 hover:bg-white">İptal</button>
                   <button onClick={handleAddSection} className="h-[30px] px-3 text-[11px] font-medium text-white bg-[#e63462] rounded hover:bg-[#d42d56]">Ekle</button>
                 </div>
               )}
@@ -158,7 +158,7 @@ export default function SettingsView() {
                       <div className="p-3">
                         {showAddTable === sec.id && (
                           <div className="flex items-center gap-2 mb-2 p-2 bg-[#f5f5f7] rounded-lg">
-                            <input type="text" value={newTableName} onChange={(e) => setNewTableName(e.target.value)} placeholder="Masa adi" autoFocus onKeyDown={(e) => { if (e.key === "Enter") handleAddTable(sec.name) }} className="flex-1 h-[28px] px-2.5 text-[12px] bg-white rounded border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
+                            <input type="text" value={newTableName} onChange={(e) => setNewTableName(e.target.value)} placeholder="Masa adı" autoFocus onKeyDown={(e) => { if (e.key === "Enter") handleAddTable(sec.name) }} className="flex-1 h-[28px] px-2.5 text-[12px] bg-white rounded border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
                             <button onClick={() => setShowAddTable(null)} className="text-[11px] text-[#86868b] hover:text-[#1d1d1f]"><X className="w-3.5 h-3.5" /></button>
                             <button onClick={() => handleAddTable(sec.name)} className="h-[28px] px-2.5 text-[11px] font-medium text-white bg-[#e63462] rounded hover:bg-[#d42d56]">Ekle</button>
                           </div>
@@ -186,27 +186,27 @@ export default function SettingsView() {
             <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-5">
               <div className="flex items-center gap-2 mb-4">
                 <Monitor className="w-4 h-4 text-[#e63462]" />
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Gorunum Ayarlari</h3>
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Görünüm Ayarları</h3>
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="text-[12px] text-[#86868b] font-medium mb-2 flex items-center gap-1.5"><Type className="w-3.5 h-3.5" /> Yazi Boyutu</label>
+                  <label className="text-[12px] text-[#86868b] font-medium mb-2 flex items-center gap-1.5"><Type className="w-3.5 h-3.5" /> Yazı Boyutu</label>
                   <div className="grid grid-cols-3 gap-2">
                     {(["small", "medium", "large"] as const).map((size) => (
                       <button key={size} onClick={() => { setFontSize(size); updateSettings({ fontSize: size }) }} className={`h-[40px] rounded-lg text-[12px] font-medium transition-colors ${fontSize === size ? "bg-[#e63462] text-white" : "bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed]"}`}>
                         <span className={size === "small" ? "text-[11px]" : size === "large" ? "text-[14px]" : "text-[12px]"}>
-                          {size === "small" ? "Kucuk" : size === "medium" ? "Normal" : "Buyuk"}
+                          {size === "small" ? "Küçük" : size === "medium" ? "Normal" : "Büyük"}
                         </span>
                       </button>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <label className="text-[12px] text-[#86868b] font-medium mb-2 flex items-center gap-1.5"><LayoutGrid className="w-3.5 h-3.5" /> Masa Karti Boyutu</label>
+                  <label className="text-[12px] text-[#86868b] font-medium mb-2 flex items-center gap-1.5"><LayoutGrid className="w-3.5 h-3.5" /> Masa Kartı Boyutu</label>
                   <div className="grid grid-cols-3 gap-2">
                     {(["compact", "normal", "large"] as const).map((size) => (
                       <button key={size} onClick={() => { setTableCardSize(size); updateSettings({ tableCardSize: size }) }} className={`h-[40px] rounded-lg text-[12px] font-medium transition-colors ${tableCardSize === size ? "bg-[#e63462] text-white" : "bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed]"}`}>
-                        {size === "compact" ? "Kompakt" : size === "normal" ? "Normal" : "Genis"}
+                        {size === "compact" ? "Kompakt" : size === "normal" ? "Normal" : "Geniş"}
                       </button>
                     ))}
                   </div>
@@ -215,7 +215,7 @@ export default function SettingsView() {
                   <div className="flex items-center justify-between p-3 bg-[#f5f5f7] rounded-xl">
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-lg bg-[#e63462]/10 flex items-center justify-center"><Image className="w-4 h-4 text-[#e63462]" /></div>
-                      <div><p className="text-[13px] font-medium text-[#1d1d1f]">Urun Gorselleri</p><p className="text-[11px] text-[#86868b]">Siparis ekraninda gorselleri goster</p></div>
+                      <div><p className="text-[13px] font-medium text-[#1d1d1f]">Ürün Görselleri</p><p className="text-[11px] text-[#86868b]">Sipariş ekranında görselleri göster</p></div>
                     </div>
                     <button onClick={() => { setShowProductImages(!showProductImages); updateSettings({ showProductImages: !showProductImages }) }}>
                       {showProductImages ? <ToggleRight className="w-9 h-9 text-[#e63462]" /> : <ToggleLeft className="w-9 h-9 text-[#d1d1d6]" />}
@@ -224,7 +224,7 @@ export default function SettingsView() {
                   <div className="flex items-center justify-between p-3 bg-[#f5f5f7] rounded-xl">
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-lg bg-[#007aff]/10 flex items-center justify-center"><Zap className="w-4 h-4 text-[#007aff]" /></div>
-                      <div><p className="text-[13px] font-medium text-[#1d1d1f]">Hizli Islemler</p><p className="text-[11px] text-[#86868b]">Masa kartlarinda hizli islem butonlari</p></div>
+                      <div><p className="text-[13px] font-medium text-[#1d1d1f]">Hızlı İşlemler</p><p className="text-[11px] text-[#86868b]">Masa kartlarında hızlı işlem butonları</p></div>
                     </div>
                     <button onClick={() => { setQuickActionsEnabled(!quickActionsEnabled); updateSettings({ quickActionsEnabled: !quickActionsEnabled }) }}>
                       {quickActionsEnabled ? <ToggleRight className="w-9 h-9 text-[#007aff]" /> : <ToggleLeft className="w-9 h-9 text-[#d1d1d6]" />}
@@ -239,7 +239,7 @@ export default function SettingsView() {
             <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-5">
               <div className="flex items-center gap-2 mb-4">
                 <Globe className="w-4 h-4 text-[#e63462]" />
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Sosyal Medya & Iletisim</h3>
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Sosyal Medya &amp; İletişim</h3>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -259,7 +259,7 @@ export default function SettingsView() {
                   <input type="url" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://..." className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
                 </div>
               </div>
-              <p className="text-[10px] text-[#86868b] mt-3">Bu bilgiler menu sayfasindaki iletisim bolumunde gosterilir.</p>
+              <p className="text-[10px] text-[#86868b] mt-3">Bu bilgiler menü sayfasındaki iletişim bölümünde gösterilir.</p>
               <div className="flex justify-end mt-4">
                 <button onClick={handleSaveSettings} className="h-[34px] px-5 text-[12px] font-medium text-white bg-[#e63462] rounded-lg hover:bg-[#d42d56] transition-colors">Kaydet</button>
               </div>

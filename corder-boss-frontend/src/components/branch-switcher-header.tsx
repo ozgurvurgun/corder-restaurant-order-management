@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useBossStore } from "@/lib/boss-store"
 import {
   Building2,
@@ -25,6 +25,18 @@ export function BranchSwitcherHeader() {
   } = useBossStore()
   const [openSheet, setOpenSheet] = useState(false)
   const [showPwaInfo, setShowPwaInfo] = useState(false)
+
+  useEffect(() => {
+    if (!openSheet && !showPwaInfo) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpenSheet(false)
+        setShowPwaInfo(false)
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [openSheet, showPwaInfo])
 
   const currentLabel =
     selectedBranchId === "ALL"

@@ -1,9 +1,18 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
 import { PanelRootGuard } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
 import { InventoryCountsService } from '../application/inventory-counts.service';
+import { UpdateInventoryCountItemDto } from './dto/update-inventory-count-item.dto';
 
 @Controller('restaurant/inventory-counts')
 @UseGuards(RestaurantJwtGuard, PanelRootGuard)
@@ -26,8 +35,8 @@ export class InventoryCountsController {
   @Post(':id/items')
   updateItem(
     @RestaurantId() restaurantId: string,
-    @Param('id') id: string,
-    @Body() body: { materialId: string; actual: number },
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: UpdateInventoryCountItemDto,
   ) {
     return this.inventoryCounts.updateItem(
       restaurantId,
@@ -41,7 +50,7 @@ export class InventoryCountsController {
   complete(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { name: string },
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.inventoryCounts.complete(restaurantId, id, user.name);
   }

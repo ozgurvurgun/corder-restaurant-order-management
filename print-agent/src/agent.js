@@ -35,7 +35,7 @@ function normalizePrintJob(payload, restaurantId) {
   if (!payload.order || !Array.isArray(payload.order.items)) return null
 
   const items = (payload.order.items || []).map((item) => ({
-    productName: item.productName || item.name || "Urun",
+    productName: item.productName || item.name || "Item",
     quantity: Number(item.quantity || 0),
     price: Number(item.price || 0),
     note: item.note || "",
@@ -69,7 +69,7 @@ function normalizeOrderCreated(payload, restaurantId) {
   const items = payload.items
     .filter((item) => item && item.status !== "cancelled")
     .map((item) => ({
-      productName: item.productName || item.name || "Urun",
+      productName: item.productName || item.name || "Item",
       quantity: Number(item.quantity || 0),
       price: Number(item.price || 0),
       note: item.note || "",

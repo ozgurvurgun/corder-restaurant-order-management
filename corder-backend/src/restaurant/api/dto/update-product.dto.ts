@@ -1,8 +1,12 @@
 import { Type } from 'class-transformer';
-import { IsString, IsOptional, IsNumber, IsBoolean, IsArray, ValidateNested, Min, MinLength } from 'class-validator';
+import { IsString, IsUUID, IsOptional, IsNumber, IsBoolean, IsArray, ValidateNested, Min, MinLength } from 'class-validator';
 import { ProductIngredientInputDto } from './product-ingredient-input.dto';
 
 export class UpdateProductDto {
+  @IsOptional()
+  @IsUUID()
+  categoryId?: string;
+
   @IsOptional()
   @IsString()
   @MinLength(1)
@@ -26,6 +30,7 @@ export class UpdateProductDto {
   inStock?: boolean;
 
   @IsOptional()
+  @IsNumber()
   order?: number;
 
   @IsOptional()

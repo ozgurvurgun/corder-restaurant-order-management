@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { AlertTriangle, X } from "lucide-react"
 import type { PanelProduct } from "@/lib/panel-types"
 import ImageUpload from "../image-upload"
@@ -32,8 +33,9 @@ export function AddProductInlineForm(props: {
   return (
     <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4 mb-4">
       <div className="flex items-center justify-between mb-3">
-        <h4 className="text-[13px] font-semibold text-[#1d1d1f]">Yeni Urun</h4>
+        <h4 className="text-[13px] font-semibold text-[#1d1d1f]">Yeni Ürün</h4>
         <button
+          type="button"
           onClick={onClose}
           className="w-6 h-6 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed]"
         >
@@ -45,11 +47,13 @@ export function AddProductInlineForm(props: {
           type="text"
           value={productName}
           onChange={(e) => setProductName(e.target.value)}
-          placeholder="Urun adi"
+          placeholder="Ürün adı"
           className="flex-1 h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
         />
         <input
           type="number"
+          min={0}
+          step="0.01"
           value={productPrice}
           onChange={(e) => setProductPrice(e.target.value)}
           placeholder="Fiyat"
@@ -60,25 +64,27 @@ export function AddProductInlineForm(props: {
         type="text"
         value={productDesc}
         onChange={(e) => setProductDesc(e.target.value)}
-        placeholder="Aciklama (opsiyonel)"
+        placeholder="Açıklama (opsiyonel)"
         className="w-full mt-2 h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
       />
       <div className="mt-3">
         <ImageUpload
           value={productImage}
           onChange={setProductImage}
-          label="Urun Fotografi (opsiyonel)"
+          label="Ürün Fotoğrafı (opsiyonel)"
           onUpload={onUpload}
         />
       </div>
       <div className="flex justify-end gap-2 mt-3">
         <button
+          type="button"
           onClick={onClose}
           className="h-[34px] px-4 text-[12px] font-medium text-[#86868b] rounded-lg border border-[#d1d1d6]/60 hover:bg-[#f5f5f7]"
         >
-          Iptal
+          İptal
         </button>
         <button
+          type="button"
           onClick={onSubmit}
           className="h-[34px] px-4 text-[12px] font-medium text-white bg-[#e63462] rounded-lg hover:bg-[#d42d56]"
         >
@@ -116,14 +122,23 @@ export function EditProductModal(props: {
     onSave,
   } = props
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [onClose])
+
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl w-[420px] max-h-[90vh] overflow-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#e8e8ed]">
           <h3 className="text-[15px] font-semibold text-[#1d1d1f]">
-            Urun Duzenle
+            Ürün Düzenle
           </h3>
           <button
+            type="button"
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed]"
           >
@@ -133,7 +148,7 @@ export function EditProductModal(props: {
         <div className="p-5 space-y-4">
           <div>
             <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
-              Urun Adi
+              Ürün Adı
             </label>
             <input
               type="text"
@@ -148,6 +163,8 @@ export function EditProductModal(props: {
             </label>
             <input
               type="number"
+              min={0}
+              step="0.01"
               value={editPrice}
               onChange={(e) => setEditPrice(e.target.value)}
               className="w-full h-[40px] px-3 text-[14px] bg-[#f5f5f7] rounded-xl border border-transparent focus:border-[#e63462]/50 focus:outline-none"
@@ -155,7 +172,7 @@ export function EditProductModal(props: {
           </div>
           <div>
             <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
-              Aciklama (opsiyonel)
+              Açıklama (opsiyonel)
             </label>
             <textarea
               value={editDesc}
@@ -166,7 +183,7 @@ export function EditProductModal(props: {
           </div>
           <div>
             <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
-              Fotograf
+              Fotoğraf
             </label>
             <ImageUpload
               value={editImage}
@@ -177,12 +194,14 @@ export function EditProductModal(props: {
         </div>
         <div className="px-5 py-4 border-t border-[#e8e8ed] flex justify-end gap-2">
           <button
+            type="button"
             onClick={onClose}
             className="h-[38px] px-5 text-[13px] font-medium text-[#86868b] rounded-xl border border-[#d1d1d6]/60 hover:bg-[#f5f5f7]"
           >
-            Iptal
+            İptal
           </button>
           <button
+            type="button"
             onClick={onSave}
             className="h-[38px] px-5 text-[13px] font-medium text-white bg-[#e63462] rounded-xl hover:bg-[#d42d56]"
           >
@@ -200,6 +219,15 @@ export function DeleteProductConfirmModal(props: {
   onConfirm: () => void
 }) {
   const { product, onCancel, onConfirm } = props
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel()
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [onCancel])
+
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[400px]">
@@ -209,11 +237,11 @@ export function DeleteProductConfirmModal(props: {
           </div>
           <div>
             <h3 className="text-[15px] font-semibold text-[#1d1d1f]">
-              Urunu sil
+              Ürünü Sil
             </h3>
             <p className="text-[13px] text-[#86868b] mt-1.5 leading-relaxed">
               <span className="font-medium text-[#1d1d1f]">{product.name}</span>{" "}
-              urununu silmek istediginize emin misiniz? Bu islem geri alinamaz.
+              ürününü silmek istediğinize emin misiniz? Bu işlem geri alınamaz.
             </p>
           </div>
         </div>
@@ -223,7 +251,7 @@ export function DeleteProductConfirmModal(props: {
             onClick={onCancel}
             className="h-[38px] px-4 text-[13px] font-medium text-[#86868b] rounded-xl border border-[#d1d1d6]/60 hover:bg-[#f5f5f7]"
           >
-            Iptal
+            İptal
           </button>
           <button
             type="button"

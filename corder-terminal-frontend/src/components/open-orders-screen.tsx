@@ -60,7 +60,7 @@ export function OpenOrdersScreen({
     productName: string
   } | null>(null)
   const [cancelReason, setCancelReason] = useState(CANCEL_REASONS[0])
-  const [cancelling, setCancelling] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const tabsRef = useRef<HTMLDivElement>(null)
   const activeTabRef = useRef<HTMLButtonElement>(null)
@@ -79,6 +79,15 @@ export function OpenOrdersScreen({
     }
   }, [activeTab])
 
+  useEffect(() => {
+    if (!cancelTarget) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !isSubmitting) setCancelTarget(null)
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [cancelTarget, isSubmitting])
+
   if (!table) return null
   const isBillRequested = table.status === "bill-requested"
 
@@ -88,19 +97,26 @@ export function OpenOrdersScreen({
   const visibleItems = (activeOrder?.items ?? []).filter((item) => item.status !== "cancelled")
 
   const handleConfirmCancelItem = async () => {
-    if (!cancelTarget || !cancelReason.trim()) return
-    setCancelling(true)
-    const ok = await cancelOrderItemOnServer(
-      cancelTarget.orderId,
-      cancelTarget.itemId,
-      cancelReason
-    )
-    setCancelling(false)
-    if (ok) {
-      showToast(`${cancelTarget.productName} iptal edildi`)
-      setCancelTarget(null)
-    } else {
-      showToast("Ürün iptal edilemedi (yetki veya açık kasa vardiyası kontrol edin)", "error")
+    if (isSubmitting || !cancelTarget || !cancelReason.trim()) return
+    if (!canCancelItem) {
+      showToast("Ürün iptal etme yetkiniz bulunmuyor", "error")
+      return
+    }
+    setIsSubmitting(true)
+    try {
+      const ok = await cancelOrderItemOnServer(
+        cancelTarget.orderId,
+        cancelTarget.itemId,
+        cancelReason
+      )
+      if (ok) {
+        showToast(`${cancelTarget.productName} iptal edildi`)
+        setCancelTarget(null)
+      } else {
+        showToast("Ürün iptal edilemedi (yetki veya açık kasa vardiyası kontrol edin)", "error")
+      }
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -125,7 +141,7 @@ export function OpenOrdersScreen({
             onClick={onNewOrder}
             disabled={isBillRequested || !canCreateOrder}
             className="p-2 active:opacity-60 disabled:opacity-40"
-            aria-label="Yeni Siparis"
+            aria-label="Yeni Sipariş"
           >
             <ListOrdered className="h-[20px] w-[20px]" />
           </button>
@@ -186,7 +202,7 @@ export function OpenOrdersScreen({
                 <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
                   <ArrowRightLeft className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
                   <span className="text-[12px] font-medium text-amber-700">
-                    {activeOrder.mergedFrom} masasindan
+                    {activeOrder.mergedFrom} masasından
                   </span>
                 </div>
               )}
@@ -295,11 +311,11 @@ export function OpenOrdersScreen({
               </button>
               <button
                 type="button"
-                disabled={cancelling}
+                disabled={isSubmitting}
                 onClick={() => void handleConfirmCancelItem()}
                 className="flex-1 rounded-xl bg-red-600 py-3 text-[14px] font-bold text-white disabled:opacity-50"
               >
-                {cancelling ? "İptal Ediliyor…" : "Ürünü İptal Et"}
+                {isSubmitting ? "İptal Ediliyor…" : "Ürünü İptal Et"}
               </button>
             </div>
           </div>
@@ -353,7 +369,7 @@ function OrderItemRow({
               className="text-[13px] font-medium text-[#007aff] inline-flex items-center gap-1 active:opacity-70"
             >
               <CornerUpRight className="h-3.5 w-3.5" />
-              Baska masaya
+              Başka masaya
             </button>
           )}
           {canCancel && onCancel && (
@@ -363,7 +379,7 @@ function OrderItemRow({
               className="text-[13px] font-medium text-red-600 inline-flex items-center gap-1 active:opacity-70"
             >
               <Trash2 className="h-3.5 w-3.5" />
-              Iptal Et
+              İptal Et
             </button>
           )}
         </div>

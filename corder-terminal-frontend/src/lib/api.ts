@@ -196,7 +196,7 @@ export const api = {
       const staffSession = getStaffSession()
       if (!staffSession?.staffToken) {
         staffExpiredHandler?.()
-        throw new Error("Personel PIN dogrulamasi gerekli")
+        throw new Error("Personel PIN doğrulaması gerekli")
       }
       const url = `${getBase()}/restaurant/tables/${encodeURIComponent(tableId)}/session-lock`
       const res = await fetch(url, {
@@ -240,7 +240,7 @@ export const api = {
             authExpiredHandler?.()
           }
         }
-        throw new Error(message || "Kilitleme basarisiz")
+        throw new Error(message || "Kilitleme başarısız")
       }
       return { ok: true }
     },

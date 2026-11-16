@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Post,
   Put,
   UseGuards,
@@ -19,13 +20,13 @@ export class RootAdminsController {
   constructor(private readonly service: RootAdminService) {}
 
   @Get()
-  findByRestaurant(@Param('restaurantId') restaurantId: string) {
+  findByRestaurant(@Param('restaurantId', ParseUUIDPipe) restaurantId: string) {
     return this.service.findByRestaurantId(restaurantId);
   }
 
   @Post()
   create(
-    @Param('restaurantId') restaurantId: string,
+    @Param('restaurantId', ParseUUIDPipe) restaurantId: string,
     @Body() dto: CreateRootAdminDto,
   ) {
     return this.service.create({ ...dto, restaurantId });
@@ -33,26 +34,29 @@ export class RootAdminsController {
 
   @Post('link/:bossId')
   linkExisting(
-    @Param('restaurantId') restaurantId: string,
-    @Param('bossId') bossId: string,
+    @Param('restaurantId', ParseUUIDPipe) restaurantId: string,
+    @Param('bossId', ParseUUIDPipe) bossId: string,
   ) {
     return this.service.linkExistingBossToRestaurant(bossId, restaurantId);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.service.findOne(id);
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateRootAdminDto) {
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateRootAdminDto,
+  ) {
     return this.service.update(id, dto);
   }
 
   @Delete(':id')
   remove(
-    @Param('restaurantId') restaurantId: string,
-    @Param('id') id: string,
+    @Param('restaurantId', ParseUUIDPipe) restaurantId: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.service.remove(id, restaurantId);
   }
@@ -69,7 +73,7 @@ export class PlatformBossesController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.service.findOne(id);
   }
 
@@ -79,28 +83,31 @@ export class PlatformBossesController {
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateRootAdminDto) {
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateRootAdminDto,
+  ) {
     return this.service.update(id, dto);
   }
 
   @Post(':id/restaurants/:restaurantId')
   linkRestaurant(
-    @Param('id') id: string,
-    @Param('restaurantId') restaurantId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('restaurantId', ParseUUIDPipe) restaurantId: string,
   ) {
     return this.service.linkExistingBossToRestaurant(id, restaurantId);
   }
 
   @Delete(':id/restaurants/:restaurantId')
   unlinkRestaurant(
-    @Param('id') id: string,
-    @Param('restaurantId') restaurantId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('restaurantId', ParseUUIDPipe) restaurantId: string,
   ) {
     return this.service.unlinkBossFromRestaurant(id, restaurantId);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
+  remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.service.remove(id);
   }
 }

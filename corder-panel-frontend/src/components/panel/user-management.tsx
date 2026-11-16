@@ -1,18 +1,9 @@
 import { useState } from "react"
 import { usePanelStore } from "@/lib/panel-store"
 import { usePanelAuth } from "@/lib/panel-auth"
+import { usePanelToast } from "./panel-toast"
 import type { PanelUserRole } from "@/lib/panel-types"
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  X,
-  Users,
-  Shield,
-  Lock,
-  Monitor,
-  Smartphone,
-} from "lucide-react"
+import { Plus, Pencil, Trash2, X, Users, Shield, Lock, Monitor, Smartphone } from "lucide-react"
 
 const ROLE_LABELS: Record<string, string> = {
   root: "İşletme Sahibi (Boss)",
@@ -56,6 +47,7 @@ const ROLE_OPTIONS: Array<{ value: PanelUserRole; label: string }> = [
 export default function UserManagement() {
   const { users, addUser, updateUser, deleteUser } = usePanelStore()
   const { hasPermission } = usePanelAuth()
+  const { showToast } = usePanelToast()
   const canManageStaff = hasPermission("staff.manage")
 
   const [showAdd, setShowAdd] = useState(false)
@@ -82,13 +74,22 @@ export default function UserManagement() {
 
   const handleAdd = () => {
     const pin = formPin.replace(/\D/g, "").slice(0, 8)
-    if (!formName.trim()) return
-    if (formCanAccessTerminal && !formCanAccessPanel && pin.length < 4) return
-    if (formCanAccessPanel && (!formEmail.trim() || formPassword.length < 6)) return
+    if (!formName.trim()) {
+      showToast("Lütfen personel adını girin.", "error")
+      return
+    }
+    if (formCanAccessTerminal && !formCanAccessPanel && pin.length < 4) {
+      showToast("Terminal girişi için 4-8 haneli PIN girin.", "error")
+      return
+    }
+    if (formCanAccessPanel && (!formEmail.trim() || formPassword.length < 6)) {
+      showToast("Panel girişi için geçerli e-posta ve en az 6 karakterli parola girin.", "error")
+      return
+    }
     addUser({
-      name: formName,
+      name: formName.trim(),
       role: formRole,
-      phone: formPhone || undefined,
+      phone: formPhone.trim() || undefined,
       ...(pin.length >= 4 ? { pin } : {}),
       ...(formEmail.trim() ? { email: formEmail.trim() } : {}),
       ...(formPassword ? { password: formPassword } : {}),
@@ -115,12 +116,15 @@ export default function UserManagement() {
   }
 
   const handleUpdate = () => {
-    if (!editingId || !formName.trim()) return
+    if (!editingId || !formName.trim()) {
+      showToast("Lütfen personel adını girin.", "error")
+      return
+    }
     const pin = formPin.replace(/\D/g, "").slice(0, 8)
     updateUser(editingId, {
-      name: formName,
+      name: formName.trim(),
       role: formRole,
-      phone: formPhone || undefined,
+      phone: formPhone.trim() || undefined,
       email: formEmail.trim() || undefined,
       ...(formPassword.length >= 6 ? { password: formPassword } : {}),
       ...(pin.length >= 4 ? { pin } : {}),
@@ -135,7 +139,7 @@ export default function UserManagement() {
     <div className="h-full flex flex-col">
       <div className="flex-shrink-0 h-[52px] border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl flex items-center justify-between px-5">
         <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
-          Kullanici &amp; Personel Yonetimi
+          Kullanıcı &amp; Personel Yönetimi
         </h2>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 text-[12px] text-[#86868b]">
@@ -152,7 +156,7 @@ export default function UserManagement() {
               }}
               className="h-[30px] px-3 flex items-center gap-1.5 bg-[#e63462] text-white rounded-lg text-[12px] font-medium hover:bg-[#d42d56] transition-colors"
             >
-              <Plus className="w-3.5 h-3.5" /> Kullanici Ekle
+              <Plus className="w-3.5 h-3.5" /> Kullanıcı Ekle
             </button>
           )}
         </div>
@@ -164,7 +168,7 @@ export default function UserManagement() {
             <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4 mb-4">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-[13px] font-semibold text-[#1d1d1f]">
-                  {editingId ? "Kullaniciyi Duzenle" : "Yeni Kullanici / Personel"}
+                  {editingId ? "Kullanıcıyı Düzenle" : "Yeni Kullanıcı / Personel"}
                 </h4>
                 <button
                   onClick={() => {
@@ -211,7 +215,7 @@ export default function UserManagement() {
                   onChange={(e) => setFormPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
                   placeholder={
                     editingId
-                      ? "Yeni Terminal PIN (degistirmek icin 4-8 rakam)"
+                      ? "Yeni Terminal PIN (değiştirmek için 4-8 rakam)"
                       : "Terminal PIN Kodu (4-8 rakam)"
                   }
                   className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 font-mono tracking-widest"
@@ -254,7 +258,7 @@ export default function UserManagement() {
                       placeholder={
                         editingId
                           ? "Yeni Parola (boş bırakılırsa değişmez)"
-                          : "Merchant Panel Parolası (en az 6 krk)"
+                          : "Merchant Panel Parolası (en az 6 karakter)"
                       }
                       className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
                     />
@@ -270,13 +274,13 @@ export default function UserManagement() {
                   }}
                   className="h-[34px] px-4 text-[12px] font-medium text-[#86868b] rounded-lg border border-[#d1d1d6]/60 hover:bg-[#f5f5f7]"
                 >
-                  Iptal
+                  İptal
                 </button>
                 <button
                   onClick={editingId ? handleUpdate : handleAdd}
                   className="h-[34px] px-4 text-[12px] font-medium text-white bg-[#e63462] rounded-lg hover:bg-[#d42d56]"
                 >
-                  {editingId ? "Guncelle" : "Ekle"}
+                  {editingId ? "Güncelle" : "Ekle"}
                 </button>
               </div>
             </div>
@@ -286,12 +290,12 @@ export default function UserManagement() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[#f0f0f0] bg-[#f9f9f9]">
-                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Kullanici</th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Kullanıcı</th>
                   <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Rol</th>
                   <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Erişim &amp; Yetkiler</th>
-                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Iletisim</th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">İletişim</th>
                   <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Durum</th>
-                  <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide w-[100px]">Islem</th>
+                  <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide w-[100px]">İşlem</th>
                 </tr>
               </thead>
               <tbody>
@@ -364,12 +368,14 @@ export default function UserManagement() {
                       ) : (
                         <div className="flex items-center justify-end gap-1">
                           <button
+                            title="Düzenle"
                             onClick={() => startEdit(user.id)}
                             className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-[#f5f5f7] transition-colors"
                           >
                             <Pencil className="w-3.5 h-3.5 text-[#86868b]" />
                           </button>
                           <button
+                            title="Sil"
                             onClick={() => deleteUser(user.id)}
                             className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-50 transition-colors"
                           >
@@ -386,7 +392,7 @@ export default function UserManagement() {
             {users.length === 0 && (
               <div className="text-center py-12">
                 <Users className="w-10 h-10 text-[#d1d1d6] mx-auto mb-2" />
-                <p className="text-[13px] text-[#86868b]">Henuz kullanici eklenmemis</p>
+                <p className="text-[13px] text-[#86868b]">Henüz kullanıcı eklenmemiş</p>
               </div>
             )}
           </div>

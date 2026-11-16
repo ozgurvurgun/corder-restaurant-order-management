@@ -69,7 +69,7 @@ export default function PanelSidebar({
         },
         {
           id: "quick-sale" as PanelViewId,
-          label: locale === "tr" ? "Hizli Satis" : "Quick Sale",
+          label: locale === "tr" ? "Hızlı Satış" : "Quick Sale",
           icon: ShoppingBag,
           visible: hasPermission("order.quick_sale", "billing.close_check"),
         },
@@ -97,7 +97,7 @@ export default function PanelSidebar({
       ],
     },
     {
-      label: locale === "tr" ? "Yonetim" : "Management",
+      label: locale === "tr" ? "Yönetim" : "Management",
       items: [
         {
           id: "products" as PanelViewId,
@@ -274,7 +274,7 @@ export default function PanelSidebar({
           <button
             onClick={logout}
             className="w-7 h-7 rounded-lg flex items-center justify-center text-[#86868b] hover:text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-colors"
-            title={locale === "tr" ? "Cikis Yap" : "Logout"}
+            title={locale === "tr" ? "Çıkış Yap" : "Logout"}
           >
             <LogOut className="w-4 h-4" />
           </button>

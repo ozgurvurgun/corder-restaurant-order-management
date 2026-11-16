@@ -24,10 +24,10 @@ export function MoveOrderItemScreen({
   onBack,
 }: MoveOrderItemScreenProps) {
   const { showToast } = useToast()
-  const { tables, moveOrderItemsToTable } = useApp()
+  const { tables, moveOrderItemsToTable, hasPermission } = useApp()
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null)
   const [showConfirm, setShowConfirm] = useState(false)
-  const [moving, setMoving] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [activeSection, setActiveSection] = useState<string>(ALL_SECTIONS)
   const [filterMode, setFilterMode] = useState<FilterMode>("all")
   const [tableNumber, setTableNumber] = useState("")
@@ -47,22 +47,30 @@ export function MoveOrderItemScreen({
     })
 
   const handleSelectTarget = (toTableId: string) => {
+    if (isSubmitting) return
     setSelectedTargetId(toTableId)
     setShowConfirm(true)
   }
 
   const handleConfirm = async () => {
-    if (!selectedTargetId) return
-    setMoving(true)
-    const ok = await moveOrderItemsToTable(fromTableId, selectedTargetId, [itemId])
-    setMoving(false)
-    if (!ok) {
-      showToast("Urun tasinamadi", "error")
+    if (!selectedTargetId || isSubmitting) return
+    if (!hasPermission("order.move_items")) {
+      showToast("Ürün taşıma yetkiniz bulunmuyor", "error")
       return
     }
-    showToast(`${productName} -> ${selectedTarget?.name} (yeni adisyon)`, "success")
-    setShowConfirm(false)
-    onBack()
+    setIsSubmitting(true)
+    try {
+      const ok = await moveOrderItemsToTable(fromTableId, selectedTargetId, [itemId])
+      if (!ok) {
+        showToast("Ürün taşınamadı", "error")
+        return
+      }
+      showToast(`${productName} -> ${selectedTarget?.name} (yeni adisyon)`, "success")
+      setShowConfirm(false)
+      onBack()
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleNumberSearch = () => {
@@ -71,7 +79,7 @@ export function MoveOrderItemScreen({
       (t) => t.id !== fromTableId && t.name.toLowerCase().includes(tableNumber.toLowerCase())
     )
     if (found) handleSelectTarget(found.id)
-    else showToast("Masa bulunamadi", "error")
+    else showToast("Masa bulunamadı", "error")
     setTableNumber("")
   }
 
@@ -90,7 +98,7 @@ export function MoveOrderItemScreen({
           <span className="text-[17px]">Geri</span>
         </button>
         <h1 className="text-[17px] font-semibold absolute left-1/2 -translate-x-1/2 truncate max-w-[200px]">
-          Urun Tasi
+          Ürün Taşı
         </h1>
       </header>
 
@@ -111,7 +119,7 @@ export function MoveOrderItemScreen({
                   : "text-muted-foreground"
               }`}
             >
-              {section === ALL_SECTIONS ? "Tumu" : section}
+              {section === ALL_SECTIONS ? "Tümü" : section}
             </button>
           ))}
         </div>
@@ -121,7 +129,7 @@ export function MoveOrderItemScreen({
         <div className="px-4 py-3 flex gap-2 flex-shrink-0 border-b border-border bg-background">
           <input
             type="text"
-            placeholder="Masa adi..."
+            placeholder="Masa adı..."
             value={tableNumber}
             onChange={(e) => setTableNumber(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleNumberSearch()}
@@ -164,13 +172,13 @@ export function MoveOrderItemScreen({
         <div className="flex">
           <TabBarButton
             icon={<UtensilsCrossed className="h-[22px] w-[22px]" />}
-            label="Tum Masalar"
+            label="Tüm Masalar"
             active={filterMode === "all"}
             onClick={() => setFilterMode("all")}
           />
           <TabBarButton
             icon={<Wine className="h-[22px] w-[22px]" />}
-            label="Acik Masalar"
+            label="Açık Masalar"
             active={filterMode === "open"}
             onClick={() => setFilterMode("open")}
           />
@@ -185,17 +193,18 @@ export function MoveOrderItemScreen({
 
       <ConfirmDialog
         open={showConfirm}
-        title="Yeni adisyon olarak tasi"
+        title="Yeni adisyon olarak taşı"
         message={
           isTargetOccupied
-            ? `${productName} urunu ${fromTable?.name} masasindan ${selectedTarget?.name} masasina yeni adisyon olarak tasinacak.`
-            : `${productName} urunu ${fromTable?.name} -> ${selectedTarget?.name} (yeni adisyon).`
+            ? `${productName} ürünü ${fromTable?.name} masasından ${selectedTarget?.name} masasına yeni adisyon olarak taşınacak.`
+            : `${productName} ürünü ${fromTable?.name} -> ${selectedTarget?.name} (yeni adisyon).`
         }
-        confirmText="Tasi"
-        cancelText="Vazgec"
-        loading={moving}
-        onConfirm={handleConfirm}
+        confirmText="Taşı"
+        cancelText="Vazgeç"
+        loading={isSubmitting}
+        onConfirm={() => void handleConfirm()}
         onCancel={() => {
+          if (isSubmitting) return
           setShowConfirm(false)
           setSelectedTargetId(null)
         }}
@@ -224,7 +233,7 @@ function ItemMoveTableCard({ table, onClick }: { table: TerminalTable; onClick: 
           </span>
         </>
       ) : (
-        <span className="text-[12px] text-muted-foreground mt-0.5">Bos</span>
+        <span className="text-[12px] text-muted-foreground mt-0.5">Boş</span>
       )}
     </button>
   )

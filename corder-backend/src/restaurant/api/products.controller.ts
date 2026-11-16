@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Get,
   Param,
+  ParseUUIDPipe,
   Post,
   Put,
   UseGuards,
@@ -32,7 +33,10 @@ export class ProductsController {
 
   @Get(':id')
   @RequirePermissions('catalog.view', 'order.view', 'order.create')
-  findOne(@Param('id') id: string, @RestaurantId() restaurantId: string) {
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @RestaurantId() restaurantId: string,
+  ) {
     return this.service.findOne(id, restaurantId);
   }
 
@@ -49,7 +53,7 @@ export class ProductsController {
     'catalog.toggle_stock',
   )
   async update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { isBoss?: boolean; permissions?: PermissionKey[] },
     @Body() dto: UpdateProductDto,
@@ -73,7 +77,10 @@ export class ProductsController {
 
   @Delete(':id')
   @RequirePermissions('catalog.manage_products')
-  remove(@Param('id') id: string, @RestaurantId() restaurantId: string) {
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @RestaurantId() restaurantId: string,
+  ) {
     return this.service.remove(id, restaurantId);
   }
 

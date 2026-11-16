@@ -1,14 +1,14 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, IsNull, Repository } from 'typeorm';
+import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
 import { LedgerCustomerEntity } from '../domain/ledger-customer.entity';
 import { LedgerEntryEntity } from '../domain/ledger-entry.entity';
+import { CashShiftEntity } from '../domain/cash-shift.entity';
+import { CashTransactionEntity } from '../domain/cash-transaction.entity';
+import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
+import { CreateLedgerCustomerDto } from '../api/dto/create-ledger-customer.dto';
 
-export interface CreateLedgerCustomerDto {
-  name: string;
-  phone?: string;
-  notes?: string;
-}
+export { CreateLedgerCustomerDto };
 
 @Injectable()
 export class LedgerService {
@@ -17,6 +17,7 @@ export class LedgerService {
     private readonly customerRepo: Repository<LedgerCustomerEntity>,
     @InjectRepository(LedgerEntryEntity)
     private readonly entryRepo: Repository<LedgerEntryEntity>,
+    private readonly dataSource: DataSource,
   ) {}
 
   private parseDateRange(
@@ -73,10 +74,10 @@ export class LedgerService {
       creditSum: string | null;
     }>();
     for (const r of rows) {
-      const debt = Number(r.debtSum || 0);
-      const pay = Number(r.paySum || 0);
-      const credit = Number(r.creditSum || 0);
-      out.set(r.customerId, debt - pay - credit);
+      const debtMinor = toMinorUnits(Number(r.debtSum || 0));
+      const payMinor = toMinorUnits(Number(r.paySum || 0));
+      const creditMinor = toMinorUnits(Number(r.creditSum || 0));
+      out.set(r.customerId, fromMinorUnits(debtMinor - payMinor - creditMinor));
     }
     return out;
   }
@@ -165,6 +166,64 @@ export class LedgerService {
     }));
   }
 
+  async recordPayment(
+    restaurantId: string,
+    customerId: string,
+    amount: number,
+    receivedBy: string,
+    receivedByUserId?: string | null,
+  ) {
+    const payMinorUnits = toMinorUnits(amount);
+    if (payMinorUnits <= 0) {
+      throw new BadRequestException('Invalid payment amount');
+    }
+    const normalizedAmount = fromMinorUnits(payMinorUnits);
+    const actorName = (receivedBy ?? '').trim() || 'System';
+
+    await this.dataSource.transaction(async (em) => {
+      const customer = await this.assertCustomer(restaurantId, customerId, em, true);
+      const row = em.create(LedgerEntryEntity, {
+        restaurantId,
+        customerId: customer.id,
+        entryType: 'payment',
+        amount: normalizedAmount,
+        description: 'Payment received',
+        tableId: null,
+        tableName: null,
+        completedOrderId: null,
+        snapshot: null,
+        receivedBy: actorName,
+        receivedByUserId: receivedByUserId?.trim() || null,
+      });
+      await em.save(LedgerEntryEntity, row);
+
+      const shift = await em.findOne(CashShiftEntity, {
+        where: { restaurantId, status: 'open' },
+        order: { openedAt: 'DESC' },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (shift) {
+        const cashTx = em.create(CashTransactionEntity, {
+          restaurantId,
+          shiftId: shift.id,
+          type: 'cash-in',
+          amount: normalizedAmount,
+          description: `Ledger payment: ${customer.name}`,
+          reference: customer.id,
+          createdBy: actorName,
+        });
+        await em.save(CashTransactionEntity, cashTx);
+        shift.recordCashMovement('cash-in', payMinorUnits);
+        await em.save(CashShiftEntity, shift);
+      }
+    });
+
+    const customers = await this.listCustomers(restaurantId);
+    const customer = customers.find((x) => x.id === customerId);
+    if (!customer) throw new NotFoundException('Ledger customer not found');
+    return customer;
+  }
+
   async addPayment(
     restaurantId: string,
     customerId: string,
@@ -172,38 +231,26 @@ export class LedgerService {
     receivedBy: string,
     receivedByUserId?: string | null,
   ) {
-    const pay = Number(amount);
-    if (!Number.isFinite(pay) || pay <= 0) {
-      throw new BadRequestException('Invalid payment amount');
-    }
-    await this.assertCustomer(restaurantId, customerId);
-    const row = this.entryRepo.create({
+    return this.recordPayment(
       restaurantId,
       customerId,
-      entryType: 'payment',
-      amount: pay,
-      description: 'Payment received',
-      tableId: null,
-      tableName: null,
-      completedOrderId: null,
-      snapshot: null,
-      receivedBy: receivedBy.trim() || null,
-      receivedByUserId: receivedByUserId?.trim() || null,
-    });
-    await this.entryRepo.save(row);
-    const customers = await this.listCustomers(restaurantId);
-    const customer = customers.find((x) => x.id === customerId);
-    if (!customer) throw new NotFoundException('Ledger customer not found');
-    return customer;
+      amount,
+      receivedBy,
+      receivedByUserId,
+    );
   }
 
-  private async assertCustomer(
+  async assertCustomer(
     restaurantId: string,
     customerId: string,
     em?: EntityManager,
+    lock = false,
   ): Promise<LedgerCustomerEntity> {
     const customer = em
-      ? await em.findOne(LedgerCustomerEntity, { where: { id: customerId, restaurantId } })
+      ? await em.findOne(LedgerCustomerEntity, {
+          where: { id: customerId, restaurantId },
+          ...(lock ? { lock: { mode: 'pessimistic_write' as const } } : {}),
+        })
       : await this.customerRepo.findOne({ where: { id: customerId, restaurantId } });
     if (!customer) throw new NotFoundException('Ledger customer not found');
     return customer;
@@ -223,16 +270,16 @@ export class LedgerService {
       recordedBy?: string | null;
     },
   ): Promise<void> {
-    const amt = Number(params.amount);
-    if (!Number.isFinite(amt) || amt < 0) {
+    const minorUnits = toMinorUnits(params.amount);
+    if (minorUnits < 0) {
       throw new BadRequestException('Invalid debt amount');
     }
-    await this.assertCustomer(params.restaurantId, params.customerId, em);
+    await this.assertCustomer(params.restaurantId, params.customerId, em, true);
     const row = em.create(LedgerEntryEntity, {
       restaurantId: params.restaurantId,
       customerId: params.customerId,
       entryType: 'debt',
-      amount: amt,
+      amount: fromMinorUnits(minorUnits),
       description: params.description,
       tableId: params.tableId?.trim() || null,
       tableName: params.tableName?.trim() || null,
@@ -257,16 +304,16 @@ export class LedgerService {
       recordedBy?: string | null;
     },
   ): Promise<void> {
-    const amt = Number(params.amount);
-    if (!Number.isFinite(amt) || amt <= 0) {
+    const minorUnits = toMinorUnits(params.amount);
+    if (minorUnits <= 0) {
       throw new BadRequestException('Invalid debt amount');
     }
-    await this.assertCustomer(params.restaurantId, params.customerId, em);
+    await this.assertCustomer(params.restaurantId, params.customerId, em, true);
     const row = em.create(LedgerEntryEntity, {
       restaurantId: params.restaurantId,
       customerId: params.customerId,
       entryType: 'debt',
-      amount: amt,
+      amount: fromMinorUnits(minorUnits),
       description: params.description.trim() || 'Ledger item assignment',
       tableId: params.tableId?.trim() || null,
       tableName: params.tableName?.trim() || null,
@@ -291,16 +338,16 @@ export class LedgerService {
       recordedBy?: string | null;
     },
   ): Promise<void> {
-    const amt = Number(params.amount);
-    if (!Number.isFinite(amt) || amt <= 0) {
+    const minorUnits = toMinorUnits(params.amount);
+    if (minorUnits <= 0) {
       throw new BadRequestException('Invalid credit amount');
     }
-    await this.assertCustomer(params.restaurantId, params.customerId, em);
+    await this.assertCustomer(params.restaurantId, params.customerId, em, true);
     const row = em.create(LedgerEntryEntity, {
       restaurantId: params.restaurantId,
       customerId: params.customerId,
       entryType: 'credit',
-      amount: amt,
+      amount: fromMinorUnits(minorUnits),
       description: (params.description ?? '').trim() || 'Revert ledger item',
       tableId: params.tableId?.trim() || null,
       tableName: params.tableName?.trim() || null,

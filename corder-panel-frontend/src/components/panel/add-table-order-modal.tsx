@@ -1,16 +1,14 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { usePanelStore } from "@/lib/panel-store"
 import { formatCurrency } from "@/lib/format"
 import type { PanelCategory, PanelProduct } from "@/lib/panel-types"
-import { Minus, Plus, Search, ShoppingBag, Trash2, X } from "lucide-react"
+import { Loader2, Minus, Plus, Search, ShoppingBag, Trash2, X } from "lucide-react"
 
 function descendantCategoryIds(rootId: string, cats: PanelCategory[]): Set<string> {
   const out = new Set<string>()
   const walk = (id: string) => {
     out.add(id)
-    for (const c of cats) {
-      if (c.parentId === id) walk(c.id)
-    }
+    for (const c of cats) { if (c.parentId === id) walk(c.id) }
   }
   walk(rootId)
   return out
@@ -18,16 +16,19 @@ function descendantCategoryIds(rootId: string, cats: PanelCategory[]): Set<strin
 
 function ProductCard({
   product,
+  disabled,
   onAddProduct,
 }: {
   product: PanelProduct
+  disabled?: boolean
   onAddProduct: (product: PanelProduct) => void
 }) {
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={() => onAddProduct(product)}
-      className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden hover:border-[#e63462]/50 hover:shadow-md transition-all text-left"
+      className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden hover:border-[#e63462]/50 hover:shadow-md transition-all text-left disabled:opacity-60 disabled:pointer-events-none"
     >
       <div className="aspect-square bg-[#f5f5f7] relative overflow-hidden">
         {product.image ? (
@@ -56,37 +57,25 @@ function ProductSubtree(props: {
   categories: PanelCategory[]
   products: PanelProduct[]
   depth: number
+  disabled?: boolean
   onAddProduct: (product: PanelProduct) => void
 }) {
-  const { nodeId, categories, products, depth, onAddProduct } = props
+  const { nodeId, categories, products, depth, disabled, onAddProduct } = props
   const node = categories.find((c) => c.id === nodeId)
   const nodeProducts = products.filter((p) => p.categoryId === nodeId)
-  const childCats = categories
-    .filter((c) => c.parentId === nodeId && c.showInTerminal !== false)
-    .sort((a, b) => a.order - b.order)
+  const childCats = categories.filter((c) => c.parentId === nodeId && c.showInTerminal !== false).sort((a, b) => a.order - b.order)
   if (nodeProducts.length === 0 && childCats.length === 0) return null
 
   return (
     <div className={depth > 0 ? "mt-4" : ""}>
-      {depth > 0 && (
-        <h4 className="text-[12px] font-semibold text-[#86868b] mb-2 px-1">{node?.name ?? ""}</h4>
-      )}
+      {depth > 0 && <h4 className="text-[12px] font-semibold text-[#86868b] mb-2 px-1">{node?.name ?? ""}</h4>}
       {nodeProducts.length > 0 && (
         <div className="grid grid-cols-3 md:grid-cols-4 gap-2.5 mb-2">
-          {nodeProducts.map((product) => (
-            <ProductCard key={product.id} product={product} onAddProduct={onAddProduct} />
-          ))}
+          {nodeProducts.map((product) => <ProductCard key={product.id} product={product} disabled={disabled} onAddProduct={onAddProduct} />)}
         </div>
       )}
       {childCats.map((ch) => (
-        <ProductSubtree
-          key={ch.id}
-          nodeId={ch.id}
-          categories={categories}
-          products={products}
-          depth={depth + 1}
-          onAddProduct={onAddProduct}
-        />
+        <ProductSubtree key={ch.id} nodeId={ch.id} categories={categories} products={products} depth={depth + 1} disabled={disabled} onAddProduct={onAddProduct} />
       ))}
     </div>
   )
@@ -115,31 +104,34 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
   const [cart, setCart] = useState<CartLine[]>([])
   const [editingNote, setEditingNote] = useState<string | null>(null)
   const [noteValue, setNoteValue] = useState("")
-  const [submitting, setSubmitting] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const submittingRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !isSubmitting && !submittingRef.current && !editingNote) {
+        onClose()
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [isSubmitting, editingNote, onClose])
+
   const terminalProducts = useMemo(
-    () =>
-      products.filter((p) => {
-        const cat = categories.find((c) => c.id === p.categoryId)
-        return cat && cat.showInTerminal !== false && p.inStock
-      }),
+    () => products.filter((p) => { const cat = categories.find((c) => c.id === p.categoryId); return cat && cat.showInTerminal !== false && p.inStock }),
     [products, categories],
   )
 
   const rootCategories = useMemo(
-    () =>
-      categories
-        .filter((c) => c.showInTerminal !== false && !c.parentId)
-        .sort((a, b) => a.order - b.order),
+    () => categories.filter((c) => c.showInTerminal !== false && !c.parentId).sort((a, b) => a.order - b.order),
     [categories],
   )
 
   const filteredProducts = useMemo(() => {
     let filtered = terminalProducts
-    if (searchQuery.trim()) {
-      filtered = filtered.filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    } else if (selectedCategoryId) {
+    if (searchQuery.trim()) filtered = filtered.filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    else if (selectedCategoryId) {
       const ids = descendantCategoryIds(selectedCategoryId, categories)
       filtered = filtered.filter((p) => ids.has(p.categoryId))
     }
@@ -150,68 +142,51 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
   const cartCount = cart.reduce((sum, i) => sum + i.quantity, 0)
 
   const addToCart = (product: PanelProduct) => {
-    if (!product.inStock) return
+    if (!product.inStock || isSubmitting || submittingRef.current) return
     setCart((prev) => {
       const existing = prev.find((i) => i.productId === product.id)
-      if (existing) {
-        return prev.map((i) =>
-          i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i,
-        )
-      }
-      return [
-        ...prev,
-        {
-          productId: product.id,
-          productName: product.name,
-          price: product.price,
-          quantity: 1,
-          image: product.image,
-        },
-      ]
+      if (existing) return prev.map((i) => (i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i))
+      return [...prev, { productId: product.id, productName: product.name, price: product.price, quantity: 1, image: product.image }]
     })
   }
 
   const updateQty = (productId: string, delta: number) => {
+    if (isSubmitting || submittingRef.current) return
     setCart((prev) =>
-      prev
-        .map((i) => {
-          if (i.productId !== productId) return i
-          const qty = i.quantity + delta
-          return qty <= 0 ? null : { ...i, quantity: qty }
-        })
-        .filter(Boolean) as CartLine[],
+      prev.map((i) => {
+        if (i.productId !== productId) return i
+        const qty = i.quantity + delta
+        return qty <= 0 ? null : { ...i, quantity: qty }
+      }).filter(Boolean) as CartLine[],
     )
   }
 
   const saveNote = (productId: string) => {
     const note = noteValue.trim()
-    setCart((prev) =>
-      prev.map((item) =>
-        item.productId === productId ? { ...item, note: note || undefined } : item,
-      ),
-    )
+    setCart((prev) => prev.map((item) => (item.productId === productId ? { ...item, note: note || undefined } : item)))
     setEditingNote(null)
     setNoteValue("")
   }
 
   const handleSubmit = async () => {
-    if (cart.length === 0 || submitting) return
-    setSubmitting(true)
+    if (cart.length === 0 || isSubmitting || submittingRef.current || !currentShift) return
+    submittingRef.current = true
+    setIsSubmitting(true)
     setError(null)
-    const result = await createTableOrder(
-      tableId,
-      cart.map((i) => ({
-        productId: i.productId,
-        quantity: i.quantity,
-        note: i.note,
-      })),
-    )
-    setSubmitting(false)
-    if (!result.ok) {
-      setError(result.error ?? "Siparis gonderilemedi")
-      return
+    try {
+      const result = await createTableOrder(
+        tableId,
+        cart.map((i) => ({ productId: i.productId, quantity: i.quantity, note: i.note })),
+      )
+      if (!result.ok) {
+        setError(result.error ?? "Sipariş gönderilemedi")
+        return
+      }
+      onSuccess()
+    } finally {
+      submittingRef.current = false
+      setIsSubmitting(false)
     }
-    onSuccess()
   }
 
   return (
@@ -219,13 +194,14 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
       <div className="w-full max-w-5xl h-[min(90vh,820px)] bg-[#f5f5f7] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         <div className="flex-shrink-0 h-[52px] px-4 bg-white border-b border-[#d1d1d6]/60 flex items-center justify-between">
           <div>
-            <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Siparis Gir</h3>
+            <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Sipariş Gir</h3>
             <p className="text-[11px] text-[#86868b]">{tableName}</p>
           </div>
           <button
             type="button"
+            disabled={isSubmitting}
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed]"
+            className="w-8 h-8 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed] disabled:opacity-50"
           >
             <X className="w-4 h-4 text-[#86868b]" />
           </button>
@@ -233,7 +209,7 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
 
         {!currentShift && (
           <div className="px-4 py-2.5 bg-[#fff4e5] text-[12px] text-[#b54708] border-b border-[#f5d0a9]">
-            Siparis gonderebilmek icin once kasayi acmaniz gerekir.
+            Sipariş gönderebilmek için önce kasayı açmanız gerekir.
           </div>
         )}
 
@@ -243,12 +219,9 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#86868b]" />
               <input
                 type="text"
-                placeholder="Urun ara..."
+                placeholder="Ürün ara..."
                 value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value)
-                  if (e.target.value) setSelectedCategoryId(null)
-                }}
+                onChange={(e) => { setSearchQuery(e.target.value); if (e.target.value) setSelectedCategoryId(null) }}
                 className="w-full h-[42px] pl-10 pr-3 text-[13px] bg-white rounded-xl border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
               />
             </div>
@@ -256,30 +229,20 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
             <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1 flex-shrink-0">
               <button
                 type="button"
-                onClick={() => {
-                  setSelectedCategoryId(null)
-                  setSearchQuery("")
-                }}
+                onClick={() => { setSelectedCategoryId(null); setSearchQuery("") }}
                 className={`px-3 py-1.5 rounded-lg text-[12px] font-medium whitespace-nowrap ${
-                  !selectedCategoryId && !searchQuery
-                    ? "bg-[#e63462] text-white"
-                    : "bg-white text-[#1d1d1f] border border-[#d1d1d6]/60"
+                  !selectedCategoryId && !searchQuery ? "bg-[#e63462] text-white" : "bg-white text-[#1d1d1f] border border-[#d1d1d6]/60"
                 }`}
               >
-                Tumu
+                Tümü
               </button>
               {rootCategories.map((cat) => (
                 <button
                   key={cat.id}
                   type="button"
-                  onClick={() => {
-                    setSelectedCategoryId(cat.id)
-                    setSearchQuery("")
-                  }}
+                  onClick={() => { setSelectedCategoryId(cat.id); setSearchQuery("") }}
                   className={`px-3 py-1.5 rounded-lg text-[12px] font-medium whitespace-nowrap ${
-                    selectedCategoryId === cat.id
-                      ? "bg-[#e63462] text-white"
-                      : "bg-white text-[#1d1d1f] border border-[#d1d1d6]/60"
+                    selectedCategoryId === cat.id ? "bg-[#e63462] text-white" : "bg-white text-[#1d1d1f] border border-[#d1d1d6]/60"
                   }`}
                 >
                   {cat.name}
@@ -291,12 +254,12 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
               {filteredProducts.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-[220px] text-[#86868b]">
                   <ShoppingBag className="w-10 h-10 mb-2 opacity-30" />
-                  <p className="text-[13px]">Urun bulunamadi</p>
+                  <p className="text-[13px]">Ürün bulunamadı</p>
                 </div>
               ) : searchQuery.trim() || !selectedCategoryId ? (
                 <div className="grid grid-cols-3 md:grid-cols-4 gap-2.5">
                   {filteredProducts.map((product) => (
-                    <ProductCard key={product.id} product={product} onAddProduct={addToCart} />
+                    <ProductCard key={product.id} product={product} disabled={isSubmitting} onAddProduct={addToCart} />
                   ))}
                 </div>
               ) : (
@@ -305,6 +268,7 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
                   categories={categories}
                   products={filteredProducts}
                   depth={0}
+                  disabled={isSubmitting}
                   onAddProduct={addToCart}
                 />
               )}
@@ -317,7 +281,7 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
             </div>
             <div className="flex-1 overflow-auto p-3 space-y-2">
               {cart.length === 0 ? (
-                <p className="text-[12px] text-[#86868b] text-center mt-8">Urun secerek sepete ekleyin</p>
+                <p className="text-[12px] text-[#86868b] text-center mt-8">Ürün seçerek sepete ekleyin</p>
               ) : (
                 cart.map((item) => (
                   <div key={item.productId} className="rounded-xl bg-[#f5f5f7] p-2.5">
@@ -325,14 +289,13 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
                       <div className="min-w-0">
                         <p className="text-[12px] font-medium text-[#1d1d1f] truncate">{item.productName}</p>
                         <p className="text-[11px] text-[#86868b]">{"₺"}{formatCurrency(item.price)}</p>
-                        {item.note && (
-                          <p className="mt-1 text-[11px] text-[#e63462] break-words">{item.note}</p>
-                        )}
+                        {item.note && <p className="mt-1 text-[11px] text-[#e63462] break-words">{item.note}</p>}
                       </div>
                       <button
                         type="button"
+                        disabled={isSubmitting}
                         onClick={() => setCart((prev) => prev.filter((i) => i.productId !== item.productId))}
-                        className="text-[#86868b] hover:text-[#ff3b30]"
+                        className="text-[#86868b] hover:text-[#ff3b30] disabled:opacity-50"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -340,35 +303,19 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
                     <div className="mt-2 flex items-center justify-between">
                       <button
                         type="button"
+                        disabled={isSubmitting}
                         onClick={() => {
-                          if (editingNote === item.productId) {
-                            setEditingNote(null)
-                            setNoteValue("")
-                          } else {
-                            setEditingNote(item.productId)
-                            setNoteValue(item.note ?? "")
-                          }
+                          if (editingNote === item.productId) { setEditingNote(null); setNoteValue("") }
+                          else { setEditingNote(item.productId); setNoteValue(item.note ?? "") }
                         }}
                         className="text-[11px] font-medium text-[#007aff] hover:opacity-70"
                       >
-                        {item.note ? "Notu Duzenle" : "Not Ekle"}
+                        {item.note ? "Notu Düzenle" : "Not Ekle"}
                       </button>
                       <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => updateQty(item.productId, -1)}
-                          className="w-6 h-6 rounded-md bg-white border border-[#d1d1d6]/60 flex items-center justify-center"
-                        >
-                          <Minus className="w-3 h-3" />
-                        </button>
+                        <button type="button" disabled={isSubmitting} onClick={() => updateQty(item.productId, -1)} className="w-6 h-6 rounded-md bg-white border border-[#d1d1d6]/60 flex items-center justify-center"><Minus className="w-3 h-3" /></button>
                         <span className="text-[12px] font-semibold w-5 text-center">{item.quantity}</span>
-                        <button
-                          type="button"
-                          onClick={() => updateQty(item.productId, 1)}
-                          className="w-6 h-6 rounded-md bg-white border border-[#d1d1d6]/60 flex items-center justify-center"
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
+                        <button type="button" disabled={isSubmitting} onClick={() => updateQty(item.productId, 1)} className="w-6 h-6 rounded-md bg-white border border-[#d1d1d6]/60 flex items-center justify-center"><Plus className="w-3 h-3" /></button>
                       </div>
                     </div>
                     <div className="mt-1 text-right text-[12px] font-bold text-[#1d1d1f]">
@@ -380,24 +327,15 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
                           type="text"
                           value={noteValue}
                           onChange={(e) => setNoteValue(e.target.value)}
-                          placeholder="Ornegin: acisiz, az piskin..."
+                          placeholder="Örneğin: acısız, az pişmiş..."
                           autoFocus
                           onKeyDown={(e) => {
                             if (e.key === "Enter") saveNote(item.productId)
-                            if (e.key === "Escape") {
-                              setEditingNote(null)
-                              setNoteValue("")
-                            }
+                            if (e.key === "Escape") { setEditingNote(null); setNoteValue("") }
                           }}
                           className="min-w-0 flex-1 h-8 rounded-lg bg-white border border-[#d1d1d6]/60 px-2.5 text-[11px] focus:outline-none focus:border-[#e63462]/50"
                         />
-                        <button
-                          type="button"
-                          onClick={() => saveNote(item.productId)}
-                          className="text-[11px] font-semibold text-[#007aff]"
-                        >
-                          Tamam
-                        </button>
+                        <button type="button" onClick={() => saveNote(item.productId)} className="text-[11px] font-semibold text-[#007aff]">Tamam</button>
                       </div>
                     )}
                   </div>
@@ -412,11 +350,18 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
               </div>
               <button
                 type="button"
-                disabled={cart.length === 0 || submitting || !currentShift}
+                disabled={cart.length === 0 || isSubmitting || !currentShift}
                 onClick={() => void handleSubmit()}
-                className="w-full h-[40px] rounded-xl bg-[#e63462] hover:bg-[#d12d57] disabled:opacity-45 disabled:pointer-events-none text-white text-[13px] font-semibold transition-colors"
+                className="w-full h-[40px] rounded-xl bg-[#e63462] hover:bg-[#d12d57] disabled:opacity-45 disabled:pointer-events-none text-white text-[13px] font-semibold transition-colors flex items-center justify-center gap-2"
               >
-                {submitting ? "Gonderiliyor..." : "Siparisi Gonder"}
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Gönderiliyor...
+                  </>
+                ) : (
+                  "Siparişi Gönder"
+                )}
               </button>
             </div>
           </div>

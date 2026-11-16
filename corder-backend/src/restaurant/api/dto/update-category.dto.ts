@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsBoolean, MinLength, IsUUID, ValidateIf } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsNumber, MinLength, IsUUID, ValidateIf } from 'class-validator';
 
 export class UpdateCategoryDto {
   @IsOptional()
@@ -20,5 +20,6 @@ export class UpdateCategoryDto {
   showInMenu?: boolean;
 
   @IsOptional()
+  @IsNumber()
   order?: number;
 }

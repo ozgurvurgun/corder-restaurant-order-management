@@ -9,6 +9,7 @@ import type {
   RestaurantSettings,
 } from "../panel-types"
 import { api } from "../api"
+import { showPanelToast } from "@/components/panel/panel-toast"
 import { genId } from "./panel-local-storage"
 import type { LogActivityFn } from "./panel-store-context"
 
@@ -59,16 +60,9 @@ export function useSystemActions(params: {
   setPrinterDepartments: StateSetter<PrinterDepartment[]>
 }) {
   const {
-    token,
-    currentUser,
-    printers,
-    setUsers,
-    setSettings,
-    setNotifications,
-    setAuditLogs,
-    setBranches,
-    setPrinters,
-    setPrinterDepartments,
+    token, currentUser, printers,
+    setUsers, setSettings, setNotifications, setAuditLogs,
+    setBranches, setPrinters, setPrinterDepartments,
   } = params
 
   const addAuditLog = useCallback(
@@ -84,7 +78,7 @@ export function useSystemActions(params: {
           details: log.details,
           metadata: log.metadata,
         })
-        .catch(console.error)
+        .catch(() => {})
     },
     [token, setAuditLogs],
   )
@@ -108,14 +102,17 @@ export function useSystemActions(params: {
       if (!token) return
       const role = u.role === "root" ? "branch_manager" : u.role
       const pin = (u.pin ?? "").trim()
+      const phone = u.phone?.trim()
+      const email = u.email?.trim()
+      const password = u.password?.trim()
       api.staff
         .create(token, {
-          name: u.name,
+          name: u.name.trim(),
           ...(pin ? { pin } : {}),
           role,
-          phone: u.phone,
-          email: u.email,
-          password: u.password,
+          ...(phone ? { phone } : {}),
+          ...(email ? { email } : {}),
+          ...(password ? { password } : {}),
           canAccessPanel: u.canAccessPanel,
           canAccessTerminal: u.canAccessTerminal,
         })
@@ -124,11 +121,12 @@ export function useSystemActions(params: {
           logActivity({
             action: "staff_created",
             category: "user",
-            details: `Kullanici eklendi: ${created.name}`,
+            details: `Kullanıcı eklendi: ${created.name}`,
             metadata: { userId: created.id, role: created.role },
           })
+          showPanelToast(`Kullanıcı eklendi: ${created.name}`, "success")
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Kullanıcı eklenemedi", "error"))
     },
     [token, setUsers, logActivity],
   )
@@ -147,12 +145,12 @@ export function useSystemActions(params: {
         canAccessPanel?: boolean
         canAccessTerminal?: boolean
       } = {}
-      if (data.name != null) payload.name = data.name
-      if (data.pin != null && data.pin !== "") payload.pin = data.pin
+      if (data.name != null) payload.name = data.name.trim()
+      if (data.pin != null && data.pin.trim() !== "") payload.pin = data.pin.trim()
       if (data.role != null && data.role !== "root") payload.role = data.role
-      if (data.phone !== undefined) payload.phone = data.phone
-      if (data.email !== undefined) payload.email = data.email || null
-      if (data.password != null && data.password !== "") payload.password = data.password
+      if (data.phone !== undefined) payload.phone = data.phone.trim() || undefined
+      if (data.email !== undefined) payload.email = data.email?.trim() || null
+      if (data.password != null && data.password.trim() !== "") payload.password = data.password
       if (data.active !== undefined) payload.isActive = data.active
       if (data.canAccessPanel !== undefined) payload.canAccessPanel = data.canAccessPanel
       if (data.canAccessTerminal !== undefined) payload.canAccessTerminal = data.canAccessTerminal
@@ -167,11 +165,12 @@ export function useSystemActions(params: {
           logActivity({
             action: "staff_updated",
             category: "user",
-            details: `Kullanici guncellendi: ${updated.name}`,
+            details: `Kullanıcı güncellendi: ${updated.name}`,
             metadata: { userId: id, fields: Object.keys(payload) },
           })
+          showPanelToast("Kullanıcı güncellendi", "success")
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Kullanıcı güncellenemedi", "error"))
     },
     [token, setUsers, logActivity],
   )
@@ -186,11 +185,12 @@ export function useSystemActions(params: {
           logActivity({
             action: "staff_deleted",
             category: "user",
-            details: `Kullanici silindi: ${id}`,
+            details: `Kullanıcı silindi: ${id}`,
             metadata: { userId: id },
           })
+          showPanelToast("Kullanıcı silindi", "info")
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Kullanıcı silinemedi", "error"))
     },
     [token, setUsers, logActivity],
   )
@@ -199,9 +199,12 @@ export function useSystemActions(params: {
     (s: Partial<RestaurantSettings>) => {
       setSettings((prev) => ({ ...prev, ...s }))
       if (!token) return
+      const serverFields = ["name", "address", "phone", "taxId", "whatsapp", "instagram", "facebook", "website", "workingHours"] as const
+      const hasServerField = serverFields.some((k) => s[k] !== undefined)
+      if (!hasServerField) return
       api.restaurant
         .updateSettings(token, {
-          name: s.name,
+          ...(s.name?.trim() ? { name: s.name.trim() } : {}),
           address: s.address,
           phone: s.phone,
           taxId: s.taxId,
@@ -215,69 +218,49 @@ export function useSystemActions(params: {
           logActivity({
             action: "settings_updated",
             category: "settings",
-            details: "Restoran ayarlari guncellendi",
+            details: "Restoran ayarları güncellendi",
             metadata: { fields: Object.keys(s) },
           })
+          showPanelToast("Ayarlar kaydedildi", "success")
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Ayarlar güncellenemedi", "error"))
     },
     [token, setSettings, logActivity],
   )
 
   const markNotificationRead = useCallback(
-    (id: string) => {
-      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
-    },
+    (id: string) => setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n))),
     [setNotifications],
   )
-  const markAllNotificationsRead = useCallback(() => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
-  }, [setNotifications])
+  const markAllNotificationsRead = useCallback(
+    () => setNotifications((prev) => prev.map((n) => ({ ...n, read: true }))),
+    [setNotifications],
+  )
   const addNotification = useCallback(
-    (n: Omit<PanelNotification, "id" | "createdAt" | "read">) => {
-      setNotifications((prev) => [
-        { ...n, id: genId("n"), createdAt: new Date(), read: false },
-        ...prev,
-      ])
-    },
+    (n: Omit<PanelNotification, "id" | "createdAt" | "read">) =>
+      setNotifications((prev) => [{ ...n, id: genId("n"), createdAt: new Date(), read: false }, ...prev]),
     [setNotifications],
   )
-  const clearAllNotifications = useCallback(() => {
-    setNotifications([])
-  }, [setNotifications])
+  const clearAllNotifications = useCallback(() => setNotifications([]), [setNotifications])
 
   const switchBranch = useCallback(
     (id: string) => {
       setBranches((prev) => prev.map((b) => ({ ...b, isCurrent: b.id === id })))
-      logActivity({
-        action: "branch_switched",
-        category: "settings",
-        details: `Sube degistirildi: ${id}`,
-        metadata: { branchId: id },
-      })
+      logActivity({ action: "branch_switched", category: "settings", details: `Şube değiştirildi: ${id}`, metadata: { branchId: id } })
     },
     [setBranches, logActivity],
   )
   const addBranch = useCallback(
     (b: Omit<Branch, "id">) => {
       setBranches((prev) => [...prev, { ...b, id: genId("br") }])
-      logActivity({
-        action: "branch_created",
-        category: "settings",
-        details: `Sube eklendi: ${b.name}`,
-      })
+      logActivity({ action: "branch_created", category: "settings", details: `Şube eklendi: ${b.name}` })
     },
     [setBranches, logActivity],
   )
   const updateBranch = useCallback(
     (id: string, data: Partial<Branch>) => {
       setBranches((prev) => prev.map((b) => (b.id === id ? { ...b, ...data } : b)))
-      logActivity({
-        action: "branch_updated",
-        category: "settings",
-        details: `Sube guncellendi: ${id}`,
-        metadata: { branchId: id, fields: Object.keys(data) },
-      })
+      logActivity({ action: "branch_updated", category: "settings", details: `Şube güncellendi: ${id}`, metadata: { branchId: id, fields: Object.keys(data) } })
     },
     [setBranches, logActivity],
   )
@@ -287,85 +270,59 @@ export function useSystemActions(params: {
       if (!token) return
       api.technical
         .createPrinter(token, {
-          name: p.name,
-          type: p.type,
-          connection: p.connection,
-          ipAddress: p.ipAddress,
-          port: p.port,
-          department: p.department,
-          paperWidth: p.paperWidth,
-          autoCut: p.autoCut,
+          name: p.name, type: p.type, connection: p.connection,
+          ipAddress: p.ipAddress, port: p.port, department: p.department,
+          paperWidth: p.paperWidth, autoCut: p.autoCut,
         })
         .then((created) => {
           setPrinters((prev) => [
             ...prev,
             {
-              id: created.id,
-              name: created.name,
-              type: created.type,
-              connection: created.connection,
-              ipAddress: created.ipAddress ?? undefined,
-              port: created.port ?? undefined,
-              department: created.department ?? undefined,
-              status: created.status,
-              paperWidth: created.paperWidth === 58 ? 58 : 80,
-              autoCut: created.autoCut,
+              id: created.id, name: created.name, type: created.type, connection: created.connection,
+              ipAddress: created.ipAddress ?? undefined, port: created.port ?? undefined,
+              department: created.department ?? undefined, status: created.status,
+              paperWidth: created.paperWidth === 58 ? 58 : 80, autoCut: created.autoCut,
             },
           ])
-          logActivity({
-            action: "printer_created",
-            category: "settings",
-            details: `Yazici eklendi: ${created.name}`,
-            metadata: {
-              printerId: created.id,
-              type: created.type,
-              connection: created.connection,
-            },
-          })
+          logActivity({ action: "printer_created", category: "settings", details: `Yazıcı eklendi: ${created.name}`, metadata: { printerId: created.id, type: created.type, connection: created.connection } })
+          showPanelToast(`Yazıcı eklendi: ${created.name}`, "success")
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Yazıcı eklenemedi", "error"))
     },
     [token, setPrinters, logActivity],
   )
 
   const updatePrinter = useCallback(
     (id: string, data: Partial<PrinterConfig>) => {
-      setPrinters((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p)))
-      logActivity({
-        action: "printer_updated",
-        category: "settings",
-        details: `Yazici guncellendi: ${id}`,
-        metadata: { printerId: id, fields: Object.keys(data) },
-      })
       if (!token) return
       api.technical
         .updatePrinter(token, id, {
-          name: data.name,
-          type: data.type,
-          connection: data.connection,
-          ipAddress: data.ipAddress ?? null,
-          port: data.port ?? null,
-          department: data.department ?? null,
-          status: data.status,
-          paperWidth: data.paperWidth,
-          autoCut: data.autoCut,
+          name: data.name, type: data.type, connection: data.connection,
+          ipAddress: data.ipAddress ?? null, port: data.port ?? null,
+          department: data.department ?? null, status: data.status,
+          paperWidth: data.paperWidth, autoCut: data.autoCut,
         })
-        .catch(console.error)
+        .then(() => {
+          setPrinters((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p)))
+          logActivity({ action: "printer_updated", category: "settings", details: `Yazıcı güncellendi: ${id}`, metadata: { printerId: id, fields: Object.keys(data) } })
+          showPanelToast("Yazıcı güncellendi", "success")
+        })
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Yazıcı güncellenemedi", "error"))
     },
     [token, setPrinters, logActivity],
   )
 
   const deletePrinter = useCallback(
     (id: string) => {
-      setPrinters((prev) => prev.filter((p) => p.id !== id))
-      logActivity({
-        action: "printer_deleted",
-        category: "settings",
-        details: `Yazici silindi: ${id}`,
-        metadata: { printerId: id },
-      })
       if (!token) return
-      api.technical.deletePrinter(token, id).catch(console.error)
+      api.technical
+        .deletePrinter(token, id)
+        .then(() => {
+          setPrinters((prev) => prev.filter((p) => p.id !== id))
+          logActivity({ action: "printer_deleted", category: "settings", details: `Yazıcı silindi: ${id}`, metadata: { printerId: id } })
+          showPanelToast("Yazıcı silindi", "info")
+        })
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Yazıcı silinemedi", "error"))
     },
     [token, setPrinters, logActivity],
   )
@@ -375,57 +332,30 @@ export function useSystemActions(params: {
       const pr = printers.find((p) => p.id === id)
       if (!pr || !token) return
       setPrinters((prev) => prev.map((p) => (p.id === id ? { ...p, status: "online" } : p)))
-      logActivity({
-        action: "printer_tested",
-        category: "settings",
-        details: `Yazici test edildi: ${pr.name}`,
-        metadata: { printerId: id },
-      })
+      logActivity({ action: "printer_tested", category: "settings", details: `Yazıcı test edildi: ${pr.name}`, metadata: { printerId: id } })
+      showPanelToast(`${pr.name} test bağlantısı başarılı`, "success")
     },
     [printers, token, setPrinters, logActivity],
   )
 
   const addPrinterDepartment = useCallback(
-    (pd: Omit<PrinterDepartment, "id">) => {
-      setPrinterDepartments((prev) => [...prev, { ...pd, id: genId("pd") }])
-    },
+    (pd: Omit<PrinterDepartment, "id">) => setPrinterDepartments((prev) => [...prev, { ...pd, id: genId("pd") }]),
     [setPrinterDepartments],
   )
   const updatePrinterDepartment = useCallback(
-    (id: string, data: Partial<PrinterDepartment>) => {
-      setPrinterDepartments((prev) =>
-        prev.map((pd) => (pd.id === id ? { ...pd, ...data } : pd)),
-      )
-    },
+    (id: string, data: Partial<PrinterDepartment>) =>
+      setPrinterDepartments((prev) => prev.map((pd) => (pd.id === id ? { ...pd, ...data } : pd))),
     [setPrinterDepartments],
   )
   const deletePrinterDepartment = useCallback(
-    (id: string) => {
-      setPrinterDepartments((prev) => prev.filter((pd) => pd.id !== id))
-    },
+    (id: string) => setPrinterDepartments((prev) => prev.filter((pd) => pd.id !== id)),
     [setPrinterDepartments],
   )
 
   return {
-    addAuditLog,
-    logActivity,
-    addUser,
-    updateUser,
-    deleteUser,
-    updateSettings,
-    markNotificationRead,
-    markAllNotificationsRead,
-    addNotification,
-    clearAllNotifications,
-    switchBranch,
-    addBranch,
-    updateBranch,
-    addPrinter,
-    updatePrinter,
-    deletePrinter,
-    testPrinter,
-    addPrinterDepartment,
-    updatePrinterDepartment,
-    deletePrinterDepartment,
+    addAuditLog, logActivity, addUser, updateUser, deleteUser, updateSettings,
+    markNotificationRead, markAllNotificationsRead, addNotification, clearAllNotifications,
+    switchBranch, addBranch, updateBranch, addPrinter, updatePrinter, deletePrinter,
+    testPrinter, addPrinterDepartment, updatePrinterDepartment, deletePrinterDepartment,
   }
 }

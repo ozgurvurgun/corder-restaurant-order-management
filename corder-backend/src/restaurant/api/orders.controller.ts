@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -55,7 +56,10 @@ export class OrdersController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @RestaurantId() restaurantId: string) {
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @RestaurantId() restaurantId: string,
+  ) {
     return this.service.findOne(id, restaurantId);
   }
 

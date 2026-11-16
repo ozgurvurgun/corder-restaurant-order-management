@@ -41,6 +41,7 @@ export function AddMaterialForm(props: {
           Yeni Malzeme
         </h4>
         <button
+          type="button"
           onClick={onClose}
           className="w-6 h-6 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed]"
         >
@@ -52,7 +53,7 @@ export function AddMaterialForm(props: {
           type="text"
           value={matName}
           onChange={(e) => setMatName(e.target.value)}
-          placeholder="Malzeme adi"
+          placeholder="Malzeme adı"
           className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
         />
         <select
@@ -70,6 +71,8 @@ export function AddMaterialForm(props: {
         </select>
         <input
           type="number"
+          min={0}
+          step="0.01"
           value={matCost}
           onChange={(e) => setMatCost(e.target.value)}
           placeholder="Birim maliyet"
@@ -84,6 +87,8 @@ export function AddMaterialForm(props: {
         />
         <input
           type="number"
+          min={0}
+          step="0.01"
           value={matStock}
           onChange={(e) => setMatStock(e.target.value)}
           placeholder="Mevcut Stok"
@@ -91,6 +96,8 @@ export function AddMaterialForm(props: {
         />
         <input
           type="number"
+          min={0}
+          step="0.01"
           value={matMin}
           onChange={(e) => setMatMin(e.target.value)}
           placeholder="Min. Stok"
@@ -99,12 +106,14 @@ export function AddMaterialForm(props: {
       </div>
       <div className="flex justify-end gap-2 mt-3">
         <button
+          type="button"
           onClick={onClose}
           className="h-[34px] px-4 text-[12px] font-medium text-[#86868b] rounded-lg border border-[#d1d1d6]/60 hover:bg-[#f5f5f7]"
         >
-          Iptal
+          İptal
         </button>
         <button
+          type="button"
           onClick={onSubmit}
           className="h-[34px] px-4 text-[12px] font-medium text-white bg-[#e63462] rounded-lg hover:bg-[#d42d56]"
         >
@@ -153,6 +162,7 @@ export function AddMovementForm(props: {
           Stok Hareketi
         </h4>
         <button
+          type="button"
           onClick={onClose}
           className="w-6 h-6 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed]"
         >
@@ -165,7 +175,7 @@ export function AddMovementForm(props: {
           onChange={(e) => setMvMatId(e.target.value)}
           className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60"
         >
-          <option value="">Malzeme secin</option>
+          <option value="">Malzeme seçin</option>
           {stockMaterials.map((m) => (
             <option key={m.id} value={m.id}>
               {m.name} ({m.currentStock} {m.unit})
@@ -176,6 +186,7 @@ export function AddMovementForm(props: {
           {(["in", "out", "waste"] as const).map((t) => (
             <button
               key={t}
+              type="button"
               onClick={() => setMvType(t)}
               className={`flex-1 h-[36px] rounded-lg border text-[12px] font-medium ${
                 mvType === t
@@ -183,12 +194,14 @@ export function AddMovementForm(props: {
                   : "border-[#d1d1d6]/60 text-[#86868b]"
               }`}
             >
-              {t === "in" ? "Giris" : t === "out" ? "Cikis" : "Fire"}
+              {t === "in" ? "Giriş" : t === "out" ? "Çıkış" : "Fire"}
             </button>
           ))}
         </div>
         <input
           type="number"
+          min={0.01}
+          step="0.01"
           value={mvQty}
           onChange={(e) => setMvQty(e.target.value)}
           placeholder="Miktar"
@@ -198,6 +211,8 @@ export function AddMovementForm(props: {
       <div className="grid grid-cols-2 gap-3 mt-2">
         <input
           type="number"
+          min={0}
+          step="0.01"
           value={mvCost}
           onChange={(e) => setMvCost(e.target.value)}
           placeholder="Birim maliyet (opsiyonel)"
@@ -213,12 +228,14 @@ export function AddMovementForm(props: {
       </div>
       <div className="flex justify-end gap-2 mt-3">
         <button
+          type="button"
           onClick={onClose}
           className="h-[34px] px-4 text-[12px] font-medium text-[#86868b] rounded-lg border border-[#d1d1d6]/60"
         >
-          Iptal
+          İptal
         </button>
         <button
+          type="button"
           onClick={onSubmit}
           className="h-[34px] px-4 text-[12px] font-medium text-white bg-[#e63462] rounded-lg hover:bg-[#d42d56]"
         >
@@ -259,14 +276,14 @@ export function AddSupplierForm(props: {
           type="text"
           value={supName}
           onChange={(e) => setSupName(e.target.value)}
-          placeholder="Firma adi"
+          placeholder="Firma adı"
           className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
         />
         <input
           type="text"
           value={supContact}
           onChange={(e) => setSupContact(e.target.value)}
-          placeholder="Yetkili kisi"
+          placeholder="Yetkili kişi"
           className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
         />
         <input
@@ -284,7 +301,7 @@ export function AddSupplierForm(props: {
           onClick={onClose}
           className="h-[34px] px-4 text-[12px] font-medium text-[#86868b] rounded-lg border border-[#d1d1d6]/60 disabled:opacity-50"
         >
-          Iptal
+          İptal
         </button>
         <button
           type="button"

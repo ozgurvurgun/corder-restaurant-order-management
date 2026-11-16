@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useBossStore } from "@/lib/boss-store"
 import { bossApi } from "@/lib/api"
 import type { CatalogProductDto } from "@/lib/types"
@@ -10,6 +10,7 @@ import {
   User,
   Check,
   X,
+  Building2,
 } from "lucide-react"
 
 function formatMoney(n: number): string {
@@ -26,6 +27,7 @@ export function OperationsCatalogTab() {
     products,
     overview,
     branches,
+    selectedBranchId,
     effectiveBranchId,
     effectiveBranch,
     setSelectedBranchId,
@@ -38,6 +40,15 @@ export function OperationsCatalogTab() {
   const [searchProduct, setSearchProduct] = useState("")
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null)
   const [priceDraft, setPriceDraft] = useState<string>("")
+
+  useEffect(() => {
+    if (!selectedTableId) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelectedTableId(null)
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [selectedTableId])
 
   const criticalMaterials = overview?.criticalMaterials ?? []
 
@@ -134,17 +145,24 @@ export function OperationsCatalogTab() {
         </div>
 
         {branches.length > 1 && (
-          <select
-            value={effectiveBranchId}
-            onChange={(e) => setSelectedBranchId(e.target.value)}
-            className="h-9 rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3 text-[12px] font-semibold text-[#1d1d1f]"
-          >
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>
-                Şube: {b.name}
-              </option>
-            ))}
-          </select>
+          <div className="inline-flex items-center gap-1.5 rounded-xl border border-[#e63462]/30 bg-[#fef3f5] px-2.5 py-1.5">
+            <Building2 className="h-3.5 w-3.5 text-[#e63462]" />
+            <span className="text-[11px] font-semibold text-[#86868b]">
+              {selectedBranchId === "ALL" ? "Aktif Şube:" : "Şube:"}
+            </span>
+            <select
+              value={effectiveBranchId}
+              onChange={(e) => setSelectedBranchId(e.target.value)}
+              aria-label="Aktif Şube"
+              className="bg-transparent text-[12px] font-bold text-[#1d1d1f] outline-none cursor-pointer"
+            >
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
         )}
       </div>
 

@@ -76,7 +76,14 @@ export class CreateOrderUseCase {
       ? await this.staffRepo.findOne({ where: { id: staffId, restaurantId } })
       : null;
 
-    const savedId = await this.orderRepo.manager.transaction(async (em) => {
+    const { savedId, tableName } = await this.orderRepo.manager.transaction(async (em) => {
+      const lockedTable = await em.findOne(TableEntity, {
+        where: { id: dto.tableId, restaurantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!lockedTable) throw new NotFoundException('Table not found');
+      this.tableService.assertStaffMayUseTable(lockedTable, staffId);
+
       const txOrderRepo = em.getRepository(OrderEntity);
       const txItemRepo = em.getRepository(OrderItemEntity);
       const order = txOrderRepo.create({
@@ -100,14 +107,14 @@ export class CreateOrderUseCase {
         });
       });
       await txItemRepo.save(items);
-      return saved.id;
+      return { savedId: saved.id, tableName: lockedTable.name ?? null };
     });
 
     const serialized = await this.orderQuery.serializeOrderEntityById(savedId, restaurantId);
     const payload: Record<string, unknown> = {
       ...serialized,
       restaurantId,
-      tableName: table.name ?? null,
+      tableName,
       waiterName: (serialized.userName as string | null) ?? null,
     };
     const payloadItems = payload.items as

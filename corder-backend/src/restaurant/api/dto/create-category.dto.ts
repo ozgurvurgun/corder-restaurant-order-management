@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsBoolean, MinLength, IsUUID, ValidateIf } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsNumber, MinLength, IsUUID, ValidateIf } from 'class-validator';
 
 export class CreateCategoryDto {
   @IsString()
@@ -19,5 +19,6 @@ export class CreateCategoryDto {
   showInMenu?: boolean;
 
   @IsOptional()
+  @IsNumber()
   order?: number;
 }

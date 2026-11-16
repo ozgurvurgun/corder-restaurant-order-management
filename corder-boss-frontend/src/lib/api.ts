@@ -182,11 +182,15 @@ export const bossApi = {
       return bossFetch<BossOverviewResponse>(`/restaurant/boss/overview${q}`)
     },
     async syncRoles(sourceRestaurantId: string, targetRestaurantIds?: string[]) {
+      const payload: { sourceRestaurantId: string; targetRestaurantIds?: string[] } = {
+        sourceRestaurantId,
+        ...(targetRestaurantIds ? { targetRestaurantIds } : {}),
+      }
       return bossFetch<{ syncedBranches: number; syncedRoles: number }>(
         "/restaurant/boss/sync-roles",
         {
           method: "POST",
-          body: JSON.stringify({ sourceRestaurantId, targetRestaurantIds }),
+          body: JSON.stringify(payload),
         },
         sourceRestaurantId
       )
@@ -206,6 +210,7 @@ export const bossApi = {
     async create(
       branchId: string,
       body: {
+        key?: string
         name: string
         description?: string
         color?: string
@@ -216,9 +221,20 @@ export const bossApi = {
         maxDiscountAmount?: number | null
       }
     ) {
+      const payload = {
+        ...(body.key !== undefined ? { key: body.key } : {}),
+        name: body.name,
+        ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(body.color !== undefined ? { color: body.color } : {}),
+        ...(body.canAccessPanel !== undefined ? { canAccessPanel: body.canAccessPanel } : {}),
+        ...(body.canAccessTerminal !== undefined ? { canAccessTerminal: body.canAccessTerminal } : {}),
+        permissions: body.permissions,
+        ...(body.maxDiscountPercent !== undefined ? { maxDiscountPercent: body.maxDiscountPercent } : {}),
+        ...(body.maxDiscountAmount !== undefined ? { maxDiscountAmount: body.maxDiscountAmount } : {}),
+      }
       return bossFetch<RoleDefinition>(
         "/restaurant/roles",
-        { method: "POST", body: JSON.stringify(body) },
+        { method: "POST", body: JSON.stringify(payload) },
         branchId
       )
     },
@@ -236,9 +252,19 @@ export const bossApi = {
         maxDiscountAmount?: number | null
       }
     ) {
+      const payload = {
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(body.color !== undefined ? { color: body.color } : {}),
+        ...(body.canAccessPanel !== undefined ? { canAccessPanel: body.canAccessPanel } : {}),
+        ...(body.canAccessTerminal !== undefined ? { canAccessTerminal: body.canAccessTerminal } : {}),
+        ...(body.permissions !== undefined ? { permissions: body.permissions } : {}),
+        ...(body.maxDiscountPercent !== undefined ? { maxDiscountPercent: body.maxDiscountPercent } : {}),
+        ...(body.maxDiscountAmount !== undefined ? { maxDiscountAmount: body.maxDiscountAmount } : {}),
+      }
       return bossFetch<RoleDefinition>(
         `/restaurant/roles/${encodeURIComponent(idOrKey)}`,
-        { method: "PUT", body: JSON.stringify(body) },
+        { method: "PUT", body: JSON.stringify(payload) },
         branchId
       )
     },
@@ -278,9 +304,27 @@ export const bossApi = {
         maxDiscountAmountOverride?: number | null
       }
     ) {
+      const payload = {
+        name: body.name,
+        role: body.role,
+        ...(body.phone !== undefined ? { phone: body.phone } : {}),
+        ...(body.email !== undefined ? { email: body.email } : {}),
+        ...(body.password !== undefined ? { password: body.password } : {}),
+        ...(body.pin !== undefined ? { pin: body.pin } : {}),
+        ...(body.canAccessPanel !== undefined ? { canAccessPanel: body.canAccessPanel } : {}),
+        ...(body.canAccessTerminal !== undefined ? { canAccessTerminal: body.canAccessTerminal } : {}),
+        ...(body.grantedPermissions !== undefined ? { grantedPermissions: body.grantedPermissions } : {}),
+        ...(body.revokedPermissions !== undefined ? { revokedPermissions: body.revokedPermissions } : {}),
+        ...(body.maxDiscountPercentOverride !== undefined
+          ? { maxDiscountPercentOverride: body.maxDiscountPercentOverride }
+          : {}),
+        ...(body.maxDiscountAmountOverride !== undefined
+          ? { maxDiscountAmountOverride: body.maxDiscountAmountOverride }
+          : {}),
+      }
       return bossFetch<StaffMemberDto>(
         "/restaurant/staff",
-        { method: "POST", body: JSON.stringify(body) },
+        { method: "POST", body: JSON.stringify(payload) },
         branchId
       )
     },
@@ -303,9 +347,28 @@ export const bossApi = {
         maxDiscountAmountOverride?: number | null
       }
     ) {
+      const payload = {
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.role !== undefined ? { role: body.role } : {}),
+        ...(body.phone !== undefined ? { phone: body.phone } : {}),
+        ...(body.email !== undefined ? { email: body.email } : {}),
+        ...(body.password !== undefined ? { password: body.password } : {}),
+        ...(body.pin !== undefined ? { pin: body.pin } : {}),
+        ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
+        ...(body.canAccessPanel !== undefined ? { canAccessPanel: body.canAccessPanel } : {}),
+        ...(body.canAccessTerminal !== undefined ? { canAccessTerminal: body.canAccessTerminal } : {}),
+        ...(body.grantedPermissions !== undefined ? { grantedPermissions: body.grantedPermissions } : {}),
+        ...(body.revokedPermissions !== undefined ? { revokedPermissions: body.revokedPermissions } : {}),
+        ...(body.maxDiscountPercentOverride !== undefined
+          ? { maxDiscountPercentOverride: body.maxDiscountPercentOverride }
+          : {}),
+        ...(body.maxDiscountAmountOverride !== undefined
+          ? { maxDiscountAmountOverride: body.maxDiscountAmountOverride }
+          : {}),
+      }
       return bossFetch<StaffMemberDto>(
         `/restaurant/staff/${id}`,
-        { method: "PUT", body: JSON.stringify(body) },
+        { method: "PUT", body: JSON.stringify(payload) },
         branchId
       )
     },
@@ -335,9 +398,14 @@ export const bossApi = {
       productId: string,
       body: { price?: number; inStock?: boolean; name?: string }
     ) {
+      const payload = {
+        ...(body.price !== undefined ? { price: body.price } : {}),
+        ...(body.inStock !== undefined ? { inStock: body.inStock } : {}),
+        ...(body.name !== undefined ? { name: body.name } : {}),
+      }
       return bossFetch<CatalogProductDto>(
         `/restaurant/products/${productId}`,
-        { method: "PUT", body: JSON.stringify(body) },
+        { method: "PUT", body: JSON.stringify(payload) },
         branchId
       )
     },

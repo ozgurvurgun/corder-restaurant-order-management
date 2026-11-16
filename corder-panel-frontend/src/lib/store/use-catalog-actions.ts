@@ -11,30 +11,18 @@ import {
   mapApiProductsToPanel,
   mapCampaignDtoToPanel,
 } from "../mappers/catalog-inventory.mapper"
+import { showPanelToast } from "@/components/panel/panel-toast"
 import type { LogActivityFn } from "./panel-store-context"
 
 export function useCatalogActions(params: {
   token: string | null
   stockMaterials: StockMaterial[]
-  setCategories: (
-    v: PanelCategory[] | ((prev: PanelCategory[]) => PanelCategory[]),
-  ) => void
-  setProducts: (
-    v: PanelProduct[] | ((prev: PanelProduct[]) => PanelProduct[]),
-  ) => void
-  setCampaigns: (
-    v: Campaign[] | ((prev: Campaign[]) => Campaign[]),
-  ) => void
+  setCategories: (v: PanelCategory[] | ((prev: PanelCategory[]) => PanelCategory[])) => void
+  setProducts: (v: PanelProduct[] | ((prev: PanelProduct[]) => PanelProduct[])) => void
+  setCampaigns: (v: Campaign[] | ((prev: Campaign[]) => Campaign[])) => void
   logActivity: LogActivityFn
 }) {
-  const {
-    token,
-    stockMaterials,
-    setCategories,
-    setProducts,
-    setCampaigns,
-    logActivity,
-  } = params
+  const { token, stockMaterials, setCategories, setProducts, setCampaigns, logActivity } = params
 
   const addProduct = useCallback(
     (p: Omit<PanelProduct, "id">) => {
@@ -42,34 +30,25 @@ export function useCatalogActions(params: {
       api.products
         .create(token, {
           categoryId: p.categoryId,
-          name: p.name,
+          name: p.name.trim(),
           price: p.price,
-          description: p.description,
-          imageUrl: p.image,
+          description: p.description?.trim() || undefined,
+          imageUrl: p.image || undefined,
           inStock: p.inStock ?? true,
           ingredients:
-            p.ingredients?.map((i) => ({
-              materialId: i.materialId,
-              quantity: i.quantity,
-            })) ?? undefined,
+            p.ingredients?.map((i) => ({ materialId: i.materialId, quantity: i.quantity })) ?? undefined,
         })
         .then((created) => {
-          setProducts((prev) => [
-            ...prev,
-            mapApiProductsToPanel([created], stockMaterials)[0],
-          ])
+          setProducts((prev) => [...prev, mapApiProductsToPanel([created], stockMaterials)[0]])
           logActivity({
             action: "product_created",
             category: "product",
-            details: `Urun eklendi: ${created.name}`,
-            metadata: {
-              productId: created.id,
-              categoryId: created.categoryId,
-              price: created.price,
-            },
+            details: `Ürün eklendi: ${created.name}`,
+            metadata: { productId: created.id, categoryId: created.categoryId, price: created.price },
           })
+          showPanelToast(`Ürün eklendi: ${created.name}`, "success")
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Ürün eklenemedi", "error"))
     },
     [token, stockMaterials, setProducts, logActivity],
   )
@@ -78,7 +57,7 @@ export function useCatalogActions(params: {
     (id: string, data: Partial<PanelProduct>) => {
       if (!token) return
       const body: Parameters<typeof api.products.update>[2] = {}
-      if (data.name !== undefined) body.name = data.name
+      if (data.name !== undefined) body.name = data.name.trim()
       if (data.description !== undefined) body.description = data.description
       if (data.price !== undefined) body.price = data.price
       if (data.image !== undefined) body.imageUrl = data.image
@@ -86,10 +65,7 @@ export function useCatalogActions(params: {
       if (data.ingredients !== undefined) {
         body.ingredients =
           data.ingredients.length > 0
-            ? data.ingredients.map((i) => ({
-                materialId: i.materialId,
-                quantity: i.quantity,
-              }))
+            ? data.ingredients.map((i) => ({ materialId: i.materialId, quantity: i.quantity }))
             : []
       }
       if (Object.keys(body).length === 0) return
@@ -97,20 +73,17 @@ export function useCatalogActions(params: {
         .update(token, id, body)
         .then((updated) => {
           setProducts((prev) =>
-            prev.map((p) =>
-              p.id === id
-                ? mapApiProductsToPanel([updated], stockMaterials)[0]
-                : p,
-            ),
+            prev.map((p) => (p.id === id ? mapApiProductsToPanel([updated], stockMaterials)[0] : p)),
           )
           logActivity({
             action: "product_updated",
             category: "product",
-            details: `Urun guncellendi: ${updated.name}`,
+            details: `Ürün güncellendi: ${updated.name}`,
             metadata: { productId: id, fields: Object.keys(body) },
           })
+          showPanelToast("Ürün güncellendi", "success")
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Ürün güncellenemedi", "error"))
     },
     [token, stockMaterials, setProducts, logActivity],
   )
@@ -125,37 +98,46 @@ export function useCatalogActions(params: {
           logActivity({
             action: "product_deleted",
             category: "product",
-            details: `Urun silindi: ${id}`,
+            details: `Ürün silindi: ${id}`,
             metadata: { productId: id },
           })
+          showPanelToast("Ürün silindi", "info")
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Ürün silinemedi", "error"))
     },
     [token, setProducts, logActivity],
   )
 
   const reorderProducts = useCallback(
     (ids: string[]) => {
-      setProducts((prev) => {
-        const map = new Map(prev.map((p) => [p.id, p]))
-        const reordered: PanelProduct[] = []
-        ids.forEach((id, index) => {
-          const p = map.get(id)
-          if (p) {
-            reordered.push({ ...p, order: index + 1 })
-            map.delete(id)
-          }
-        })
-        return [...reordered, ...Array.from(map.values())]
-      })
       if (!token) return
-      logActivity({
-        action: "products_reordered",
-        category: "product",
-        details: `Urun sirasi guncellendi (${ids.length} adet)`,
-        metadata: { ids },
-      })
-      api.products.reorder(token, ids).catch(console.error)
+      api.products
+        .reorder(token, ids)
+        .then((updatedList) => {
+          setProducts((prev) => {
+            if (updatedList?.length) {
+              const orderMap = new Map(updatedList.map((u) => [u.id, u.order]))
+              return prev.map((p) => (orderMap.has(p.id) ? { ...p, order: orderMap.get(p.id)! } : p))
+            }
+            const map = new Map(prev.map((p) => [p.id, p]))
+            const reordered: PanelProduct[] = []
+            ids.forEach((id, index) => {
+              const p = map.get(id)
+              if (p) {
+                reordered.push({ ...p, order: index + 1 })
+                map.delete(id)
+              }
+            })
+            return [...reordered, ...Array.from(map.values())]
+          })
+          logActivity({
+            action: "products_reordered",
+            category: "product",
+            details: `Ürün sırası güncellendi (${ids.length} adet)`,
+            metadata: { ids },
+          })
+        })
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Ürün sırası güncellenemedi", "error"))
     },
     [token, setProducts, logActivity],
   )
@@ -163,11 +145,7 @@ export function useCatalogActions(params: {
   const addCategory = useCallback(
     (
       name: string,
-      opts?: {
-        showInTerminal?: boolean
-        showInMenu?: boolean
-        parentId?: string | null
-      },
+      opts?: { showInTerminal?: boolean; showInMenu?: boolean; parentId?: string | null },
     ) => {
       if (!token) return
       const showInTerminal = opts?.showInTerminal ?? true
@@ -175,33 +153,34 @@ export function useCatalogActions(params: {
       const parentId = opts?.parentId?.trim() || undefined
       api.categories
         .create(token, {
-          name,
+          name: name.trim(),
           showInTerminal,
           showInMenu,
           ...(parentId ? { parentId } : {}),
         })
         .then((created) => {
-          setCategories((prev) => [
-            ...prev,
-            mapApiCategoriesToPanel([created])[0],
-          ])
+          setCategories((prev) => [...prev, mapApiCategoriesToPanel([created])[0]])
           logActivity({
             action: "category_created",
             category: "product",
             details: `Kategori eklendi: ${created.name}`,
-            metadata: {
-              categoryId: created.id,
-              parentId: created.parentId ?? undefined,
-            },
+            metadata: { categoryId: created.id, parentId: created.parentId ?? undefined },
           })
+          showPanelToast(`Kategori eklendi: ${created.name}`, "success")
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Kategori eklenemedi", "error"))
     },
     [token, setCategories, logActivity],
   )
 
   const updateCategory = useCallback(
     (id: string, data: Partial<PanelCategory>) => {
+      if (data.showInQuickSale !== undefined) {
+        const nextQuickSale = Boolean(data.showInQuickSale)
+        setCategories((prev) =>
+          prev.map((c) => (c.id === id ? { ...c, showInQuickSale: nextQuickSale } : c)),
+        )
+      }
       if (!token) return
       const payload: {
         name?: string
@@ -209,28 +188,30 @@ export function useCatalogActions(params: {
         showInMenu?: boolean
         parentId?: string | null
       } = {}
-      if (data.name !== undefined) payload.name = data.name
-      if (data.showInTerminal !== undefined)
-        payload.showInTerminal = data.showInTerminal
+      if (data.name !== undefined) payload.name = data.name.trim()
+      if (data.showInTerminal !== undefined) payload.showInTerminal = data.showInTerminal
       if (data.showInMenu !== undefined) payload.showInMenu = data.showInMenu
-      if (data.parentId !== undefined)
-        payload.parentId = data.parentId?.trim() || null
+      if (data.parentId !== undefined) payload.parentId = data.parentId?.trim() || null
+      if (Object.keys(payload).length === 0) return
       api.categories
         .update(token, id, payload)
         .then((updated) => {
           setCategories((prev) =>
             prev.map((c) =>
-              c.id === id ? mapApiCategoriesToPanel([updated])[0] : c,
+              c.id === id
+                ? { ...mapApiCategoriesToPanel([updated])[0], showInQuickSale: c.showInQuickSale }
+                : c,
             ),
           )
           logActivity({
             action: "category_updated",
             category: "product",
-            details: `Kategori guncellendi: ${updated.name}`,
+            details: `Kategori güncellendi: ${updated.name}`,
             metadata: { categoryId: id, fields: Object.keys(payload) },
           })
+          showPanelToast("Kategori güncellendi", "success")
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Kategori güncellenemedi", "error"))
     },
     [token, setCategories, logActivity],
   )
@@ -248,31 +229,35 @@ export function useCatalogActions(params: {
             details: `Kategori silindi: ${id}`,
             metadata: { categoryId: id },
           })
+          showPanelToast("Kategori silindi", "info")
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Kategori silinemedi", "error"))
     },
     [token, setCategories, logActivity],
   )
 
   const reorderCategories = useCallback(
     (ids: string[], parentId?: string | null) => {
-      setCategories((prev) =>
-        prev.map((c) => {
-          const idx = ids.indexOf(c.id)
-          if (idx === -1) return c
-          return { ...c, order: idx + 1 }
-        }),
-      )
       if (!token) return
       const body: { ids: string[]; parentId?: string | null } = { ids }
       if (parentId !== undefined) body.parentId = parentId
-      logActivity({
-        action: "categories_reordered",
-        category: "product",
-        details: `Kategori sirasi guncellendi (${ids.length} adet)`,
-        metadata: { ids, parentId },
-      })
-      api.categories.reorder(token, body).catch(console.error)
+      api.categories
+        .reorder(token, body)
+        .then(() => {
+          setCategories((prev) =>
+            prev.map((c) => {
+              const idx = ids.indexOf(c.id)
+              return idx === -1 ? c : { ...c, order: idx + 1 }
+            }),
+          )
+          logActivity({
+            action: "categories_reordered",
+            category: "product",
+            details: `Kategori sırası güncellendi (${ids.length} adet)`,
+            metadata: { ids, parentId },
+          })
+        })
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Kategori sırası güncellenemedi", "error"))
     },
     [token, setCategories, logActivity],
   )
@@ -282,8 +267,8 @@ export function useCatalogActions(params: {
       if (!token) return
       api.campaigns
         .create(token, {
-          title: c.title,
-          description: c.description,
+          title: c.title.trim(),
+          description: c.description?.trim() || undefined,
           imageUrl: c.image,
           discountPercent: c.discountPercent,
           originalPrice: c.originalPrice,
@@ -299,23 +284,15 @@ export function useCatalogActions(params: {
             details: `Kampanya eklendi: ${created.title}`,
             metadata: { campaignId: created.id, isActive: created.isActive },
           })
+          showPanelToast("Kampanya eklendi", "success")
         })
-        .catch(console.error)
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Kampanya eklenemedi", "error"))
     },
     [token, setCampaigns, logActivity],
   )
 
   const updateCampaign = useCallback(
     (id: string, data: Partial<Campaign>) => {
-      setCampaigns((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, ...data } : c)),
-      )
-      logActivity({
-        action: "campaign_updated",
-        category: "settings",
-        details: `Kampanya guncellendi: ${id}`,
-        metadata: { campaignId: id, fields: Object.keys(data) },
-      })
       if (!token) return
       api.campaigns
         .update(token, id, {
@@ -325,63 +302,75 @@ export function useCatalogActions(params: {
           discountPercent: data.discountPercent,
           originalPrice: data.originalPrice,
           discountedPrice: data.discountedPrice,
-          validUntil: data.validUntil
-            ? data.validUntil.toISOString()
-            : undefined,
+          validUntil: data.validUntil ? data.validUntil.toISOString() : undefined,
           isActive: data.isActive,
         })
-        .catch(console.error)
+        .then((updated) => {
+          setCampaigns((prev) =>
+            prev.map((c) => (c.id === id ? mapCampaignDtoToPanel(updated) : c)),
+          )
+          logActivity({
+            action: "campaign_updated",
+            category: "settings",
+            details: `Kampanya güncellendi: ${updated.title}`,
+            metadata: { campaignId: id, fields: Object.keys(data) },
+          })
+          showPanelToast("Kampanya güncellendi", "success")
+        })
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Kampanya güncellenemedi", "error"))
     },
     [token, setCampaigns, logActivity],
   )
 
   const deleteCampaign = useCallback(
     (id: string) => {
-      setCampaigns((prev) => prev.filter((c) => c.id !== id))
-      logActivity({
-        action: "campaign_deleted",
-        category: "settings",
-        details: `Kampanya silindi: ${id}`,
-        metadata: { campaignId: id },
-      })
       if (!token) return
-      api.campaigns.delete(token, id).catch(console.error)
+      api.campaigns
+        .delete(token, id)
+        .then(() => {
+          setCampaigns((prev) => prev.filter((c) => c.id !== id))
+          logActivity({
+            action: "campaign_deleted",
+            category: "settings",
+            details: `Kampanya silindi: ${id}`,
+            metadata: { campaignId: id },
+          })
+          showPanelToast("Kampanya silindi", "warning")
+        })
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Kampanya silinemedi", "error"))
     },
     [token, setCampaigns, logActivity],
   )
 
   const reorderCampaigns = useCallback(
     (ids: string[]) => {
-      setCampaigns((prev) =>
-        ids.map((id, i) => ({
-          ...prev.find((c) => c.id === id)!,
-          order: i + 1,
-        })),
-      )
-      logActivity({
-        action: "campaigns_reordered",
-        category: "settings",
-        details: `Kampanya sirasi guncellendi (${ids.length} adet)`,
-        metadata: { ids },
-      })
       if (!token) return
-      api.campaigns.reorder(token, ids).catch(console.error)
+      api.campaigns
+        .reorder(token, ids)
+        .then(() => {
+          setCampaigns((prev) =>
+            ids
+              .map((id, i) => {
+                const hit = prev.find((c) => c.id === id)
+                return hit ? { ...hit, order: i + 1 } : null
+              })
+              .filter(Boolean) as Campaign[],
+          )
+          logActivity({
+            action: "campaigns_reordered",
+            category: "settings",
+            details: `Kampanya sırası güncellendi (${ids.length} adet)`,
+            metadata: { ids },
+          })
+        })
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Kampanya sırası güncellenemedi", "error"))
     },
     [token, setCampaigns, logActivity],
   )
 
   return {
-    addProduct,
-    updateProduct,
-    deleteProduct,
-    reorderProducts,
-    addCategory,
-    updateCategory,
-    deleteCategory,
-    reorderCategories,
-    addCampaign,
-    updateCampaign,
-    deleteCampaign,
-    reorderCampaigns,
+    addProduct, updateProduct, deleteProduct, reorderProducts,
+    addCategory, updateCategory, deleteCategory, reorderCategories,
+    addCampaign, updateCampaign, deleteCampaign, reorderCampaigns,
   }
 }

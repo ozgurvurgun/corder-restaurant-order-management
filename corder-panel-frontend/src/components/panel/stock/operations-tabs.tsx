@@ -49,11 +49,11 @@ export function MovementsTab(props: {
             <tr className="bg-[#f9f9f9] border-b border-[#f0f0f0]">
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Tarih</th>
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Malzeme</th>
-              <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Tur</th>
+              <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Tür</th>
               <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Miktar</th>
               <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Stok</th>
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Sebep</th>
-              <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Isleyen</th>
+              <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">İşleyen</th>
             </tr>
           </thead>
           <tbody>
@@ -63,13 +63,13 @@ export function MovementsTab(props: {
                 <td className="px-4 py-2 text-[12px] font-medium text-[#1d1d1f]">{mv.materialName}</td>
                 <td className="px-4 py-2 text-center">
                   <span className={`text-[10px] font-medium px-2 py-0.5 rounded inline-flex items-center gap-1 ${mv.type === "in" ? "bg-green-50 text-green-600" : mv.type === "out" ? "bg-blue-50 text-blue-600" : mv.type === "waste" ? "bg-red-50 text-red-500" : "bg-amber-50 text-amber-600"}`}>
-                    {mv.type === "in" ? <><ArrowDown className="w-2.5 h-2.5" /> Giris</> : mv.type === "out" ? <><ArrowUp className="w-2.5 h-2.5" /> Cikis</> : mv.type === "waste" ? "Fire" : "Sayim"}
+                    {mv.type === "in" ? <><ArrowDown className="w-2.5 h-2.5" /> Giriş</> : mv.type === "out" ? <><ArrowUp className="w-2.5 h-2.5" /> Çıkış</> : mv.type === "waste" ? "Fire" : "Sayım"}
                   </span>
                 </td>
                 <td className={`px-4 py-2 text-[12px] text-right font-semibold ${mv.type === "in" || (mv.type === "count-adjustment" && mv.quantity > 0) ? "text-green-600" : "text-red-500"}`}>
                   {mv.type === "count-adjustment" ? `${mv.quantity > 0 ? "+" : ""}${mv.quantity}` : `${mv.type === "in" ? "+" : "-"}${mv.quantity}`}
                 </td>
-                <td className="px-4 py-2 text-[12px] text-right text-[#86868b]">{mv.previousStock} {"->"} {mv.newStock}</td>
+                <td className="px-4 py-2 text-[12px] text-right text-[#86868b]">{mv.previousStock} {"→"} {mv.newStock}</td>
                 <td className="px-4 py-2 text-[12px] text-[#86868b]">{mv.reason || "-"}</td>
                 <td className="px-4 py-2 text-[12px] text-[#86868b]">{mv.createdBy}</td>
               </tr>
@@ -106,7 +106,7 @@ export function SuppliersTab(props: {
     <>
       <div className="flex justify-end">
         <button onClick={() => setShowAddSupplier(true)} className="h-[30px] px-3 flex items-center gap-1.5 bg-[#e63462] text-white rounded-lg text-[12px] font-medium hover:bg-[#d42d56]">
-          <Plus className="w-3.5 h-3.5" /> Tedarikci Ekle
+          <Plus className="w-3.5 h-3.5" /> Tedarikçi Ekle
         </button>
       </div>
       {showAddSupplier && (
@@ -124,12 +124,12 @@ export function SuppliersTab(props: {
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Yetkili</th>
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Telefon</th>
               <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Durum</th>
-              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide w-[80px]">Islem</th>
+              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide w-[80px]">İşlem</th>
             </tr>
           </thead>
           <tbody>
             {suppliers.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-[13px] text-[#86868b]">Henuz tedarikci yok. Yukaridan &quot;Tedarikci Ekle&quot; ile kayit acin.</td></tr>
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-[13px] text-[#86868b]">Henüz tedarikçi yok. Yukarıdan &quot;Tedarikçi Ekle&quot; ile kayıt açın.</td></tr>
             ) : (
               suppliers.map((sup, idx) => (
                 <tr key={sup.id} className={`border-b border-[#f0f0f0] ${idx % 2 === 1 ? "bg-[#fafafa]" : ""}`}>
@@ -168,19 +168,19 @@ export function InventoryCountsTab(props: {
     <>
       <div className="flex justify-end">
         <button onClick={startInventoryCount} className="h-[30px] px-3 flex items-center gap-1.5 bg-[#e63462] text-white rounded-lg text-[12px] font-medium hover:bg-[#d42d56]">
-          <ClipboardList className="w-3.5 h-3.5" /> Yeni Sayim Baslat
+          <ClipboardList className="w-3.5 h-3.5" /> Yeni Sayım Başlat
         </button>
       </div>
       {inventoryCounts.map((ic) => (
         <div key={ic.id} className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-[#f0f0f0] bg-[#f9f9f9]">
             <div>
-              <h4 className="text-[13px] font-semibold text-[#1d1d1f]">Sayim - {formatDate(ic.date)}</h4>
+              <h4 className="text-[13px] font-semibold text-[#1d1d1f]">Sayım - {formatDate(ic.date)}</h4>
               <p className="text-[11px] text-[#86868b]">Sayan: {ic.countedBy}</p>
             </div>
             <div className="flex items-center gap-2">
               <span className={`text-[10px] font-medium px-2.5 py-1 rounded-full ${ic.status === "completed" ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-600"}`}>
-                {ic.status === "completed" ? "Tamamlandi" : "Devam Ediyor"}
+                {ic.status === "completed" ? "Tamamlandı" : "Devam Ediyor"}
               </span>
               {ic.status === "in-progress" && (
                 <button onClick={() => completeInventoryCount(ic.id)} className="h-[26px] px-3 bg-[#34c759] text-white rounded-lg text-[11px] font-medium hover:bg-[#2db84e]">Tamamla</button>
@@ -192,7 +192,7 @@ export function InventoryCountsTab(props: {
               <tr className="border-b border-[#f0f0f0]">
                 <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase">Malzeme</th>
                 <th className="text-right px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase">Beklenen</th>
-                <th className="text-right px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase">Sayilan</th>
+                <th className="text-right px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase">Sayılan</th>
                 <th className="text-right px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase">Fark</th>
               </tr>
             </thead>
@@ -203,7 +203,7 @@ export function InventoryCountsTab(props: {
                   <td className="px-4 py-2 text-[12px] text-right text-[#86868b]">{item.expectedStock}</td>
                   <td className="px-4 py-2 text-right">
                     {ic.status === "in-progress" ? (
-                      <input type="number" defaultValue={item.actualStock} onBlur={(e) => updateInventoryItem(ic.id, item.materialId, parseFloat(e.target.value) || 0)} className="w-[80px] h-[26px] px-2 text-[12px] text-right bg-[#f5f5f7] rounded border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
+                      <input type="number" min={0} defaultValue={item.actualStock} onBlur={(e) => updateInventoryItem(ic.id, item.materialId, Math.max(0, parseFloat(e.target.value) || 0))} className="w-[80px] h-[26px] px-2 text-[12px] text-right bg-[#f5f5f7] rounded border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
                     ) : (
                       <span className="text-[12px] text-[#1d1d1f]">{item.actualStock}</span>
                     )}
@@ -229,29 +229,29 @@ export function CostAnalysisTab(props: {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[12px] text-[#86868b] px-1">
-        Maliyet: once manuel <span className="font-medium text-[#1d1d1f]">costPrice</span> (varsa), yoksa <span className="font-medium text-[#1d1d1f]">Urun Eslestir</span> recetesi ile malzeme birim maliyetlerinin toplami.
+        Maliyet: önce manuel <span className="font-medium text-[#1d1d1f]">maliyet fiyatı</span> (varsa), yoksa <span className="font-medium text-[#1d1d1f]">Ürün Eşleştir</span> reçetesi ile malzeme birim maliyetlerinin toplamı.
       </p>
       <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
-        <h3 className="text-[13px] font-semibold text-[#1d1d1f] px-4 pt-4 pb-2">Urun Maliyet Analizi</h3>
+        <h3 className="text-[13px] font-semibold text-[#1d1d1f] px-4 pt-4 pb-2">Ürün Maliyet Analizi</h3>
         <table className="w-full">
           <thead>
             <tr className="bg-[#f9f9f9] border-b border-[#f0f0f0]">
-              <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Urun</th>
+              <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Ürün</th>
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Kaynak</th>
-              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Satis Fiyati</th>
+              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Satış Fiyatı</th>
               <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Maliyet</th>
-              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Kar</th>
-              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Kar Marji</th>
+              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Kâr</th>
+              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Kâr Marjı</th>
             </tr>
           </thead>
           <tbody>
             {costAnalysis.length === 0 ? (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-[13px] text-[#86868b]">Hesaplanabilir urun yok. Urunlere recete tanimlayin (Urun Eslestir) ve malzemelerde birim maliyet girin.</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-[13px] text-[#86868b]">Hesaplanabilir ürün yok. Ürünlere reçete tanımlayın (Ürün Eşleştir) ve malzemelerde birim maliyet girin.</td></tr>
             ) : (
               costAnalysis.map((item, idx) => (
                 <tr key={item.id} className={`border-b border-[#f0f0f0] ${idx % 2 === 1 ? "bg-[#fafafa]" : ""}`}>
                   <td className="px-4 py-2.5 text-[13px] font-medium text-[#1d1d1f]">{item.name}</td>
-                  <td className="px-4 py-2.5 text-[11px] text-[#86868b]">{item.source === "manual" ? "Manuel" : "Recete"}</td>
+                  <td className="px-4 py-2.5 text-[11px] text-[#86868b]">{item.source === "manual" ? "Manuel" : "Reçete"}</td>
                   <td className="px-4 py-2.5 text-[12px] text-right text-[#1d1d1f]">{"\u20BA"}{formatCurrency(item.sellPrice)}</td>
                   <td className="px-4 py-2.5 text-[12px] text-right text-red-500">{"\u20BA"}{formatCurrency(item.costPrice)}</td>
                   <td className="px-4 py-2.5 text-[12px] text-right font-semibold text-green-600">{"\u20BA"}{formatCurrency(item.margin)}</td>

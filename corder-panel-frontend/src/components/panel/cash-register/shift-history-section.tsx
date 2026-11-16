@@ -86,7 +86,7 @@ export function ZReportSection(props: {
           onClick={handlePrintZReport}
           className="h-[34px] px-4 flex items-center gap-2 bg-[#1d1d1f] text-white rounded-lg text-[12px] font-medium hover:bg-[#3a3a3c] transition-colors"
         >
-          <Printer className="w-3.5 h-3.5" /> Z Raporu Yazdir
+          <Printer className="w-3.5 h-3.5" /> Z Raporu Yazdır
         </button>
       </div>
 
@@ -113,18 +113,18 @@ export function ZReportSection(props: {
 
         <div className="flex flex-col gap-3 text-[13px]">
           <div className="flex justify-between py-1.5 border-b border-dashed border-[#d1d1d6]">
-            <span className="text-[#86868b]">Toplam Satis</span>
+            <span className="text-[#86868b]">Toplam Satış</span>
             <span className="font-bold text-[#1d1d1f]">
               {"\u20BA"}
               {formatCurrency(shiftTotals.totalRevenue || 0)}
             </span>
           </div>
           <div className="flex justify-between py-1.5 border-b border-dashed border-[#d1d1d6]">
-            <span className="text-[#86868b]">Kapanan Masa Sayisi</span>
+            <span className="text-[#86868b]">Kapanan Masa Sayısı</span>
             <span className="font-bold text-[#1d1d1f]">{todaysClosedCount}</span>
           </div>
           <div className="flex justify-between py-1.5 border-b border-dashed border-[#d1d1d6]">
-            <span className="text-[#86868b]">Islem Sayisi</span>
+            <span className="text-[#86868b]">İşlem Sayısı</span>
             <span className="font-bold text-[#1d1d1f]">
               {currentShift?.transactionCount || 0}
             </span>
@@ -132,15 +132,15 @@ export function ZReportSection(props: {
 
           <div className="mt-2 mb-1">
             <span className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
-              Odeme Dagilimi
+              Ödeme Dağılımı
             </span>
           </div>
           {[
             { label: "Nakit", value: shiftTotals.totalCash || 0 },
-            { label: "Kredi Karti", value: shiftTotals.totalCard || 0 },
-            { label: "Yemek Karti", value: shiftTotals.totalMealCard || 0 },
+            { label: "Kredi Kartı", value: shiftTotals.totalCard || 0 },
+            { label: "Yemek Kartı", value: shiftTotals.totalMealCard || 0 },
             { label: "Multinet", value: shiftTotals.totalMultinet || 0 },
-            { label: "Cariye atilan", value: shiftTotals.totalLedger || 0 },
+            { label: "Cariye Atılan", value: shiftTotals.totalLedger || 0 },
           ].map((row) => (
             <div key={row.label} className="flex justify-between py-1">
               <span className="text-[#86868b]">{row.label}</span>
@@ -158,21 +158,21 @@ export function ZReportSection(props: {
             </span>
           </div>
           <div className="flex justify-between py-1">
-            <span className="text-[#86868b]">Acilis Bakiye</span>
+            <span className="text-[#86868b]">Açılış Bakiye</span>
             <span className="font-medium text-[#1d1d1f]">
               {"\u20BA"}
               {formatCurrency(currentShift?.openingBalance || 0)}
             </span>
           </div>
           <div className="flex justify-between py-1">
-            <span className="text-[#86868b]">Nakit Giris</span>
+            <span className="text-[#86868b]">Nakit Giriş</span>
             <span className="font-medium text-green-600">
               +{"\u20BA"}
               {formatCurrency(currentShift?.cashIn || 0)}
             </span>
           </div>
           <div className="flex justify-between py-1">
-            <span className="text-[#86868b]">Nakit Cikis</span>
+            <span className="text-[#86868b]">Nakit Çıkış</span>
             <span className="font-medium text-red-500">
               -{"\u20BA"}
               {formatCurrency(currentShift?.cashOut || 0)}
@@ -225,7 +225,7 @@ export function DetailReportSection(props: {
     },
     {
       key: "credit-card",
-      label: "Kredi Karti",
+      label: "Kredi Kartı",
       icon: CreditCard,
       headerBg: "bg-blue-50",
       iconText: "text-blue-600",
@@ -233,7 +233,7 @@ export function DetailReportSection(props: {
     },
     {
       key: "meal-card",
-      label: "Yemek Karti",
+      label: "Yemek Kartı",
       icon: UtensilsCrossed,
       headerBg: "bg-purple-50",
       iconText: "text-purple-600",
@@ -249,7 +249,7 @@ export function DetailReportSection(props: {
     },
     {
       key: "split",
-      label: "Coklu Odeme",
+      label: "Çoklu Ödeme",
       icon: Receipt,
       headerBg: "bg-gray-100",
       iconText: "text-gray-600",
@@ -269,10 +269,10 @@ export function DetailReportSection(props: {
     <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
       <div className="px-4 py-3 bg-[#f9f9f9] border-b border-[#f0f0f0]">
         <h3 className="text-[14px] font-semibold text-[#1d1d1f]">
-          Detay Raporu - Odeme Yontemine Gore
+          Detay Raporu - Ödeme Yöntemine Göre
         </h3>
         <p className="text-[11px] text-[#86868b] mt-0.5">
-          {filteredClosedTables.length} siparis listeleniyor
+          {filteredClosedTables.length} sipariş listeleniyor
         </p>
       </div>
 
@@ -291,7 +291,7 @@ export function DetailReportSection(props: {
                   {block.label}
                 </span>
                 <span className={`text-[11px] ${block.iconText}`}>
-                  ({list.length} siparis)
+                  ({list.length} sipariş)
                 </span>
               </div>
               <span className={`text-[14px] font-bold ${block.titleText}`}>
@@ -329,7 +329,7 @@ export function DetailReportSection(props: {
 
       {filteredClosedTables.length === 0 && (
         <div className="py-10 text-center text-[13px] text-[#86868b]">
-          Secilen tarihte siparis bulunmuyor
+          Seçilen tarihte sipariş bulunmuyor
         </div>
       )}
     </div>

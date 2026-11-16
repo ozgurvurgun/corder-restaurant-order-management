@@ -46,7 +46,7 @@ export default function TablesView() {
               <span className="inline-block w-2 h-2 rounded-full bg-[#e63462]" />
               Dolu: {tables.filter((t) => t.status === "occupied").length}
               <span className="inline-block w-2 h-2 rounded-full bg-[#d1d1d6] ml-2" />
-              Bos: {tables.filter((t) => t.status === "empty").length}
+              Boş: {tables.filter((t) => t.status === "empty").length}
             </div>
           </div>
         </div>
@@ -63,7 +63,7 @@ export default function TablesView() {
                   : "text-[#86868b] hover:bg-black/[0.04]"
               }`}
             >
-              {s}
+              {s === "Tumu" ? "Tümü" : s}
             </button>
           ))}
         </div>
@@ -106,7 +106,7 @@ export default function TablesView() {
                       )}
                     </>
                   ) : (
-                    <p className="text-[12px] text-[#86868b] mt-0.5">Bos</p>
+                    <p className="text-[12px] text-[#86868b] mt-0.5">Boş</p>
                   )}
                 </button>
               )

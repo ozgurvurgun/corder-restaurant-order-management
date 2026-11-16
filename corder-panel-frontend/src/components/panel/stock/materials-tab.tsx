@@ -63,9 +63,9 @@ export function MaterialsTab(props: {
               <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Stok</th>
               <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Min.</th>
               <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Birim Maliyet</th>
-              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Toplam Deger</th>
+              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Toplam Değer</th>
               <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Durum</th>
-              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide w-[80px]">Islem</th>
+              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide w-[80px]">İşlem</th>
             </tr>
           </thead>
           <tbody>
@@ -97,7 +97,7 @@ export function MaterialsTab(props: {
       </div>
 
       <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4 flex items-center justify-between">
-        <span className="text-[13px] font-semibold text-[#1d1d1f]">Toplam Stok Degeri</span>
+        <span className="text-[13px] font-semibold text-[#1d1d1f]">Toplam Stok Değeri</span>
         <span className="text-[18px] font-bold text-[#e63462]">{"\u20BA"}{formatCurrency(stockMaterials.reduce((s, m) => s + m.currentStock * m.costPerUnit, 0))}</span>
       </div>
     </>
@@ -134,14 +134,14 @@ export function ProductLinkTab(props: {
       <div className="bg-amber-50 rounded-xl p-4 flex items-start gap-3">
         <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
         <div className="text-[12px] text-amber-800">
-          <p className="font-semibold mb-1">Urun-Malzeme Eslestirme</p>
-          <p>Her urun icin gerekli malzemeleri ve miktarlarini tanimlayarak, siparis tamamlandiginda envanter otomatik olarak dusecektir.</p>
+          <p className="font-semibold mb-1">Ürün-Malzeme Eşleştirme</p>
+          <p>Her ürün için gerekli malzemeleri ve miktarlarını tanımlayarak, sipariş tamamlandığında envanter otomatik olarak düşecektir.</p>
         </div>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
         <button onClick={() => setLinkCategoryFilter("all")} className={`h-[30px] px-3 rounded-lg text-[12px] font-medium transition-colors ${linkCategoryFilter === "all" ? "bg-[#e63462] text-white" : "bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed]"}`}>
-          Tumu ({products.length})
+          Tümü ({products.length})
         </button>
         {categories.map((cat) => {
           const count = products.filter((p) => p.categoryId === cat.id).length
@@ -157,10 +157,10 @@ export function ProductLinkTab(props: {
         <table className="w-full">
           <thead>
             <tr className="bg-[#f9f9f9] border-b border-[#f0f0f0]">
-              <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Urun</th>
+              <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Ürün</th>
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Kategorisi</th>
-              <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Eslesen Malzemeler</th>
-              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide w-[100px]">Islem</th>
+              <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Eşleşen Malzemeler</th>
+              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide w-[100px]">İşlem</th>
             </tr>
           </thead>
           <tbody>
@@ -176,10 +176,10 @@ export function ProductLinkTab(props: {
                         {editingIngredients.map((ing, ingIdx) => (
                           <div key={ingIdx} className="flex items-center gap-2">
                             <select value={ing.materialId} onChange={(e) => { const newIng = [...editingIngredients]; newIng[ingIdx].materialId = e.target.value; setEditingIngredients(newIng) }} className="h-[28px] px-2 text-[12px] bg-[#f5f5f7] rounded border border-[#d1d1d6]/60 flex-1">
-                              <option value="">Malzeme sec</option>
+                              <option value="">Malzeme seç</option>
                               {stockMaterials.map((m) => <option key={m.id} value={m.id}>{m.name} ({m.unit})</option>)}
                             </select>
-                            <input type="number" value={ing.quantity} onChange={(e) => { const newIng = [...editingIngredients]; newIng[ingIdx].quantity = parseFloat(e.target.value) || 0; setEditingIngredients(newIng) }} placeholder="Miktar" className="h-[28px] w-[80px] px-2 text-[12px] bg-[#f5f5f7] rounded border border-[#d1d1d6]/60" />
+                            <input type="number" min={0} step="0.01" value={ing.quantity} onChange={(e) => { const newIng = [...editingIngredients]; newIng[ingIdx].quantity = Math.max(0, parseFloat(e.target.value) || 0); setEditingIngredients(newIng) }} placeholder="Miktar" className="h-[28px] w-[80px] px-2 text-[12px] bg-[#f5f5f7] rounded border border-[#d1d1d6]/60" />
                             <button onClick={() => setEditingIngredients((prev) => prev.filter((_, i) => i !== ingIdx))} className="w-6 h-6 rounded bg-red-50 flex items-center justify-center hover:bg-red-100">
                               <Trash2 className="w-3 h-3 text-red-500" />
                             </button>
@@ -193,7 +193,7 @@ export function ProductLinkTab(props: {
                             <Check className="w-3 h-3" /> Kaydet
                           </button>
                           <button onClick={() => setEditingProductId(null)} className="h-[26px] px-2 text-[11px] font-medium text-[#86868b] border border-[#d1d1d6]/60 rounded hover:bg-[#f5f5f7]">
-                            Iptal
+                            İptal
                           </button>
                         </div>
                       </div>
@@ -206,7 +206,7 @@ export function ProductLinkTab(props: {
                             </span>
                           ))
                         ) : (
-                          <span className="text-[11px] text-[#aeaeb2] italic">Esleme yapilmamis</span>
+                          <span className="text-[11px] text-[#aeaeb2] italic">Eşleme yapılmamış</span>
                         )}
                       </div>
                     )}
@@ -214,7 +214,7 @@ export function ProductLinkTab(props: {
                   <td className="px-4 py-2.5 text-right">
                     {!isEditing && (
                       <button onClick={() => handleEditIngredients(product)} className="h-[28px] px-3 text-[11px] font-medium text-[#e63462] bg-[#e63462]/10 rounded-lg hover:bg-[#e63462]/20 flex items-center gap-1 ml-auto">
-                        <Link2 className="w-3 h-3" /> Esle
+                        <Link2 className="w-3 h-3" /> Eşle
                       </button>
                     )}
                   </td>
@@ -226,11 +226,11 @@ export function ProductLinkTab(props: {
       </div>
 
       <div className="bg-[#f9f9fb] rounded-xl p-4 text-[12px] text-[#86868b]">
-        <p className="font-semibold text-[#1d1d1f] mb-1">Stok Nasil Duser?</p>
+        <p className="font-semibold text-[#1d1d1f] mb-1">Stok Nasıl Düşer?</p>
         <ul className="list-disc list-inside space-y-1">
-          <li>Bir masa kapatildiginda, o masadaki tum urunler icin tanimlanan malzemeler otomatik olarak duser.</li>
-          <li>Ornek: 1 adet Kahvalti Tabagi = 2 adet Yumurta + 50gr Peynir + 30gr Zeytin</li>
-          <li>Iptal edilen urunler dusulmez.</li>
+          <li>Bir masa kapatıldığında, o masadaki tüm ürünler için tanımlanan malzemeler otomatik olarak düşer.</li>
+          <li>Örnek: 1 adet Kahvaltı Tabağı = 2 adet Yumurta + 50gr Peynir + 30gr Zeytin</li>
+          <li>İptal edilen ürünler düşülmez.</li>
         </ul>
       </div>
     </>

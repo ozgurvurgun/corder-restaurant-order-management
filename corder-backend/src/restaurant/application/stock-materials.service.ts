@@ -2,26 +2,10 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { StockMaterialEntity } from '../domain/stock-material.entity';
+import { CreateStockMaterialDto } from '../api/dto/create-stock-material.dto';
+import { UpdateStockMaterialDto } from '../api/dto/update-stock-material.dto';
 
-export interface CreateStockMaterialDto {
-  name: string;
-  unit: string;
-  currentStock?: number;
-  minStock?: number;
-  costPerUnit: number;
-  supplierId?: string;
-  category?: string;
-}
-
-export interface UpdateStockMaterialDto {
-  name?: string;
-  unit?: string;
-  currentStock?: number;
-  minStock?: number;
-  costPerUnit?: number;
-  supplierId?: string | null;
-  category?: string;
-}
+export { CreateStockMaterialDto, UpdateStockMaterialDto };
 
 @Injectable()
 export class StockMaterialsService {

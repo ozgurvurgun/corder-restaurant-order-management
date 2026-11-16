@@ -1,7 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 import { OrderEntity } from '../../domain/order.entity';
 import { OrderItemEntity } from '../../domain/order-item.entity';
 import { TableEntity } from '../../domain/table.entity';
@@ -14,16 +13,7 @@ import { OrderQueryService } from './order-query.service';
 @Injectable()
 export class CancelOrderItemUseCase {
   constructor(
-    @InjectRepository(OrderEntity)
-    private readonly orderRepo: Repository<OrderEntity>,
-    @InjectRepository(OrderItemEntity)
-    private readonly itemRepo: Repository<OrderItemEntity>,
-    @InjectRepository(TableEntity)
-    private readonly tableRepo: Repository<TableEntity>,
-    @InjectRepository(RestaurantStaffEntity)
-    private readonly staffRepo: Repository<RestaurantStaffEntity>,
-    @InjectRepository(PrintJobEntity)
-    private readonly printJobRepo: Repository<PrintJobEntity>,
+    private readonly dataSource: DataSource,
     private readonly ordersGateway: OrdersGateway,
     private readonly cashShiftService: CashShiftService,
     private readonly orderQuery: OrderQueryService,
@@ -36,48 +26,58 @@ export class CancelOrderItemUseCase {
     cancelledByName?: string,
   ): Promise<{ ok: true }> {
     await this.cashShiftService.requireCurrent(restaurantId);
-    const item = await this.itemRepo.findOne({
-      where: { id: itemId },
-      relations: ['order'],
-    });
-    if (!item?.order) throw new NotFoundException('Order item not found');
-    const order = item.order;
-    if (order.restaurantId !== restaurantId) {
-      throw new BadRequestException('Invalid restaurant');
-    }
-    if (order.status !== 'active') {
-      throw new BadRequestException('Order is not active');
-    }
-    const table = await this.tableRepo.findOne({
-      where: { id: order.tableId, restaurantId },
-    });
-    if (!table) throw new NotFoundException('Table not found');
-    if (table.status === 'checkout') {
-      throw new BadRequestException('Cannot cancel an order item while table is in checkout');
-    }
 
-    item.cancel(reason, cancelledByName);
-    await this.itemRepo.save(item);
-    await this.orderRepo.update(
-      { id: order.id, restaurantId },
-      { updatedAt: new Date() },
-    );
+    const cancelPayload = await this.dataSource.transaction(async (em) => {
+      const item = await em.findOne(OrderItemEntity, {
+        where: { id: itemId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!item) throw new NotFoundException('Order item not found');
+
+      const order = await em.findOne(OrderEntity, {
+        where: { id: item.orderId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!order) throw new NotFoundException('Order not found');
+      if (order.restaurantId !== restaurantId) {
+        throw new BadRequestException('Invalid restaurant');
+      }
+      if (order.status !== 'active') {
+        throw new BadRequestException('Order is not active');
+      }
+
+      const table = await em.findOne(TableEntity, {
+        where: { id: order.tableId, restaurantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!table) throw new NotFoundException('Table not found');
+      if (table.status === 'checkout') {
+        throw new BadRequestException('Cannot cancel an order item while table is in checkout');
+      }
+
+      item.cancel(reason, cancelledByName);
+      await em.save(OrderItemEntity, item);
+      await em.update(OrderEntity, { id: order.id, restaurantId }, { updatedAt: new Date() });
+
+      return this.persistKitchenCancelTicket(em, restaurantId, order, table, item);
+    });
+
     this.ordersGateway.emitOrdersUpdated(restaurantId);
-
-    await this.enqueueKitchenCancelTicket(restaurantId, order, table, item);
+    this.ordersGateway.emitPrintJob(restaurantId, cancelPayload);
     return { ok: true };
   }
 
-  private async enqueueKitchenCancelTicket(
+  private async persistKitchenCancelTicket(
+    em: EntityManager,
     restaurantId: string,
     order: OrderEntity,
     table: TableEntity,
     item: OrderItemEntity,
-  ): Promise<void> {
+  ) {
     const cancelJobId = randomUUID();
     const createdAt = new Date().toISOString();
     const waiter = order.userId
-      ? await this.staffRepo.findOne({ where: { id: order.userId, restaurantId } })
+      ? await em.findOne(RestaurantStaffEntity, { where: { id: order.userId, restaurantId } })
       : null;
     const waiterName =
       (order.userDisplayName && order.userDisplayName.trim()) || waiter?.name?.trim() || '-';
@@ -107,8 +107,9 @@ export class CancelOrderItemUseCase {
         total: Number(item.price) * item.quantity,
       },
     };
-    await this.printJobRepo.save(
-      this.printJobRepo.create({
+    await em.save(
+      PrintJobEntity,
+      em.create(PrintJobEntity, {
         id: cancelJobId,
         restaurantId,
         printType: 'kitchen_cancel',
@@ -116,6 +117,6 @@ export class CancelOrderItemUseCase {
         printedAt: null,
       }),
     );
-    this.ordersGateway.emitPrintJob(restaurantId, cancelPayload);
+    return cancelPayload;
   }
 }

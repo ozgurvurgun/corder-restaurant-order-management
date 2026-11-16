@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react"
+import { useState, useMemo, useEffect, useCallback, useRef } from "react"
 import { usePanelStore } from "@/lib/panel-store"
 import { usePanelAuth } from "@/lib/panel-auth"
 import { api, type LedgerCustomerDto } from "@/lib/api"
@@ -76,6 +76,7 @@ export default function CashRegisterView() {
   const [txDesc, setTxDesc] = useState("")
   const [shiftError, setShiftError] = useState("")
   const [shiftLoading, setShiftLoading] = useState(false)
+  const shiftLoadingRef = useRef(false)
 
   const shiftTransactions = useMemo(() => {
     if (!currentShift) return []
@@ -160,31 +161,71 @@ export default function CashRegisterView() {
   const todaysClosed = useMemo(() => { const today = new Date(); today.setHours(0, 0, 0, 0); return closedTables.filter((ct) => new Date(ct.closedAt) >= today) }, [closedTables])
 
   const handleOpenShift = async () => {
-    if (!openBalance) return
-    setShiftError(""); setShiftLoading(true)
-    try { await openShift(parseFloat(openBalance)); setOpenBalance(""); setShowOpenShift(false) }
-    catch (e) { setShiftError(e instanceof Error ? e.message : "Kasa acilamadi") }
-    finally { setShiftLoading(false) }
+    if (shiftLoading || shiftLoadingRef.current) return
+    const bal = parseFloat(openBalance)
+    if (!Number.isFinite(bal) || bal < 0) {
+      setShiftError("Geçerli bir açılış bakiyesi girin (0 veya üzeri)")
+      return
+    }
+    shiftLoadingRef.current = true
+    setShiftError("")
+    setShiftLoading(true)
+    try {
+      await openShift(bal)
+      setOpenBalance("")
+      setShowOpenShift(false)
+    } catch (e) {
+      setShiftError(e instanceof Error ? e.message : "Kasa açılamadı")
+    } finally {
+      shiftLoadingRef.current = false
+      setShiftLoading(false)
+    }
   }
 
   const handleCloseShift = async () => {
-    setShiftError(""); setShiftLoading(true)
-    try { await closeShift(parseFloat(closeBalance) || 0, closeNotes || undefined); setCloseBalance(""); setCloseNotes(""); setShowCloseShift(false) }
-    catch (e) { setShiftError(e instanceof Error ? e.message : "Kasa kapatilamadi") }
-    finally { setShiftLoading(false) }
+    if (shiftLoading || shiftLoadingRef.current) return
+    const bal = closeBalance.trim() === "" ? 0 : parseFloat(closeBalance)
+    if (!Number.isFinite(bal) || bal < 0) {
+      setShiftError("Geçerli bir kapanış bakiyesi girin (0 veya üzeri)")
+      return
+    }
+    shiftLoadingRef.current = true
+    setShiftError("")
+    setShiftLoading(true)
+    try {
+      await closeShift(bal, closeNotes.trim() || undefined)
+      setCloseBalance("")
+      setCloseNotes("")
+      setShowCloseShift(false)
+    } catch (e) {
+      setShiftError(e instanceof Error ? e.message : "Kasa kapatılamadı")
+    } finally {
+      shiftLoadingRef.current = false
+      setShiftLoading(false)
+    }
   }
 
-  const handleAddTransaction = () => {
-    if (!txAmount || !txDesc) return
-    void addCashTransaction({ type: txType, amount: parseFloat(txAmount), description: txDesc, createdBy: currentUser?.name || "Sistem" })
-    setTxAmount(""); setTxDesc(""); setShowAddTransaction(false)
+  const handleAddTransaction = async () => {
+    const amount = parseFloat(txAmount)
+    if (!Number.isFinite(amount) || amount <= 0 || !txDesc.trim()) return
+    const ok = await addCashTransaction({
+      type: txType,
+      amount,
+      description: txDesc.trim(),
+      createdBy: currentUser?.name || "Sistem",
+    })
+    if (ok) {
+      setTxAmount("")
+      setTxDesc("")
+      setShowAddTransaction(false)
+    }
   }
 
   const cashRegisterTabs = useMemo(() => {
     const ledgerLabel = !ledgerBounds ? `Cariler (${ledgerWithBalance.length})` : ledgerTabLoading ? "Cariler (…)" : `Cariler (${(ledgerTabCustomers ?? []).length})`
     return [
-      { id: "overview" as const, label: "Kasa Ozeti" },
-      { id: "transactions" as const, label: "Islemler" },
+      { id: "overview" as const, label: "Kasa Özeti" },
+      { id: "transactions" as const, label: "İşlemler" },
       { id: "ledger" as const, label: ledgerLabel },
       { id: "z-report" as const, label: "Z Raporu" },
       { id: "detail-report" as const, label: "Detay Raporu" },
@@ -199,12 +240,12 @@ export default function CashRegisterView() {
           <div className="flex items-center gap-3">
             {currentShift ? (
               <>
-                <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-green-50 text-green-600">Kasa Acik - {currentShift.openedBy}</span>
+                <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-green-50 text-green-600">Kasa Açık - {currentShift.openedBy}</span>
                 <button onClick={() => setShowCloseShift(true)} className="h-[30px] px-3 flex items-center gap-1.5 bg-red-500 text-white rounded-lg text-[12px] font-medium hover:bg-red-600 transition-colors">Kasa Kapat</button>
               </>
             ) : (
               <button onClick={() => setShowOpenShift(true)} className="h-[30px] px-3 flex items-center gap-1.5 bg-[#34c759] text-white rounded-lg text-[12px] font-medium hover:bg-[#2db84e] transition-colors">
-                <Plus className="w-3.5 h-3.5" /> Kasa Ac
+                <Plus className="w-3.5 h-3.5" /> Kasa Aç
               </button>
             )}
           </div>
@@ -212,27 +253,27 @@ export default function CashRegisterView() {
         <div className="flex items-center gap-3">
           <Filter className="w-3.5 h-3.5 text-[#86868b]" />
           <select value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="h-[30px] px-2.5 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 appearance-none pr-7 cursor-pointer">
-            <option value="today">Bugun</option>
-            <option value="yesterday">Dun</option>
-            <option value="week">Son 7 Gun</option>
-            <option value="month">Son 30 Gun</option>
-            <option value="custom">Ozel Tarih</option>
-            <option value="all">Tumu</option>
+            <option value="today">Bugün</option>
+            <option value="yesterday">Dün</option>
+            <option value="week">Son 7 Gün</option>
+            <option value="month">Son 30 Gün</option>
+            <option value="custom">Özel Tarih</option>
+            <option value="all">Tümü</option>
           </select>
           {filterDate === "custom" && (
             <>
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-[#86868b]">Baslangic:</span>
+                <span className="text-[10px] text-[#86868b]">Başlangıç:</span>
                 <input type="datetime-local" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="h-[30px] px-2 text-[11px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-[#86868b]">Bitis:</span>
+                <span className="text-[10px] text-[#86868b]">Bitiş:</span>
                 <input type="datetime-local" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="h-[30px] px-2 text-[11px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
               </div>
             </>
           )}
           <span className="text-[11px] text-[#86868b] ml-2">
-            {filteredClosedTables.length} siparis | {"\u20BA"}{formatCurrency(filteredClosedTables.reduce((s, ct) => s + ct.netAmount, 0))}
+            {filteredClosedTables.length} sipariş | {"\u20BA"}{formatCurrency(filteredClosedTables.reduce((s, ct) => s + ct.netAmount, 0))}
           </span>
         </div>
       </div>

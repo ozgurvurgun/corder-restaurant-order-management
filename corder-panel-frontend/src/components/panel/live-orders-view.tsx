@@ -105,7 +105,7 @@ export default function CompletedOrdersView() {
     void reprintReceipt({ orderId })
     showToast(
       locale === "tr"
-        ? "Adisyon fisi yaziciya gonderildi"
+        ? "Adisyon fişi yazıcıya gönderildi"
         : "Check receipt sent to printer",
       "success",
     )
@@ -131,23 +131,22 @@ export default function CompletedOrdersView() {
       total,
     })
     showToast(
-      locale === "tr" ? "Fis gonderildi" : "Receipt sent",
+      locale === "tr" ? "Fiş gönderildi" : "Receipt sent",
       "success",
     )
   }
 
   return (
     <div className="h-full flex flex-col">
-      {/* Toolbar */}
       <div className="flex-shrink-0 border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl px-5 py-3">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
-            {locale === "tr" ? "Tamamlanan Siparisler" : "Completed Orders"}
+            {locale === "tr" ? "Tamamlanan Siparişler" : "Completed Orders"}
           </h2>
           <div className="flex items-center gap-2 text-[12px] text-[#86868b]">
             <span className="font-medium">
               {filteredTables.length}{" "}
-              {locale === "tr" ? "siparis" : "orders"}
+              {locale === "tr" ? "sipariş" : "orders"}
             </span>
             <span className="text-[#e63462] font-semibold">
               {"₺"}
@@ -164,25 +163,25 @@ export default function CompletedOrdersView() {
             onChange={(e) => setFilterDate(e.target.value)}
             className="h-[30px] px-2.5 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 appearance-none pr-7 cursor-pointer"
           >
-            <option value="today">{locale === "tr" ? "Bugun" : "Today"}</option>
+            <option value="today">{locale === "tr" ? "Bugün" : "Today"}</option>
             <option value="yesterday">
-              {locale === "tr" ? "Dun" : "Yesterday"}
+              {locale === "tr" ? "Dün" : "Yesterday"}
             </option>
             <option value="week">
-              {locale === "tr" ? "Son 7 Gun" : "Last 7 Days"}
+              {locale === "tr" ? "Son 7 Gün" : "Last 7 Days"}
             </option>
             <option value="month">
-              {locale === "tr" ? "Son 30 Gun" : "Last 30 Days"}
+              {locale === "tr" ? "Son 30 Gün" : "Last 30 Days"}
             </option>
             <option value="custom">
-              {locale === "tr" ? "Ozel Tarih" : "Custom Date"}
+              {locale === "tr" ? "Özel Tarih" : "Custom Date"}
             </option>
-            <option value="all">{locale === "tr" ? "Tumu" : "All"}</option>
+            <option value="all">{locale === "tr" ? "Tümü" : "All"}</option>
           </select>
           {filterDate === "custom" && (
             <>
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-[#86868b]">Baslangic:</span>
+                <span className="text-[10px] text-[#86868b]">Başlangıç:</span>
                 <input
                   type="datetime-local"
                   value={customStartDate}
@@ -191,7 +190,7 @@ export default function CompletedOrdersView() {
                 />
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-[#86868b]">Bitis:</span>
+                <span className="text-[10px] text-[#86868b]">Bitiş:</span>
                 <input
                   type="datetime-local"
                   value={customEndDate}
@@ -207,7 +206,7 @@ export default function CompletedOrdersView() {
             className="h-[30px] px-2.5 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 appearance-none pr-7 cursor-pointer"
           >
             <option value="Tumu">
-              {locale === "tr" ? "Tum Masalar" : "All Tables"}
+              {locale === "tr" ? "Tüm Masalar" : "All Tables"}
             </option>
             {tableNames.map((t) => (
               <option key={t} value={t}>
@@ -221,7 +220,7 @@ export default function CompletedOrdersView() {
             className="h-[30px] px-2.5 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 appearance-none pr-7 cursor-pointer"
           >
             <option value="Tumu">
-              {locale === "tr" ? "Tum Garsonlar" : "All Waiters"}
+              {locale === "tr" ? "Tüm Garsonlar" : "All Waiters"}
             </option>
             {waiters.map((w) => (
               <option key={w} value={w}>
@@ -232,7 +231,6 @@ export default function CompletedOrdersView() {
         </div>
       </div>
 
-      {/* Order list */}
       <div className="flex-1 overflow-auto p-5">
         <CompletedOrdersList
           paginatedTables={paginatedTables}

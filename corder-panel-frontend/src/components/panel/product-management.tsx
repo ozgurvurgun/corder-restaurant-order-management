@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react"
 import { usePanelStore } from "@/lib/panel-store"
 import { usePanelAuth } from "@/lib/panel-auth"
+import { usePanelToast } from "./panel-toast"
 import { api, getBase } from "@/lib/api"
 import { Plus, Pencil, Trash2, Search, Package, ToggleLeft, ToggleRight, ImageIcon, Monitor, Menu, Settings2, CornerDownRight } from "lucide-react"
 import type { PanelCategory, PanelProduct } from "@/lib/panel-types"
@@ -18,10 +19,11 @@ function productImageSrc(url: string | undefined): string {
 
 export default function ProductManagement() {
   const { token } = usePanelAuth()
+  const { showToast } = usePanelToast()
   const { categories, products, addCategory, updateCategory, deleteCategory, addProduct, updateProduct, deleteProduct, reorderCategories, reorderProducts } = usePanelStore()
 
   const handleUpload = useCallback((file: File) => {
-    if (!token) return Promise.reject(new Error("Giris gerekli"))
+    if (!token) return Promise.reject(new Error("Giriş gerekli"))
     return api.upload(token, file).then((r) => r.url)
   }, [token])
 
@@ -63,14 +65,18 @@ export default function ProductManagement() {
   })
 
   const handleAddProduct = () => {
-    if (!productName.trim() || !productPrice.trim()) return
-    addProduct({ name: productName, price: parseFloat(productPrice), categoryId: selectedCat, inStock: true, description: productDesc || undefined, image: productImage || undefined })
+    const priceVal = parseFloat(productPrice)
+    if (!productName.trim() || !Number.isFinite(priceVal) || priceVal < 0) {
+      showToast("Geçerli bir ürün adı ve fiyat girin.", "error")
+      return
+    }
+    addProduct({ name: productName.trim(), price: priceVal, categoryId: selectedCat, inStock: true, description: productDesc.trim() || undefined, image: productImage || undefined })
     setProductName(""); setProductPrice(""); setProductDesc(""); setProductImage(""); setShowAddProduct(false)
   }
 
   const handleAddCategory = () => {
     if (!catName.trim()) return
-    addCategory(catName, { parentId: newCategoryParentId.trim() || null })
+    addCategory(catName.trim(), { parentId: newCategoryParentId.trim() || null })
     setCatName(""); setNewCategoryParentId(""); setShowAddCategory(false)
   }
 
@@ -83,8 +89,12 @@ export default function ProductManagement() {
   }
 
   const handleUpdateProduct = () => {
-    if (!editingProduct || !editName.trim() || !editPrice.trim()) return
-    updateProduct(editingProduct.id, { name: editName, price: parseFloat(editPrice), description: editDesc || undefined, image: editImage || undefined })
+    const priceVal = parseFloat(editPrice)
+    if (!editingProduct || !editName.trim() || !Number.isFinite(priceVal) || priceVal < 0) {
+      showToast("Geçerli bir ürün adı ve fiyat girin.", "error")
+      return
+    }
+    updateProduct(editingProduct.id, { name: editName.trim(), price: priceVal, description: editDesc.trim() || undefined, image: editImage || undefined })
     setEditingProduct(null)
   }
 
@@ -184,14 +194,14 @@ export default function ProductManagement() {
 
       <div className="flex-1 flex flex-col h-full min-w-0">
         <div className="flex-shrink-0 h-[52px] border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl flex items-center justify-between px-5">
-          <h2 className="text-[15px] font-semibold text-[#1d1d1f]">Urunler</h2>
+          <h2 className="text-[15px] font-semibold text-[#1d1d1f]">Ürünler</h2>
           <div className="flex items-center gap-3">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#86868b]" />
-              <input type="text" placeholder="Urun ara..." value={search} onChange={(e) => setSearch(e.target.value)} className="h-[30px] w-[180px] pl-8 pr-3 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 focus:ring-1 focus:ring-[#e63462]/20" />
+              <input type="text" placeholder="Ürün ara..." value={search} onChange={(e) => setSearch(e.target.value)} className="h-[30px] w-[180px] pl-8 pr-3 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 focus:ring-1 focus:ring-[#e63462]/20" />
             </div>
             <button onClick={() => { setShowAddProduct(true); setProductName(""); setProductPrice(""); setProductDesc(""); setProductImage("") }} className="h-[30px] px-3 flex items-center gap-1.5 bg-[#e63462] text-white rounded-lg text-[12px] font-medium hover:bg-[#d42d56] transition-colors">
-              <Plus className="w-3.5 h-3.5" /> Urun Ekle
+              <Plus className="w-3.5 h-3.5" /> Ürün Ekle
             </button>
           </div>
         </div>
@@ -209,10 +219,10 @@ export default function ProductManagement() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[#f0f0f0] bg-[#f9f9f9]">
-                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Urun</th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Ürün</th>
                   <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Fiyat</th>
                   <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Stok</th>
-                  <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide w-[100px]">Islem</th>
+                  <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide w-[100px]">İşlem</th>
                 </tr>
               </thead>
               <tbody onDragOver={(e) => { if (dragProductId) e.preventDefault() }}>
@@ -265,7 +275,7 @@ export default function ProductManagement() {
                 {catProducts.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-4 py-10 text-center text-[13px] text-[#86868b]">
-                      <Package className="w-8 h-8 text-[#d1d1d6] mx-auto mb-2" /> Bu kategoride urun yok
+                      <Package className="w-8 h-8 text-[#d1d1d6] mx-auto mb-2" /> Bu kategoride ürün yok
                     </td>
                   </tr>
                 )}

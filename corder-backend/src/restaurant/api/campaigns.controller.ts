@@ -1,6 +1,20 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { CampaignService } from '../application/campaign.service';
 import { ReorderItemsDto } from './dto/reorder-items.dto';
+import {
+  CreateCampaignBodyDto,
+  UpdateCampaignBodyDto,
+} from './dto/create-campaign.dto';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
 import { PanelRootGuard } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
@@ -18,17 +32,7 @@ export class CampaignsController {
   @Post()
   create(
     @RestaurantId() restaurantId: string,
-    @Body()
-    body: {
-      title: string;
-      description?: string;
-      imageUrl: string;
-      discountPercent?: number;
-      originalPrice?: number;
-      discountedPrice?: number;
-      validUntil?: string;
-      isActive?: boolean;
-    },
+    @Body() body: CreateCampaignBodyDto,
   ) {
     return this.service.create(restaurantId, {
       title: body.title,
@@ -45,18 +49,8 @@ export class CampaignsController {
   @Put(':id')
   update(
     @RestaurantId() restaurantId: string,
-    @Param('id') id: string,
-    @Body()
-    body: {
-      title?: string;
-      description?: string;
-      imageUrl?: string;
-      discountPercent?: number;
-      originalPrice?: number;
-      discountedPrice?: number;
-      validUntil?: string;
-      isActive?: boolean;
-    },
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: UpdateCampaignBodyDto,
   ) {
     return this.service.update(restaurantId, id, {
       title: body.title,
@@ -71,7 +65,10 @@ export class CampaignsController {
   }
 
   @Delete(':id')
-  remove(@RestaurantId() restaurantId: string, @Param('id') id: string) {
+  remove(
+    @RestaurantId() restaurantId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
     return this.service.remove(restaurantId, id);
   }
 
@@ -80,4 +77,3 @@ export class CampaignsController {
     return this.service.reorder(restaurantId, body.ids ?? []);
   }
 }
-

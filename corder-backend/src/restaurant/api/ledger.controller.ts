@@ -1,9 +1,22 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { LedgerService } from '../application/ledger.service';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
 import { PanelRootGuard } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
+import {
+  AddLedgerPaymentDto,
+  CreateLedgerCustomerDto,
+} from './dto/create-ledger-customer.dto';
 
 @Controller('restaurant/ledger-customers')
 @UseGuards(RestaurantJwtGuard, PanelRootGuard)
@@ -22,7 +35,7 @@ export class LedgerController {
   @Post()
   create(
     @RestaurantId() restaurantId: string,
-    @Body() body: { name: string; phone?: string; notes?: string },
+    @Body() body: CreateLedgerCustomerDto,
   ) {
     return this.ledger.createCustomer(restaurantId, body);
   }
@@ -30,7 +43,7 @@ export class LedgerController {
   @Get(':id/entries')
   entries(
     @RestaurantId() restaurantId: string,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
@@ -40,10 +53,16 @@ export class LedgerController {
   @Post(':id/payments')
   pay(
     @RestaurantId() restaurantId: string,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @RestaurantUser() user: { id: string; name: string },
-    @Body() body: { amount: number },
+    @Body() body: AddLedgerPaymentDto,
   ) {
-    return this.ledger.addPayment(restaurantId, id, body.amount, user.name, user.id);
+    return this.ledger.addPayment(
+      restaurantId,
+      id,
+      body.amount,
+      user.name,
+      user.id,
+    );
   }
 }

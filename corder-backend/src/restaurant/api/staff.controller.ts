@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Post,
   Put,
   Req,
@@ -55,7 +56,7 @@ export class StaffController {
   @Put(':id')
   @UseGuards(PanelRootGuard)
   update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
     @Body() dto: UpdateStaffDto,
   ) {
@@ -64,7 +65,10 @@ export class StaffController {
 
   @Delete(':id')
   @UseGuards(PanelRootGuard)
-  delete(@Param('id') id: string, @RestaurantId() restaurantId: string) {
+  delete(
+    @Param('id', ParseUUIDPipe) id: string,
+    @RestaurantId() restaurantId: string,
+  ) {
     return this.staffService.delete(restaurantId, id);
   }
 }

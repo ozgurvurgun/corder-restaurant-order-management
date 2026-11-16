@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { UserPlus, Link2, Crown, Building2 } from "lucide-react"
 import type { RootAdmin } from "@/lib/types"
 import { useAdminStore } from "@/lib/store"
@@ -32,6 +32,15 @@ export function RootAdminsSection({
   const [selectedExistingBossId, setSelectedExistingBossId] = useState("")
   const [adminError, setAdminError] = useState("")
   const [adminSubmitLoading, setAdminSubmitLoading] = useState(false)
+
+  useEffect(() => {
+    if (mode === "none") return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !adminSubmitLoading) setMode("none")
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [mode, adminSubmitLoading])
 
   const assignedIds = new Set(rootAdmins.map((a) => a.id))
   const linkableBosses = allBosses.filter((b) => !assignedIds.has(b.id))
@@ -135,7 +144,14 @@ export function RootAdminsSection({
                 </div>
                 <button
                   type="button"
-                  onClick={() => void onDeleteRootAdmin(restaurantId, admin.id)}
+                  onClick={() => {
+                    const actionText =
+                      admin.restaurants && admin.restaurants.length > 1
+                        ? "bu şubeden ayırmak"
+                        : "kaldırmak"
+                    if (!confirm(`${admin.name} Boss hesabını ${actionText} istediğinize emin misiniz?`)) return
+                    void onDeleteRootAdmin(restaurantId, admin.id)
+                  }}
                   className="text-xs text-red-400 hover:underline flex-shrink-0"
                 >
                   {admin.restaurants && admin.restaurants.length > 1

@@ -41,6 +41,15 @@ export function BossesPage() {
     void loadRestaurants()
   }, [loadAllBosses, loadRestaurants])
 
+  useEffect(() => {
+    if (!showModal) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !submitting) setShowModal(false)
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [showModal, submitting])
+
   const openCreate = () => {
     setEditingBoss(null)
     setName("")
@@ -252,15 +261,22 @@ export function BossesPage() {
       )}
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl border border-[#2a2a2a] bg-[#1a1a1a] p-6 shadow-2xl">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          onClick={() => !submitting && setShowModal(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl border border-[#2a2a2a] bg-[#1a1a1a] p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-[#2a2a2a] pb-4">
               <h2 className="text-lg font-semibold text-white">
                 {editingBoss ? "Boss Hesabını Düzenle" : "Yeni Boss (İşletme Sahibi) Oluştur"}
               </h2>
               <button
-                onClick={() => setShowModal(false)}
-                className="rounded-lg p-1.5 text-zinc-400 hover:bg-[#2a2a2a] hover:text-white"
+                onClick={() => !submitting && setShowModal(false)}
+                disabled={submitting}
+                className="rounded-lg p-1.5 text-zinc-400 hover:bg-[#2a2a2a] hover:text-white disabled:opacity-50"
               >
                 <X className="h-4 w-4" />
               </button>

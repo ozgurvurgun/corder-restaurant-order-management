@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { CategoryService } from '../application/category.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
@@ -18,7 +28,10 @@ export class CategoriesController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @RestaurantId() restaurantId: string) {
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @RestaurantId() restaurantId: string,
+  ) {
     return this.service.findOne(id, restaurantId);
   }
 
@@ -29,7 +42,7 @@ export class CategoriesController {
 
   @Put(':id')
   update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
     @Body() dto: UpdateCategoryDto,
   ) {
@@ -37,7 +50,10 @@ export class CategoriesController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @RestaurantId() restaurantId: string) {
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @RestaurantId() restaurantId: string,
+  ) {
     return this.service.remove(id, restaurantId);
   }
 

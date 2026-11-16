@@ -73,8 +73,8 @@ export function mapCompletedOrderDtoToClosedTable(
 ): ClosedTable {
   const orders: PanelOrder[] = dto.orders.map((o) => ({
     id: o.id,
-    tableId: o.tableId,
-    userId: o.userId,
+    tableId: o.tableId ?? "",
+    userId: o.userId ?? "",
     userName: o.userName?.trim() || undefined,
     items: o.items.map((i) => ({
       id: i.id,

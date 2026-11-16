@@ -52,11 +52,11 @@ export function HeaderBar() {
     const now = new Date()
     const diff = now.getTime() - date.getTime()
     const mins = Math.floor(diff / 60000)
-    if (mins < 1) return locale === "tr" ? "Simdi" : "Now"
+    if (mins < 1) return locale === "tr" ? "Şimdi" : "Now"
     if (mins < 60) return `${mins} ${locale === "tr" ? "dk" : "min"}`
     const hours = Math.floor(mins / 60)
     if (hours < 24) return `${hours} ${locale === "tr" ? "saat" : "hr"}`
-    return `${Math.floor(hours / 24)} ${locale === "tr" ? "gun" : "day"}`
+    return `${Math.floor(hours / 24)} ${locale === "tr" ? "gün" : "day"}`
   }
 
   return (
@@ -94,7 +94,7 @@ export function HeaderBar() {
                   onClick={clearAllNotifications}
                   className="text-[13px] text-[#007aff] hover:underline"
                 >
-                  {locale === "tr" ? "Tumunu Temizle" : "Clear All"}
+                  {locale === "tr" ? "Tümünü Temizle" : "Clear All"}
                 </button>
               )}
             </div>

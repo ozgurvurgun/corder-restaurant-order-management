@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 import { CashShiftEntity } from '../domain/cash-shift.entity';
 import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
 import { serializeCashShift } from './orders/order.mapper';
@@ -12,6 +13,7 @@ export class CashShiftService {
   constructor(
     @InjectRepository(CashShiftEntity)
     private readonly repo: Repository<CashShiftEntity>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async getCurrent(restaurantId: string): Promise<CashShiftEntity | null> {
@@ -27,7 +29,15 @@ export class CashShiftService {
     openingBalance: number,
   ): Promise<CashShiftEntity> {
     const openingMinorUnits = Math.max(0, toMinorUnits(openingBalance));
-    return this.repo.manager.transaction(async (em) => {
+    return this.dataSource.transaction(async (em) => {
+      const restaurant = await em.findOne(RestaurantEntity, {
+        where: { id: restaurantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!restaurant) {
+        throw new NotFoundException('Restaurant not found.');
+      }
+
       const current = await em.findOne(CashShiftEntity, {
         where: { restaurantId, status: 'open' },
         order: { openedAt: 'DESC' },
@@ -65,7 +75,7 @@ export class CashShiftService {
     notes?: string,
   ): Promise<CashShiftEntity> {
     const closingMinorUnits = Math.max(0, toMinorUnits(closingBalance));
-    return this.repo.manager.transaction(async (em) => {
+    return this.dataSource.transaction(async (em) => {
       const shift = await em.findOne(CashShiftEntity, {
         where: { id, restaurantId },
         lock: { mode: 'pessimistic_write' },

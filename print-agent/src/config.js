@@ -47,7 +47,7 @@ const config = {
   agentId: process.env.AGENT_ID || "windows-pos-1",
   restaurantId: process.env.RESTAURANT_ID || "",
   printerMode: process.env.PRINTER_MODE || "network_raw",
-  printerName: process.env.PRINTER_NAME || "MUTFAK",
+  printerName: process.env.PRINTER_NAME || "KITCHEN",
   /** Management panel cash receipt (receiptMode=consolidated). Falls back to PRINTER_NAME if empty. */
   managementReceiptPrinter: (process.env.MANAGEMENT_RECEIPT_PRINTER || "").trim(),
   printerHost: process.env.PRINTER_HOST || "127.0.0.1",
@@ -85,7 +85,7 @@ const config = {
   printUsbDrainMs: Math.max(0, Math.floor(toNumber(process.env.PRINT_USB_DRAIN_MS, defaultUsbDrainMs))),
   /**
    * Category UUID -> Windows printer display name (same as Settings → Printers).
-   * Example: PRINT_CATEGORY_ROUTES={"8f2c...":"MUTFAK","a1b3...":"BAR YAZICI"}
+   * Example: PRINT_CATEGORY_ROUTES={"8f2c...":"KITCHEN","a1b3...":"BAR PRINTER"}
    */
   categoryPrinterRoutes: parseJsonEnv("PRINT_CATEGORY_ROUTES"),
   /**

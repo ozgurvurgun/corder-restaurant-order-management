@@ -40,45 +40,82 @@ export class RootAdminService {
     private readonly restaurantRepo: Repository<RestaurantEntity>,
   ) {}
 
-  async enrichBoss(admin: RootAdminEntity): Promise<BossWithRestaurantsDto> {
-    const links = await this.bossRestaurantRepo.find({
-      where: { bossId: admin.id },
+  async enrichBosses(admins: RootAdminEntity[]): Promise<BossWithRestaurantsDto[]> {
+    if (admins.length === 0) return [];
+    const bossIds = admins.map((a) => a.id);
+    const allLinks = await this.bossRestaurantRepo.find({
+      where: { bossId: In(bossIds) },
       order: { createdAt: 'ASC' },
     });
-    const restIds = new Set<string>(links.map((l) => l.restaurantId));
-    if (admin.restaurantId) restIds.add(admin.restaurantId);
+
+    const restIdsByBoss = new Map<string, Set<string>>();
+    const allRestIds = new Set<string>();
+    for (const admin of admins) {
+      const set = new Set<string>();
+      if (admin.restaurantId) {
+        set.add(admin.restaurantId);
+        allRestIds.add(admin.restaurantId);
+      }
+      restIdsByBoss.set(admin.id, set);
+    }
+    for (const link of allLinks) {
+      let set = restIdsByBoss.get(link.bossId);
+      if (!set) {
+        set = new Set<string>();
+        restIdsByBoss.set(link.bossId, set);
+      }
+      set.add(link.restaurantId);
+      allRestIds.add(link.restaurantId);
+    }
+
     const restaurants =
-      restIds.size > 0
+      allRestIds.size > 0
         ? await this.restaurantRepo.find({
-            where: { id: In(Array.from(restIds)) },
+            where: { id: In(Array.from(allRestIds)) },
             order: { createdAt: 'ASC' },
           })
         : [];
-    return {
-      id: admin.id,
-      name: admin.name,
-      email: admin.email,
-      phone: admin.phone ?? null,
-      isActive: admin.isActive ?? true,
-      restaurantId: admin.restaurantId ?? restaurants[0]?.id ?? null,
-      restaurants: restaurants.map((r) => ({
-        id: r.id,
-        name: r.name,
-        slug: r.slug,
-        status: r.status,
-      })),
-      createdAt: admin.createdAt,
-    };
+    const restaurantById = new Map(restaurants.map((r) => [r.id, r]));
+
+    return admins.map((admin) => {
+      const restIds = restIdsByBoss.get(admin.id) ?? new Set<string>();
+      const bossRestaurants = Array.from(restIds)
+        .map((id) => restaurantById.get(id))
+        .filter((r): r is RestaurantEntity => Boolean(r))
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+      return {
+        id: admin.id,
+        name: admin.name,
+        email: admin.email,
+        phone: admin.phone ?? null,
+        isActive: admin.isActive ?? true,
+        restaurantId: admin.restaurantId ?? bossRestaurants[0]?.id ?? null,
+        restaurants: bossRestaurants.map((r) => ({
+          id: r.id,
+          name: r.name,
+          slug: r.slug,
+          status: r.status,
+        })),
+        createdAt: admin.createdAt,
+      };
+    });
+  }
+
+  async enrichBoss(admin: RootAdminEntity): Promise<BossWithRestaurantsDto> {
+    const [enriched] = await this.enrichBosses([admin]);
+    return enriched;
   }
 
   async findAllBosses(): Promise<BossWithRestaurantsDto[]> {
     const list = await this.rootAdminRepo.find({ order: { createdAt: 'DESC' } });
-    return Promise.all(list.map((a) => this.enrichBoss(a)));
+    return this.enrichBosses(list);
   }
 
   async findByRestaurantId(restaurantId: string): Promise<BossWithRestaurantsDto[]> {
-    const links = await this.bossRestaurantRepo.find({ where: { restaurantId } });
-    const direct = await this.rootAdminRepo.find({ where: { restaurantId } });
+    const [links, direct] = await Promise.all([
+      this.bossRestaurantRepo.find({ where: { restaurantId } }),
+      this.rootAdminRepo.find({ where: { restaurantId } }),
+    ]);
     const bossIds = new Set<string>([
       ...links.map((l) => l.bossId),
       ...direct.map((d) => d.id),
@@ -88,7 +125,7 @@ export class RootAdminService {
       where: { id: In(Array.from(bossIds)) },
       order: { createdAt: 'DESC' },
     });
-    return Promise.all(bosses.map((b) => this.enrichBoss(b)));
+    return this.enrichBosses(bosses);
   }
 
   async findOne(id: string): Promise<BossWithRestaurantsDto> {

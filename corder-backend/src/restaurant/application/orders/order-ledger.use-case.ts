@@ -1,20 +1,24 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, In, Not, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Not } from 'typeorm';
 import { OrderEntity } from '../../domain/order.entity';
 import { OrderItemEntity } from '../../domain/order-item.entity';
 import { TableEntity } from '../../domain/table.entity';
+import { LedgerCustomerEntity } from '../../domain/ledger-customer.entity';
 import { OrdersGateway } from '../../api/orders.gateway';
 import { CashShiftService } from '../cash-shift.service';
 import { LedgerService } from '../ledger.service';
+import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
+
+interface StagedLedgerItem {
+  line: { itemId: string; quantity?: number };
+  item: OrderItemEntity;
+  order: OrderEntity;
+}
 
 @Injectable()
 export class OrderLedgerUseCase {
   constructor(
-    @InjectRepository(OrderEntity)
-    private readonly orderRepo: Repository<OrderEntity>,
-    @InjectRepository(TableEntity)
-    private readonly tableRepo: Repository<TableEntity>,
+    private readonly dataSource: DataSource,
     private readonly ordersGateway: OrdersGateway,
     private readonly cashShiftService: CashShiftService,
     private readonly ledgerService: LedgerService,
@@ -33,30 +37,43 @@ export class OrderLedgerUseCase {
       }
       seen.add(line.itemId);
     }
+    await this.cashShiftService.requireCurrent(restaurantId);
 
     let total = 0;
-    await this.orderRepo.manager.transaction(async (em) => {
+    await this.dataSource.transaction(async (em) => {
+      const customer = await em.findOne(LedgerCustomerEntity, {
+        where: { id: ledgerCustomerId, restaurantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!customer) {
+        throw new NotFoundException('Ledger customer not found');
+      }
+
       const staged = await this.loadStagedLedgerItems(em, restaurantId, lines);
-      const tableIds = new Set(staged.map((s) => s.item.order!.tableId));
+      const tableIds = new Set(staged.map((s) => s.order.tableId));
       if (tableIds.size !== 1) {
         throw new BadRequestException('All selected items must belong to the same table');
       }
-      const table = staged[0].item.order?.table;
-      if (!table || table.restaurantId !== restaurantId) {
+      const tableId = staged[0].order.tableId;
+      const table = await em.findOne(TableEntity, {
+        where: { id: tableId, restaurantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!table) {
         throw new NotFoundException('Table not found');
       }
       if (table.status === 'checkout') {
         throw new BadRequestException('Cannot assign items to ledger while table is in checkout');
       }
-      const tableId = table.id;
       const tableName = (table.name ?? '').trim() || null;
 
       const snapshotLines: Array<Record<string, unknown>> = [];
       const now = new Date();
+      let totalMinorUnits = 0;
 
       for (const { line, item } of staged) {
         const assignment = item.assignToLedger(line.quantity);
-        total += assignment.lineTotal;
+        totalMinorUnits += toMinorUnits(assignment.lineTotal);
 
         if (!assignment.fullAssignment) {
           await em.save(OrderItemEntity, item);
@@ -94,13 +111,14 @@ export class OrderLedgerUseCase {
         }
       }
 
+      total = fromMinorUnits(totalMinorUnits);
       let desc = snapshotLines.map((l) => `${l.productName} x${l.quantity}`).join(', ');
       if (desc.length > 480) desc = desc.slice(0, 477) + '...';
       desc = `Ledger item assignment: ${desc}`;
 
       await this.ledgerService.recordStandaloneDebt(em, {
         restaurantId,
-        customerId: ledgerCustomerId,
+        customerId: customer.id,
         amount: total,
         description: desc,
         tableId,
@@ -109,7 +127,7 @@ export class OrderLedgerUseCase {
         recordedBy: (staffName ?? '').trim() || null,
       });
 
-      const orderIds = new Set(staged.map((s) => s.item.orderId));
+      const orderIds = [...new Set(staged.map((s) => s.item.orderId))].sort();
       for (const oid of orderIds) {
         await em.update(OrderEntity, { id: oid, restaurantId }, { updatedAt: now });
       }
@@ -123,17 +141,33 @@ export class OrderLedgerUseCase {
     em: EntityManager,
     restaurantId: string,
     lines: { itemId: string; quantity?: number }[],
-  ): Promise<{ line: { itemId: string; quantity?: number }; item: OrderItemEntity }[]> {
-    const staged: { line: { itemId: string; quantity?: number }; item: OrderItemEntity }[] = [];
+  ): Promise<StagedLedgerItem[]> {
+    const sortedItemIds = [...new Set(lines.map((l) => l.itemId))].sort();
+    const lockedItems = await em.find(OrderItemEntity, {
+      where: { id: In(sortedItemIds) },
+      order: { id: 'ASC' },
+      lock: { mode: 'pessimistic_write' },
+    });
+    const itemById = new Map(lockedItems.map((i) => [i.id, i]));
+    if (itemById.size !== sortedItemIds.length) {
+      throw new NotFoundException('Order item not found');
+    }
+
+    const sortedOrderIds = [...new Set(lockedItems.map((i) => i.orderId))].sort();
+    const lockedOrders = await em.find(OrderEntity, {
+      where: { id: In(sortedOrderIds) },
+      order: { id: 'ASC' },
+      lock: { mode: 'pessimistic_write' },
+    });
+    const orderById = new Map(lockedOrders.map((o) => [o.id, o]));
+
+    const staged: StagedLedgerItem[] = [];
     for (const line of lines) {
-      const item = await em.findOne(OrderItemEntity, {
-        where: { id: line.itemId },
-        relations: ['order', 'order.table'],
-      });
-      if (!item?.order) {
-        throw new NotFoundException('Order item not found');
+      const item = itemById.get(line.itemId)!;
+      const order = orderById.get(item.orderId);
+      if (!order) {
+        throw new NotFoundException('Order not found');
       }
-      const order = item.order;
       if (order.restaurantId !== restaurantId) {
         throw new BadRequestException('Invalid order item');
       }
@@ -146,7 +180,7 @@ export class OrderLedgerUseCase {
       if (item.status === 'ledger') {
         throw new BadRequestException('Order item is already assigned to ledger');
       }
-      staged.push({ line, item });
+      staged.push({ line, item, order });
     }
     return staged;
   }
@@ -158,15 +192,23 @@ export class OrderLedgerUseCase {
   ): Promise<{ ok: true; amount: number }> {
     await this.cashShiftService.requireCurrent(restaurantId);
     let amountOut = 0;
-    await this.orderRepo.manager.transaction(async (em) => {
+
+    await this.dataSource.transaction(async (em) => {
       const item = await em.findOne(OrderItemEntity, {
         where: { id: itemId },
-        relations: ['order', 'order.table'],
+        lock: { mode: 'pessimistic_write' },
       });
-      if (!item?.order) {
+      if (!item) {
         throw new NotFoundException('Order item not found');
       }
-      const order = item.order;
+
+      const order = await em.findOne(OrderEntity, {
+        where: { id: item.orderId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!order) {
+        throw new NotFoundException('Order not found');
+      }
       if (order.restaurantId !== restaurantId) {
         throw new BadRequestException('Invalid order item');
       }
@@ -176,8 +218,10 @@ export class OrderLedgerUseCase {
       if (item.status !== 'ledger') {
         throw new BadRequestException('Only ledger-assigned order items can be reverted');
       }
-      const table = await this.tableRepo.findOne({
+
+      const table = await em.findOne(TableEntity, {
         where: { id: order.tableId, restaurantId },
+        lock: { mode: 'pessimistic_write' },
       });
       if (!table) {
         throw new NotFoundException('Table not found');
@@ -197,17 +241,17 @@ export class OrderLedgerUseCase {
         );
       }
 
-      const lineAmount = Number(item.price) * item.quantity;
-      if (!Number.isFinite(lineAmount) || lineAmount <= 0) {
+      const lineMinorUnits = toMinorUnits(item.price) * item.quantity;
+      if (lineMinorUnits <= 0) {
         throw new BadRequestException('Invalid item amount');
       }
-      amountOut = lineAmount;
+      amountOut = fromMinorUnits(lineMinorUnits);
 
       const tableName = (table.name ?? '').trim() || null;
       await this.ledgerService.recordStandaloneCredit(em, {
         restaurantId,
         customerId: debtEntry.customerId,
-        amount: lineAmount,
+        amount: amountOut,
         description: `Revert ledger item: ${item.productName} x${item.quantity}`,
         tableId: order.tableId,
         tableName,
@@ -233,20 +277,22 @@ export class OrderLedgerUseCase {
     item: OrderItemEntity,
   ): Promise<void> {
     const noteNormalized = (item.note ?? '').trim();
-    const priceNormalized = Number(item.price);
+    const priceMinor = toMinorUnits(item.price);
     const siblings = await em.find(OrderItemEntity, {
       where: {
         orderId: item.orderId,
         productId: item.productId,
         status: Not(In(['cancelled', 'ledger'])),
       },
+      order: { id: 'ASC' },
+      lock: { mode: 'pessimistic_write' },
     });
     const partner = siblings
       .filter(
         (s) =>
           s.id !== item.id &&
           (s.note ?? '').trim() === noteNormalized &&
-          Number(s.price) === priceNormalized,
+          toMinorUnits(s.price) === priceMinor,
       )
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
 

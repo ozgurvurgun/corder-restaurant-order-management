@@ -265,7 +265,10 @@ export class RolesService {
     await this.roleRepo.remove(role);
   }
 
-  async resolveForStaff(staff: RestaurantStaffEntity): Promise<{
+  async resolveForStaff(
+    staff: RestaurantStaffEntity,
+    preloadedRoles?: RestaurantRoleEntity[],
+  ): Promise<{
     roleKey: string;
     roleLabel: string;
     roleColor: string;
@@ -274,7 +277,7 @@ export class RolesService {
     permissions: PermissionKey[];
     limits: EffectivePolicyLimits;
   }> {
-    const roles = await this.ensureDefaultRoles(staff.restaurantId);
+    const roles = preloadedRoles ?? (await this.ensureDefaultRoles(staff.restaurantId));
     const normalizedKey = normalizeRoleKey(staff.role);
     const roleEntity = roles.find((r) => r.key === normalizedKey);
     const fallbackTpl = getDefaultRoleTemplate(normalizedKey);

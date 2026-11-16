@@ -1,10 +1,10 @@
 const PAYMENT_METHOD_LABELS = {
-  cash: "NAKIT",
-  "credit-card": "KREDI KARTI",
-  "meal-card": "YEMEK KARTI",
+  cash: "CASH",
+  "credit-card": "CREDIT CARD",
+  "meal-card": "MEAL CARD",
   multinet: "MULTINET",
-  split: "COKLU ODEME",
-  ledger: "CARI",
+  split: "SPLIT PAYMENT",
+  ledger: "LEDGER",
 }
 
 function formatPaymentMethodLabel(method) {
@@ -16,23 +16,23 @@ function formatPaymentMethodLabel(method) {
 function trSafe(text) {
   if (!text) return ""
   return String(text)
-    .replaceAll("İ", "I")
-    .replaceAll("ı", "i")
-    .replaceAll("Ş", "S")
-    .replaceAll("ş", "s")
-    .replaceAll("Ğ", "G")
-    .replaceAll("ğ", "g")
-    .replaceAll("Ü", "U")
-    .replaceAll("ü", "u")
-    .replaceAll("Ö", "O")
-    .replaceAll("ö", "o")
-    .replaceAll("Ç", "C")
-    .replaceAll("ç", "c")
+    .replaceAll("\u0130", "I")
+    .replaceAll("\u0131", "i")
+    .replaceAll("\u015e", "S")
+    .replaceAll("\u015f", "s")
+    .replaceAll("\u011e", "G")
+    .replaceAll("\u011f", "g")
+    .replaceAll("\u00dc", "U")
+    .replaceAll("\u00fc", "u")
+    .replaceAll("\u00d6", "O")
+    .replaceAll("\u00f6", "o")
+    .replaceAll("\u00c7", "C")
+    .replaceAll("\u00e7", "c")
 }
 
 function money(value) {
   const amount = Number(value || 0)
-  return amount.toLocaleString("tr-TR", {
+  return amount.toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
@@ -73,9 +73,7 @@ function kvWrappedLines(label, value, width) {
   const indent = leftPart.length + 1
   const maxValWidth = Math.max(8, width - indent)
   const lines = wrapWords(value || "-", maxValWidth)
-  if (!lines.length) {
-    return `${leftPart} -\n`
-  }
+  if (!lines.length) return `${leftPart} -\n`
   return lines
     .map((seg, idx) => (idx === 0 ? `${leftPart} ${seg}\n` : `${" ".repeat(indent)}${seg}\n`))
     .join("")
@@ -136,12 +134,11 @@ function noteBlock(note, width, columnIndent = 2) {
   if (!n) return ""
   const indent = Math.max(0, Math.floor(columnIndent))
   const max = Math.max(8, width - indent)
-  const prefixed = `NOT: ${trSafe(n)}`
+  const prefixed = `NOTE: ${trSafe(n)}`
   const wrapped = wrapWords(prefixed, max)
   return wrapped.map((ln) => `${" ".repeat(indent)}${ln}\n`).join("")
 }
 
-/** Gap between Unit Price column and Product column (spaces only). */
 const COL_GAP = "  "
 
 function tableColLayout(width) {
@@ -152,24 +149,18 @@ function tableColLayout(width) {
   return { qtyW, priceW, gapLen, nameW }
 }
 
-/** Left column (Qty): header and values start at same x. */
 function colQty(value, qtyW) {
   return trSafe(value).slice(0, qtyW).padEnd(qtyW, " ")
 }
 
-/** Price column: amounts right-aligned under header (same width). */
 function colPriceMoney(amount, priceW) {
   return `${money(amount)} TL`.slice(0, priceW).padStart(priceW, " ")
 }
 
 function colPriceHeader(priceW) {
-  return trSafe("Birim Fiyat").slice(0, priceW).padStart(priceW, " ")
+  return trSafe("Unit Price").slice(0, priceW).padStart(priceW, " ")
 }
 
-/**
- * One item: qty + price on first line; long product names wrap only in the Product column,
- * continuation lines leave Qty/Unit Price columns blank.
- */
 function tableItemRows(qty, unitPrice, name, width) {
   const { qtyW, priceW, nameW } = tableColLayout(width)
   const qStr = colQty(String(Number(qty) || 0), qtyW)
@@ -190,9 +181,9 @@ function tableItemRows(qty, unitPrice, name, width) {
 
 function tableHeaderRow(width) {
   const { qtyW, priceW, nameW } = tableColLayout(width)
-  const hQty = colQty("Miktar", qtyW)
+  const hQty = colQty("Qty", qtyW)
   const hPrice = colPriceHeader(priceW)
-  const hName = trSafe("Urun").slice(0, nameW).padEnd(nameW, " ")
+  const hName = trSafe("Item").slice(0, nameW).padEnd(nameW, " ")
   return `${hQty}${hPrice}${COL_GAP}${hName}\n`
 }
 
@@ -219,8 +210,8 @@ function cancelHeaderRow(width) {
   const qtyW = 8
   const gapLen = COL_GAP.length
   const nameW = Math.max(1, width - qtyW - gapLen)
-  const hQty = colQty("Adet", qtyW)
-  const hName = trSafe("Urun").slice(0, nameW).padEnd(nameW, " ")
+  const hQty = colQty("Qty", qtyW)
+  const hName = trSafe("Item").slice(0, nameW).padEnd(nameW, " ")
   return `${hQty}${COL_GAP}${hName}\n`
 }
 
@@ -228,25 +219,16 @@ function textBuf(s) {
   return Buffer.from(String(s), "ascii")
 }
 
-/** ESC/POS: bold on/off */
 const BOLD_ON = Buffer.from([0x1b, 0x45, 0x01])
 const BOLD_OFF = Buffer.from([0x1b, 0x45, 0x00])
-/**
- * GS ! n — Epson-style: n = (widthMul - 1) * 16 + (heightMul - 1).
- * 0x10 = double WIDTH only (breaks column layout). 0x01 = double height, normal width.
- */
 const SIZE_DOUBLE_HEIGHT = Buffer.from([0x1d, 0x21, 0x01])
 const SIZE_NORMAL = Buffer.from([0x1d, 0x21, 0x00])
 
-/** ESC d n — print and feed n lines (before cut so totals are not clipped). */
 function escFeedLines(n) {
   const lines = Math.min(255, Math.max(0, Math.floor(Number(n) || 0)))
   return Buffer.from([0x1b, 0x64, lines])
 }
 
-/**
- * Bottom: a few LFs + ESC d n before cut (tune with `TICKET_FEED_LINES_BEFORE_CUT`).
- */
 function escposBytes(bodyBuffer, feedLinesBeforeCut = 6) {
   const init = Buffer.from([0x1b, 0x40])
   const cut = Buffer.from([0x1d, 0x56, 0x00])
@@ -255,7 +237,7 @@ function escposBytes(bodyBuffer, feedLinesBeforeCut = 6) {
   return Buffer.concat([init, bodyBuffer, tailLf, feed, cut])
 }
 
-function buildStandardTicket(payload, options = {}, heading = "SIPARIS") {
+function buildStandardTicket(payload, options = {}, heading = "ORDER") {
   const width = clampWidth(options.charsPerLine)
   const footerLine = String(options.footerLine || "").trim()
   const feedBeforeCut = Math.min(255, Math.max(0, Number(options.feedLinesBeforeCut) || 6))
@@ -269,20 +251,18 @@ function buildStandardTicket(payload, options = {}, heading = "SIPARIS") {
     push("\n")
   }
 
-  push(kvLine("Tarih/Saat", formatTicketDate(payload.createdAt), width))
-  push(kvLine("Siparis No", orderNumberFromId(payload.jobId), width))
-  push(kvLine("Masa", payload.tableName || "-", width))
-  push(kvLine("Garson", payload.waiterName || "-", width))
+  push(kvLine("Date/Time", formatTicketDate(payload.createdAt), width))
+  push(kvLine("Order No", orderNumberFromId(payload.jobId), width))
+  push(kvLine("Table", payload.tableName || "-", width))
+  push(kvLine("Waiter", payload.waiterName || "-", width))
   if (payload.paymentMethod) {
-    push(kvLine("Odeme", formatPaymentMethodLabel(payload.paymentMethod), width))
+    push(kvLine("Payment", formatPaymentMethodLabel(payload.paymentMethod), width))
   }
   push("\n")
 
-  chunks.push(BOLD_ON)
-  chunks.push(SIZE_DOUBLE_HEIGHT)
+  chunks.push(BOLD_ON, SIZE_DOUBLE_HEIGHT)
   push(`${trSafe(heading)}\n`)
-  chunks.push(SIZE_NORMAL)
-  chunks.push(BOLD_OFF)
+  chunks.push(SIZE_NORMAL, BOLD_OFF)
   push("\n")
   chunks.push(SIZE_NORMAL)
 
@@ -294,13 +274,12 @@ function buildStandardTicket(payload, options = {}, heading = "SIPARIS") {
 
   const layout = tableColLayout(width)
   const nameColumnIndent = layout.qtyW + layout.priceW + layout.gapLen
-
   const showLineNotes = options.includeLineNotes !== false
 
   for (const item of payload.items || []) {
     const qty = Number(item.quantity || 0)
     const unit = Number(item.price || 0)
-    const name = item.productName || item.name || "Urun"
+    const name = item.productName || item.name || "Item"
     push(tableItemRows(qty, unit, name, width))
     if (showLineNotes) {
       const nb = noteBlock(item.note, width, nameColumnIndent)
@@ -309,7 +288,7 @@ function buildStandardTicket(payload, options = {}, heading = "SIPARIS") {
   }
 
   push(hrLine("-", width))
-  push(justifyLabelAmount("Toplam:", Number(payload.total || 0), width))
+  push(justifyLabelAmount("Total:", Number(payload.total || 0), width))
   push(hrLine("-", width))
 
   if (footerLine) {
@@ -321,11 +300,11 @@ function buildStandardTicket(payload, options = {}, heading = "SIPARIS") {
 }
 
 function buildKitchenTicket(payload, options) {
-  return buildStandardTicket(payload, options || {}, "SIPARIS")
+  return buildStandardTicket(payload, options || {}, "ORDER")
 }
 
 function buildReceipt(payload, options) {
-  return buildStandardTicket(payload, options || {}, "HESAP FISI")
+  return buildStandardTicket(payload, options || {}, "RECEIPT")
 }
 
 function buildKitchenCancelTicket(payload, options = {}) {
@@ -342,17 +321,15 @@ function buildKitchenCancelTicket(payload, options = {}) {
     push("\n")
   }
 
-  chunks.push(BOLD_ON)
-  chunks.push(SIZE_DOUBLE_HEIGHT)
-  push("IPTAL\n")
-  chunks.push(SIZE_NORMAL)
-  chunks.push(BOLD_OFF)
+  chunks.push(BOLD_ON, SIZE_DOUBLE_HEIGHT)
+  push("CANCELLED\n")
+  chunks.push(SIZE_NORMAL, BOLD_OFF)
   push("\n")
 
-  push(kvLine("Tarih/Saat", formatTicketDate(payload.createdAt), width))
-  push(kvLine("Masa", payload.tableName || "-", width))
-  push(kvLine("Iptal Eden", payload.cancelledBy || payload.waiterName || "-", width))
-  push(kvWrappedLines("Sebep", payload.cancelReason || "-", width))
+  push(kvLine("Date/Time", formatTicketDate(payload.createdAt), width))
+  push(kvLine("Table", payload.tableName || "-", width))
+  push(kvLine("Cancelled By", payload.cancelledBy || payload.waiterName || "-", width))
+  push(kvWrappedLines("Reason", payload.cancelReason || "-", width))
   push("\n")
 
   push(hrLine("=", width))
@@ -366,7 +343,7 @@ function buildKitchenCancelTicket(payload, options = {}) {
 
   for (const item of payload.items || []) {
     const qty = Number(item.quantity || 0)
-    const name = item.productName || item.name || "Urun"
+    const name = item.productName || item.name || "Item"
     push(cancelItemRows(qty, name, width))
     if (showLineNotes) {
       const nb = noteBlock(item.note, width, nameColumnIndent)

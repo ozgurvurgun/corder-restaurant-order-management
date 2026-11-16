@@ -16,6 +16,7 @@ import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
 
 @Entity('open_accounts')
 @Index(['restaurantId'])
+@Index(['restaurantId', 'status'])
 export class OpenAccountEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;

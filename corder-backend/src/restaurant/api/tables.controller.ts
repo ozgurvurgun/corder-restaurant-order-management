@@ -7,6 +7,7 @@ import {
   HttpException,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Req,
@@ -47,7 +48,7 @@ export class TablesController {
 
   @Post(':id/session-lock')
   async sessionLock(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
     @Req() req: Request,
     @Body() body?: SessionLockDto,
@@ -82,7 +83,7 @@ export class TablesController {
 
   @Post(':id/session-unlock')
   async sessionUnlock(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
     @Req() req: Request,
   ) {
@@ -95,7 +96,10 @@ export class TablesController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @RestaurantId() restaurantId: string) {
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @RestaurantId() restaurantId: string,
+  ) {
     return this.service.findOne(id, restaurantId);
   }
 
@@ -110,7 +114,7 @@ export class TablesController {
   @UseGuards(PanelRootGuard)
   @RequirePermissions('system.manage_tables', 'billing.close_check')
   async update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { isBoss?: boolean; permissions?: PermissionKey[] },
     @Body() dto: UpdateTableDto,
@@ -132,7 +136,10 @@ export class TablesController {
   @Delete(':id')
   @UseGuards(PanelRootGuard)
   @RequirePermissions('system.manage_tables')
-  remove(@Param('id') id: string, @RestaurantId() restaurantId: string) {
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @RestaurantId() restaurantId: string,
+  ) {
     return this.service.remove(id, restaurantId);
   }
 }

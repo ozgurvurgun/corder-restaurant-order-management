@@ -32,7 +32,7 @@ export function UserSelectScreen({ onSelect }: UserSelectScreenProps) {
         if (res.ok) {
           onSelect()
         } else {
-          setError(res.error || "Gecersiz PIN")
+          setError(res.error || "Geçersiz PIN kodu")
           triggerShake()
         }
       } finally {
@@ -68,7 +68,7 @@ export function UserSelectScreen({ onSelect }: UserSelectScreenProps) {
           className="flex items-center gap-1.5 text-white/70 active:text-white transition-colors py-2 px-2 touch-manipulation cursor-pointer"
         >
           <LogOut className="h-4 w-4" />
-          <span className="text-[13px] font-medium">Restorandan Cikis</span>
+          <span className="text-[13px] font-medium">Restorandan Çıkış</span>
         </button>
       </div>
 
@@ -77,7 +77,7 @@ export function UserSelectScreen({ onSelect }: UserSelectScreenProps) {
           <User className="h-9 w-9 text-white" />
         </div>
         <h2 className="text-[22px] font-bold text-white text-center">
-          {restaurant?.name || "Personel Girisi"}
+          {restaurant?.name || "Personel Girişi"}
         </h2>
         <p className="text-white/60 text-[14px] mt-1 flex items-center gap-1.5">
           <Lock className="w-3.5 h-3.5" />
@@ -141,7 +141,7 @@ export function UserSelectScreen({ onSelect }: UserSelectScreenProps) {
             type="button"
             disabled={submitting || pin.length < MIN_PIN_LENGTH}
             onClick={() => void submitPin(pin)}
-            aria-label="Giris"
+            aria-label="Giriş"
             className="h-[62px] rounded-2xl bg-white/20 backdrop-blur-xl flex items-center justify-center text-white active:bg-white/30 active:scale-95 transition-all disabled:opacity-30"
           >
             <Check className="h-6 w-6 text-white" />

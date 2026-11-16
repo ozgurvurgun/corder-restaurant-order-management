@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { BookUser, Loader2, Plus, X } from "lucide-react"
 import { api } from "@/lib/api"
 import type { LedgerCustomer, LedgerEntry } from "@/lib/panel-types"
@@ -35,11 +35,22 @@ export function LedgerCustomersSection(props: {
   const [lcPhone, setLcPhone] = useState("")
   const [lcNotes, setLcNotes] = useState("")
   const [lcSaving, setLcSaving] = useState(false)
+  const busyRef = useRef(false)
 
   useEffect(() => {
     if (!showAddLedger) return
     setLcName(""); setLcPhone(""); setLcNotes("")
   }, [showAddLedger])
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || lcSaving || ledgerPayBusy || busyRef.current) return
+      if (showAddLedger) setShowAddLedger(false)
+      else if (ledgerDetailId) setLedgerDetailId(null)
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [showAddLedger, ledgerDetailId, lcSaving, ledgerPayBusy])
 
   useEffect(() => {
     if (!ledgerDetailId || !token) { setLedgerEntries([]); return }
@@ -64,7 +75,8 @@ export function LedgerCustomersSection(props: {
   }, [ledgerDetailId, token, ledgerBounds])
 
   const handleSaveLedgerCustomer = async () => {
-    if (!lcName.trim()) return
+    if (!lcName.trim() || lcSaving || busyRef.current) return
+    busyRef.current = true
     setLcSaving(true)
     try {
       const c = await createLedgerCustomer({ name: lcName.trim(), phone: lcPhone.trim() || undefined, notes: lcNotes.trim() || undefined })
@@ -72,14 +84,19 @@ export function LedgerCustomersSection(props: {
         setShowAddLedger(false)
         if (ledgerBounds) void refetchLedgerTabCustomers()
       }
-    } finally { setLcSaving(false) }
+    } finally {
+      busyRef.current = false
+      setLcSaving(false)
+    }
   }
 
   const handleLedgerCollection = async () => {
-    if (!ledgerDetailId || !ledgerPayAmount) return
+    const amountVal = parseFloat(String(ledgerPayAmount).replace(",", "."))
+    if (!ledgerDetailId || !Number.isFinite(amountVal) || amountVal <= 0 || ledgerPayBusy || busyRef.current) return
+    busyRef.current = true
     setLedgerPayBusy(true)
     try {
-      const ok = await addLedgerPayment(ledgerDetailId, parseFloat(String(ledgerPayAmount).replace(",", ".")))
+      const ok = await addLedgerPayment(ledgerDetailId, amountVal)
       if (ok) {
         setLedgerPayAmount("")
         void ledgerRefresh()
@@ -102,7 +119,10 @@ export function LedgerCustomersSection(props: {
         }
         if (ledgerBounds) void refetchLedgerTabCustomers()
       }
-    } finally { setLedgerPayBusy(false) }
+    } finally {
+      busyRef.current = false
+      setLedgerPayBusy(false)
+    }
   }
 
   return (
@@ -128,7 +148,7 @@ export function LedgerCustomersSection(props: {
         {ledgerBounds && ledgerTabLoading && ledgerTabCustomers === null ? (
           <div className="flex items-center justify-center py-16 text-[#86868b] gap-2">
             <Loader2 className="w-6 h-6 animate-spin" />
-            <span className="text-[14px]">Yukleniyor…</span>
+            <span className="text-[14px]">Yükleniyor…</span>
           </div>
         ) : (
           displayLedgerCustomers
@@ -155,16 +175,16 @@ export function LedgerCustomersSection(props: {
                     <div className="text-right flex-shrink-0">
                       {showPeriod ? (
                         <>
-                          <p className={`text-[13px] font-bold ${net > 0.009 ? "text-red-600" : net < -0.009 ? "text-green-600" : "text-[#86868b]"}`}>Donem neti</p>
+                          <p className={`text-[13px] font-bold ${net > 0.009 ? "text-red-600" : net < -0.009 ? "text-green-600" : "text-[#86868b]"}`}>Dönem neti</p>
                           <p className={`text-[14px] font-semibold ${net > 0.009 ? "text-red-600" : net < -0.009 ? "text-green-600" : "text-[#1d1d1f]"}`}>
                             {net > 0.009 ? "+" : net < -0.009 ? "\u2212" : ""}{"\u20BA"}{formatCurrency(Math.abs(net))}
                           </p>
-                          <p className="text-[10px] text-[#86868b] mt-0.5">Guncel: {"\u20BA"}{formatCurrency(Math.abs(c.balance))}</p>
+                          <p className="text-[10px] text-[#86868b] mt-0.5">Güncel: {"\u20BA"}{formatCurrency(Math.abs(c.balance))}</p>
                         </>
                       ) : (
                         <>
                           <p className={`text-[13px] font-bold ${c.balance > 0.009 ? "text-red-600" : c.balance < -0.009 ? "text-green-600" : "text-[#86868b]"}`}>
-                            {c.balance > 0.009 ? "Borc" : c.balance < -0.009 ? "Alacak" : "Bakiye"}
+                            {c.balance > 0.009 ? "Borç" : c.balance < -0.009 ? "Alacak" : "Bakiye"}
                           </p>
                           <p className="text-[14px] font-semibold text-[#1d1d1f]">{"\u20BA"}{formatCurrency(Math.abs(c.balance))}</p>
                         </>
@@ -176,10 +196,10 @@ export function LedgerCustomersSection(props: {
             })
         )}
         {!ledgerBounds && ledgerCustomers.length === 0 && (
-          <div className="text-center py-16 text-[#86868b] text-[14px]">Kayitli Cari yok. Yukaridan Cari ekleyin.</div>
+          <div className="text-center py-16 text-[#86868b] text-[14px]">Kayıtlı Cari yok. Yukarıdan Cari ekleyin.</div>
         )}
         {ledgerBounds && !ledgerTabLoading && displayLedgerCustomers.length === 0 && (
-          <div className="text-center py-16 text-[#86868b] text-[14px]">Bu tarih araliginda Cari hareketi yok.</div>
+          <div className="text-center py-16 text-[#86868b] text-[14px]">Bu tarih aralığında Cari hareketi yok.</div>
         )}
       </div>
 
@@ -187,18 +207,18 @@ export function LedgerCustomersSection(props: {
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 backdrop-blur-sm p-3">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[420px] animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#f0f0f0]">
-              <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Cari Musteri Ekle</h3>
-              <button type="button" onClick={() => setShowAddLedger(false)} className="w-7 h-7 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed]">
+              <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Cari Müşteri Ekle</h3>
+              <button type="button" disabled={lcSaving} onClick={() => setShowAddLedger(false)} className="w-7 h-7 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed] disabled:opacity-50">
                 <X className="w-3.5 h-3.5 text-[#86868b]" />
               </button>
             </div>
             <div className="px-6 py-5 flex flex-col gap-3">
-              <input type="text" value={lcName} onChange={(e) => setLcName(e.target.value)} placeholder="Unvan / Ad Soyad" autoFocus className="h-[40px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
-              <input type="tel" value={lcPhone} onChange={(e) => setLcPhone(e.target.value)} placeholder="Telefon (opsiyonel)" className="h-[40px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
-              <textarea value={lcNotes} onChange={(e) => setLcNotes(e.target.value)} placeholder="Not (opsiyonel)" rows={2} className="px-3 py-2 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 resize-none" />
+              <input type="text" disabled={lcSaving} value={lcName} onChange={(e) => setLcName(e.target.value)} placeholder="Unvan / Ad Soyad" autoFocus className="h-[40px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
+              <input type="tel" disabled={lcSaving} value={lcPhone} onChange={(e) => setLcPhone(e.target.value)} placeholder="Telefon (opsiyonel)" className="h-[40px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
+              <textarea disabled={lcSaving} value={lcNotes} onChange={(e) => setLcNotes(e.target.value)} placeholder="Not (opsiyonel)" rows={2} className="px-3 py-2 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 resize-none" />
             </div>
             <div className="px-6 py-4 border-t border-[#f0f0f0] flex gap-3">
-              <button type="button" onClick={() => setShowAddLedger(false)} className="flex-1 h-[38px] rounded-xl border border-[#d1d1d6]/60 text-[13px] font-medium text-[#86868b]">Vazgec</button>
+              <button type="button" disabled={lcSaving} onClick={() => setShowAddLedger(false)} className="flex-1 h-[38px] rounded-xl border border-[#d1d1d6]/60 text-[13px] font-medium text-[#86868b] disabled:opacity-50">Vazgeç</button>
               <button type="button" disabled={lcSaving || !lcName.trim()} onClick={() => void handleSaveLedgerCustomer()} className="flex-1 h-[38px] rounded-xl bg-[#e63462] text-white text-[13px] font-semibold hover:bg-[#d42d56] disabled:opacity-50">
                 {lcSaving ? "Kaydediliyor…" : "Kaydet"}
               </button>
@@ -216,11 +236,11 @@ export function LedgerCustomersSection(props: {
                   {displayLedgerCustomers.find((c) => c.id === ledgerDetailId)?.name || ledgerCustomers.find((c) => c.id === ledgerDetailId)?.name || "Cari"}
                 </h3>
                 <p className="text-[12px] text-[#86868b] mt-0.5">
-                  Guncel bakiye: <span className="font-semibold text-[#1d1d1f]">{"\u20BA"}{formatCurrency(ledgerCustomers.find((c) => c.id === ledgerDetailId)?.balance ?? 0)}</span>
+                  Güncel bakiye: <span className="font-semibold text-[#1d1d1f]">{"\u20BA"}{formatCurrency(ledgerCustomers.find((c) => c.id === ledgerDetailId)?.balance ?? 0)}</span>
                 </p>
-                {ledgerBounds && <p className="text-[11px] text-[#aeaeb2] mt-1">Hareketler Kasa tarih filtresine gore listelenir.</p>}
+                {ledgerBounds && <p className="text-[11px] text-[#aeaeb2] mt-1">Hareketler Kasa tarih filtresine göre listelenir.</p>}
               </div>
-              <button type="button" onClick={() => setLedgerDetailId(null)} className="w-7 h-7 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed]">
+              <button type="button" disabled={ledgerPayBusy} onClick={() => setLedgerDetailId(null)} className="w-7 h-7 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed] disabled:opacity-50">
                 <X className="w-3.5 h-3.5 text-[#86868b]" />
               </button>
             </div>
@@ -229,7 +249,7 @@ export function LedgerCustomersSection(props: {
               {ledgerEntriesLoading ? (
                 <div className="flex items-center justify-center py-12 text-[#86868b] gap-2">
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  <span className="text-[13px]">Yukleniyor…</span>
+                  <span className="text-[13px]">Yükleniyor…</span>
                 </div>
               ) : ledgerEntries.length === 0 ? (
                 <p className="text-[13px] text-[#86868b] py-6 text-center">Hareket yok</p>
@@ -244,10 +264,10 @@ export function LedgerCustomersSection(props: {
                         </span>
                       </div>
                       <div className="text-[10px] text-[#86868b] mt-1 flex flex-wrap gap-x-2">
-                        <span>{e.entryType === "debt" ? "Borc" : e.entryType === "credit" ? "Adisyon geri al" : "Tahsilat"}</span>
+                        <span>{e.entryType === "debt" ? "Borç" : e.entryType === "credit" ? "Adisyon geri al" : "Tahsilat"}</span>
                         <span>{formatFullDate(e.createdAt)} {formatTime(e.createdAt)}</span>
                         {e.tableName && <span>Masa: {e.tableName}</span>}
-                        {e.receivedBy && <span>{e.entryType === "payment" ? "Kasiyer:" : "Islem yapan:"} {e.receivedBy}</span>}
+                        {e.receivedBy && <span>{e.entryType === "payment" ? "Kasiyer:" : "İşlem yapan:"} {e.receivedBy}</span>}
                       </div>
                     </li>
                   ))}
@@ -257,8 +277,26 @@ export function LedgerCustomersSection(props: {
             <div className="px-6 py-4 border-t border-[#f0f0f0] flex-shrink-0 space-y-3">
               <p className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Tahsilat</p>
               <div className="flex gap-2">
-                <input type="number" value={ledgerPayAmount} onChange={(e) => setLedgerPayAmount(e.target.value)} placeholder="Tutar" className="flex-1 h-[40px] px-3 text-[14px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
-                <button type="button" disabled={ledgerPayBusy || !ledgerPayAmount || !token} onClick={() => void handleLedgerCollection()} className="h-[40px] px-4 rounded-lg bg-[#34c759] text-white text-[13px] font-semibold hover:bg-[#2db84e] disabled:opacity-50">
+                <input
+                  type="number"
+                  min={0.01}
+                  step="0.01"
+                  disabled={ledgerPayBusy}
+                  value={ledgerPayAmount}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    if (v !== "" && Number(v) < 0) return
+                    setLedgerPayAmount(v)
+                  }}
+                  placeholder="Tutar"
+                  className="flex-1 h-[40px] px-3 text-[14px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
+                />
+                <button
+                  type="button"
+                  disabled={ledgerPayBusy || !(parseFloat(String(ledgerPayAmount).replace(",", ".")) > 0) || !token}
+                  onClick={() => void handleLedgerCollection()}
+                  className="h-[40px] px-4 rounded-lg bg-[#34c759] text-white text-[13px] font-semibold hover:bg-[#2db84e] disabled:opacity-50"
+                >
                   {ledgerPayBusy ? "…" : "Kaydet"}
                 </button>
               </div>

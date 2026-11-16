@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { CompletedOrderEntity } from '../domain/completed-order.entity';
 import { CashShiftEntity } from '../domain/cash-shift.entity';
 import { CashTransactionEntity } from '../domain/cash-transaction.entity';
@@ -30,6 +30,7 @@ export class CompletedOrdersService {
   constructor(
     @InjectRepository(CompletedOrderEntity)
     private readonly repo: Repository<CompletedOrderEntity>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async list(restaurantId: string, filters: ListFilters): Promise<CompletedOrderEntity[]> {
@@ -73,13 +74,22 @@ export class CompletedOrdersService {
     return sumMinorUnits;
   }
 
+  async updateFromPanel(
+    restaurantId: string,
+    id: string,
+    dto: UpdateCompletedOrderDto,
+    actorName = 'Manager',
+  ): Promise<CompletedOrderEntity> {
+    return this.update(restaurantId, id, dto, actorName);
+  }
+
   async update(
     restaurantId: string,
     id: string,
     dto: UpdateCompletedOrderDto,
     actorName: string,
   ): Promise<CompletedOrderEntity> {
-    return this.repo.manager.transaction(async (em) => {
+    return this.dataSource.transaction(async (em) => {
       const row = await em.findOne(CompletedOrderEntity, {
         where: { id, restaurantId },
         lock: { mode: 'pessimistic_write' },

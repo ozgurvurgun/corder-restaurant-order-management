@@ -1,12 +1,18 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
 import { PanelRootGuard } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
-import {
-  PurchaseOrderItemInput,
-  PurchaseOrdersService,
-} from '../application/purchase-orders.service';
+import { PurchaseOrdersService } from '../application/purchase-orders.service';
+import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 
 @Controller('restaurant/purchase-orders')
 @UseGuards(RestaurantJwtGuard, PanelRootGuard)
@@ -22,14 +28,7 @@ export class PurchaseOrdersController {
   create(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { name: string },
-    @Body()
-    body: {
-      supplierId: string;
-      supplierName: string;
-      items: PurchaseOrderItemInput[];
-      notes?: string;
-      status?: 'draft' | 'ordered';
-    },
+    @Body() body: CreatePurchaseOrderDto,
   ) {
     return this.purchaseOrders.create(restaurantId, {
       ...body,
@@ -41,7 +40,7 @@ export class PurchaseOrdersController {
   receive(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { name: string },
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.purchaseOrders.markReceived(restaurantId, id, user.name);
   }

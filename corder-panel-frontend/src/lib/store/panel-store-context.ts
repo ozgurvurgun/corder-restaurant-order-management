@@ -129,7 +129,7 @@ export interface PanelStore {
   ) => Promise<{ ok: boolean; error?: string }>
 
   // Cancel & Ledger
-  cancelOrderItem: (orderId: string, itemId: string, reason: string) => void
+  cancelOrderItem: (orderId: string, itemId: string, reason: string) => Promise<boolean>
   assignItemsToLedger: (
     lines: { itemId: string; quantity?: number }[],
     ledgerCustomerId: string,
@@ -224,7 +224,7 @@ export interface PanelStore {
     description: string
     reference?: string
     createdBy?: string
-  }) => Promise<void> | void
+  }) => Promise<boolean>
 
   // Open Accounts & Ledger
   addOpenAccount: (

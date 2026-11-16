@@ -28,6 +28,10 @@ export interface CheckSettlementShiftDiff {
 @Entity('cash_shifts')
 @Index(['restaurantId'])
 @Index(['restaurantId', 'status'])
+@Index('IDX_cash_shifts_one_open_per_restaurant', ['restaurantId'], {
+  unique: true,
+  where: `"status" = 'open'`,
+})
 export class CashShiftEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;

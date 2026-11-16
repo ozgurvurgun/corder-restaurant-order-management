@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import {
   CompletedOrdersService,
   serializeCompletedOrder,
@@ -40,11 +49,16 @@ export class CompletedOrdersController {
   @UseGuards(PanelRootGuard)
   async update(
     @RestaurantId() restaurantId: string,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @RestaurantUser() user: { id: string; name: string },
     @Body() dto: UpdateCompletedOrderDto,
   ) {
-    const updated = await this.service.update(restaurantId, id, dto, user.name);
+    const updated = await this.service.updateFromPanel(
+      restaurantId,
+      id,
+      dto,
+      user.name,
+    );
     return serializeCompletedOrder(updated);
   }
 }

@@ -35,7 +35,7 @@ function expandCategoryRoutedJobs(evt, config, kind) {
   const netRoutes = config.categoryNetworkRoutes || {}
   const hasRoutes = Object.keys(routes).length > 0 || Object.keys(netRoutes).length > 0
 
-  const defaultName = String(config.printerName || "MUTFAK").trim() || "MUTFAK"
+  const defaultName = String(config.printerName || "KITCHEN").trim() || "KITCHEN"
   const keyFn = keyFnForKind(kind)
 
   if (!hasRoutes || !evt.items?.length) {
@@ -60,7 +60,7 @@ function expandCategoryRoutedJobs(evt, config, kind) {
 
   for (const item of evt.items) {
     const cid = item.categoryId || ""
-    let printerName = String(defaultName || "").trim() || "MUTFAK"
+    let printerName = String(defaultName || "").trim() || "KITCHEN"
     let network = null
     if (cid && routes[cid]) {
       printerName = String(routes[cid] || "").trim() || printerName
