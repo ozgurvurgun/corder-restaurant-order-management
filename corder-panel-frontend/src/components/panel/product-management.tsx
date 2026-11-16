@@ -150,35 +150,37 @@ export default function ProductManagement() {
                   />
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setSelectedCat(cat.id)}
+                <div
                   style={{ paddingLeft: `${12 + categoryDepth(categories, cat.id) * 12}px` }}
-                  className={`w-full text-left pr-4 py-2 text-[13px] flex items-center justify-between gap-1 transition-colors ${selectedCat === cat.id ? "bg-[#e63462]/10 text-[#e63462] font-medium" : "text-[#1d1d1f] hover:bg-black/[0.03]"}`}
+                  className={`w-full pr-4 text-[13px] flex items-center justify-between gap-1 transition-colors ${selectedCat === cat.id ? "bg-[#e63462]/10 text-[#e63462] font-medium" : "text-[#1d1d1f] hover:bg-black/[0.03]"}`}
                 >
-                  <span className="truncate flex-1 flex items-center gap-2">
-                    {cat.name}
-                    <div className="flex items-center gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCat(cat.id)}
+                    className="truncate flex-1 flex items-center gap-2 py-2 text-left"
+                  >
+                    <span className="truncate">{cat.name}</span>
+                    <span className="flex items-center gap-0.5 shrink-0">
                       {cat.showInTerminal && <Monitor className="w-2.5 h-2.5 text-blue-500" />}
                       {cat.showInMenu && <Menu className="w-2.5 h-2.5 text-green-500" />}
-                    </div>
-                  </span>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    </span>
+                  </button>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                     <span className="text-[10px] text-[#86868b]">{products.filter((p) => p.categoryId === cat.id).length}</span>
-                    <button onClick={(e) => { e.stopPropagation(); setEditingCatSettings(cat) }} className="w-5 h-5 rounded flex items-center justify-center hover:bg-black/5">
+                    <button type="button" onClick={() => setEditingCatSettings(cat)} className="w-5 h-5 rounded flex items-center justify-center hover:bg-black/5">
                       <Settings2 className="w-3 h-3 text-[#86868b]" />
                     </button>
-                    <button type="button" title="Alt kategori" onClick={(e) => { e.stopPropagation(); setNewCategoryParentId(cat.id); setCatName(""); setShowAddCategory(true) }} className="w-5 h-5 rounded flex items-center justify-center hover:bg-black/5">
+                    <button type="button" title="Alt kategori" onClick={() => { setNewCategoryParentId(cat.id); setCatName(""); setShowAddCategory(true) }} className="w-5 h-5 rounded flex items-center justify-center hover:bg-black/5">
                       <CornerDownRight className="w-3 h-3 text-[#86868b]" />
                     </button>
-                    <button type="button" onClick={(e) => { e.stopPropagation(); setEditingCat(cat.id) }} className="w-5 h-5 rounded flex items-center justify-center hover:bg-black/5">
+                    <button type="button" onClick={() => setEditingCat(cat.id)} className="w-5 h-5 rounded flex items-center justify-center hover:bg-black/5">
                       <Pencil className="w-3 h-3 text-[#86868b]" />
                     </button>
-                    <button type="button" onClick={(e) => { e.stopPropagation(); setCategoryDeleteStep({ id: cat.id, name: cat.name, step: 1 }) }} className="w-5 h-5 rounded flex items-center justify-center hover:bg-red-50">
+                    <button type="button" onClick={() => setCategoryDeleteStep({ id: cat.id, name: cat.name, step: 1 })} className="w-5 h-5 rounded flex items-center justify-center hover:bg-red-50">
                       <Trash2 className="w-3 h-3 text-red-400" />
                     </button>
                   </div>
-                </button>
+                </div>
               )}
             </div>
           ))}
