@@ -1,8 +1,8 @@
 {
   "name": "corder-print-agent",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "Windows print agent for Corder order events",
+  "description": "Corder Desktop Print Agent & Local Web Control Center",
   "engines": {
     "node": ">=18"
   },
@@ -10,6 +10,8 @@
   "type": "commonjs",
   "scripts": {
     "start": "node src/index.js",
+    "ui": "node src/index.js --open",
+    "electron": "electron electron/main.js",
     "dev": "node --watch src/index.js",
     "mock:server": "node src/mock-ws-server.js"
   },

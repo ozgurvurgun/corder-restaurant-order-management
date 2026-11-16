@@ -302,25 +302,20 @@ function buildStandardTicket(payload, options = {}, heading = "ORDER") {
 function buildKitchenTicket(payload, options) {
   return buildStandardTicket(payload, options || {}, "ORDER")
 }
-
 function buildReceipt(payload, options) {
   return buildStandardTicket(payload, options || {}, "RECEIPT")
 }
-
 function buildKitchenCancelTicket(payload, options = {}) {
   const width = clampWidth(options.charsPerLine)
   const footerLine = String(options.footerLine || "").trim()
   const feedBeforeCut = Math.min(255, Math.max(0, Number(options.feedLinesBeforeCut) || 6))
-
   const chunks = []
   const push = (s) => chunks.push(textBuf(s))
-
   const stamp = String(options.ticketStamp || "").trim()
   if (stamp) {
     push(centerLine(stamp, width))
     push("\n")
   }
-
   chunks.push(BOLD_ON, SIZE_DOUBLE_HEIGHT)
   push("CANCELLED\n")
   chunks.push(SIZE_NORMAL, BOLD_OFF)
@@ -361,9 +356,35 @@ function buildKitchenCancelTicket(payload, options = {}) {
   return escposBytes(Buffer.concat(chunks), feedBeforeCut)
 }
 
+function buildTestTicket(printerInfo = {}, options = {}) {
+  const paperWidth = Number(printerInfo.paperWidth) === 58 ? 58 : 80
+  const width = clampWidth(options.charsPerLine || (paperWidth === 58 ? 32 : 42))
+  const feedBeforeCut = Math.min(255, Math.max(0, Number(options.feedLinesBeforeCut ?? printerInfo.feedLinesBeforeCut ?? 6)))
+  const targetDesc =
+    printerInfo.mode === "network"
+      ? `TCP ${printerInfo.host || "127.0.0.1"}:${printerInfo.port || 9100}`
+      : `USB/OS: ${printerInfo.systemPrinterName || printerInfo.name || "DEFAULT"}`
+
+  const chunks = [BOLD_ON, SIZE_DOUBLE_HEIGHT, textBuf(centerLine("CORDER YAZICI TESTI", width)), SIZE_NORMAL, BOLD_OFF]
+  const push = (s) => chunks.push(textBuf(s))
+  push(hrLine("=", width))
+  push(kvLine("Tarih/Saat", formatTicketDate(), width))
+  push(kvLine("Yazici", printerInfo.name || "Test Printer", width))
+  push(kvLine("Baglanti", targetDesc, width))
+  push(kvLine("Kagit", `${paperWidth}mm (${width} kolon)`, width))
+  push(hrLine("-", width))
+  push(centerLine("KARAKTER TESTI (TR -> ASCII)", width))
+  push(centerLine("CGIOSU cgiosu - 1234567890", width))
+  push(`${"1234567890".repeat(Math.ceil(width / 10)).slice(0, width)}\n`)
+  push(hrLine("=", width))
+  push(centerLine("BAGLANTI BASARILI - CORDER POS", width))
+  return escposBytes(Buffer.concat(chunks), feedBeforeCut)
+}
+
 module.exports = {
   buildKitchenTicket,
   buildReceipt,
   buildKitchenCancelTicket,
+  buildTestTicket,
   formatPaymentMethodLabel,
 }

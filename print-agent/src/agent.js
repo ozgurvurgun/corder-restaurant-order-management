@@ -17,24 +17,19 @@ const { info, warn, error } = require("./logger")
 
 function makeJobKey(evt) {
   if (evt._mySplitKey) return evt._mySplitKey
-  if (evt.printType === "receipt") {
-    return `${evt.jobId}:receipt`
-  }
-  if (evt.printType === "kitchen_cancel") {
-    return makeKitchenCancelKey(evt)
-  }
+  if (evt.printType === "receipt") return `${evt.jobId}:receipt`
+  if (evt.printType === "kitchen_cancel") return makeKitchenCancelKey(evt)
   return makeKitchenKey(evt)
 }
 
 function normalizePrintJob(payload, restaurantId) {
   if (!payload || payload.type !== "order.print_job") return null
-  const acceptAllRestaurants = restaurantId === "*"
-  if (!acceptAllRestaurants && payload.restaurantId !== restaurantId) return null
-  if (!payload.jobId) return null
+  const acceptAll = !restaurantId || restaurantId === "*"
+  if (!acceptAll && payload.restaurantId !== restaurantId) return null
+  if (!payload.jobId || !payload.order || !Array.isArray(payload.order.items)) return null
   if (payload.printType !== "receipt" && payload.printType !== "kitchen_cancel") return null
-  if (!payload.order || !Array.isArray(payload.order.items)) return null
 
-  const items = (payload.order.items || []).map((item) => ({
+  const items = payload.order.items.map((item) => ({
     productName: item.productName || item.name || "Item",
     quantity: Number(item.quantity || 0),
     price: Number(item.price || 0),
@@ -42,15 +37,13 @@ function normalizePrintJob(payload, restaurantId) {
     categoryId: item.categoryId || undefined,
   }))
   const lineTotal = items.reduce((s, i) => s + i.price * i.quantity, 0)
-  const receiptMode = payload.receiptMode === "consolidated" ? "consolidated" : "split"
-  const includeLineNotes = payload.includeLineNotes !== false
 
   return {
     jobId: String(payload.jobId),
     restaurantId: payload.restaurantId,
     printType: payload.printType,
-    receiptMode,
-    includeLineNotes,
+    receiptMode: payload.receiptMode === "consolidated" ? "consolidated" : "split",
+    includeLineNotes: payload.includeLineNotes !== false,
     createdAt: payload.createdAt || new Date().toISOString(),
     tableName: payload.order.tableName || "-",
     waiterName: payload.order.waiterName || "-",
@@ -63,8 +56,8 @@ function normalizePrintJob(payload, restaurantId) {
 
 function normalizeOrderCreated(payload, restaurantId) {
   if (!payload || !payload.id || !Array.isArray(payload.items)) return null
-  const acceptAllRestaurants = restaurantId === "*"
-  if (!acceptAllRestaurants && payload.restaurantId !== restaurantId) return null
+  const acceptAll = !restaurantId || restaurantId === "*"
+  if (!acceptAll && payload.restaurantId !== restaurantId) return null
 
   const items = payload.items
     .filter((item) => item && item.status !== "cancelled")
@@ -75,10 +68,7 @@ function normalizeOrderCreated(payload, restaurantId) {
       note: item.note || "",
       categoryId: item.categoryId || undefined,
     }))
-
   if (!items.length) return null
-
-  const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
 
   return {
     jobId: String(payload.id),
@@ -88,60 +78,60 @@ function normalizeOrderCreated(payload, restaurantId) {
     tableName: payload.table?.name || payload.tableName || payload.tableId || "-",
     waiterName: payload.user?.name || payload.waiterName || "-",
     items,
-    total,
+    total: items.reduce((sum, item) => sum + item.price * item.quantity, 0),
   }
 }
 
 function maybeAckJob(store, config, job) {
-  if (job._splitKeys && job._splitKeys.length > 0) {
-    const all = job._splitKeys.every((k) => store.hasPrinted(k))
-    if (!all) return
-  } else {
-    const jk = job.jobKey || makeJobKey(job)
-    if (!store.hasPrinted(jk)) return
+  if (job._splitKeys?.length) {
+    if (!job._splitKeys.every((k) => store.hasPrinted(k))) return
+  } else if (!store.hasPrinted(job.jobKey || makeJobKey(job))) {
+    return
   }
-
-  if (job.printType === "kitchen") {
-    void ackKitchenPrinted(config, job.jobId)
-  } else if (job.printType === "receipt" || job.printType === "kitchen_cancel") {
+  if (job.printType === "kitchen") void ackKitchenPrinted(config, job.jobId)
+  else if (job.printType === "receipt" || job.printType === "kitchen_cancel") {
     void ackPrintJobPrinted(config, job.jobId)
   }
 }
 
 async function printJob(job, printer, agentConfig) {
+  const tp = job.targetPrinter
+  const charsPerLine =
+    tp?.paperWidth === 58 ? 32 : tp?.paperWidth === 80 ? 42 : agentConfig.ticketCharsPerLine
+  const feedLinesBeforeCut = Number(tp?.feedLinesBeforeCut ?? agentConfig.ticketFeedLinesBeforeCut ?? 6)
   const printOpts = {
     footerLine: agentConfig.printFooterLine,
-    charsPerLine: agentConfig.ticketCharsPerLine,
-    feedLinesBeforeCut: agentConfig.ticketFeedLinesBeforeCut,
+    charsPerLine,
+    feedLinesBeforeCut,
     ticketStamp: agentConfig.printTicketStamp,
     includeLineNotes: job.includeLineNotes !== false,
   }
-  let bytes
-  if (job.printType === "kitchen_cancel") {
-    bytes = buildKitchenCancelTicket(job, printOpts)
-  } else if (job.printType === "receipt") {
-    bytes = buildReceipt(job, printOpts)
-  } else {
-    bytes = buildKitchenTicket(job, printOpts)
-  }
+  const bytes =
+    job.printType === "kitchen_cancel"
+      ? buildKitchenCancelTicket(job, printOpts)
+      : job.printType === "receipt"
+        ? buildReceipt(job, printOpts)
+        : buildKitchenTicket(job, printOpts)
+
   const opts = {}
-  if (job.targetNetwork) {
-    opts.networkTarget = job.targetNetwork
-  } else if (job.targetPrinterName) {
-    opts.printerName = job.targetPrinterName
-  }
+  if (tp) opts.printer = tp
+  if (job.targetNetwork) opts.networkTarget = job.targetNetwork
+  else if (job.targetPrinterName) opts.printerName = job.targetPrinterName
   await printer.print(bytes, opts)
 }
 
 function expandOrderPrintJob(evt, config) {
   if (evt.printType === "receipt") {
     if (evt.receiptMode === "consolidated") {
-      const name = (config.managementReceiptPrinter || "").trim() || null
+      const rp = config.receiptPrinter || config.defaultKitchenPrinter || null
+      const name = rp?.systemPrinterName || rp?.name || (config.managementReceiptPrinter || "").trim() || null
+      const net = rp?.mode === "network" ? `${rp.host}:${rp.port || 9100}` : null
       return [
         {
           ...evt,
-          targetPrinterName: name,
-          targetNetwork: null,
+          targetPrinter: rp,
+          targetPrinterName: net ? null : name,
+          targetNetwork: net,
           targetPrinterKey: "mgmt",
           splitIndex: 0,
           _splitKeys: null,
@@ -151,54 +141,51 @@ function expandOrderPrintJob(evt, config) {
     }
     return expandReceiptPrintJobs(evt, config)
   }
-  if (evt.printType === "kitchen_cancel") {
-    return expandCancelPrintJobs(evt, config)
-  }
+  if (evt.printType === "kitchen_cancel") return expandCancelPrintJobs(evt, config)
   return []
 }
 
-function startAgent({ config, store, printer }) {
+function startAgent({ config: initialConfig, store, printer }) {
+  let config = initialConfig
   let socket = null
   let queueTimer = null
   let syncTimer = null
   let isDraining = false
   let printPipeline = Promise.resolve()
 
+  const statusState = {
+    socketConnected: false,
+    lastConnectedAt: null,
+    lastHttpSyncAt: null,
+    lastError: null,
+    setupRequired: false,
+  }
+
   const enqueuePrint = (evt) => {
     printPipeline = printPipeline
       .then(() => handleEvent(evt))
-      .catch((e) => {
-        const message = e instanceof Error ? e.message : String(e)
-        error("Print pipeline failed", { error: message })
-      })
+      .catch((e) => error("Print pipeline failed", { error: e instanceof Error ? e.message : String(e) }))
+  }
+
+  const enqueueJobs = (jobs) => {
+    for (const job of jobs) {
+      const jk = makeJobKey(job)
+      if (store.hasPrinted(jk)) {
+        maybeAckJob(store, config, job)
+        continue
+      }
+      enqueuePrint(job)
+    }
   }
 
   const enqueueKitchenJobsFromPayload = (payload) => {
     const base = normalizeOrderCreated(payload, config.restaurantId)
-    if (!base) return
-    const jobs = expandKitchenPrintJobs(base, config)
-    for (const job of jobs) {
-      const jk = makeJobKey(job)
-      if (store.hasPrinted(jk)) {
-        maybeAckJob(store, config, job)
-        continue
-      }
-      enqueuePrint(job)
-    }
+    if (base) enqueueJobs(expandKitchenPrintJobs(base, config))
   }
 
   const enqueueOrderPrintJobsFromPayload = (payload) => {
     const evt = normalizePrintJob(payload, config.restaurantId)
-    if (!evt) return
-    const jobs = expandOrderPrintJob(evt, config)
-    for (const job of jobs) {
-      const jk = makeJobKey(job)
-      if (store.hasPrinted(jk)) {
-        maybeAckJob(store, config, job)
-        continue
-      }
-      enqueuePrint(job)
-    }
+    if (evt) enqueueJobs(expandOrderPrintJob(evt, config))
   }
 
   const drainQueue = async () => {
@@ -206,17 +193,15 @@ function startAgent({ config, store, printer }) {
     isDraining = true
     try {
       const ready = store.peekReady(5)
-      if (!ready.length) return
-
       for (const job of ready) {
         try {
           if (store.hasPrinted(job.jobKey)) {
-            store.markPrinted(job.jobKey)
+            store.markPrinted(job.jobKey, job)
             maybeAckJob(store, config, job)
             continue
           }
           await printJob(job, printer, config)
-          store.markPrinted(job.jobKey)
+          store.markPrinted(job.jobKey, job)
           info(`Queued job printed: ${job.jobKey}`)
           maybeAckJob(store, config, job)
         } catch (e) {
@@ -233,10 +218,7 @@ function startAgent({ config, store, printer }) {
   const scheduleDrainQueue = () => {
     printPipeline = printPipeline
       .then(() => drainQueue())
-      .catch((e) => {
-        const message = e instanceof Error ? e.message : String(e)
-        error("Drain pipeline failed", { error: message })
-      })
+      .catch((e) => error("Drain pipeline failed", { error: e instanceof Error ? e.message : String(e) }))
     return printPipeline
   }
 
@@ -248,12 +230,10 @@ function startAgent({ config, store, printer }) {
       maybeAckJob(store, config, job)
       return
     }
-
     store.enqueue(job)
-
     try {
       await printJob(job, printer, config)
-      store.markPrinted(jobKey)
+      store.markPrinted(jobKey, job)
       info(`Print success: ${jobKey}`)
       maybeAckJob(store, config, job)
     } catch (e) {
@@ -264,19 +244,25 @@ function startAgent({ config, store, printer }) {
   }
 
   const pullPendingFromHttp = () => {
-    void fetchPendingKitchenOrders(config).then((list) => {
-      for (const payload of list) {
-        enqueueKitchenJobsFromPayload(payload)
-      }
-    })
-    void fetchPendingPrintJobs(config).then((list) => {
-      for (const payload of list) {
-        enqueueOrderPrintJobsFromPayload(payload)
-      }
-    })
+    if (!config.backendWsUrl || !config.agentToken) return
+    statusState.lastHttpSyncAt = new Date().toISOString()
+    void fetchPendingKitchenOrders(config).then((list) => list.forEach(enqueueKitchenJobsFromPayload))
+    void fetchPendingPrintJobs(config).then((list) => list.forEach(enqueueOrderPrintJobsFromPayload))
   }
 
   const connect = () => {
+    if (socket) {
+      socket.removeAllListeners()
+      socket.close()
+      socket = null
+    }
+    if (!config.backendWsUrl || !config.agentToken) {
+      statusState.socketConnected = false
+      statusState.setupRequired = true
+      info("Waiting for backend URL and agent token configuration in UI")
+      return
+    }
+    statusState.setupRequired = false
     info(`Connecting socket.io: ${config.backendWsUrl} (path=${config.backendSocketPath})`)
     socket = io(config.backendWsUrl, {
       path: config.backendSocketPath,
@@ -291,51 +277,64 @@ function startAgent({ config, store, printer }) {
     })
 
     socket.on("connect", () => {
-      info("Print agent connected (socket.io)", {
-        socketId: socket?.id,
-        eventName: config.backendOrderEventName,
-      })
+      statusState.socketConnected = true
+      statusState.lastConnectedAt = new Date().toISOString()
+      statusState.lastError = null
+      info("Print agent connected (socket.io)", { socketId: socket?.id })
       void scheduleDrainQueue()
       pullPendingFromHttp()
     })
-
-    socket.on(config.backendOrderEventName, (payload) => {
-      enqueueKitchenJobsFromPayload(payload)
-    })
-
-    socket.on("order.print_job", (payload) => {
-      enqueueOrderPrintJobsFromPayload(payload)
-    })
-
+    socket.on(config.backendOrderEventName, enqueueKitchenJobsFromPayload)
+    socket.on("order.print_job", enqueueOrderPrintJobsFromPayload)
     socket.on("disconnect", (reason) => {
+      statusState.socketConnected = false
       warn("Socket disconnected", { reason })
     })
-
     socket.on("connect_error", (err) => {
+      statusState.socketConnected = false
+      statusState.lastError = err.message
       error("Socket connect error", { error: err.message })
     })
   }
 
-  queueTimer = setInterval(() => {
-    void scheduleDrainQueue()
-  }, config.queueDrainIntervalMs)
-
-  if (config.kitchenSyncIntervalMs > 0) {
-    syncTimer = setInterval(() => {
-      pullPendingFromHttp()
-    }, config.kitchenSyncIntervalMs)
+  const setupTimers = () => {
+    if (queueTimer) clearInterval(queueTimer)
+    if (syncTimer) clearInterval(syncTimer)
+    queueTimer = setInterval(() => void scheduleDrainQueue(), config.queueDrainIntervalMs)
+    if (config.kitchenSyncIntervalMs > 0) {
+      syncTimer = setInterval(pullPendingFromHttp, config.kitchenSyncIntervalMs)
+    }
   }
 
+  setupTimers()
   connect()
-
-  setImmediate(() => {
-    pullPendingFromHttp()
-  })
+  setImmediate(pullPendingFromHttp)
 
   return {
     flushQueue: scheduleDrainQueue,
+    getStatus() {
+      return {
+        ...statusState,
+        restaurantId: config.restaurantId,
+        restaurantName: config.restaurantName || "",
+        backendUrl: config.backendHttpUrl || config.backendWsUrl || "",
+        queueSize: store.getQueueSize(),
+      }
+    },
+    reloadConfig(nextConfig) {
+      const reconnectNeeded =
+        nextConfig.backendWsUrl !== config.backendWsUrl ||
+        nextConfig.agentToken !== config.agentToken ||
+        nextConfig.backendSocketPath !== config.backendSocketPath
+      config = nextConfig
+      if (printer && typeof printer.updateConfig === "function") printer.updateConfig(nextConfig)
+      setupTimers()
+      if (reconnectNeeded || !statusState.socketConnected) connect()
+      pullPendingFromHttp()
+      void scheduleDrainQueue()
+    },
     stop() {
-      clearInterval(queueTimer)
+      if (queueTimer) clearInterval(queueTimer)
       if (syncTimer) clearInterval(syncTimer)
       if (socket) socket.close()
     },

@@ -92,13 +92,19 @@ class JobStore {
     return Boolean(this.state.printed[jobKey])
   }
 
-  /**
-   * Marks a job as printed ONLY after the printer succeeded, removing it from the queue
-   * and pruning the bounded `printed` history.
-   */
-  markPrinted(jobKey) {
+  markPrinted(jobKey, extraMeta = {}) {
+    const queuedItem = this.state.queue.find((item) => item.jobKey === jobKey)
     this.state.printed[jobKey] = {
       printedAt: new Date().toISOString(),
+      tableName: extraMeta.tableName || queuedItem?.tableName || "-",
+      printType: extraMeta.printType || queuedItem?.printType || "kitchen",
+      printerName:
+        extraMeta.printerName ||
+        queuedItem?.targetPrinter?.name ||
+        queuedItem?.targetPrinterName ||
+        queuedItem?.targetNetwork ||
+        "-",
+      total: Number(extraMeta.total ?? queuedItem?.total ?? 0),
     }
     this.state.queue = this.state.queue.filter((item) => item.jobKey !== jobKey)
     this.prunePrinted()
@@ -117,10 +123,6 @@ class JobStore {
     this.save()
   }
 
-  /**
-   * Returns ready jobs WITHOUT deleting them from the queue before printing.
-   * Jobs are removed from `queue` only in `markPrinted` once printing succeeds.
-   */
   peekReady(limit = 10) {
     const now = Date.now()
     return this.state.queue.filter((item) => item.nextAttemptAt <= now).slice(0, limit)
@@ -147,6 +149,28 @@ class JobStore {
 
   getQueueSize() {
     return this.state.queue.length
+  }
+
+  getPendingJobs() {
+    return [...this.state.queue]
+  }
+
+  getRecentPrinted(limit = 30) {
+    const entries = Object.entries(this.state.printed).map(([jobKey, meta]) => ({
+      jobKey,
+      printedAt: meta?.printedAt || "",
+      tableName: meta?.tableName || "-",
+      printType: meta?.printType || "kitchen",
+      printerName: meta?.printerName || "-",
+      total: Number(meta?.total || 0),
+    }))
+    entries.sort((a, b) => Date.parse(b.printedAt || 0) - Date.parse(a.printedAt || 0))
+    return entries.slice(0, limit)
+  }
+
+  clearQueue() {
+    this.state.queue = []
+    this.save()
   }
 }
 

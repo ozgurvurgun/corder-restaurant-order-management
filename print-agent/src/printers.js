@@ -37,18 +37,36 @@ function sendRawTcp(host, port, bytes) {
   })
 }
 
+function resolveSystemPrintCommand(configCommand) {
+  const raw = String(configCommand || "").trim()
+  if (process.platform === "win32") {
+    return (
+      raw ||
+      'powershell -NoProfile -ExecutionPolicy Bypass -File "./scripts/send-raw-printer.ps1" -PrinterName "{PRINTER_NAME}" -FilePath "{FILE}"'
+    )
+  }
+  if (!raw || raw.toLowerCase().includes("powershell")) {
+    return 'lp -d "{PRINTER_NAME}" -o raw "{FILE}"'
+  }
+  return raw
+}
+
 function execCommand(command, bytes, printerName, usbDrainMs) {
   return new Promise((resolve, reject) => {
-    if (!command.trim()) {
+    const resolvedBase = resolveSystemPrintCommand(command)
+    if (!resolvedBase) {
       reject(new Error("PRINT_COMMAND is empty"))
       return
     }
 
-    const tempFile = path.join(os.tmpdir(), `corder-print-${Date.now()}-${Math.random().toString(36).slice(2)}.bin`)
+    const tempFile = path.join(
+      os.tmpdir(),
+      `corder-print-${Date.now()}-${Math.random().toString(36).slice(2)}.bin`,
+    )
     fs.writeFileSync(tempFile, bytes)
 
-    const safePrinterName = (printerName || "").replaceAll("\"", "")
-    const resolvedCommand = command
+    const safePrinterName = String(printerName || "").replaceAll('"', "")
+    const resolvedCommand = resolvedBase
       .replaceAll("{FILE}", tempFile)
       .replaceAll("{PRINTER_NAME}", safePrinterName)
 
@@ -92,21 +110,20 @@ function execCommand(command, bytes, printerName, usbDrainMs) {
 }
 
 /**
- * @param {object} config
- * @param {Buffer|Uint8Array} bytes
- * @param {{ printerName?: string; networkTarget?: string }} opts networkTarget = "host:port"
+ * Supports mixed-mode per-job printer targets (system/USB or network raw TCP).
  */
 async function printBytes(config, bytes, opts = {}) {
-  const printerName = opts.printerName ?? config.printerName
-  const networkTarget = opts.networkTarget?.trim()
+  const targetPrinter = opts.printer || null
+  const networkTarget = opts.networkTarget ? String(opts.networkTarget).trim() : ""
+  const explicitPrinterName = opts.printerName ? String(opts.printerName).trim() : ""
 
-  if (config.printerMode === "network_raw") {
-    let host = config.printerHost
-    let port = config.printerPort
+  if (targetPrinter?.mode === "network" || networkTarget) {
+    let host = targetPrinter?.host || config.printerHost || "127.0.0.1"
+    let port = parsePort(targetPrinter?.port, config.printerPort || 9100)
     if (networkTarget) {
       const parts = networkTarget.split(":")
       host = (parts[0] || "").trim() || host
-      port = parsePort(parts[1], config.printerPort)
+      port = parsePort(parts[1], port)
     }
     await sendRawTcp(host, port, bytes)
     const drain = Math.max(0, Number(config.printUsbDrainMs) || 0)
@@ -114,17 +131,40 @@ async function printBytes(config, bytes, opts = {}) {
     return
   }
 
+  if (targetPrinter?.mode === "system" || explicitPrinterName) {
+    const sysName =
+      targetPrinter?.systemPrinterName ||
+      targetPrinter?.name ||
+      explicitPrinterName ||
+      config.printerName
+    await execCommand(config.printCommand, bytes, sysName, config.printUsbDrainMs)
+    return
+  }
+
+  if (config.printerMode === "network_raw") {
+    const host = config.printerHost || "127.0.0.1"
+    const port = parsePort(config.printerPort, 9100)
+    await sendRawTcp(host, port, bytes)
+    const drain = Math.max(0, Number(config.printUsbDrainMs) || 0)
+    if (drain > 0) await sleep(drain)
+    return
+  }
+
   if (config.printerMode === "command") {
-    await execCommand(config.printCommand, bytes, printerName, config.printUsbDrainMs)
+    await execCommand(config.printCommand, bytes, config.printerName, config.printUsbDrainMs)
     return
   }
 
   throw new Error(`Unsupported PRINTER_MODE: ${config.printerMode}`)
 }
 
-function createPrinter(config) {
+function createPrinter(initialConfig) {
+  let currentConfig = initialConfig
   return {
-    print: (bytes, opts) => printBytes(config, bytes, opts || {}),
+    print: (bytes, opts) => printBytes(currentConfig, bytes, opts || {}),
+    updateConfig: (nextConfig) => {
+      currentConfig = nextConfig
+    },
   }
 }
 
