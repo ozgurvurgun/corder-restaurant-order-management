@@ -11,6 +11,7 @@ function defaultSettings() {
     backendUrl: baseConfig.backendHttpUrl,
     backendSocketPath: baseConfig.backendSocketPath || "/ws",
     authToken: "",
+    refreshToken: "",
     username: "",
     agentId: baseConfig.agentId,
     restaurantId: "",
@@ -24,6 +25,7 @@ function defaultSettings() {
     printFooterLine: "",
     printTicketStamp: "",
     printUsbDrainMs: baseConfig.printUsbDrainMs,
+    autoStartOnBoot: true,
     kitchenSyncIntervalMs: baseConfig.kitchenSyncIntervalMs,
     queueDrainIntervalMs: baseConfig.queueDrainIntervalMs,
   }
@@ -33,10 +35,12 @@ function normalizeSettings(raw) {
   const defaults = defaultSettings()
   const merged = { ...defaults, ...(raw || {}) }
   merged.authToken = String(merged.authToken || "").trim()
+  merged.refreshToken = String(merged.refreshToken || "").trim()
   merged.username = String(merged.username || "").trim().toLowerCase()
   merged.restaurantId = String(merged.restaurantId || "").trim()
   merged.restaurantName = String(merged.restaurantName || "").trim()
   merged.restaurantSlug = String(merged.restaurantSlug || "").trim()
+  merged.autoStartOnBoot = merged.autoStartOnBoot !== false
   merged.printers = Array.isArray(merged.printers)
     ? merged.printers.map((p, idx) => ({
         id: String(p.id || `p-${idx + 1}`),
@@ -102,10 +106,10 @@ function saveSettings(partial) {
 
 function getPublicSettings(settingsInput) {
   const s = normalizeSettings(settingsInput || loadSettings())
-  const { authToken, backendUrl, backendSocketPath, ...rest } = s
+  const { authToken, refreshToken, backendUrl, backendSocketPath, ...rest } = s
   return {
     ...rest,
-    authenticated: Boolean(authToken && s.restaurantId),
+    authenticated: Boolean((authToken || refreshToken) && s.restaurantId),
   }
 }
 
@@ -133,10 +137,12 @@ function buildRuntimeConfig(settingsInput) {
     backendWsUrl: settings.backendUrl || baseConfig.backendWsUrl,
     backendSocketPath: settings.backendSocketPath || "/ws",
     agentToken: settings.authToken,
+    refreshToken: settings.refreshToken,
     username: settings.username,
     agentId: settings.agentId,
     restaurantId: settings.restaurantId,
     restaurantName: settings.restaurantName,
+    autoStartOnBoot: settings.autoStartOnBoot !== false,
     printerMode: defaultKitchenPrinter?.mode === "network" ? "network_raw" : "system",
     printerName: defaultKitchenPrinter?.systemPrinterName || defaultKitchenPrinter?.name || "KITCHEN",
     printerHost: defaultKitchenPrinter?.host || "127.0.0.1",

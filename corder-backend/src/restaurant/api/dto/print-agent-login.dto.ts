@@ -9,3 +9,9 @@ export class PrintAgentLoginDto {
   @MinLength(4)
   password: string;
 }
+
+export class PrintAgentRefreshDto {
+  @IsString()
+  @MinLength(16)
+  refreshToken: string;
+}

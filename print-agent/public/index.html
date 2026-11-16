@@ -3,18 +3,59 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Corder Yazıcı &amp; Mutfak Merkezi</title>
+  <title>Corder Print Agent</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <div class="app-shell">
+  <!-- Full-Screen Login View (shown when not authenticated) -->
+  <div id="loginView" class="login-shell hidden">
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="brand-logo brand-logo-lg">C</div>
+        <h1 class="login-title">Corder Print Agent</h1>
+        <p class="login-subtitle">
+          Yazıcı ve sipariş fişi yönetim sistemine devam etmek için kullanıcı adı ve parolanızla giriş yapın.
+        </p>
+      </div>
+
+      <form id="formLogin" class="form-stack">
+        <div class="field-group">
+          <label for="inputUsername">Kullanıcı Adı</label>
+          <input
+            type="text"
+            id="inputUsername"
+            placeholder="Kullanıcı adınızı girin"
+            autocomplete="username"
+            required
+          />
+        </div>
+        <div class="field-group">
+          <label for="inputPassword">Parola</label>
+          <input
+            type="password"
+            id="inputPassword"
+            placeholder="••••••••"
+            autocomplete="current-password"
+            required
+          />
+        </div>
+        <div id="loginErrorBox" class="inline-feedback status-err hidden"></div>
+        <button type="submit" class="btn btn-primary btn-block" id="btnLoginSubmit">
+          Giriş Yap
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Authenticated Main Application Shell -->
+  <div id="appShell" class="app-shell hidden">
     <!-- Top Header -->
     <header class="topbar">
       <div class="brand">
         <div class="brand-logo">C</div>
         <div>
-          <h1 class="brand-title">Corder Yazıcı &amp; Mutfak Merkezi</h1>
-          <p class="brand-subtitle" id="headerBranchInfo">Masaüstü Otomatik Fiş &amp; Kategori Yönlendirme Sistemi</p>
+          <h1 class="brand-title">Corder Print Agent</h1>
+          <p class="brand-subtitle" id="headerBranchInfo">Otomatik Fiş &amp; Kategori Yönlendirme Sistemi</p>
         </div>
       </div>
 
@@ -31,25 +72,20 @@
         <button class="btn btn-secondary btn-sm" id="btnFlushTop">
           Bekleyenleri Yazdır
         </button>
+
+        <button class="btn btn-danger btn-sm" id="btnLogoutTop">
+          Çıkış Yap
+        </button>
       </div>
     </header>
-
-    <!-- Setup Banner when not logged in -->
-    <div class="setup-banner hidden" id="setupBanner">
-      <div class="setup-banner-content">
-        <strong>Mekan Girişi Gerekli:</strong>
-        <span id="setupBannerText">Şube bağlantısını başlatmak için Admin panelinden oluşturduğunuz Print Agent kullanıcı adı ve parolası ile giriş yapın.</span>
-      </div>
-      <button class="btn btn-primary btn-sm" id="btnGoSetup">Şube Girişine Git</button>
-    </div>
 
     <!-- Navigation Tabs -->
     <nav class="tabs-nav">
       <button class="tab-btn active" data-tab="workspace">
         1. Yazıcılar &amp; Kategori Eşleştirme
       </button>
-      <button class="tab-btn" data-tab="connection">
-        2. Şube Girişi &amp; Fiş Ayarları
+      <button class="tab-btn" data-tab="settings">
+        2. Fiş &amp; Başlangıç Ayarları
       </button>
       <button class="tab-btn" data-tab="queue">
         3. Canlı Kuyruk &amp; Loglar
@@ -78,7 +114,7 @@
             <div class="card-header">
               <div>
                 <h2>USB / Bilgisayar Yazıcıları</h2>
-                <p class="card-desc">Bilgisayara bağlı Linux (CUPS / USB), Windows veya macOS yazıcıları tek tıkla ekleyin</p>
+                <p class="card-desc">Bilgisayara bağlı Windows, Linux (CUPS / USB) veya macOS yazıcıları tek tıkla ekleyin</p>
               </div>
               <button class="btn btn-secondary btn-sm" id="btnDiscoverPrinters">
                 Bilgisayardaki Yazıcıları Tara
@@ -158,7 +194,7 @@
                 <p class="card-desc">Hangi kategorideki yemek veya içecek siparişi hangi yazıcıdan çıksın?</p>
               </div>
               <button class="btn btn-secondary btn-sm" id="btnRefreshCategories">
-                Şubeden Kategorileri Yenile
+                Kategorileri Yenile
               </button>
             </div>
             <div id="categoryRoutingList" class="category-list"></div>
@@ -167,38 +203,38 @@
       </div>
     </main>
 
-    <!-- TAB 2: Branch Login & Ticket Settings -->
-    <main class="tab-panel" id="tab-connection">
+    <!-- TAB 2: Ticket & Auto-Start Settings -->
+    <main class="tab-panel" id="tab-settings">
       <div class="workspace-grid">
         <section class="card">
           <div class="card-header">
             <div>
-              <h2>Mekan / Şube Kullanıcı Girişi</h2>
-              <p class="card-desc">Admin panelinden bu mekan için oluşturulan Print Agent kullanıcı adı ve parolası ile giriş yapın</p>
+              <h2>Fiş Görünümü &amp; Yazdırma Ayarları</h2>
+              <p class="card-desc">Termal fişin alt bilgi metni ve USB yazdırma ince ayarları</p>
             </div>
           </div>
-
-          <div id="activeSessionBox" class="inline-feedback status-ok hidden" style="margin-bottom: 14px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-              <span id="activeSessionText">Aktif Oturum</span>
-              <button type="button" class="btn btn-danger btn-sm" id="btnLogoutBranch">Oturumu Kapat</button>
-            </div>
-          </div>
-
-          <form id="formConnectBranch" class="form-stack">
+          <form id="formTicketSettings" class="form-stack">
             <div class="field-group">
-              <label for="inputUsername">Print Agent Kullanıcı Adı</label>
-              <input type="text" id="inputUsername" placeholder="Örn: merkez-yazici" autocomplete="username" required />
+              <label for="inputFooterLine">Fiş Alt Bilgi Metni (Footer)</label>
+              <input type="text" id="inputFooterLine" placeholder="Örn: Afiyet Olsun" />
             </div>
             <div class="field-group">
-              <label for="inputPassword">Parola</label>
-              <input type="password" id="inputPassword" placeholder="••••••••" autocomplete="current-password" required />
-              <small class="field-hint">Corder Admin Paneli &rarr; Restoran Düzenle &rarr; Print Agent Kullanıcısı bölümünden belirlenir.</small>
+              <label for="inputTicketStamp">Fiş Üst Başlık / Damga (İsteğe Bağlı)</label>
+              <input type="text" id="inputTicketStamp" placeholder="Örn: MUTFAK / KASA" />
+            </div>
+            <div class="field-group">
+              <label for="inputUsbDrainMs">USB Yazdırma Bekleme Süresi (ms)</label>
+              <input type="number" id="inputUsbDrainMs" min="0" max="5000" step="50" value="400" />
+              <small class="field-hint">USB yazıcılarda arka arkaya fişlerde tampon dolmasını önlemek için bekleme süresi.</small>
+            </div>
+            <div class="field-group">
+              <label class="checkbox-row" for="inputAutoStartOnBoot">
+                <input type="checkbox" id="inputAutoStartOnBoot" checked />
+                <span>Bilgisayar açıldığında Corder Print Agent otomatik çalışsın (Windows / Linux / macOS)</span>
+              </label>
             </div>
             <div class="form-footer">
-              <button type="submit" class="btn btn-primary" id="btnConnectBranch">
-                Giriş Yap ve Şubeyi Bağla
-              </button>
+              <button type="submit" class="btn btn-primary">Ayarları Kaydet</button>
             </div>
           </form>
         </section>
@@ -206,28 +242,19 @@
         <section class="card">
           <div class="card-header">
             <div>
-              <h2>Fiş Görünümü &amp; Gelişmiş Ayarlar</h2>
-              <p class="card-desc">Termal fişin alt bilgi metni ve USB yazdırma ince ayarları</p>
+              <h2>Oturum &amp; Sistem Bilgisi</h2>
+              <p class="card-desc">Çıkış yapılana kadar oturumunuz otomatik olarak açık tutulur</p>
             </div>
           </div>
-          <form id="formTicketSettings" class="form-stack">
-            <div class="field-group">
-              <label for="inputFooterLine">Fiş Alt Bilgi Metni (Footer)</label>
-              <input type="text" id="inputFooterLine" placeholder="Örn: Afiyet Olsun - Corder Restaurant" />
+          <div class="form-stack">
+            <div class="printer-item">
+              <div class="printer-meta">
+                <div class="printer-title"><span id="infoRestaurantName">-</span></div>
+                <div class="printer-sub" id="infoUsername">Kullanıcı: -</div>
+              </div>
+              <span class="tag tag-net">Kalıcı Oturum Aktif</span>
             </div>
-            <div class="field-group">
-              <label for="inputTicketStamp">Fiş Üst Başlık / Damga (İsteğe Bağlı)</label>
-              <input type="text" id="inputTicketStamp" placeholder="Örn: MERKEZ ŞUBE" />
-            </div>
-            <div class="field-group">
-              <label for="inputUsbDrainMs">USB Yazdırma Bekleme Süresi (ms)</label>
-              <input type="number" id="inputUsbDrainMs" min="0" max="5000" step="50" value="400" />
-              <small class="field-hint">USB yazıcılarda arka arkaya fişlerde tampon dolmasını önlemek için bekleme süresi.</small>
-            </div>
-            <div class="form-footer">
-              <button type="submit" class="btn btn-primary">Fiş Ayarlarını Kaydet</button>
-            </div>
-          </form>
+          </div>
         </section>
       </div>
     </main>

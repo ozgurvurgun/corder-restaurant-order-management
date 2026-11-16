@@ -2,7 +2,7 @@ const MAX_UI_LOGS = 40
 
 const state = {
   status: {},
-  settings: { printers: [], categories: [], categoryRoutes: {}, authenticated: false, username: "" },
+  settings: { printers: [], categories: [], categoryRoutes: {}, authenticated: false, username: "", autoStartOnBoot: true },
   discoveredPrinters: [],
   queue: [],
   recentPrinted: [],
@@ -51,39 +51,31 @@ function escapeHtml(str) {
     .replaceAll('"', "&quot;")
 }
 
-function renderHeader() {
+function renderAuthGateAndHeader() {
+  const isAuth = Boolean(state.settings.authenticated)
+  $("loginView").classList.toggle("hidden", isAuth)
+  $("appShell").classList.toggle("hidden", !isAuth)
+  if (!isAuth) return
+
   const pill = $("connectionPill")
   const text = $("connectionText")
-  const banner = $("setupBanner")
-  const sessionBox = $("activeSessionBox")
-  const sessionText = $("activeSessionText")
   const rName = state.settings.restaurantName || state.status.restaurantName || ""
   const uname = state.settings.username || ""
   $("headerQueueCount").textContent = String(state.queue.length || 0)
   $("headerBranchInfo").textContent = rName
-    ? `Aktif Şube: ${rName}${uname ? ` • Kullanıcı: ${uname}` : ""}`
-    : "Masaüstü Otomatik Fiş & Kategori Yönlendirme Sistemi"
+    ? `${rName}${uname ? ` • Kullanıcı: ${uname}` : ""}`
+    : "Otomatik Fiş & Kategori Yönlendirme Sistemi"
 
-  if (state.settings.authenticated && rName) {
-    sessionBox.classList.remove("hidden")
-    sessionText.textContent = `Aktif Oturum: ${rName} (${uname})`
-  } else {
-    sessionBox.classList.add("hidden")
-  }
+  $("infoRestaurantName").textContent = rName || "Bağlı İşletme"
+  $("infoUsername").textContent = `Kullanıcı: ${uname || "-"}`
 
   pill.className = "status-pill"
-  if (state.status.setupRequired || !state.settings.authenticated) {
-    pill.classList.add("status-warn")
-    text.textContent = "Giriş Bekleniyor"
-    banner.classList.remove("hidden")
-  } else if (state.status.socketConnected) {
+  if (state.status.socketConnected) {
     pill.classList.add("status-ok")
-    text.textContent = rName ? `Bağlı: ${rName}` : "Sunucuya Bağlı (Canlı)"
-    banner.classList.add("hidden")
+    text.textContent = rName ? `Bağlı: ${rName}` : "Canlı Bağlantı Aktif"
   } else {
     pill.classList.add("status-err")
-    text.textContent = state.status.lastError ? `Bağlantı Yok (${state.status.lastError})` : "Sunucuya Bağlanıyor..."
-    banner.classList.add("hidden")
+    text.textContent = state.status.lastError ? `Yeniden Bağlanıyor (${state.status.lastError})` : "Sunucuya Bağlanıyor..."
   }
 }
 
@@ -156,7 +148,7 @@ function renderRoutingDropdowns() {
   const categories = state.settings.categories || []
   const routes = state.settings.categoryRoutes || {}
   if (!categories.length) {
-    catContainer.innerHTML = `<div class="empty-hint">Henüz kategori listesi çekilmedi. Şube girişi yaptıktan sonra kategoriler otomatik gelir veya "Şubeden Kategorileri Yenile" butonuna basabilirsiniz.</div>`
+    catContainer.innerHTML = `<div class="empty-hint">Henüz kategori tanımlanmamış. "Kategorileri Yenile" butonuna basarak menü kategorilerinizi güncelleyebilirsiniz.</div>`
     return
   }
 
@@ -238,6 +230,7 @@ async function loadState(rerenderAll = false) {
     const data = await apiCall("/api/state")
     const changed =
       rerenderAll ||
+      state.settings.authenticated !== data.settings?.authenticated ||
       JSON.stringify(state.settings.printers) !== JSON.stringify(data.settings?.printers) ||
       JSON.stringify(state.settings.categories) !== JSON.stringify(data.settings?.categories) ||
       JSON.stringify(state.settings.categoryRoutes) !== JSON.stringify(data.settings?.categoryRoutes)
@@ -254,13 +247,16 @@ async function loadState(rerenderAll = false) {
       $("inputFooterLine").value = state.settings.printFooterLine || ""
       $("inputTicketStamp").value = state.settings.printTicketStamp || ""
       $("inputUsbDrainMs").value = state.settings.printUsbDrainMs ?? 400
+      $("inputAutoStartOnBoot").checked = state.settings.autoStartOnBoot !== false
     }
-    renderHeader()
-    renderQueueAndLogs()
-    if (changed) {
-      renderPrinters()
-      renderDiscoveredPrinters()
-      renderRoutingDropdowns()
+    renderAuthGateAndHeader()
+    if (state.settings.authenticated) {
+      renderQueueAndLogs()
+      if (changed) {
+        renderPrinters()
+        renderDiscoveredPrinters()
+        renderRoutingDropdowns()
+      }
     }
   } catch (e) {
     console.error(e)
@@ -269,7 +265,44 @@ async function loadState(rerenderAll = false) {
 
 document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll(".tab-btn").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)))
-  $("btnGoSetup").addEventListener("click", () => switchTab("connection"))
+
+  $("formLogin").addEventListener("submit", async (e) => {
+    e.preventDefault()
+    const errBox = $("loginErrorBox")
+    const submitBtn = $("btnLoginSubmit")
+    errBox.classList.add("hidden")
+    submitBtn.disabled = true
+    submitBtn.textContent = "Giriş Yapılıyor..."
+    try {
+      const res = await apiCall("/api/login", {
+        method: "POST",
+        body: JSON.stringify({
+          username: $("inputUsername").value.trim(),
+          password: $("inputPassword").value,
+        }),
+      })
+      $("inputPassword").value = ""
+      $("inputFooterLine").value = res.settings?.printFooterLine || ""
+      showToast(`Hoş geldiniz: ${res.settings?.restaurantName || "Corder Print Agent"}`)
+      await loadState(true)
+    } catch (err) {
+      errBox.textContent = err.message
+      errBox.classList.remove("hidden")
+    } finally {
+      submitBtn.disabled = false
+      submitBtn.textContent = "Giriş Yap"
+    }
+  })
+
+  $("btnLogoutTop").addEventListener("click", async () => {
+    try {
+      await apiCall("/api/logout", { method: "POST" })
+      showToast("Oturum kapatıldı")
+      await loadState(true)
+    } catch (err) {
+      showToast(err.message, true)
+    }
+  })
 
   $("configuredPrintersList").addEventListener("click", async (e) => {
     const btn = e.target.closest("button[data-action]")
@@ -409,42 +442,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   $("btnRefreshCategories").addEventListener("click", async () => {
     try {
-      showToast("Şube kategorileri yenileniyor...")
+      showToast("Kategoriler yenileniyor...")
       const res = await apiCall("/api/sync-context", { method: "POST" })
       showToast(`Kategoriler güncellendi (${res.settings?.categories?.length || 0} kategori)`)
       await loadState(true)
     } catch (e) {
       showToast(e.message, true)
-    }
-  })
-
-  $("formConnectBranch").addEventListener("submit", async (e) => {
-    e.preventDefault()
-    try {
-      showToast("Giriş yapılıyor ve şube bilgileri çekiliyor...")
-      const res = await apiCall("/api/login", {
-        method: "POST",
-        body: JSON.stringify({
-          username: $("inputUsername").value.trim(),
-          password: $("inputPassword").value,
-        }),
-      })
-      $("inputPassword").value = ""
-      showToast(`Bağlandı: ${res.settings?.restaurantName || "Şube"} (${res.settings?.categories?.length || 0} kategori)`)
-      await loadState(true)
-      switchTab("workspace")
-    } catch (err) {
-      showToast(`Giriş hatası: ${err.message}`, true)
-    }
-  })
-
-  $("btnLogoutBranch").addEventListener("click", async () => {
-    try {
-      await apiCall("/api/logout", { method: "POST" })
-      showToast("Şube oturumu kapatıldı")
-      await loadState(true)
-    } catch (err) {
-      showToast(err.message, true)
     }
   })
 
@@ -457,9 +460,10 @@ document.addEventListener("DOMContentLoaded", () => {
           printFooterLine: $("inputFooterLine").value.trim(),
           printTicketStamp: $("inputTicketStamp").value.trim(),
           printUsbDrainMs: Number($("inputUsbDrainMs").value) || 0,
+          autoStartOnBoot: $("inputAutoStartOnBoot").checked,
         }),
       })
-      showToast("Fiş ayarları kaydedildi")
+      showToast("Ayarlar kaydedildi")
       await loadState(true)
     } catch (err) {
       showToast(err.message, true)

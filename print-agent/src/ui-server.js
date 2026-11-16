@@ -5,6 +5,7 @@ const crypto = require("crypto")
 const { loadSettings, saveSettings, getPublicSettings, buildRuntimeConfig } = require("./settings-store")
 const { discoverSystemPrinters, testTcpPrinterConnection } = require("./printer-discovery")
 const { loginPrintAgent, fetchAgentContext } = require("./http-sync")
+const { applyAutoStartSetting } = require("./autostart")
 const { buildTestTicket } = require("./escpos")
 const { printBytes } = require("./printers")
 const { info, warn, getRecentLogs, clearLogs } = require("./logger")
@@ -128,6 +129,7 @@ function mapBackendPrinters(backendPrinters = []) {
 
 function createUiServer({ store, agent }) {
   let electronPrinterProvider = null
+  let electronAppRef = null
   const sessionToken = crypto.randomBytes(32).toString("hex")
 
   const applyAndReload = (partial) => {
@@ -176,6 +178,7 @@ function createUiServer({ store, agent }) {
       const { publicSettings } = applyAndReload({
         backendUrl: loginResult.backendUrl,
         authToken: loginResult.accessToken,
+        refreshToken: loginResult.refreshToken,
         username: String(body.username || "").trim().toLowerCase(),
         restaurantId: loginResult.restaurant?.id || "",
         restaurantName: loginResult.restaurant?.name || "",
@@ -183,7 +186,7 @@ function createUiServer({ store, agent }) {
         printers: nextPrinters,
         printFooterLine: current.printFooterLine || loginResult.restaurant?.name || "",
       })
-      info("Print Agent authenticated with branch", {
+      info("Corder Print Agent logged in", {
         username: publicSettings.username,
         restaurantName: publicSettings.restaurantName,
         categories: publicSettings.categories.length,
@@ -195,10 +198,11 @@ function createUiServer({ store, agent }) {
     if (req.method === "POST" && pathname === "/api/logout") {
       const { publicSettings } = applyAndReload({
         authToken: "",
+        refreshToken: "",
         restaurantId: "",
         restaurantName: "",
       })
-      info("Print Agent logged out")
+      info("Corder Print Agent logged out")
       sendJson(res, 200, { ok: true, settings: publicSettings })
       return
     }
@@ -280,6 +284,10 @@ function createUiServer({ store, agent }) {
         patch.categoryRoutes = body.categoryRoutes
       }
       if (body.printUsbDrainMs !== undefined) patch.printUsbDrainMs = Number(body.printUsbDrainMs || 0)
+      if (body.autoStartOnBoot !== undefined) {
+        patch.autoStartOnBoot = Boolean(body.autoStartOnBoot)
+        await applyAutoStartSetting(patch.autoStartOnBoot, electronAppRef)
+      }
 
       const { publicSettings } = applyAndReload({ ...current, ...patch })
       sendJson(res, 200, { ok: true, settings: publicSettings })
@@ -347,8 +355,9 @@ function createUiServer({ store, agent }) {
   return {
     server,
     sessionToken,
-    setElectronPrinterProvider(fn) {
+    setElectronPrinterProvider(fn, electronApp = null) {
       electronPrinterProvider = fn
+      if (electronApp) electronAppRef = electronApp
     },
     listen(preferredPort = 0) {
       return new Promise((resolve, reject) => {

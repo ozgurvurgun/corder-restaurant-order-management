@@ -5,6 +5,7 @@ const {
   ackPrintJobPrinted,
   fetchPendingKitchenOrders,
   fetchPendingPrintJobs,
+  refreshAgentSession,
 } = require("./http-sync")
 const {
   expandKitchenPrintJobs,
@@ -289,11 +290,26 @@ function startAgent({ config: initialConfig, store, printer }) {
     socket.on("disconnect", (reason) => {
       statusState.socketConnected = false
       warn("Socket disconnected", { reason })
+      if (reason === "io server disconnect" && config.refreshToken) {
+        void refreshAgentSession(config).then((refreshed) => {
+          if (refreshed?.authToken) {
+            config.agentToken = refreshed.authToken
+            connect()
+          }
+        })
+      }
     })
     socket.on("connect_error", (err) => {
       statusState.socketConnected = false
       statusState.lastError = err.message
       error("Socket connect error", { error: err.message })
+      if (config.refreshToken) {
+        void refreshAgentSession(config).then((refreshed) => {
+          if (refreshed?.authToken && socket) {
+            socket.auth = { token: refreshed.authToken }
+          }
+        })
+      }
     })
   }
 

@@ -1,5 +1,8 @@
 const { info, warn } = require("./logger")
 const { resolveEmbeddedBackendUrl, PRODUCTION_SERVER_URL } = require("./config")
+const { saveSettings } = require("./settings-store")
+
+let refreshInFlight = null
 
 function normalizeHttpOrigin(rawUrl) {
   const clean = String(rawUrl || "").trim()
@@ -19,16 +22,71 @@ function httpBaseUrl(config) {
   return normalizeHttpOrigin(config?.backendWsUrl || PRODUCTION_SERVER_URL)
 }
 
+async function refreshAgentSession(config) {
+  if (!config?.refreshToken) return null
+  if (refreshInFlight) return refreshInFlight
+
+  refreshInFlight = (async () => {
+    const base = httpBaseUrl(config)
+    const url = `${base}/restaurant/print-agent/refresh`
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken: config.refreshToken }),
+      })
+      if (!res.ok) {
+        warn("Print Agent token refresh rejected", { status: res.status })
+        return null
+      }
+      const data = await res.json()
+      if (!data?.accessToken) return null
+      const saved = saveSettings({
+        authToken: String(data.accessToken),
+        refreshToken: String(data.refreshToken || config.refreshToken),
+      })
+      config.agentToken = saved.authToken
+      config.refreshToken = saved.refreshToken
+      info("Print Agent session token refreshed automatically")
+      return saved
+    } catch (e) {
+      warn("Print Agent token refresh network error", { error: e instanceof Error ? e.message : String(e) })
+      return null
+    } finally {
+      refreshInFlight = null
+    }
+  })()
+
+  return refreshInFlight
+}
+
+async function authorizedFetch(config, url, options = {}) {
+  const doCall = (token) =>
+    fetch(url, {
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+  let res = await doCall(config.agentToken)
+  if (res.status === 401 && config.refreshToken) {
+    const refreshed = await refreshAgentSession(config)
+    if (refreshed?.authToken) {
+      res = await doCall(refreshed.authToken)
+    }
+  }
+  return res
+}
+
 async function patchWithRetry(config, url, logLabel, meta) {
   let lastErr = ""
   for (let i = 0; i < 6; i++) {
     try {
-      const res = await fetch(url, {
+      const res = await authorizedFetch(config, url, {
         method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${config.agentToken}`,
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
       })
       if (res.ok) {
         if (i > 0) info(`${logLabel} ack succeeded after retry`, { ...meta, attempt: i + 1 })
@@ -63,9 +121,7 @@ async function fetchPendingKitchenOrders(config) {
   if (!base || !config.agentToken) return []
   const url = `${base}/restaurant/print-agent/pending-kitchen-orders`
   try {
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${config.agentToken}` },
-    })
+    const res = await authorizedFetch(config, url)
     if (!res.ok) {
       warn("pending-kitchen HTTP failed", { status: res.status })
       return []
@@ -83,9 +139,7 @@ async function fetchPendingPrintJobs(config) {
   if (!base || !config.agentToken) return []
   const url = `${base}/restaurant/print-agent/pending-print-jobs`
   try {
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${config.agentToken}` },
-    })
+    const res = await authorizedFetch(config, url)
     if (!res.ok) {
       warn("pending-print-jobs HTTP failed", { status: res.status })
       return []
@@ -128,6 +182,7 @@ async function loginPrintAgent(username, password) {
   return {
     backendUrl: base,
     accessToken: String(data?.accessToken || ""),
+    refreshToken: String(data?.refreshToken || ""),
     restaurant: data?.restaurant || null,
     categories: Array.isArray(data?.categories) ? data.categories : [],
     printers: Array.isArray(data?.printers) ? data.printers : [],
@@ -136,16 +191,13 @@ async function loginPrintAgent(username, password) {
 
 async function fetchAgentContext(config) {
   const base = httpBaseUrl(config)
-  const token = String(config?.agentToken || config?.authToken || "").trim()
-  if (!token) {
-    throw new Error("Önce mekan kullanıcı adı ve parolası ile giriş yapın.")
+  if (!config?.agentToken && !config?.refreshToken) {
+    throw new Error("Lütfen önce kullanıcı adı ve parolanızla giriş yapın.")
   }
   const url = `${base}/restaurant/print-agent/context`
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
+  const res = await authorizedFetch(config, url)
   if (!res.ok) {
-    throw new Error(`Kategori ve şube bilgileri çekilemedi (HTTP ${res.status})`)
+    throw new Error(`Kategori bilgileri çekilemedi (HTTP ${res.status})`)
   }
   const data = await res.json()
   return {
@@ -162,5 +214,6 @@ module.exports = {
   fetchPendingKitchenOrders,
   fetchPendingPrintJobs,
   loginPrintAgent,
+  refreshAgentSession,
   fetchAgentContext,
 }

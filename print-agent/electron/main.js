@@ -18,8 +18,15 @@ if (typeof electronModule === "string") {
 }
 
 const { app, BrowserWindow } = electronModule
+const { getAppDataDir } = require("../src/config")
 const { startPrintAgentApp } = require("../src/index")
 const { info, error } = require("../src/logger")
+
+app.setName("corder-print-agent")
+app.setPath("userData", path.join(getAppDataDir(), "desktop-profile"))
+if (process.platform === "linux") {
+  app.commandLine.appendSwitch("no-sandbox")
+}
 
 let mainWindow = null
 let agentApp = null
@@ -32,7 +39,7 @@ async function createMainWindow(uiUrl, uiServer, sessionToken) {
     height: 840,
     minWidth: 960,
     minHeight: 640,
-    title: "Corder Yazıcı & Mutfak Merkezi",
+    title: "Corder Print Agent",
     autoHideMenuBar: true,
     backgroundColor: "#f4f6f9",
     webPreferences: {
@@ -52,7 +59,7 @@ async function createMainWindow(uiUrl, uiServer, sessionToken) {
         return mainWindow.webContents.getPrintersAsync()
       }
       return []
-    })
+    }, app)
   }
 
   mainWindow.webContents.setWindowOpenHandler(() => {
@@ -85,7 +92,7 @@ if (!singleInstanceLock) {
 
   app.whenReady().then(async () => {
     try {
-      agentApp = await startPrintAgentApp({ openBrowser: false, port: 0 })
+      agentApp = await startPrintAgentApp({ openBrowser: false, port: 4190, electronApp: app })
       await createMainWindow(agentApp.uiUrl, agentApp.uiServer, agentApp.sessionToken)
     } catch (err) {
       error("Failed to launch Electron Print Agent", {

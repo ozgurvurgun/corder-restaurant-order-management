@@ -16,7 +16,7 @@ import { PrintersService } from '../application/printers.service';
 import { RestaurantSettingsService } from '../application/restaurant-settings.service';
 import { RestaurantAuthService } from '../application/restaurant-auth.service';
 import { PrintAgentGuard, type PrintAgentRequest } from '../infrastructure/print-agent.guard';
-import { PrintAgentLoginDto } from './dto/print-agent-login.dto';
+import { PrintAgentLoginDto, PrintAgentRefreshDto } from './dto/print-agent-login.dto';
 import {
   extractClientIp,
   LoginRateLimiterService,
@@ -36,15 +36,21 @@ export class PrintAgentController {
   @Post('login')
   async login(@Req() req: Request, @Body() dto: PrintAgentLoginDto) {
     this.rateLimiter.consumeLoginAttempt('print-agent', extractClientIp(req), dto.username);
-    const { accessToken, restaurant } = await this.authService.loginPrintAgent(
+    const { accessToken, refreshToken, restaurant } = await this.authService.loginPrintAgent(
       dto.username,
       dto.password,
     );
     const context = await this.buildContext(restaurant.id);
     return {
       accessToken,
+      refreshToken,
       ...context,
     };
+  }
+
+  @Post('refresh')
+  async refresh(@Body() dto: PrintAgentRefreshDto) {
+    return this.authService.refreshPrintAgentSession(dto.refreshToken);
   }
 
   @Get('context')

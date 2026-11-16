@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
+import { createHash } from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import { RootAdminEntity } from '../../platform/domain/root-admin.entity';
 import { BossRestaurantEntity } from '../../platform/domain/boss-restaurant.entity';
@@ -18,7 +19,7 @@ export interface RestaurantLoginDto {
   restaurantId?: string;
 }
 
-export type RestaurantJwtRole = 'root' | 'staff' | 'terminal' | 'print_agent';
+export type RestaurantJwtRole = 'root' | 'staff' | 'terminal' | 'print_agent' | 'print_agent_refresh';
 
 export interface RestaurantTokenPayload {
   sub: string;
@@ -29,6 +30,7 @@ export interface RestaurantTokenPayload {
   type: 'restaurant';
   role: RestaurantJwtRole;
   staffRole?: string;
+  pwdFp?: string;
 }
 
 export interface BranchSummaryDto {
@@ -116,24 +118,80 @@ export class RestaurantAuthService {
       !restaurant?.printAgentPasswordHash ||
       !(await bcrypt.compare(password, restaurant.printAgentPasswordHash))
     ) {
-      throw new UnauthorizedException('Invalid Print Agent username or password');
+      throw new UnauthorizedException('Kullanıcı adı veya parola hatalı');
     }
     if (restaurant.status !== 'active') {
-      throw new UnauthorizedException('Restaurant is not active');
+      throw new UnauthorizedException('İşletme hesabı aktif değil');
     }
-    const accessToken = this.signToken({
+    return this.issuePrintAgentTokens(restaurant);
+  }
+
+  async refreshPrintAgentSession(rawRefreshToken: string) {
+    const jwtSecret = requireConfigSecret(this.config, 'JWT_SECRET');
+    let payload: RestaurantTokenPayload;
+    try {
+      payload = this.jwt.verify<RestaurantTokenPayload>(rawRefreshToken.trim(), {
+        secret: jwtSecret,
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid or expired Print Agent refresh token');
+    }
+    if (
+      payload.type !== 'restaurant' ||
+      payload.role !== 'print_agent_refresh' ||
+      !payload.restaurantId ||
+      !payload.email
+    ) {
+      throw new UnauthorizedException('Invalid Print Agent refresh token');
+    }
+    const restaurant = await this.restaurantRepo.findOne({
+      where: { id: payload.restaurantId },
+    });
+    if (
+      !restaurant ||
+      restaurant.status !== 'active' ||
+      !restaurant.printAgentUsername ||
+      !restaurant.printAgentPasswordHash ||
+      restaurant.printAgentUsername !== payload.email
+    ) {
+      throw new UnauthorizedException('Print Agent account is no longer active');
+    }
+    const expectedFp = this.computePasswordFingerprint(restaurant.printAgentPasswordHash);
+    if (payload.pwdFp && payload.pwdFp !== expectedFp) {
+      throw new UnauthorizedException('Print Agent password has been changed');
+    }
+    return this.issuePrintAgentTokens(restaurant);
+  }
+
+  private issuePrintAgentTokens(restaurant: RestaurantEntity) {
+    const jwtSecret = requireConfigSecret(this.config, 'JWT_SECRET');
+    const pwdFp = this.computePasswordFingerprint(restaurant.printAgentPasswordHash || '');
+    const basePayload = {
       sub: restaurant.id,
       restaurantId: restaurant.id,
       slug: restaurant.slug,
       email: restaurant.printAgentUsername!,
-      name: 'Print Agent',
-      type: 'restaurant',
-      role: 'print_agent',
-    });
+      name: 'Corder Print Agent',
+      type: 'restaurant' as const,
+      pwdFp,
+    };
+    const accessToken = this.jwt.sign(
+      { ...basePayload, role: 'print_agent' as const },
+      { secret: jwtSecret, expiresIn: '30d' },
+    );
+    const refreshToken = this.jwt.sign(
+      { ...basePayload, role: 'print_agent_refresh' as const },
+      { secret: jwtSecret, expiresIn: '3650d' },
+    );
     return {
       accessToken,
+      refreshToken,
       restaurant: this.toBranchSummary(restaurant),
     };
+  }
+
+  private computePasswordFingerprint(hash: string): string {
+    return createHash('sha256').update(hash).digest('hex').slice(0, 16);
   }
 
   async getSessionProfile(user: {

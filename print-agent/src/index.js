@@ -5,6 +5,7 @@ const { JobStore } = require("./job-store")
 const { createPrinter } = require("./printers")
 const { startAgent } = require("./agent")
 const { createUiServer } = require("./ui-server")
+const { applyAutoStartSetting } = require("./autostart")
 const { info, error } = require("./logger")
 
 function openDesktopBrowser(url) {
@@ -20,6 +21,7 @@ function openDesktopBrowser(url) {
 async function startPrintAgentApp(options = {}) {
   const detectedBackendUrl = await resolveEmbeddedBackendUrl(true)
   const settings = saveSettings({ backendUrl: detectedBackendUrl })
+  await applyAutoStartSetting(settings.autoStartOnBoot, options.electronApp || null)
   const config = buildRuntimeConfig(settings)
   const store = new JobStore(config.queueFile)
   const printer = createPrinter(config)

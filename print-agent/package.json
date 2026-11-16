@@ -9,8 +9,8 @@
   "main": "electron/main.js",
   "type": "commonjs",
   "scripts": {
-    "start": "electron --no-sandbox electron/main.js",
-    "electron": "electron --no-sandbox electron/main.js",
+    "start": "node electron/main.js",
+    "electron": "node electron/main.js",
     "headless": "node src/index.js",
     "ui": "node src/index.js --open",
     "dev": "node --watch src/index.js"
