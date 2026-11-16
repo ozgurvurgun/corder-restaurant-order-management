@@ -1,4 +1,12 @@
-import type { CancelledItem } from "./panel-types"
+import type { CancelledItem, CloseCheckSplitMethod } from "./panel-types"
+
+export interface PanelSplitSharePayment {
+  shareIndex: number
+  method: CloseCheckSplitMethod
+  amount: number
+  ledgerCustomerId?: string
+  paidAt: string
+}
 
 export interface StockMaterial {
   id: string

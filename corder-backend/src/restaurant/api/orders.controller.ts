@@ -180,12 +180,24 @@ export class OrdersController {
     @Body() dto: CloseCheckDto,
   ) {
     const isWalkIn = Boolean(dto.items && dto.items.length > 0 && !dto.tableId);
-    const actor = await this.staffSession.assertActorPermission(
-      req,
-      restaurantId,
-      isWalkIn ? 'order.quick_sale' : 'billing.close_check',
-      user,
-    );
+    const hasPartialLines = Boolean(dto.lines && dto.lines.length > 0);
+    const actor = await this.staffSession.resolveActorContext(req, restaurantId, user);
+
+    if (isWalkIn) {
+      if (!actor.isBoss && !actor.permissions.includes('order.quick_sale')) {
+        throw new ForbiddenException('You do not have permission for this action (order.quick_sale)');
+      }
+    } else if (hasPartialLines) {
+      if (
+        !actor.isBoss &&
+        !actor.permissions.includes('billing.split_bill') &&
+        !actor.permissions.includes('billing.close_check')
+      ) {
+        throw new ForbiddenException('You do not have permission to split bills (billing.split_bill)');
+      }
+    } else if (!actor.isBoss && !actor.permissions.includes('billing.close_check')) {
+      throw new ForbiddenException('You do not have permission for this action (billing.close_check)');
+    }
 
     if (
       dto.method === 'split' &&

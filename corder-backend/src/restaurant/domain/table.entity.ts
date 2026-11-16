@@ -9,6 +9,30 @@ import {
 } from 'typeorm';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 
+export interface TableDiscountState {
+  type: 'percent' | 'amount' | 'complimentary';
+  value: number;
+  reason: string;
+}
+
+export interface TableSplitSharePayment {
+  shareIndex: number;
+  method: 'cash' | 'credit-card' | 'meal-card' | 'multinet' | 'ledger';
+  amount: number;
+  ledgerCustomerId?: string;
+  paidAt: string;
+}
+
+export interface TableSplitState {
+  type: 'person' | 'items';
+  personCount?: number;
+  perPersonAmount?: number;
+  paidShares?: TableSplitSharePayment[];
+  itemIds?: string[];
+  amounts?: Record<string, number>;
+  selectedTotal?: number;
+}
+
 @Entity('tables')
 @Index(['restaurantId'])
 export class TableEntity {
@@ -30,6 +54,12 @@ export class TableEntity {
 
   @Column({ default: 'empty' })
   status: string;
+
+  @Column({ name: 'discount', type: 'jsonb', nullable: true, default: null })
+  discount: TableDiscountState | null;
+
+  @Column({ name: 'split_info', type: 'jsonb', nullable: true, default: null })
+  splitInfo: TableSplitState | null;
 
   /** Waiter is working this table on the terminal — persistent like register checkout; other waiters cannot enter via API. */
   @Column({ name: 'session_staff_id', type: 'uuid', nullable: true })
@@ -78,6 +108,8 @@ export class TableEntity {
 
   markEmpty(): void {
     this.status = 'empty';
+    this.discount = null;
+    this.splitInfo = null;
     this.releaseSession();
   }
 }

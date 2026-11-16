@@ -1,7 +1,18 @@
 import type {
   CloseCheckPaymentMethod,
   CloseCheckSplitMethod,
+  PanelDiscountType,
+  PanelTable,
 } from "../panel-types"
+
+export interface RawTableDto {
+  id: string
+  name: string
+  section: string
+  status: string
+  discount?: { type: PanelDiscountType; value: number; reason: string } | null
+  splitInfo?: PanelTable["splitInfo"] | null
+}
 
 export interface ShiftDto {
   id: string
@@ -178,6 +189,7 @@ export interface CompletedOrderDto {
 
 export interface CloseCheckBody {
   tableId?: string
+  lines?: { itemId: string; quantity: number }[]
   items?: { productId: string; quantity: number; note?: string }[]
   method: CloseCheckPaymentMethod
   discount?: { type: "percent" | "amount"; value: number; reason?: string }
@@ -190,11 +202,14 @@ export interface CloseCheckBody {
   tip?: number
 }
 
+export type CloseCheckRequestDto = CloseCheckBody
+
 export interface CloseCheckResponseDto {
   completedOrder: CompletedOrderDto
   shift: ShiftDto
   cashTransaction: CashTransactionDto | null
   stockMovements: StockMovementDto[]
+  tableFullyClosed?: boolean
 }
 
 export interface LedgerCustomerDto {

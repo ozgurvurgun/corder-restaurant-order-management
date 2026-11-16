@@ -1,20 +1,16 @@
 import { useEffect, useRef, useState } from "react"
 import { usePanelStore } from "@/lib/panel-store"
 import { usePanelToast } from "./panel-toast"
-import type { PanelDiscountType, PanelPaymentMethod } from "@/lib/panel-types"
+import type { CloseCheckSplitMethod, PanelDiscountType, PanelPaymentMethod } from "@/lib/panel-types"
 import { X, Banknote, CreditCard, UtensilsCrossed, SplitSquareVertical, Wallet, BookUser, Loader2 } from "lucide-react"
 import { usePanelAuth } from "@/lib/panel-auth"
 import { api } from "@/lib/api"
 
-function formatCurrency(n: number) {
-  return n.toLocaleString("tr-TR", { minimumFractionDigits: 2 })
-}
-
+function formatCurrency(n: number) { return n.toLocaleString("tr-TR", { minimumFractionDigits: 2 }) }
 function sanitizePositiveDecimalInput(raw: string): string {
   if (raw === "") return ""
   const num = Number(raw)
-  if (!Number.isFinite(num) || num < 0) return "0"
-  return raw
+  return !Number.isFinite(num) || num < 0 ? "0" : raw
 }
 
 const METHODS: { id: PanelPaymentMethod; label: string; icon: typeof Banknote }[] = [
@@ -28,32 +24,41 @@ const METHODS: { id: PanelPaymentMethod; label: string; icon: typeof Banknote }[
 
 const QUICK_AMOUNTS = [50, 100, 200, 500, 1000]
 
+export type PaymentSplitTarget =
+  | { mode: "person-share"; shareIndex: number; personCount: number; amount: number }
+  | { mode: "items"; lines: { itemId: string; quantity: number }[]; amount: number }
+
 interface Props {
   tableId: string
   total: number
   onClose: () => void
   onOpenSplitBill?: () => void
+  splitTarget?: PaymentSplitTarget
 }
 
-export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill }: Props) {
-  const { closeTableWithPayment, tables, ledgerCustomers, ledgerRefresh } = usePanelStore()
+export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill, splitTarget }: Props) {
+  const { closeTableWithPayment, payPersonShare, tables, ledgerCustomers, ledgerRefresh } = usePanelStore()
   const { showToast } = usePanelToast()
   const { token } = usePanelAuth()
   const completedRef = useRef(false)
   const submittingRef = useRef(false)
   const table = tables.find((t) => t.id === tableId)
+  const isPersonShare = splitTarget?.mode === "person-share"
+  const isItemsSplit = splitTarget?.mode === "items"
+  const baseTotal = splitTarget ? splitTarget.amount : total
+
   const [method, setMethod] = useState<PanelPaymentMethod>("cash")
   const [discountType, setDiscountType] = useState<PanelDiscountType>(() => {
+    if (splitTarget) return "percent"
     if (table?.discount?.type === "amount") return "amount"
     if (table?.discount?.type === "complimentary") return "complimentary"
     return "percent"
   })
   const [discountValue, setDiscountValue] = useState(() => {
-    if (!table?.discount) return ""
-    if (table.discount.type === "complimentary") return "100"
-    return String(table.discount.value)
+    if (splitTarget || !table?.discount) return ""
+    return table.discount.type === "complimentary" ? "100" : String(table.discount.value)
   })
-  const [discountReason, setDiscountReason] = useState(() => table?.discount?.reason ?? "")
+  const [discountReason, setDiscountReason] = useState(() => (splitTarget ? "" : table?.discount?.reason ?? ""))
   const [receivedAmount, setReceivedAmount] = useState("")
   const [splitCash, setSplitCash] = useState("")
   const [splitCard, setSplitCard] = useState("")
@@ -63,28 +68,28 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill 
   const [ledgerCustomerId, setLedgerCustomerId] = useState("")
 
   useEffect(() => {
-    if (!token || method !== "ledger") return
-    void ledgerRefresh()
+    if (token && method === "ledger") void ledgerRefresh()
   }, [token, method, ledgerRefresh])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !isSubmitting && !submittingRef.current) {
-        onClose()
-      }
+      if (e.key === "Escape" && !isSubmitting && !submittingRef.current) onClose()
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [isSubmitting, onClose])
 
-  const rawKurus = Math.max(0, Math.round(total * 100))
+  const paidShares = !splitTarget && table?.splitInfo?.type === "person" ? (table.splitInfo.paidShares ?? []) : []
+  const alreadyPaidKurus = paidShares.reduce((s, p) => s + Math.round(p.amount * 100), 0)
+  const alreadyPaidAmount = alreadyPaidKurus / 100
+
+  const rawKurus = Math.max(0, Math.round(baseTotal * 100))
   const parsedDiscount = parseFloat(discountValue)
-  const discountNum =
-    discountType === "complimentary"
+  const discountNum = isPersonShare
+    ? 0
+    : discountType === "complimentary"
       ? 100
-      : Number.isFinite(parsedDiscount) && parsedDiscount > 0
-        ? parsedDiscount
-        : 0
+      : Number.isFinite(parsedDiscount) && parsedDiscount > 0 ? parsedDiscount : 0
   const discountKurus =
     discountNum <= 0 || rawKurus <= 0
       ? 0
@@ -94,14 +99,11 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill 
           ? Math.min(rawKurus, Math.round((rawKurus * Math.min(100, discountNum)) / 100))
           : Math.min(rawKurus, Math.round(discountNum * 100))
   const discountAmount = discountKurus / 100
-  const netKurus = Math.max(0, rawKurus - discountKurus)
+  const netKurus = Math.max(0, rawKurus - discountKurus - alreadyPaidKurus)
   const netTotal = netKurus / 100
 
   const parsedReceived = parseFloat(receivedAmount)
-  const receivedKurus =
-    Number.isFinite(parsedReceived) && parsedReceived > 0
-      ? Math.round(parsedReceived * 100)
-      : 0
+  const receivedKurus = Number.isFinite(parsedReceived) && parsedReceived > 0 ? Math.round(parsedReceived * 100) : 0
   const received = receivedKurus / 100
   const change = (receivedKurus - netKurus) / 100
 
@@ -111,15 +113,13 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill 
   const splitMultinetVal = Math.max(0, Number.isFinite(parseFloat(splitMultinet)) ? parseFloat(splitMultinet) : 0)
 
   const splitKurus =
-    Math.round(splitCashVal * 100) +
-    Math.round(splitCardVal * 100) +
-    Math.round(splitMealVal * 100) +
-    Math.round(splitMultinetVal * 100)
+    Math.round(splitCashVal * 100) + Math.round(splitCardVal * 100) +
+    Math.round(splitMealVal * 100) + Math.round(splitMultinetVal * 100)
   const splitRemainingKurus = netKurus - splitKurus
   const splitRemaining = splitRemainingKurus / 100
 
   const canConfirm = () => {
-    if (discountType === "percent" && discountNum > 100) return false
+    if (!isPersonShare && discountType === "percent" && discountNum > 100) return false
     if (method === "cash") return receivedKurus >= netKurus
     if (method === "split") return splitRemainingKurus === 0 && splitKurus > 0
     if (method === "ledger") return Boolean(ledgerCustomerId)
@@ -130,8 +130,7 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill 
     if (!token) return
     void api.tables.update(token, tableId, { status: "checkout" }).catch(() => {})
     return () => {
-      if (completedRef.current) return
-      void api.tables.update(token, tableId, { status: "occupied" }).catch(() => {})
+      if (!completedRef.current) void api.tables.update(token, tableId, { status: "occupied" }).catch(() => {})
     }
   }, [token, tableId])
 
@@ -140,15 +139,29 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill 
     submittingRef.current = true
     setIsSubmitting(true)
     try {
+      if (splitTarget?.mode === "person-share") {
+        const res = await payPersonShare(
+          tableId, splitTarget.shareIndex, method as CloseCheckSplitMethod, splitTarget.amount,
+          method === "ledger" ? { ledgerCustomerId } : undefined,
+        )
+        if (!res.ok) return
+        completedRef.current = true
+        if (!res.fullyClosed && token) void api.tables.update(token, tableId, { status: "occupied" }).catch(() => {})
+        showToast(
+          res.fullyClosed
+            ? `${table?.name || "Masa"} tüm kişi payları ödendi ve masa kapatıldı`
+            : `${table?.name || "Masa"} — ${splitTarget.shareIndex + 1}. kişi payı (${formatCurrency(splitTarget.amount)} TL) ödendi`,
+          "success",
+        )
+        onClose()
+        return
+      }
+
       const discount =
         discountType === "complimentary" || discountNum > 0
-          ? {
-              type: discountType,
-              value: discountType === "complimentary" ? 100 : discountNum,
-              reason: discountReason.trim() || "İndirim",
-            }
+          ? { type: discountType, value: discountType === "complimentary" ? 100 : discountNum, reason: discountReason.trim() || "İndirim" }
           : undefined
-      const splitDetails =
+      const rawSplitDetails =
         method === "split"
           ? [
               { method: "cash" as const, amount: splitCashVal },
@@ -157,19 +170,46 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill 
               { method: "multinet" as const, amount: splitMultinetVal },
             ].filter((s) => s.amount > 0)
           : undefined
-      const res = await closeTableWithPayment(
-        tableId,
-        method,
-        discount,
-        splitDetails,
-        method === "ledger" ? { ledgerCustomerId } : undefined,
-      )
-      if (!res.ok || !res.completedOrder) {
-        return
+
+      let finalMethod: PanelPaymentMethod = method
+      let finalSplitDetails: { method: CloseCheckSplitMethod; amount: number }[] | undefined = rawSplitDetails
+      let finalLedgerCustomerId = method === "ledger" ? ledgerCustomerId : undefined
+      let finalLedgerDebtAmount: number | undefined
+
+      if (!splitTarget && paidShares.length > 0) {
+        const byMethod = new Map<CloseCheckSplitMethod, number>()
+        let ledgerDebt = method === "ledger" ? netTotal : 0
+        for (const s of paidShares) {
+          byMethod.set(s.method, Math.round(((byMethod.get(s.method) ?? 0) + s.amount) * 100) / 100)
+          if (s.method === "ledger" && s.ledgerCustomerId) {
+            finalLedgerCustomerId = s.ledgerCustomerId
+            ledgerDebt = Math.round((ledgerDebt + s.amount) * 100) / 100
+          }
+        }
+        if (netTotal > 0) {
+          if (method === "split" && rawSplitDetails) {
+            for (const sd of rawSplitDetails) byMethod.set(sd.method, Math.round(((byMethod.get(sd.method) ?? 0) + sd.amount) * 100) / 100)
+          } else if (method !== "split") {
+            byMethod.set(method, Math.round(((byMethod.get(method) ?? 0) + netTotal) * 100) / 100)
+          }
+        }
+        finalMethod = "split"
+        finalSplitDetails = Array.from(byMethod.entries()).map(([m, amount]) => ({ method: m, amount }))
+        if (finalLedgerCustomerId && ledgerDebt > 0) finalLedgerDebtAmount = ledgerDebt
       }
+
+      const res = await closeTableWithPayment(tableId, finalMethod, discount, finalSplitDetails, {
+        ...(finalLedgerCustomerId ? { ledgerCustomerId: finalLedgerCustomerId } : {}),
+        ...(finalLedgerDebtAmount != null ? { ledgerDebtAmount: finalLedgerDebtAmount } : {}),
+        ...(splitTarget?.mode === "items" ? { lines: splitTarget.lines } : {}),
+      })
+      if (!res.ok || !res.completedOrder) return
       completedRef.current = true
+      if (res.tableFullyClosed === false && token) void api.tables.update(token, tableId, { status: "occupied" }).catch(() => {})
       showToast(
-        `${res.completedOrder.tableName || table?.name || "Masa"} hesabı kesildi - ${formatCurrency(res.completedOrder.netAmount)} TL`,
+        res.tableFullyClosed === false
+          ? `${table?.name || "Masa"} — seçili ürünler tahsil edildi (${formatCurrency(res.completedOrder.netAmount)} TL)`
+          : `${res.completedOrder.tableName || table?.name || "Masa"} hesabı kesildi - ${formatCurrency(res.completedOrder.netAmount)} TL`,
         "success",
       )
       onClose()
@@ -179,11 +219,18 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill 
     }
   }
 
+  const availableMethods = isPersonShare ? METHODS.filter((m) => m.id !== "split") : METHODS
+  const headerTitle = isPersonShare
+    ? `Kişi Payı Ödeme (${splitTarget.shareIndex + 1}/${splitTarget.personCount}. Kişi)`
+    : isItemsSplit
+      ? `Seçili Ürünleri Öde (${splitTarget.lines.length} Kalem)`
+      : "Hesap Kes"
+
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl w-[480px] max-h-[90vh] overflow-auto animate-in fade-in zoom-in-95 duration-200">
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#f0f0f0]">
-          <h3 className="text-[16px] font-semibold text-[#1d1d1f]">Hesap Kes</h3>
+          <h3 className="text-[16px] font-semibold text-[#1d1d1f]">{headerTitle}</h3>
           <button type="button" disabled={isSubmitting} onClick={onClose} className="w-7 h-7 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed] disabled:opacity-50">
             <X className="w-3.5 h-3.5 text-[#86868b]" />
           </button>
@@ -191,27 +238,29 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill 
 
         <div className="px-6 py-5 flex flex-col gap-5">
           <div className="text-center bg-[#f5f5f7] rounded-xl p-4">
-            <p className="text-[11px] uppercase tracking-wider text-[#86868b] font-semibold">Toplam Tutar</p>
-            <p className="text-[28px] font-bold text-[#1d1d1f] mt-1">{"₺"}{formatCurrency(total)}</p>
-            {discountAmount > 0 && (
-              <>
-                <p className="text-[13px] text-red-500 mt-1">- {"₺"}{formatCurrency(discountAmount)} indirim</p>
-                <p className="text-[20px] font-bold text-[#34c759] mt-0.5">{"₺"}{formatCurrency(netTotal)}</p>
-              </>
+            <p className="text-[11px] uppercase tracking-wider text-[#86868b] font-semibold">
+              {isPersonShare ? "Kişi Payı Tutarı" : isItemsSplit ? "Seçilen Ürünler Tutarı" : "Toplam Tutar"}
+            </p>
+            <p className="text-[28px] font-bold text-[#1d1d1f] mt-1">{"₺"}{formatCurrency(baseTotal)}</p>
+            {discountAmount > 0 && <p className="text-[13px] text-red-500 mt-1">- {"₺"}{formatCurrency(discountAmount)} indirim</p>}
+            {alreadyPaidAmount > 0 && (
+              <p className="text-[13px] text-[#007aff] mt-1">
+                - {"₺"}{formatCurrency(alreadyPaidAmount)} ödenen kişi payları ({paidShares.length} kişi)
+              </p>
+            )}
+            {(discountAmount > 0 || alreadyPaidAmount > 0) && (
+              <p className="text-[20px] font-bold text-[#34c759] mt-0.5">Kalan: {"₺"}{formatCurrency(netTotal)}</p>
             )}
           </div>
 
           <div>
             <label className="text-[12px] font-semibold text-[#86868b] uppercase tracking-wide mb-2 block">Ödeme Yöntemi</label>
             <div className="grid grid-cols-3 gap-2">
-              {METHODS.map((m) => {
+              {availableMethods.map((m) => {
                 const Icon = m.icon
                 return (
                   <button
-                    key={m.id}
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() => setMethod(m.id)}
+                    key={m.id} type="button" disabled={isSubmitting} onClick={() => setMethod(m.id)}
                     className={`flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border text-[12px] font-medium transition-colors disabled:opacity-50 ${
                       method === m.id ? "border-[#e63462] bg-[#e63462]/5 text-[#e63462]" : "border-[#d1d1d6]/60 text-[#1d1d1f] hover:bg-[#f5f5f7]"
                     }`}
@@ -226,22 +275,17 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill 
               <div className="mt-3 space-y-2">
                 <label className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wide block">Cari Müşteri</label>
                 <select
-                  value={ledgerCustomerId}
-                  disabled={isSubmitting}
-                  onChange={(e) => setLedgerCustomerId(e.target.value)}
+                  value={ledgerCustomerId} disabled={isSubmitting} onChange={(e) => setLedgerCustomerId(e.target.value)}
                   className="w-full h-[40px] px-3 text-[13px] bg-[#f5f5f7] rounded-xl border border-[#d1d1d6]/60 focus:outline-none focus:ring-2 focus:ring-[#e63462]/30 text-[#1d1d1f]"
                 >
                   <option value="">Seçin...</option>
                   {ledgerCustomers.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name}
-                      {c.balance > 0 ? ` (borç: ${formatCurrency(c.balance)} TL)` : c.balance < 0 ? ` (alacak: ${formatCurrency(-c.balance)} TL)` : ""}
+                      {c.name}{c.balance > 0 ? ` (borç: ${formatCurrency(c.balance)} TL)` : c.balance < 0 ? ` (alacak: ${formatCurrency(-c.balance)} TL)` : ""}
                     </option>
                   ))}
                 </select>
-                {ledgerCustomers.length === 0 && (
-                  <p className="text-[11px] text-amber-600">Kasada Cariler sekmesinden müşteri ekleyin.</p>
-                )}
+                {ledgerCustomers.length === 0 && <p className="text-[11px] text-amber-600">Kasada Cariler sekmesinden müşteri ekleyin.</p>}
               </div>
             )}
           </div>
@@ -250,33 +294,17 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill 
             <div className="space-y-3">
               <label className="text-[12px] font-semibold text-[#86868b] uppercase tracking-wide block">Alınan Tutar</label>
               <input
-                type="number"
-                min={0}
-                step="0.01"
-                disabled={isSubmitting}
-                value={receivedAmount}
-                onChange={(e) => setReceivedAmount(sanitizePositiveDecimalInput(e.target.value))}
-                placeholder="0.00"
+                type="number" min={0} step="0.01" disabled={isSubmitting} value={receivedAmount}
+                onChange={(e) => setReceivedAmount(sanitizePositiveDecimalInput(e.target.value))} placeholder="0.00"
                 className="w-full h-[52px] px-4 text-[24px] font-bold text-center bg-[#f5f5f7] rounded-xl border-0 focus:outline-none focus:ring-2 focus:ring-[#e63462] text-[#1d1d1f]"
               />
               <div className="flex flex-wrap gap-2">
                 {QUICK_AMOUNTS.map((amt) => (
-                  <button
-                    key={amt}
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() => setReceivedAmount(String(amt))}
-                    className="px-3 py-1.5 bg-[#f5f5f7] rounded-lg text-[12px] font-medium text-[#1d1d1f] hover:bg-[#e8e8ed] transition-colors disabled:opacity-50"
-                  >
+                  <button key={amt} type="button" disabled={isSubmitting} onClick={() => setReceivedAmount(String(amt))} className="px-3 py-1.5 bg-[#f5f5f7] rounded-lg text-[12px] font-medium text-[#1d1d1f] hover:bg-[#e8e8ed] transition-colors disabled:opacity-50">
                     {amt} TL
                   </button>
                 ))}
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() => setReceivedAmount(String(netTotal))}
-                  className="px-3 py-1.5 bg-[#e63462]/10 rounded-lg text-[12px] font-medium text-[#e63462] hover:bg-[#e63462]/20 transition-colors disabled:opacity-50"
-                >
+                <button type="button" disabled={isSubmitting} onClick={() => setReceivedAmount(String(netTotal))} className="px-3 py-1.5 bg-[#e63462]/10 rounded-lg text-[12px] font-medium text-[#e63462] hover:bg-[#e63462]/20 transition-colors disabled:opacity-50">
                   Tam Tutar
                 </button>
               </div>
@@ -301,13 +329,8 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill 
                   <div key={item.label}>
                     <label className="text-[11px] text-[#86868b] font-medium mb-1 block">{item.label}</label>
                     <input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      disabled={isSubmitting}
-                      value={item.val}
-                      onChange={(e) => item.set(sanitizePositiveDecimalInput(e.target.value))}
-                      placeholder="0.00"
+                      type="number" min={0} step="0.01" disabled={isSubmitting} value={item.val}
+                      onChange={(e) => item.set(sanitizePositiveDecimalInput(e.target.value))} placeholder="0.00"
                       className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 text-[#1d1d1f]"
                     />
                   </div>
@@ -324,59 +347,47 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill 
             </div>
           )}
 
-          <div>
-            <label className="text-[12px] font-semibold text-[#86868b] uppercase tracking-wide mb-2 block">İndirim / İkram</label>
-            <div className="flex gap-2 mb-2">
-              {([
-                { id: "percent" as const, label: "% Yüzde" },
-                { id: "amount" as const, label: "Tutar" },
-                { id: "complimentary" as const, label: "Tam İkram" },
-              ]).map((dt) => (
-                <button
-                  key={dt.id}
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() => {
-                    setDiscountType(dt.id)
-                    if (dt.id === "complimentary") setDiscountValue("100")
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors disabled:opacity-50 ${
-                    discountType === dt.id ? "border-[#e63462] bg-[#e63462]/5 text-[#e63462]" : "border-[#d1d1d6]/60 text-[#86868b]"
-                  }`}
-                >
-                  {dt.label}
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              {discountType !== "complimentary" && (
+          {!isPersonShare && (
+            <div>
+              <label className="text-[12px] font-semibold text-[#86868b] uppercase tracking-wide mb-2 block">İndirim / İkram</label>
+              <div className="flex gap-2 mb-2">
+                {([
+                  { id: "percent" as const, label: "% Yüzde" },
+                  { id: "amount" as const, label: "Tutar" },
+                  { id: "complimentary" as const, label: "Tam İkram" },
+                ]).map((dt) => (
+                  <button
+                    key={dt.id} type="button" disabled={isSubmitting}
+                    onClick={() => { setDiscountType(dt.id); if (dt.id === "complimentary") setDiscountValue("100") }}
+                    className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors disabled:opacity-50 ${
+                      discountType === dt.id ? "border-[#e63462] bg-[#e63462]/5 text-[#e63462]" : "border-[#d1d1d6]/60 text-[#86868b]"
+                    }`}
+                  >
+                    {dt.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                {discountType !== "complimentary" && (
+                  <input
+                    type="number" min={0} max={discountType === "percent" ? 100 : undefined} disabled={isSubmitting}
+                    value={discountValue} onChange={(e) => setDiscountValue(sanitizePositiveDecimalInput(e.target.value))}
+                    placeholder={discountType === "percent" ? "% 0" : "₺ 0"}
+                    className="w-[100px] h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 text-[#1d1d1f]"
+                  />
+                )}
                 <input
-                  type="number"
-                  min={0}
-                  max={discountType === "percent" ? 100 : undefined}
-                  disabled={isSubmitting}
-                  value={discountValue}
-                  onChange={(e) => setDiscountValue(sanitizePositiveDecimalInput(e.target.value))}
-                  placeholder={discountType === "percent" ? "% 0" : "₺ 0"}
-                  className="w-[100px] h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 text-[#1d1d1f]"
+                  type="text" disabled={isSubmitting} value={discountReason} onChange={(e) => setDiscountReason(e.target.value)}
+                  placeholder="Sebep (opsiyonel)"
+                  className="flex-1 h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 text-[#1d1d1f]"
                 />
-              )}
-              <input
-                type="text"
-                disabled={isSubmitting}
-                value={discountReason}
-                onChange={(e) => setDiscountReason(e.target.value)}
-                placeholder="Sebep (opsiyonel)"
-                className="flex-1 h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 text-[#1d1d1f]"
-              />
+              </div>
             </div>
-          </div>
+          )}
 
-          {onOpenSplitBill && (
+          {!splitTarget && onOpenSplitBill && (
             <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={onOpenSplitBill}
+              type="button" disabled={isSubmitting} onClick={onOpenSplitBill}
               className="flex items-center justify-center gap-2 h-[40px] bg-[#007aff]/10 rounded-xl text-[13px] font-medium text-[#007aff] hover:bg-[#007aff]/20 transition-colors disabled:opacity-50"
             >
               <SplitSquareVertical className="h-4 w-4" />
@@ -390,9 +401,7 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill 
             Vazgeç
           </button>
           <button
-            type="button"
-            onClick={() => void handleConfirm()}
-            disabled={isSubmitting || !canConfirm()}
+            type="button" onClick={() => void handleConfirm()} disabled={isSubmitting || !canConfirm()}
             className="flex-1 h-[40px] rounded-xl bg-[#34c759] hover:bg-[#2db84e] text-white text-[14px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" /> İşleniyor...</> : method === "cash" && change > 0 ? `Onayla (${formatCurrency(change)} TL Para Üstü)` : `₺${formatCurrency(netTotal)} Onayla`}

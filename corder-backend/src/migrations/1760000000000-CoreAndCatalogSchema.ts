@@ -154,6 +154,8 @@ export class CoreAndCatalogSchema1760000000000 implements MigrationInterface {
         "name" character varying NOT NULL,
         "section" character varying NOT NULL DEFAULT 'default',
         "status" character varying NOT NULL DEFAULT 'empty',
+        "discount" jsonb,
+        "split_info" jsonb,
         "session_staff_id" uuid,
         "session_staff_name" character varying(120),
         "session_locked_at" TIMESTAMPTZ,

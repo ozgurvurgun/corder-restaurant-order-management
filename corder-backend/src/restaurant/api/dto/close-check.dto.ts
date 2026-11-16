@@ -71,6 +71,15 @@ export class CloseCheckWalkInItemDto {
   note?: string;
 }
 
+export class CloseCheckOrderLineDto {
+  @IsUUID()
+  itemId!: string;
+
+  @IsInt()
+  @Min(1)
+  quantity!: number;
+}
+
 export class CloseCheckDto {
   @IsOptional()
   @IsUUID()
@@ -82,6 +91,13 @@ export class CloseCheckDto {
   @ValidateNested({ each: true })
   @Type(() => CloseCheckWalkInItemDto)
   items?: CloseCheckWalkInItemDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => CloseCheckOrderLineDto)
+  lines?: CloseCheckOrderLineDto[];
 
   @IsIn(PAYMENT_METHODS)
   method!: CloseCheckMethod;

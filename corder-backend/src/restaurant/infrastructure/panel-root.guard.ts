@@ -39,7 +39,19 @@ function inferPermissionsForRequest(method: string, path: string): PermissionKey
     return m === 'GET' ? ['staff.view', 'staff.manage'] : ['staff.manage'];
   }
   if (p.includes('/restaurant/tables')) {
-    return m === 'GET' ? ['order.view', 'system.manage_tables'] : ['system.manage_tables'];
+    if (m === 'GET') return ['order.view', 'system.manage_tables'];
+    if (m === 'PATCH') {
+      return [
+        'system.manage_tables',
+        'billing.close_check',
+        'billing.split_bill',
+        'discount.apply_percent',
+        'discount.apply_amount',
+        'discount.complimentary',
+        'discount.remove',
+      ];
+    }
+    return ['system.manage_tables'];
   }
   if (p.includes('/restaurant/orders/assign-to-ledger')) {
     return ['ledger.assign_order'];

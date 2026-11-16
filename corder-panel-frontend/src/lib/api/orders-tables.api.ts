@@ -3,16 +3,18 @@ import type {
   CloseCheckBody,
   CloseCheckResponseDto,
   OrderDto,
+  RawTableDto,
 } from "./api-types"
+import type { PanelDiscountType, PanelTable } from "../panel-types"
 
 export const tablesApi = {
   list: (token: string) =>
-    request<{ id: string; name: string; section: string; status: string }[]>(
+    request<RawTableDto[]>(
       "/restaurant/tables",
       { token },
     ),
   create: (token: string, body: { name: string; section: string }) =>
-    request<{ id: string; name: string; section: string; status: string }>(
+    request<RawTableDto>(
       "/restaurant/tables",
       { method: "POST", token, body: JSON.stringify(body) },
     ),
@@ -23,9 +25,11 @@ export const tablesApi = {
       name?: string
       section?: string
       status?: "empty" | "occupied" | "ordering" | "checkout"
+      discount?: { type: PanelDiscountType; value: number; reason: string } | null
+      splitInfo?: PanelTable["splitInfo"] | null
     },
   ) =>
-    request<{ id: string; name: string; section: string; status: string }>(
+    request<RawTableDto>(
       `/restaurant/tables/${id}`,
       { method: "PATCH", token, body: JSON.stringify(body) },
     ),

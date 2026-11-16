@@ -1,4 +1,10 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  OnModuleInit,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TableEntity } from '../domain/table.entity';
@@ -10,13 +16,21 @@ import { UpdateTableDto } from '../api/dto/update-table.dto';
 const SESSION_LOCK_STALE_MS = 120_000;
 
 @Injectable()
-export class TableService {
+export class TableService implements OnModuleInit {
   constructor(
     @InjectRepository(TableEntity)
     private readonly repo: Repository<TableEntity>,
     @InjectRepository(RestaurantStaffEntity)
     private readonly staffRepo: Repository<RestaurantStaffEntity>,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    await this.repo
+      .query(
+        `ALTER TABLE "tables" ADD COLUMN IF NOT EXISTS "discount" jsonb, ADD COLUMN IF NOT EXISTS "split_info" jsonb`,
+      )
+      .catch(() => undefined);
+  }
 
   async findByRestaurant(restaurantId: string): Promise<TableEntity[]> {
     const tables = await this.repo.find({ where: { restaurantId } });
@@ -56,6 +70,8 @@ export class TableService {
     const entity = await this.findOne(id, restaurantId);
     if (dto.name !== undefined) entity.name = dto.name;
     if (dto.section !== undefined) entity.section = dto.section;
+    if (dto.discount !== undefined) entity.discount = dto.discount;
+    if (dto.splitInfo !== undefined) entity.splitInfo = dto.splitInfo;
     if (dto.status !== undefined) {
       if (dto.status === 'empty') {
         entity.markEmpty();

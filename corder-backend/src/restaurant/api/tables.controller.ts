@@ -16,7 +16,7 @@ import {
 import type { Request } from 'express';
 import { TableService } from '../application/table.service';
 import { StaffSessionService } from '../application/staff-session.service';
-import { PermissionKey } from '../domain/permissions.catalog';
+import { EffectivePolicyLimits, PermissionKey } from '../domain/permissions.catalog';
 import { CreateTableDto } from './dto/create-table.dto';
 import { UpdateTableDto } from './dto/update-table.dto';
 import { SessionLockDto } from './dto/session-lock.dto';
@@ -112,21 +112,97 @@ export class TablesController {
 
   @Patch(':id')
   @UseGuards(PanelRootGuard)
-  @RequirePermissions('system.manage_tables', 'billing.close_check')
+  @RequirePermissions(
+    'system.manage_tables',
+    'billing.close_check',
+    'billing.split_bill',
+    'discount.apply_percent',
+    'discount.apply_amount',
+    'discount.complimentary',
+    'discount.remove',
+  )
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
-    @RestaurantUser() user: { isBoss?: boolean; permissions?: PermissionKey[] },
+    @RestaurantUser()
+    user: {
+      isBoss?: boolean;
+      permissions?: PermissionKey[];
+      limits?: EffectivePolicyLimits;
+    },
     @Body() dto: UpdateTableDto,
   ) {
+    const perms = user.permissions ?? [];
     const isStructuralEdit = dto.name !== undefined || dto.section !== undefined;
-    if (
-      isStructuralEdit &&
-      !user.isBoss &&
-      !(user.permissions ?? []).includes('system.manage_tables')
-    ) {
-      throw new ForbiddenException('You do not have permission to edit tables (system.manage_tables)');
+    if (isStructuralEdit && !user.isBoss && !perms.includes('system.manage_tables')) {
+      throw new ForbiddenException(
+        'You do not have permission to edit tables (system.manage_tables)',
+      );
     }
+
+    if (
+      dto.splitInfo !== undefined &&
+      !user.isBoss &&
+      !perms.includes('billing.split_bill') &&
+      !perms.includes('billing.close_check')
+    ) {
+      throw new ForbiddenException(
+        'You do not have permission to split bills (billing.split_bill)',
+      );
+    }
+
+    if (dto.discount !== undefined && !user.isBoss) {
+      if (dto.discount === null) {
+        if (
+          !perms.includes('discount.remove') &&
+          !perms.includes('billing.close_check') &&
+          !perms.includes('discount.apply_percent') &&
+          !perms.includes('discount.apply_amount') &&
+          !perms.includes('discount.complimentary')
+        ) {
+          throw new ForbiddenException(
+            'You do not have permission to remove discounts (discount.remove)',
+          );
+        }
+      } else {
+        const isComp =
+          dto.discount.type === 'complimentary' ||
+          (dto.discount.type === 'percent' && dto.discount.value >= 100);
+        if (isComp) {
+          if (!perms.includes('discount.complimentary')) {
+            throw new ForbiddenException(
+              'You do not have permission to apply a 100% complimentary discount (discount.complimentary)',
+            );
+          }
+        } else if (dto.discount.type === 'percent') {
+          if (!perms.includes('discount.apply_percent')) {
+            throw new ForbiddenException(
+              'You do not have permission to apply a percentage discount (discount.apply_percent)',
+            );
+          }
+          if (user.limits && dto.discount.value > user.limits.maxDiscountPercent) {
+            throw new ForbiddenException(
+              `Maximum percentage discount limit is ${user.limits.maxDiscountPercent}% (entered: ${dto.discount.value}%)`,
+            );
+          }
+        } else if (dto.discount.type === 'amount') {
+          if (!perms.includes('discount.apply_amount')) {
+            throw new ForbiddenException(
+              'You do not have permission to apply an amount discount (discount.apply_amount)',
+            );
+          }
+          if (
+            user.limits?.maxDiscountAmount != null &&
+            dto.discount.value > user.limits.maxDiscountAmount
+          ) {
+            throw new ForbiddenException(
+              `Maximum amount discount limit is ${user.limits.maxDiscountAmount} TL (entered: ${dto.discount.value} TL)`,
+            );
+          }
+        }
+      }
+    }
+
     const updated = await this.service.update(id, restaurantId, dto);
     await this.ordersGateway.emitTableSessionPresence(restaurantId);
     this.ordersGateway.emitOrdersUpdated(restaurantId);

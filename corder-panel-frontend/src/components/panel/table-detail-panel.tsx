@@ -3,7 +3,7 @@ import { usePanelStore } from "@/lib/panel-store"
 import { itemCountsTowardBill, itemIsLedgerLike } from "@/lib/panel-types"
 import { usePanelToast } from "./panel-toast"
 import { usePanelAuth } from "@/lib/panel-auth"
-import PaymentModal from "./payment-modal"
+import PaymentModal, { type PaymentSplitTarget } from "./payment-modal"
 import OrderCancelModal from "./order-cancel-modal"
 import SplitBillModal from "./split-bill-modal"
 import DiscountModal from "./discount-modal"
@@ -17,6 +17,8 @@ function formatCurrency(n: number) { return n.toLocaleString("tr-TR", { minimumF
 function formatTime(d: Date) { return new Date(d).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) }
 function getUserName(users: { id: string; name: string }[], id: string) { return users.find((u) => u.id === id)?.name ?? "" }
 
+type PaymentTargetState = { mode: "full" } | PaymentSplitTarget
+
 interface Props {
   tableId: string
   onClose: () => void
@@ -24,7 +26,7 @@ interface Props {
 
 export default function TableDetailPanel({ tableId, onClose }: Props) {
   const {
-    tables, users, getTableOrders, getTableTotal, reprintReceipt, clearDiscount,
+    tables, users, getTableOrders, getTableTotal, reprintReceipt, clearDiscount, clearSplitBill,
     ledgerCustomers, ledgerRefresh, assignItemsToLedger, revertLedgerOrderItem,
   } = usePanelStore()
   const { token, hasPermission } = usePanelAuth()
@@ -41,7 +43,7 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
   const canAssignLedger = hasPermission("ledger.assign_order")
   const canRevertLedger = hasPermission("ledger.revert_item")
   const [activeTab, setActiveTab] = useState(0)
-  const [showPayment, setShowPayment] = useState(false)
+  const [paymentTarget, setPaymentTarget] = useState<PaymentTargetState | null>(null)
   const [showSplitBill, setShowSplitBill] = useState(false)
   const [showDiscount, setShowDiscount] = useState(false)
   const [showMoveTable, setShowMoveTable] = useState(false)
@@ -79,6 +81,109 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
     showToast("Seçili adisyon fişi (notlarla) yazıcıya gönderildi", "success")
   }
 
+  const renderSplitSection = () => {
+    if (!table.splitInfo) return null
+    const isPerson = table.splitInfo.type === "person" && Boolean(table.splitInfo.personCount)
+    const count = table.splitInfo.personCount ?? 2
+    const totalKurus = Math.max(0, Math.round(total * 100))
+    const baseShareKurus = Math.floor(totalKurus / count)
+    const remainderKurus = totalKurus % count
+    const paidShares = table.splitInfo.paidShares ?? []
+    const paidSum = paidShares.reduce((s, p) => s + p.amount, 0)
+    const remainingUnpaid = Math.max(0, Math.round((total - paidSum) * 100) / 100)
+
+    const itemLines =
+      table.splitInfo.type === "items" && table.splitInfo.amounts
+        ? Object.entries(table.splitInfo.amounts)
+            .filter(([, qty]) => qty > 0)
+            .map(([itemId, quantity]) => ({ itemId, quantity }))
+        : []
+    const selectedTotal = table.splitInfo.selectedTotal ?? 0
+
+    return (
+      <div className="mt-2">
+        <div className="flex items-center flex-wrap gap-2 text-[12px] mb-2">
+          <span className="flex items-center gap-1 px-2 py-1 bg-[#007aff]/10 text-[#007aff] rounded-md font-medium">
+            <Users className="w-3 h-3" />
+            {isPerson ? `${count} Kişiye Bölündü` : `${table.splitInfo.itemIds?.length ?? itemLines.length} Ürün Ayrıldı`}
+          </span>
+          {canSplitBill && (
+            <button
+              type="button"
+              onClick={() => void clearSplitBill(tableId)}
+              className="text-[11px] font-medium text-[#86868b] hover:text-[#ff3b30] underline underline-offset-2"
+            >
+              Bölmeyi kaldır
+            </button>
+          )}
+        </div>
+
+        {isPerson && (
+          <>
+            <div className="flex flex-wrap gap-1.5">
+              {Array.from({ length: count }).map((_, idx) => {
+                const shareAmount = (baseShareKurus + (idx < remainderKurus ? 1 : 0)) / 100
+                const paidShare = paidShares.find((p) => p.shareIndex === idx)
+                if (paidShare) {
+                  return (
+                    <span
+                      key={idx}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#34c759]/15 text-[#248a3d] border border-[#34c759]/30 rounded-lg text-[11px] font-semibold"
+                    >
+                      ✓ {idx + 1}. Kişi: {formatCurrency(paidShare.amount)} TL Ödendi
+                    </span>
+                  )
+                }
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    disabled={!canCloseCheck}
+                    onClick={() => setPaymentTarget({ mode: "person-share", shareIndex: idx, personCount: count, amount: shareAmount })}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f5f5f7] rounded-lg text-[12px] font-medium hover:bg-[#e8e8ed] transition-colors disabled:opacity-50"
+                  >
+                    <span className="w-5 h-5 rounded-full bg-[#007aff] text-white text-[10px] flex items-center justify-center">{idx + 1}</span>
+                    <span className="text-[#1d1d1f]">{formatCurrency(shareAmount)} TL</span>
+                  </button>
+                )
+              })}
+            </div>
+            {paidShares.length > 0 && (
+              <p className="mt-1.5 text-[11px] font-semibold text-[#007aff]">
+                Kalan Tahsilat: ₺{formatCurrency(remainingUnpaid)}
+              </p>
+            )}
+          </>
+        )}
+
+        {table.splitInfo.type === "items" && selectedTotal > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              disabled={!canCloseCheck || itemLines.length === 0}
+              onClick={() => setPaymentTarget({ mode: "items", lines: itemLines, amount: selectedTotal })}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#007aff]/10 rounded-lg text-[12px] font-medium hover:bg-[#007aff]/20 transition-colors border border-[#007aff]/30 disabled:opacity-50"
+            >
+              <span className="w-5 h-5 rounded-full bg-[#007aff] text-white text-[10px] flex items-center justify-center">1</span>
+              <span className="text-[#007aff]">{formatCurrency(selectedTotal)} TL</span>
+              <span className="text-[10px] text-[#007aff]/80">(Ayrılan — Öde)</span>
+            </button>
+            <button
+              type="button"
+              disabled={!canCloseCheck}
+              onClick={() => setPaymentTarget({ mode: "full" })}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f5f5f7] rounded-lg text-[12px] font-medium hover:bg-[#e8e8ed] transition-colors disabled:opacity-50"
+            >
+              <span className="w-5 h-5 rounded-full bg-[#86868b] text-white text-[10px] flex items-center justify-center">2</span>
+              <span className="text-[#1d1d1f]">{formatCurrency(Math.max(0, total - selectedTotal))} TL</span>
+              <span className="text-[10px] text-[#86868b]">(Kalan)</span>
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <>
       <div className="w-[400px] h-full border-l border-[#d1d1d6]/60 bg-white flex flex-col flex-shrink-0">
@@ -109,56 +214,21 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
               </span>
               <span className="text-[#86868b]">{discount.reason}</span>
               {canRemoveDiscount && (
-                <button type="button" onClick={() => clearDiscount(tableId)} className="text-[11px] font-medium text-[#86868b] hover:text-[#ff3b30] underline underline-offset-2">
+                <button type="button" onClick={() => void clearDiscount(tableId)} className="text-[11px] font-medium text-[#86868b] hover:text-[#ff3b30] underline underline-offset-2">
                   İndirimi kaldır
                 </button>
               )}
             </div>
           )}
 
-          {table.splitInfo && (
-            <div className="mt-2">
-              <div className="flex items-center gap-2 text-[12px] mb-2">
-                <span className="flex items-center gap-1 px-2 py-1 bg-[#007aff]/10 text-[#007aff] rounded-md font-medium">
-                  <Users className="w-3 h-3" />
-                  {table.splitInfo.type === "person" ? `${table.splitInfo.personCount} Kişiye Bölündü` : `${table.splitInfo.itemIds?.length} Ürün Ayrıldı`}
-                </span>
-              </div>
-              {table.splitInfo.type === "person" && table.splitInfo.personCount && (
-                <div className="flex flex-wrap gap-1.5">
-                  {Array.from({ length: table.splitInfo.personCount }).map((_, idx) => (
-                    <button key={idx} onClick={() => setShowPayment(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f5f5f7] rounded-lg text-[12px] font-medium hover:bg-[#e8e8ed] transition-colors">
-                      <span className="w-5 h-5 rounded-full bg-[#007aff] text-white text-[10px] flex items-center justify-center">{idx + 1}</span>
-                      <span className="text-[#1d1d1f]">{formatCurrency(table.splitInfo?.perPersonAmount || 0)} TL</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {table.splitInfo.type === "items" && table.splitInfo.selectedTotal && (
-                <div className="flex flex-wrap gap-1.5">
-                  <button onClick={() => setShowPayment(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#007aff]/10 rounded-lg text-[12px] font-medium hover:bg-[#007aff]/20 transition-colors border border-[#007aff]/30">
-                    <span className="w-5 h-5 rounded-full bg-[#007aff] text-white text-[10px] flex items-center justify-center">1</span>
-                    <span className="text-[#007aff]">{formatCurrency(table.splitInfo.selectedTotal)} TL</span>
-                    <span className="text-[10px] text-[#007aff]/70">(Ayrılan)</span>
-                  </button>
-                  <button onClick={() => setShowPayment(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f5f5f7] rounded-lg text-[12px] font-medium hover:bg-[#e8e8ed] transition-colors">
-                    <span className="w-5 h-5 rounded-full bg-[#86868b] text-white text-[10px] flex items-center justify-center">2</span>
-                    <span className="text-[#1d1d1f]">{formatCurrency(total - table.splitInfo.selectedTotal)} TL</span>
-                    <span className="text-[10px] text-[#86868b]">(Kalan)</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+          {renderSplitSection()}
         </div>
 
         {tableOrders.length > 1 && (
           <div className="flex-shrink-0 px-4 py-2 border-b border-[#d1d1d6]/40 flex gap-1.5 overflow-x-auto">
             {tableOrders.map((order, idx) => (
               <button
-                key={order.id}
-                type="button"
-                onClick={() => setActiveTab(idx)}
+                key={order.id} type="button" onClick={() => setActiveTab(idx)}
                 title={order.userName?.trim() || getUserName(users, order.userId) || undefined}
                 className={`px-3 py-1 rounded-full text-[12px] font-medium flex-shrink-0 transition-colors ${safeTab === idx ? "bg-[#e63462] text-white" : "bg-[#f5f5f7] text-[#86868b] hover:bg-[#e8e8ed]"}`}
               >
@@ -209,10 +279,7 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
                         <div className="flex items-start gap-1 flex-shrink-0">
                           {item.status === "ledger" && token && canRevertLedger && (
                             <button
-                              type="button"
-                              title="Cariyi geri al"
-                              aria-label="Cariyi geri al"
-                              disabled={revertLedgerItemId === item.id}
+                              type="button" title="Cariyi geri al" aria-label="Cariyi geri al" disabled={revertLedgerItemId === item.id}
                               onClick={async () => {
                                 setRevertLedgerItemId(item.id)
                                 const res = await revertLedgerOrderItem(item.id)
@@ -280,7 +347,7 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
           <button type="button" onClick={() => setShowAddOrder(true)} disabled={!canCreateOrder || table.status === "checkout"} className="flex items-center justify-center gap-2 w-full h-[40px] bg-[#e63462] hover:bg-[#d12d57] disabled:opacity-45 disabled:pointer-events-none text-white rounded-xl text-[14px] font-semibold transition-colors">
             <Plus className="w-4 h-4" /> Sipariş Gir
           </button>
-          <button onClick={() => setShowPayment(true)} disabled={!canCloseCheck || tableOrders.length === 0} className="flex items-center justify-center gap-2 w-full h-[40px] bg-[#34c759] hover:bg-[#2db84e] disabled:opacity-45 disabled:pointer-events-none text-white rounded-xl text-[14px] font-semibold transition-colors">
+          <button onClick={() => setPaymentTarget({ mode: "full" })} disabled={!canCloseCheck || tableOrders.length === 0} className="flex items-center justify-center gap-2 w-full h-[40px] bg-[#34c759] hover:bg-[#2db84e] disabled:opacity-45 disabled:pointer-events-none text-white rounded-xl text-[14px] font-semibold transition-colors">
             <CreditCard className="w-4 h-4" /> Hesap Kes
           </button>
           <div className="flex gap-2">
@@ -308,8 +375,26 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
       </div>
 
       {showAddOrder && <AddTableOrderModal tableId={tableId} tableName={table.name} onClose={() => setShowAddOrder(false)} onSuccess={() => { setShowAddOrder(false); showToast(`${table.name} — sipariş gönderildi`, "success") }} />}
-      {showPayment && <PaymentModal tableId={tableId} total={rawTotal} onClose={() => setShowPayment(false)} onOpenSplitBill={() => { setShowPayment(false); setShowSplitBill(true) }} />}
-      {showSplitBill && <SplitBillModal tableId={tableId} total={total} onClose={() => setShowSplitBill(false)} />}
+      {paymentTarget && (
+        <PaymentModal
+          tableId={tableId}
+          total={rawTotal}
+          splitTarget={paymentTarget.mode === "full" ? undefined : paymentTarget}
+          onClose={() => setPaymentTarget(null)}
+          onOpenSplitBill={() => { setPaymentTarget(null); setShowSplitBill(true) }}
+        />
+      )}
+      {showSplitBill && (
+        <SplitBillModal
+          tableId={tableId}
+          total={total}
+          onClose={() => setShowSplitBill(false)}
+          onPayItemsNow={(lines, selectedTotal) => {
+            setShowSplitBill(false)
+            setPaymentTarget({ mode: "items", lines, amount: selectedTotal })
+          }}
+        />
+      )}
       {showDiscount && <DiscountModal tableId={tableId} total={rawTotal} onClose={() => setShowDiscount(false)} />}
       {showMoveTable && <MoveTableModal tableId={tableId} onClose={() => setShowMoveTable(false)} />}
       {moveItem && <MoveOrderItemModal sourceTableId={tableId} itemIds={[moveItem.itemId]} productHint={moveItem.itemName} onClose={() => setMoveItem(null)} />}

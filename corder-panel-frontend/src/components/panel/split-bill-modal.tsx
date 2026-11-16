@@ -8,13 +8,14 @@ interface SplitBillModalProps {
   tableId: string
   total: number
   onClose: () => void
+  onPayItemsNow?: (lines: { itemId: string; quantity: number }[], selectedTotal: number) => void
 }
 
 function formatCurrency(n: number) {
   return n.toLocaleString("tr-TR", { minimumFractionDigits: 2 })
 }
 
-export default function SplitBillModal({ tableId, total, onClose }: SplitBillModalProps) {
+export default function SplitBillModal({ tableId, total, onClose, onPayItemsNow }: SplitBillModalProps) {
   const { getTableOrders, tables, splitBillByPerson, splitBillByItems } = usePanelStore()
   const { showToast } = usePanelToast()
   const [mode, setMode] = useState<"select" | "person" | "items">("select")
@@ -38,12 +39,14 @@ export default function SplitBillModal({ tableId, total, onClose }: SplitBillMod
   const allItems = tableOrders.flatMap((o) => o.items.filter(itemCountsTowardBill))
 
   const safePersonCount = Math.max(2, Math.min(20, Math.floor(personCount) || 2))
-  const perPersonAmount = Math.ceil(total / safePersonCount)
+  const perPersonAmount = Math.round((total / safePersonCount) * 100) / 100
 
-  const selectedTotal = Object.entries(selectedItems).reduce((sum, [itemId, qty]) => {
-    const item = allItems.find((i) => i.id === itemId)
-    return sum + (item ? item.price * qty : 0)
-  }, 0)
+  const selectedTotal = Math.round(
+    Object.entries(selectedItems).reduce((sum, [itemId, qty]) => {
+      const item = allItems.find((i) => i.id === itemId)
+      return sum + (item ? item.price * qty : 0)
+    }, 0) * 100,
+  ) / 100
 
   const toggleItem = (itemId: string, maxQty: number, delta: number) => {
     setSelectedItems((prev) => {
@@ -61,20 +64,41 @@ export default function SplitBillModal({ tableId, total, onClose }: SplitBillMod
     if (isSubmitting || submittingRef.current || safePersonCount < 2) return
     submittingRef.current = true
     setIsSubmitting(true)
-    splitBillByPerson(tableId, safePersonCount)
+    void splitBillByPerson(tableId, safePersonCount)
     showToast(`${table?.name}: Hesap ${safePersonCount} kişiye bölündü. Kişi başı: ${formatCurrency(perPersonAmount)} TL`, "success")
     onClose()
   }
 
-  const handleSplitByItems = () => {
+  const handleSplitByItemsOnly = () => {
     if (isSubmitting || submittingRef.current || selectedTotal <= 0) return
     const itemIds = Object.keys(selectedItems)
     if (itemIds.length === 0) return
     submittingRef.current = true
     setIsSubmitting(true)
-    splitBillByItems(tableId, itemIds, selectedItems)
+    void splitBillByItems(tableId, itemIds, selectedItems)
     showToast(`${table?.name}: ${itemIds.length} ürün ayrı hesaba ayrıldı. Tutar: ${formatCurrency(selectedTotal)} TL`, "success")
     onClose()
+  }
+
+  const handleSplitByItemsAndPay = () => {
+    if (isSubmitting || submittingRef.current || selectedTotal <= 0) return
+    const lines = Object.entries(selectedItems)
+      .filter(([, qty]) => qty > 0)
+      .map(([itemId, quantity]) => ({ itemId, quantity }))
+    if (lines.length === 0) return
+    submittingRef.current = true
+    setIsSubmitting(true)
+    void splitBillByItems(
+      tableId,
+      lines.map((l) => l.itemId),
+      selectedItems,
+    )
+    if (onPayItemsNow) {
+      onPayItemsNow(lines, selectedTotal)
+    } else {
+      showToast(`${table?.name}: ${lines.length} ürün ayrı hesaba ayrıldı. Tutar: ${formatCurrency(selectedTotal)} TL`, "success")
+      onClose()
+    }
   }
 
   return (
@@ -202,15 +226,23 @@ export default function SplitBillModal({ tableId, total, onClose }: SplitBillMod
                   <span className="text-[#e63462]">{formatCurrency(selectedTotal)} TL</span>
                 </div>
               </div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setMode("select")} className="flex-1 h-[44px] rounded-xl bg-[#f5f5f7] text-[15px] font-semibold text-[#1d1d1f] hover:bg-[#e8e8ed] transition-colors">
+              <div className="flex gap-2.5">
+                <button type="button" onClick={() => setMode("select")} className="px-4 h-[44px] rounded-xl bg-[#f5f5f7] text-[14px] font-semibold text-[#1d1d1f] hover:bg-[#e8e8ed] transition-colors">
                   Geri
                 </button>
                 <button
                   type="button"
-                  onClick={handleSplitByItems}
+                  onClick={handleSplitByItemsOnly}
                   disabled={isSubmitting || selectedTotal === 0}
-                  className="flex-1 h-[44px] rounded-xl bg-[#e63462] text-[15px] font-semibold text-white hover:bg-[#d42d58] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 h-[44px] rounded-xl bg-[#007aff]/10 text-[14px] font-semibold text-[#007aff] hover:bg-[#007aff]/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Masada Ayır
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSplitByItemsAndPay}
+                  disabled={isSubmitting || selectedTotal === 0}
+                  className="flex-1 h-[44px] rounded-xl bg-[#e63462] text-[14px] font-semibold text-white hover:bg-[#d42d58] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Ayır ve Öde
                 </button>

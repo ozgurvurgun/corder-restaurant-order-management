@@ -11,14 +11,10 @@ import { CashShiftEntity } from '../../domain/cash-shift.entity';
 import { CashTransactionEntity } from '../../domain/cash-transaction.entity';
 import { CompletedOrderEntity } from '../../domain/completed-order.entity';
 import { LedgerCustomerEntity } from '../../domain/ledger-customer.entity';
-import {
-  CheckSettlementPolicy,
-  CheckSettlementResult,
-  SettlementActorPolicy,
-} from '../../domain/services/check-settlement.policy';
+import { CheckSettlementPolicy, CheckSettlementResult, SettlementActorPolicy } from '../../domain/services/check-settlement.policy';
 import { BilledOrderLineForStock } from '../../domain/services/recipe-stock.policy';
 import { OrderStatusPolicy } from '../../domain/services/order-status.policy';
-import { CloseCheckDto, CloseCheckWalkInItemDto } from '../../api/dto/close-check.dto';
+import { CloseCheckDto, CloseCheckOrderLineDto, CloseCheckWalkInItemDto } from '../../api/dto/close-check.dto';
 import { OrdersGateway } from '../../api/orders.gateway';
 import { LedgerService } from '../ledger.service';
 import { StockMovementsService } from '../stock-movements.service';
@@ -32,6 +28,11 @@ import {
   serializeStockMovement,
 } from './order.mapper';
 
+interface PartialItemMutation {
+  item: OrderItemEntity;
+  quantity: number;
+}
+
 interface BillContext {
   table: TableEntity | null;
   tableName: string;
@@ -42,6 +43,10 @@ interface BillContext {
   orderIdsToClose: string[];
   ordersSnapshot: Array<Record<string, unknown>>;
   billLinesForStock: BilledOrderLineForStock[];
+  activeOrders?: OrderEntity[];
+  itemsByOrderId?: Map<string, OrderItemEntity[]>;
+  allOrderItems?: OrderItemEntity[];
+  partialMutations?: PartialItemMutation[];
 }
 
 @Injectable()
@@ -61,15 +66,17 @@ export class CloseCheckUseCase {
   ) {
     const hasTable = Boolean(dto.tableId?.trim());
     const hasWalkInItems = Boolean(dto.items && dto.items.length > 0);
+    const hasPartialLines = Boolean(dto.lines && dto.lines.length > 0);
     if ((hasTable && hasWalkInItems) || (!hasTable && !hasWalkInItems)) {
       throw new BadRequestException('Exactly one of tableId or walk-in items must be provided');
+    }
+    if (hasPartialLines && !hasTable) {
+      throw new BadRequestException('Partial item checkout requires a tableId');
     }
 
     const txResult = await this.orderRepo.manager.transaction(async (em) => {
       const shift = await em.findOne(CashShiftEntity, {
-        where: { restaurantId, status: 'open' },
-        order: { openedAt: 'DESC' },
-        lock: { mode: 'pessimistic_write' },
+        where: { restaurantId, status: 'open' }, order: { openedAt: 'DESC' }, lock: { mode: 'pessimistic_write' },
       });
       if (!shift) {
         throw new BadRequestException(
@@ -82,24 +89,17 @@ export class CloseCheckUseCase {
       const actorName = (actor.name || '').trim() || 'Register';
 
       const billContext = hasTable
-        ? await this.loadTableBillContext(em, restaurantId, dto.tableId!, actorId, actorName, now)
+        ? await this.loadTableBillContext(em, restaurantId, dto.tableId!, dto.lines, actorId, actorName, now)
         : await this.buildWalkInBillContext(em, restaurantId, dto.items!, actorId, actorName, now);
 
       const settlement = CheckSettlementPolicy.computeSettlement({
-        rawTotalMinorUnits: billContext.rawTotalMinorUnits,
-        method: dto.method,
-        discount: dto.discount ?? null,
-        splitDetails: dto.splitDetails ?? null,
-        ledgerCustomerId: dto.ledgerCustomerId ?? null,
-        ledgerDebtAmount: dto.ledgerDebtAmount ?? null,
-        tip: dto.tip ?? null,
+        rawTotalMinorUnits: billContext.rawTotalMinorUnits, method: dto.method, discount: dto.discount ?? null,
+        splitDetails: dto.splitDetails ?? null, ledgerCustomerId: dto.ledgerCustomerId ?? null,
+        ledgerDebtAmount: dto.ledgerDebtAmount ?? null, tip: dto.tip ?? null,
       });
 
       CheckSettlementPolicy.assertDiscountAllowedForActor(
-        settlement.rawTotalMinorUnits,
-        settlement.discountMinorUnits,
-        dto.discount,
-        actor,
+        settlement.rawTotalMinorUnits, settlement.discountMinorUnits, dto.discount, actor,
       );
 
       const ledgerCustomer = await this.resolveLedgerCustomer(em, restaurantId, dto, settlement);
@@ -109,37 +109,24 @@ export class CloseCheckUseCase {
 
       if (ledgerCustomer && settlement.ledgerMinorUnits > 0) {
         await this.ledgerService.recordDebtInTransaction(em, {
-          restaurantId,
-          customerId: ledgerCustomer.id,
-          amount: fromMinorUnits(settlement.ledgerMinorUnits),
-          description: `${billContext.tableName} table check`,
-          tableId: billContext.table ? billContext.table.id : null,
-          tableName: billContext.tableName,
-          completedOrderId: savedCompleted.id,
-          snapshot: billContext.ordersSnapshot,
-          recordedBy: actorName,
+          restaurantId, customerId: ledgerCustomer.id, amount: fromMinorUnits(settlement.ledgerMinorUnits),
+          description: `${billContext.tableName} table check`, tableId: billContext.table ? billContext.table.id : null,
+          tableName: billContext.tableName, completedOrderId: savedCompleted.id,
+          snapshot: billContext.ordersSnapshot, recordedBy: actorName,
         });
       }
 
-      if (billContext.table) {
-        await em.update(
-          OrderEntity,
-          { id: In(billContext.orderIdsToClose), restaurantId },
-          { status: 'closed', updatedAt: now },
-        );
-        billContext.table.markEmpty();
-        await em.save(TableEntity, billContext.table);
-      }
+      const tableFullyClosed = billContext.table
+        ? await this.applyTableOrderSettlement(em, restaurantId, billContext, now)
+        : true;
 
       const savedCashTx = await this.recordCashSaleIfNeeded(
         em, restaurantId, shift.id, billContext.tableName, dto.method, settlement.cashMinorUnits, actorName,
       );
 
       shift.recordCheckSettlement({
-        netMinorUnits: settlement.netMinorUnits,
-        cashMinorUnits: settlement.cashMinorUnits,
-        cardMinorUnits: settlement.cardMinorUnits,
-        mealCardMinorUnits: settlement.mealCardMinorUnits,
+        netMinorUnits: settlement.netMinorUnits, cashMinorUnits: settlement.cashMinorUnits,
+        cardMinorUnits: settlement.cardMinorUnits, mealCardMinorUnits: settlement.mealCardMinorUnits,
         multinetMinorUnits: settlement.multinetMinorUnits,
       });
       const savedShift = await em.save(CashShiftEntity, shift);
@@ -147,7 +134,7 @@ export class CloseCheckUseCase {
         em, restaurantId, billContext.billLinesForStock, actorName,
       );
 
-      return { savedCompleted, savedShift, savedCashTx, savedMovements };
+      return { savedCompleted, savedShift, savedCashTx, savedMovements, tableFullyClosed };
     });
 
     if (hasTable) {
@@ -160,24 +147,26 @@ export class CloseCheckUseCase {
       shift: serializeCashShift(txResult.savedShift),
       cashTransaction: txResult.savedCashTx ? serializeCashTransaction(txResult.savedCashTx) : null,
       stockMovements: txResult.savedMovements.map(serializeStockMovement),
+      tableFullyClosed: txResult.tableFullyClosed,
     };
   }
 
   private async loadTableBillContext(
-    em: EntityManager, restaurantId: string, tableId: string, actorId: string, actorName: string, now: Date,
+    em: EntityManager, restaurantId: string, tableId: string,
+    requestedLines: CloseCheckOrderLineDto[] | undefined, actorId: string, actorName: string, now: Date,
   ): Promise<BillContext> {
     const table = await em.findOne(TableEntity, { where: { id: tableId, restaurantId }, lock: { mode: 'pessimistic_write' } });
     if (!table) throw new NotFoundException('Table not found');
 
     const activeOrders = await em.find(OrderEntity, {
-      where: { restaurantId, tableId: table.id, status: 'active' },
-      order: { createdAt: 'ASC' },
-      lock: { mode: 'pessimistic_write' },
+      where: { restaurantId, tableId: table.id, status: 'active' }, order: { createdAt: 'ASC' }, lock: { mode: 'pessimistic_write' },
     });
     if (!activeOrders.length) throw new BadRequestException('No active orders found on this table');
 
-    const orderIdsToClose = activeOrders.map((o) => o.id);
-    const orderItems = await em.find(OrderItemEntity, { where: { orderId: In(orderIdsToClose) }, order: { createdAt: 'ASC' } });
+    const activeOrderIds = activeOrders.map((o) => o.id);
+    const orderItems = await em.find(OrderItemEntity, {
+      where: { orderId: In(activeOrderIds) }, order: { createdAt: 'ASC' }, lock: { mode: 'pessimistic_write' },
+    });
     const itemsByOrderId = new Map<string, OrderItemEntity[]>();
     for (const item of orderItems) {
       const arr = itemsByOrderId.get(item.orderId) ?? [];
@@ -193,6 +182,12 @@ export class CloseCheckUseCase {
     const latestOrder = [...activeOrders].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0];
     const latestUid = latestOrder?.userId?.trim() || '';
     const waiterName = latestOrder?.userDisplayName?.trim() || (latestUid ? staffNameById.get(latestUid) : '') || actorName;
+
+    if (requestedLines && requestedLines.length > 0) {
+      return this.buildPartialTableBillContext(
+        table, activeOrders, orderItems, itemsByOrderId, staffNameById, waiterName, requestedLines, actorId, now,
+      );
+    }
 
     let rawTotalMinorUnits = 0;
     const ordersSnapshot: Array<Record<string, unknown>> = [];
@@ -212,16 +207,107 @@ export class CloseCheckUseCase {
     }
 
     return {
-      table,
-      tableName: (table.name || '').trim() || table.id,
-      section: (table.section || '').trim() || 'default',
-      waiterName,
-      openedAt: activeOrders[0].createdAt ?? now,
-      rawTotalMinorUnits,
-      orderIdsToClose,
-      ordersSnapshot,
-      billLinesForStock,
+      table, tableName: (table.name || '').trim() || table.id, section: (table.section || '').trim() || 'default',
+      waiterName, openedAt: activeOrders[0].createdAt ?? now, rawTotalMinorUnits,
+      orderIdsToClose: activeOrderIds, ordersSnapshot, billLinesForStock,
     };
+  }
+
+  private buildPartialTableBillContext(
+    table: TableEntity, activeOrders: OrderEntity[], orderItems: OrderItemEntity[],
+    itemsByOrderId: Map<string, OrderItemEntity[]>, staffNameById: Map<string, string>,
+    waiterName: string, requestedLines: CloseCheckOrderLineDto[], actorId: string, now: Date,
+  ): BillContext {
+    const itemById = new Map(orderItems.map((i) => [i.id, i]));
+    const paidQtyByItemId = new Map<string, number>();
+    const partialMutations: PartialItemMutation[] = [];
+    let rawTotalMinorUnits = 0;
+    const billLinesForStock: BilledOrderLineForStock[] = [];
+
+    for (const reqLine of requestedLines) {
+      if (paidQtyByItemId.has(reqLine.itemId)) {
+        throw new BadRequestException('Duplicate order item in partial checkout lines');
+      }
+      const item = itemById.get(reqLine.itemId);
+      if (!item || !OrderStatusPolicy.isItemOnActiveBill(item.status)) {
+        throw new BadRequestException('Selected order item is not active on this table bill');
+      }
+      if (reqLine.quantity < 1 || reqLine.quantity > item.quantity) {
+        throw new BadRequestException('Selected quantity exceeds available order item quantity');
+      }
+      const unitMinor = toMinorUnits(item.price);
+      if (unitMinor < 0) throw new BadRequestException('Invalid order item');
+      paidQtyByItemId.set(reqLine.itemId, reqLine.quantity);
+      partialMutations.push({ item, quantity: reqLine.quantity });
+      rawTotalMinorUnits += unitMinor * reqLine.quantity;
+      billLinesForStock.push({ productId: item.productId, productName: item.productName, quantity: reqLine.quantity });
+    }
+
+    const ordersSnapshot: Array<Record<string, unknown>> = [];
+    const affectedOrderIds: string[] = [];
+    for (const order of activeOrders) {
+      const paidLines = (itemsByOrderId.get(order.id) ?? [])
+        .filter((i) => paidQtyByItemId.has(i.id))
+        .map((i) => Object.assign(new OrderItemEntity(), i, { quantity: paidQtyByItemId.get(i.id)! }));
+      if (paidLines.length > 0) {
+        affectedOrderIds.push(order.id);
+        ordersSnapshot.push(buildClosedOrderSnapshot(order, paidLines, staffNameById, actorId, now));
+      }
+    }
+
+    return {
+      table, tableName: (table.name || '').trim() || table.id, section: (table.section || '').trim() || 'default',
+      waiterName, openedAt: activeOrders[0].createdAt ?? now, rawTotalMinorUnits,
+      orderIdsToClose: affectedOrderIds, ordersSnapshot, billLinesForStock,
+      activeOrders, itemsByOrderId, allOrderItems: orderItems, partialMutations,
+    };
+  }
+
+  private async applyTableOrderSettlement(
+    em: EntityManager, restaurantId: string, ctx: BillContext, now: Date,
+  ): Promise<boolean> {
+    const table = ctx.table!;
+    if (!ctx.partialMutations) {
+      await em.update(OrderEntity, { id: In(ctx.orderIdsToClose), restaurantId }, { status: 'closed', updatedAt: now });
+      table.markEmpty();
+      await em.save(TableEntity, table);
+      return true;
+    }
+
+    const removedItems = new Set<OrderItemEntity>();
+    for (const { item, quantity } of ctx.partialMutations) {
+      if (quantity < item.quantity) {
+        item.quantity -= quantity;
+        await em.save(OrderItemEntity, item);
+      } else {
+        removedItems.add(item);
+        await em.remove(OrderItemEntity, item);
+      }
+    }
+
+    const activeOrders = ctx.activeOrders ?? [];
+    const itemsByOrderId = ctx.itemsByOrderId ?? new Map<string, OrderItemEntity[]>();
+    const allOrderItems = ctx.allOrderItems ?? [];
+    const hasRemainingBillable = allOrderItems.some(
+      (i) => !removedItems.has(i) && OrderStatusPolicy.isItemOnActiveBill(i.status),
+    );
+
+    if (hasRemainingBillable) {
+      for (const order of activeOrders) {
+        const remainingInOrder = (itemsByOrderId.get(order.id) ?? []).filter((i) => !removedItems.has(i));
+        const patch = remainingInOrder.length === 0 ? { status: 'closed', updatedAt: now } : { updatedAt: now };
+        await em.update(OrderEntity, { id: order.id, restaurantId }, patch);
+      }
+      table.status = 'occupied';
+      table.splitInfo = null;
+      await em.save(TableEntity, table);
+      return false;
+    }
+
+    await em.update(OrderEntity, { id: In(activeOrders.map((o) => o.id)), restaurantId }, { status: 'closed', updatedAt: now });
+    table.markEmpty();
+    await em.save(TableEntity, table);
+    return true;
   }
 
   private async buildWalkInBillContext(
@@ -267,8 +353,7 @@ export class CloseCheckUseCase {
     if (settlement.ledgerMinorUnits <= 0 && dto.method !== 'ledger') return null;
     if (!dto.ledgerCustomerId) throw new BadRequestException('ledgerCustomerId is required when recording a ledger debt');
     const customer = await em.findOne(LedgerCustomerEntity, {
-      where: { id: dto.ledgerCustomerId, restaurantId },
-      lock: { mode: 'pessimistic_write' },
+      where: { id: dto.ledgerCustomerId, restaurantId }, lock: { mode: 'pessimistic_write' },
     });
     if (!customer) throw new NotFoundException('Ledger customer not found');
     return customer;
@@ -279,14 +364,8 @@ export class CloseCheckUseCase {
     method: string, actorId: string, actorName: string, ledgerCustomer: LedgerCustomerEntity | null, now: Date,
   ): Promise<CompletedOrderEntity> {
     const paymentSnapshot = buildCompletedPaymentSnapshot({
-      tableId: ctx.table ? ctx.table.id : 'quick-sale',
-      tableName: ctx.tableName,
-      orderIds: ctx.orderIdsToClose,
-      method,
-      settlement,
-      processedBy: actorId,
-      createdAt: now,
-      ledgerCustomer,
+      tableId: ctx.table ? ctx.table.id : 'quick-sale', tableName: ctx.tableName, orderIds: ctx.orderIdsToClose,
+      method, settlement, processedBy: actorId, createdAt: now, ledgerCustomer,
     });
     const entity = em.create(CompletedOrderEntity, {
       restaurantId, tableName: ctx.tableName, section: ctx.section, waiter: ctx.waiterName,

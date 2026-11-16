@@ -5,7 +5,7 @@ import {
   type PanelTable,
   type PanelUser,
 } from "../panel-types"
-import type { OrderDto } from "../api"
+import type { OrderDto, RawTableDto } from "../api"
 
 export function mapOrderItem(i: OrderDto["items"][0]): PanelOrder["items"][0] {
   return {
@@ -41,7 +41,7 @@ export function mapApiOrdersToPanel(orders: OrderDto[]): PanelOrder[] {
   return orders.map(mapOrder)
 }
 
-/** On API refresh, preserve client-only discount / split-bill fields. */
+/** On API refresh, preserve fallback client discount / split-bill fields if server did not supply them. */
 export function mergeTablesPreserveClientFields(
   prev: PanelTable[],
   next: PanelTable[],
@@ -52,8 +52,8 @@ export function mergeTablesPreserveClientFields(
     if (!old || !occupied) return nt
     return {
       ...nt,
-      ...(old.discount ? { discount: old.discount } : {}),
-      ...(old.splitInfo ? { splitInfo: old.splitInfo } : {}),
+      ...(nt.discount ? { discount: nt.discount } : old.discount ? { discount: old.discount } : {}),
+      ...(nt.splitInfo ? { splitInfo: nt.splitInfo } : old.splitInfo ? { splitInfo: old.splitInfo } : {}),
     }
   })
 }
@@ -81,26 +81,73 @@ export function resolveStaffNameForTable(
 }
 
 export function mapApiTablesToPanel(
-  apiTables: { id: string; name: string; section: string; status: string }[],
+  apiTables: RawTableDto[],
   orders: PanelOrder[],
   staffUsers: PanelUser[],
 ): PanelTable[] {
   const activeOrders = orders.filter((o) => o.status === "active")
   return apiTables.map((t) => {
     const tableOrders = activeOrders.filter((o) => o.tableId === t.id)
-    const totalAmount = tableOrders.reduce(
-      (sum, o) =>
-        sum +
-        o.items
-          .filter(itemCountsTowardBill)
-          .reduce((s, i) => s + i.price * i.quantity, 0),
-      0,
-    )
+    const billableItems = tableOrders.flatMap((o) => o.items.filter(itemCountsTowardBill))
+    const rawTotal = billableItems.reduce((s, i) => s + i.price * i.quantity, 0)
     const orderCount = tableOrders.length
     const lastOrder = [...tableOrders].sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     )[0]
     const waiter = resolveStaffNameForTable(t.id, orders, staffUsers)
+
+    let discount: PanelTable["discount"] | undefined
+    let totalAmount = rawTotal
+
+    if (t.discount && orderCount > 0) {
+      const discountAmount =
+        t.discount.type === "percent"
+          ? Math.round(rawTotal * t.discount.value) / 100
+          : t.discount.type === "amount"
+            ? Math.min(t.discount.value, rawTotal)
+            : rawTotal
+      discount = {
+        type: t.discount.type,
+        value: t.discount.value,
+        amount: discountAmount,
+        reason: t.discount.reason,
+      }
+      totalAmount = Math.max(0, rawTotal - discountAmount)
+    }
+
+    let splitInfo: PanelTable["splitInfo"] | undefined
+    if (t.splitInfo && orderCount > 0) {
+      if (t.splitInfo.type === "person" && t.splitInfo.personCount) {
+        const perPersonAmount = Math.round((totalAmount / t.splitInfo.personCount) * 100) / 100
+        splitInfo = {
+          type: "person",
+          personCount: t.splitInfo.personCount,
+          perPersonAmount,
+          paidShares: t.splitInfo.paidShares ?? [],
+        }
+      } else if (t.splitInfo.type === "items" && t.splitInfo.amounts) {
+        const validAmounts: Record<string, number> = {}
+        let selectedTotal = 0
+        for (const [itemId, qty] of Object.entries(t.splitInfo.amounts)) {
+          const item = billableItems.find((i) => i.id === itemId)
+          if (item && qty > 0) {
+            const validQty = Math.min(item.quantity, qty)
+            validAmounts[itemId] = validQty
+            selectedTotal += item.price * validQty
+          }
+        }
+        const validItemIds = Object.keys(validAmounts)
+        if (validItemIds.length > 0 && selectedTotal > 0) {
+          splitInfo = {
+            type: "items",
+            itemIds: validItemIds,
+            amounts: validAmounts,
+            selectedTotal: Math.round(selectedTotal * 100) / 100,
+          }
+        }
+      }
+    }
+
     return {
       id: t.id,
       name: t.name,
@@ -111,6 +158,8 @@ export function mapApiTablesToPanel(
       lastUpdated: lastOrder ? lastOrder.updatedAt : undefined,
       activeOrderId: lastOrder?.id,
       waiter,
+      ...(discount ? { discount } : {}),
+      ...(splitInfo ? { splitInfo } : {}),
     }
   })
 }

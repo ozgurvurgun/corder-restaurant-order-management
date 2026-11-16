@@ -109,6 +109,8 @@ export function itemIsLedgerLike(i: PanelOrderItem): boolean {
   return i.status === "cancelled" && (r === "Assigned to ledger" || r.startsWith("Cari"))
 }
 
+import type { PanelSplitSharePayment } from "./panel-domain-types"
+
 export type PanelTableStatus = "empty" | "occupied" | "ordering" | "checkout"
 
 export interface PanelTable {
@@ -126,6 +128,7 @@ export interface PanelTable {
     type: "person" | "items"
     personCount?: number
     perPersonAmount?: number
+    paidShares?: PanelSplitSharePayment[]
     itemIds?: string[]
     amounts?: Record<string, number>
     selectedTotal?: number

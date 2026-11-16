@@ -86,7 +86,25 @@ export class TransferOrderUseCase {
         { id: In(activeOrders.map((o) => o.id)), restaurantId },
         { tableId: toTableId, updatedAt: now },
       );
-      fromTable.releaseSession();
+
+      let toTableChanged = false;
+      if (fromTable.discount && !toTable.discount) {
+        toTable.discount = fromTable.discount;
+        toTableChanged = true;
+      }
+      if (fromTable.splitInfo && !toTable.splitInfo) {
+        toTable.splitInfo = fromTable.splitInfo;
+        toTableChanged = true;
+      }
+      if (toTable.status === 'empty') {
+        toTable.status = 'occupied';
+        toTableChanged = true;
+      }
+      if (toTableChanged) {
+        await em.save(TableEntity, toTable);
+      }
+
+      fromTable.markEmpty();
       await em.save(TableEntity, fromTable);
       return activeOrders.length;
     });

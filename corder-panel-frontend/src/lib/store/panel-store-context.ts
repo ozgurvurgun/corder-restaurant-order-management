@@ -114,8 +114,18 @@ export interface PanelStore {
       method: CloseCheckSplitMethod
       amount: number
     }[],
-    opts?: { ledgerCustomerId?: string; ledgerDebtAmount?: number; tip?: number },
-  ) => Promise<{ ok: boolean; completedOrder?: ClosedTable; error?: string }>
+    opts?: {
+      ledgerCustomerId?: string
+      ledgerDebtAmount?: number
+      tip?: number
+      lines?: { itemId: string; quantity: number }[]
+    },
+  ) => Promise<{
+    ok: boolean
+    completedOrder?: ClosedTable
+    tableFullyClosed?: boolean
+    error?: string
+  }>
 
   // Quick Sale (Walk-in)
   addQuickSale: (
@@ -265,14 +275,27 @@ export interface PanelStore {
   applyDiscount: (
     tableId: string,
     discount: { type: PanelDiscountType; value: number; reason: string },
-  ) => void
-  clearDiscount: (tableId: string) => void
-  splitBillByPerson: (tableId: string, personCount: number) => void
+  ) => void | Promise<void>
+  clearDiscount: (tableId: string) => void | Promise<void>
+  splitBillByPerson: (tableId: string, personCount: number) => void | Promise<void>
   splitBillByItems: (
     tableId: string,
     itemIds: string[],
     amounts: Record<string, number>,
-  ) => void
+  ) => void | Promise<void>
+  clearSplitBill: (tableId: string) => void | Promise<void>
+  payPersonShare: (
+    tableId: string,
+    shareIndex: number,
+    method: CloseCheckSplitMethod,
+    amount: number,
+    opts?: { ledgerCustomerId?: string },
+  ) => Promise<{
+    ok: boolean
+    fullyClosed?: boolean
+    completedOrder?: ClosedTable
+    error?: string
+  }>
 
   // Campaigns & Ordering
   addCampaign: (c: Omit<Campaign, "id" | "createdAt" | "order">) => void
@@ -284,6 +307,7 @@ export interface PanelStore {
 }
 
 export type PanelContextType = PanelStore
+export type PanelStoreContextType = PanelStore
 
 export const PanelContext = createContext<PanelStore | null>(null)
 

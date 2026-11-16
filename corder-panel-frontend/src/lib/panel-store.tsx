@@ -33,6 +33,7 @@ import {
   PanelContext,
   usePanelStore,
   type PanelContextType,
+  type PanelStoreContextType,
   type PanelStore,
 } from "./store/panel-store-context"
 import {
@@ -49,7 +50,7 @@ import { useTableOrderActions } from "./store/use-table-order-actions"
 import { useCatalogActions } from "./store/use-catalog-actions"
 import { useInventoryActions } from "./store/use-inventory-actions"
 
-export { usePanelStore, type PanelStore, type PanelContextType }
+export { usePanelStore, type PanelStore, type PanelContextType, type PanelStoreContextType }
 
 export function PanelProvider({ children }: { children: ReactNode }) {
   const { token } = usePanelAuth()
