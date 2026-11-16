@@ -1,4 +1,12 @@
-import { IsString, IsOptional, IsEmail, MinLength } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsEmail,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MinLength,
+} from 'class-validator';
 
 export class UpdateRootAdminDto {
   @IsOptional()
@@ -9,6 +17,19 @@ export class UpdateRootAdminDto {
   @IsOptional()
   @IsEmail()
   email?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  restaurantIds?: string[];
 
   @IsOptional()
   @IsString()

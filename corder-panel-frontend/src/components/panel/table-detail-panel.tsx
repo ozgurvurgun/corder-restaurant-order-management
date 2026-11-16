@@ -27,8 +27,19 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
     tables, users, getTableOrders, getTableTotal, reprintReceipt, clearDiscount,
     ledgerCustomers, ledgerRefresh, assignItemsToLedger, revertLedgerOrderItem,
   } = usePanelStore()
-  const { token } = usePanelAuth()
+  const { token, hasPermission } = usePanelAuth()
   const { showToast } = usePanelToast()
+  const canCreateOrder = hasPermission("order.create")
+  const canCloseCheck = hasPermission("billing.close_check")
+  const canSplitBill = hasPermission("billing.split_bill")
+  const canDiscount = hasPermission("discount.apply_percent", "discount.apply_amount", "discount.complimentary")
+  const canRemoveDiscount = hasPermission("discount.remove")
+  const canPrintReceipt = hasPermission("order.print_receipt")
+  const canMoveTable = hasPermission("table.move")
+  const canMoveItems = hasPermission("order.move_items")
+  const canCancelItem = hasPermission("order.cancel_item")
+  const canAssignLedger = hasPermission("ledger.assign_order")
+  const canRevertLedger = hasPermission("ledger.revert_item")
   const [activeTab, setActiveTab] = useState(0)
   const [showPayment, setShowPayment] = useState(false)
   const [showSplitBill, setShowSplitBill] = useState(false)
@@ -97,9 +108,11 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
                 {discount.type === "percent" ? `%${discount.value}` : discount.type === "complimentary" ? "Tam Ikram" : `${formatCurrency(discount.value)} TL`} Indirim
               </span>
               <span className="text-[#86868b]">{discount.reason}</span>
-              <button type="button" onClick={() => clearDiscount(tableId)} className="text-[11px] font-medium text-[#86868b] hover:text-[#ff3b30] underline underline-offset-2">
-                Indirimi kaldir
-              </button>
+              {canRemoveDiscount && (
+                <button type="button" onClick={() => clearDiscount(tableId)} className="text-[11px] font-medium text-[#86868b] hover:text-[#ff3b30] underline underline-offset-2">
+                  Indirimi kaldir
+                </button>
+              )}
             </div>
           )}
 
@@ -194,7 +207,7 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
                           {struck && item.cancelReason && <p className="text-[11px] text-red-600 mt-0.5">Sebep: {item.cancelReason}</p>}
                         </div>
                         <div className="flex items-start gap-1 flex-shrink-0">
-                          {item.status === "ledger" && token && (
+                          {item.status === "ledger" && token && canRevertLedger && (
                             <button
                               type="button"
                               title="Cariyi geri al"
@@ -222,17 +235,21 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
                       </div>
                       {showActions && (
                         <div className="mt-1 flex flex-wrap gap-2">
-                          <button type="button" onClick={() => setMoveItem({ orderId: activeOrder.id, itemId: item.id, itemName: item.productName })} className="text-[11px] text-[#007aff] hover:text-[#0051d5] font-medium inline-flex items-center gap-0.5">
-                            <CornerUpRight className="w-3 h-3" /> Baska masaya
-                          </button>
-                          {token && (
+                          {canMoveItems && (
+                            <button type="button" onClick={() => setMoveItem({ orderId: activeOrder.id, itemId: item.id, itemName: item.productName })} className="text-[11px] text-[#007aff] hover:text-[#0051d5] font-medium inline-flex items-center gap-0.5">
+                              <CornerUpRight className="w-3 h-3" /> Baska masaya
+                            </button>
+                          )}
+                          {token && canAssignLedger && (
                             <button type="button" onClick={() => setAssignLedger({ orderId: activeOrder.id, itemId: item.id, itemName: item.productName, unitPrice: item.price, maxQty: item.quantity })} className="text-[11px] text-amber-700 hover:text-amber-800 font-medium inline-flex items-center gap-0.5">
                               <BookUser className="w-3 h-3" /> Cariye at
                             </button>
                           )}
-                          <button type="button" onClick={() => setCancelItem({ orderId: activeOrder.id, itemId: item.id, itemName: item.productName })} className="text-[11px] text-red-500 hover:text-red-600 font-medium">
-                            Iptal Et
-                          </button>
+                          {canCancelItem && (
+                            <button type="button" onClick={() => setCancelItem({ orderId: activeOrder.id, itemId: item.id, itemName: item.productName })} className="text-[11px] text-red-500 hover:text-red-600 font-medium">
+                              Iptal Et
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -261,30 +278,30 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
         )}
 
         <div className="flex-shrink-0 border-t border-[#d1d1d6]/60 p-4 flex flex-col gap-2">
-          <button type="button" onClick={() => setShowAddOrder(true)} disabled={table.status === "checkout"} className="flex items-center justify-center gap-2 w-full h-[40px] bg-[#e63462] hover:bg-[#d12d57] disabled:opacity-45 disabled:pointer-events-none text-white rounded-xl text-[14px] font-semibold transition-colors">
+          <button type="button" onClick={() => setShowAddOrder(true)} disabled={!canCreateOrder || table.status === "checkout"} className="flex items-center justify-center gap-2 w-full h-[40px] bg-[#e63462] hover:bg-[#d12d57] disabled:opacity-45 disabled:pointer-events-none text-white rounded-xl text-[14px] font-semibold transition-colors">
             <Plus className="w-4 h-4" /> Siparis Gir
           </button>
-          <button onClick={() => setShowPayment(true)} disabled={tableOrders.length === 0} className="flex items-center justify-center gap-2 w-full h-[40px] bg-[#34c759] hover:bg-[#2db84e] disabled:opacity-45 disabled:pointer-events-none text-white rounded-xl text-[14px] font-semibold transition-colors">
+          <button onClick={() => setShowPayment(true)} disabled={!canCloseCheck || tableOrders.length === 0} className="flex items-center justify-center gap-2 w-full h-[40px] bg-[#34c759] hover:bg-[#2db84e] disabled:opacity-45 disabled:pointer-events-none text-white rounded-xl text-[14px] font-semibold transition-colors">
             <CreditCard className="w-4 h-4" /> Hesap Kes
           </button>
           <div className="flex gap-2">
-            <button onClick={() => setShowSplitBill(true)} disabled={tableOrders.length === 0} className={`flex-1 flex items-center justify-center gap-1.5 h-[36px] rounded-xl text-[13px] font-medium transition-colors disabled:opacity-45 disabled:pointer-events-none ${table.splitInfo ? "bg-[#007aff]/10 text-[#007aff] border border-[#007aff]/30" : "bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f]"}`}>
+            <button onClick={() => setShowSplitBill(true)} disabled={!canSplitBill || tableOrders.length === 0} className={`flex-1 flex items-center justify-center gap-1.5 h-[36px] rounded-xl text-[13px] font-medium transition-colors disabled:opacity-45 disabled:pointer-events-none ${table.splitInfo ? "bg-[#007aff]/10 text-[#007aff] border border-[#007aff]/30" : "bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f]"}`}>
               <Users className="w-3.5 h-3.5" /> Hesap Bol
             </button>
-            <button onClick={() => setShowDiscount(true)} disabled={tableOrders.length === 0} className={`flex-1 flex items-center justify-center gap-1.5 h-[36px] rounded-xl text-[13px] font-medium transition-colors disabled:opacity-45 disabled:pointer-events-none ${discount ? "bg-[#e63462]/10 text-[#e63462] border border-[#e63462]/30" : "bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f]"}`}>
+            <button onClick={() => setShowDiscount(true)} disabled={!canDiscount || tableOrders.length === 0} className={`flex-1 flex items-center justify-center gap-1.5 h-[36px] rounded-xl text-[13px] font-medium transition-colors disabled:opacity-45 disabled:pointer-events-none ${discount ? "bg-[#e63462]/10 text-[#e63462] border border-[#e63462]/30" : "bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f]"}`}>
               <Percent className="w-3.5 h-3.5" /> Indirim
             </button>
           </div>
           <div className="flex flex-col gap-2">
             <div className="flex gap-2">
-              <button type="button" onClick={handlePrint} disabled={tableOrders.length === 0} className="flex-1 flex items-center justify-center gap-1.5 h-[36px] bg-[#f5f5f7] hover:bg-[#e8e8ed] disabled:opacity-45 disabled:pointer-events-none rounded-xl text-[12px] font-medium text-[#1d1d1f] transition-colors">
+              <button type="button" onClick={handlePrint} disabled={!canPrintReceipt || tableOrders.length === 0} className="flex-1 flex items-center justify-center gap-1.5 h-[36px] bg-[#f5f5f7] hover:bg-[#e8e8ed] disabled:opacity-45 disabled:pointer-events-none rounded-xl text-[12px] font-medium text-[#1d1d1f] transition-colors">
                 <Printer className="w-3.5 h-3.5" /> Masa fisi
               </button>
-              <button type="button" onClick={handlePrintActiveOrder} disabled={!activeOrder || !activeOrderHasPrintableLines} className="flex-1 flex items-center justify-center gap-1.5 h-[36px] bg-[#f5f5f7] hover:bg-[#e8e8ed] disabled:pointer-events-none disabled:opacity-45 disabled:cursor-not-allowed rounded-xl text-[12px] font-medium text-[#1d1d1f] transition-colors">
+              <button type="button" onClick={handlePrintActiveOrder} disabled={!canPrintReceipt || !activeOrder || !activeOrderHasPrintableLines} className="flex-1 flex items-center justify-center gap-1.5 h-[36px] bg-[#f5f5f7] hover:bg-[#e8e8ed] disabled:pointer-events-none disabled:opacity-45 disabled:cursor-not-allowed rounded-xl text-[12px] font-medium text-[#1d1d1f] transition-colors">
                 <Printer className="w-3.5 h-3.5" /> Adisyon fisi
               </button>
             </div>
-            <button type="button" onClick={() => setShowMoveTable(true)} disabled={tableOrders.length === 0} className="w-full flex items-center justify-center gap-1.5 h-[36px] bg-[#f5f5f7] hover:bg-[#e8e8ed] disabled:opacity-45 disabled:pointer-events-none rounded-xl text-[13px] font-medium text-[#1d1d1f] transition-colors">
+            <button type="button" onClick={() => setShowMoveTable(true)} disabled={!canMoveTable || tableOrders.length === 0} className="w-full flex items-center justify-center gap-1.5 h-[36px] bg-[#f5f5f7] hover:bg-[#e8e8ed] disabled:opacity-45 disabled:pointer-events-none rounded-xl text-[13px] font-medium text-[#1d1d1f] transition-colors">
               <ArrowRightLeft className="w-3.5 h-3.5" /> Tasi
             </button>
           </div>

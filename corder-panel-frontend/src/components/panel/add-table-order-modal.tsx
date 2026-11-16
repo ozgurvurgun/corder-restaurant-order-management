@@ -16,6 +16,41 @@ function descendantCategoryIds(rootId: string, cats: PanelCategory[]): Set<strin
   return out
 }
 
+function ProductCard({
+  product,
+  onAddProduct,
+}: {
+  product: PanelProduct
+  onAddProduct: (product: PanelProduct) => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onAddProduct(product)}
+      className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden hover:border-[#e63462]/50 hover:shadow-md transition-all text-left"
+    >
+      <div className="aspect-square bg-[#f5f5f7] relative overflow-hidden">
+        {product.image ? (
+          <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <ShoppingBag className="w-8 h-8 text-[#d1d1d6]" />
+          </div>
+        )}
+        {!product.inStock && (
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+            <span className="text-white text-[10px] font-medium">Stokta Yok</span>
+          </div>
+        )}
+      </div>
+      <div className="p-2.5">
+        <p className="text-[11px] font-medium text-[#1d1d1f] line-clamp-2 min-h-[28px]">{product.name}</p>
+        <p className="text-[13px] font-bold text-[#e63462]">{"₺"}{formatCurrency(product.price)}</p>
+      </div>
+    </button>
+  )
+}
+
 function ProductSubtree(props: {
   nodeId: string
   categories: PanelCategory[]
@@ -39,31 +74,7 @@ function ProductSubtree(props: {
       {nodeProducts.length > 0 && (
         <div className="grid grid-cols-3 md:grid-cols-4 gap-2.5 mb-2">
           {nodeProducts.map((product) => (
-            <button
-              key={product.id}
-              type="button"
-              onClick={() => onAddProduct(product)}
-              className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden hover:border-[#e63462]/50 hover:shadow-md transition-all text-left"
-            >
-              <div className="aspect-square bg-[#f5f5f7] relative overflow-hidden">
-                {product.image ? (
-                  <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <ShoppingBag className="w-8 h-8 text-[#d1d1d6]" />
-                  </div>
-                )}
-                {!product.inStock && (
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                    <span className="text-white text-[10px] font-medium">Stokta Yok</span>
-                  </div>
-                )}
-              </div>
-              <div className="p-2.5">
-                <p className="text-[11px] font-medium text-[#1d1d1f] line-clamp-2 min-h-[28px]">{product.name}</p>
-                <p className="text-[13px] font-bold text-[#e63462]">{"₺"}{formatCurrency(product.price)}</p>
-              </div>
-            </button>
+            <ProductCard key={product.id} product={product} onAddProduct={onAddProduct} />
           ))}
         </div>
       )}
@@ -285,26 +296,7 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
               ) : searchQuery.trim() || !selectedCategoryId ? (
                 <div className="grid grid-cols-3 md:grid-cols-4 gap-2.5">
                   {filteredProducts.map((product) => (
-                    <button
-                      key={product.id}
-                      type="button"
-                      onClick={() => addToCart(product)}
-                      className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden hover:border-[#e63462]/50 hover:shadow-md transition-all text-left"
-                    >
-                      <div className="aspect-square bg-[#f5f5f7] relative overflow-hidden">
-                        {product.image ? (
-                          <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <ShoppingBag className="w-8 h-8 text-[#d1d1d6]" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="p-2.5">
-                        <p className="text-[11px] font-medium text-[#1d1d1f] line-clamp-2 min-h-[28px]">{product.name}</p>
-                        <p className="text-[13px] font-bold text-[#e63462]">{"₺"}{formatCurrency(product.price)}</p>
-                      </div>
-                    </button>
+                    <ProductCard key={product.id} product={product} onAddProduct={addToCart} />
                   ))}
                 </div>
               ) : (

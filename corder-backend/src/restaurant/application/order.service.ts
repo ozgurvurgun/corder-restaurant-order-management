@@ -12,6 +12,7 @@ import { CancelOrderItemUseCase } from './orders/cancel-order-item.use-case';
 import { OrderLedgerUseCase } from './orders/order-ledger.use-case';
 import { CloseCheckUseCase } from './orders/close-check.use-case';
 import { PrintReceiptUseCase } from './orders/print-receipt.use-case';
+import { SettlementActorPolicy } from '../domain/services/check-settlement.policy';
 
 /**
  * Application Facade coordinating order queries and command use cases.
@@ -65,7 +66,7 @@ export class OrderService {
   closeCheck(
     restaurantId: string,
     dto: CloseCheckDto,
-    actor: { id: string; name: string },
+    actor: { id: string; name: string } & SettlementActorPolicy,
   ) {
     return this.closeCheckUseCase.execute(restaurantId, dto, actor);
   }

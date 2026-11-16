@@ -4,6 +4,7 @@ import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RootAdminEntity } from '../platform/domain/root-admin.entity';
+import { BossRestaurantEntity } from '../platform/domain/boss-restaurant.entity';
 import { RestaurantEntity } from '../platform/domain/restaurant.entity';
 import { TableEntity } from './domain/table.entity';
 import { OrderEntity } from './domain/order.entity';
@@ -11,6 +12,7 @@ import { OrderItemEntity } from './domain/order-item.entity';
 import { CategoryEntity } from './domain/category.entity';
 import { ProductEntity } from './domain/product.entity';
 import { RestaurantStaffEntity } from './domain/restaurant-staff.entity';
+import { RestaurantRoleEntity } from './domain/restaurant-role.entity';
 import { CashShiftEntity } from './domain/cash-shift.entity';
 import { CashTransactionEntity } from './domain/cash-transaction.entity';
 import { OpenAccountEntity } from './domain/open-account.entity';
@@ -29,6 +31,8 @@ import { PrinterConfigEntity } from './domain/printer-config.entity';
 import { AuditLogEntity } from './domain/audit-log.entity';
 import { PrintJobEntity } from './domain/print-job.entity';
 import { RestaurantAuthService } from './application/restaurant-auth.service';
+import { RolesService } from './application/roles.service';
+import { BossOverviewService } from './application/boss-overview.service';
 import { CashShiftService } from './application/cash-shift.service';
 import { CashTransactionsService } from './application/cash-transactions.service';
 import { OpenAccountsService } from './application/open-accounts.service';
@@ -57,6 +61,8 @@ import { RestaurantSettingsService } from './application/restaurant-settings.ser
 import { PrintersService } from './application/printers.service';
 import { AuditLogsService } from './application/audit-logs.service';
 import { RestaurantAuthController } from './api/restaurant-auth.controller';
+import { RolesController } from './api/roles.controller';
+import { BossController } from './api/boss.controller';
 import { TablesController } from './api/tables.controller';
 import { OrdersController } from './api/orders.controller';
 import { CategoriesController } from './api/categories.controller';
@@ -94,8 +100,10 @@ import {
   imports: [
     TypeOrmModule.forFeature([
       RootAdminEntity,
+      BossRestaurantEntity,
       RestaurantEntity,
       RestaurantStaffEntity,
+      RestaurantRoleEntity,
       TableEntity,
       OrderEntity,
       OrderItemEntity,
@@ -132,6 +140,8 @@ import {
   ],
   controllers: [
     RestaurantAuthController,
+    RolesController,
+    BossController,
     TablesController,
     OrdersController,
     CategoriesController,
@@ -157,6 +167,8 @@ import {
   ],
   providers: [
     RestaurantAuthService,
+    RolesService,
+    BossOverviewService,
     StaffService,
     StaffSessionService,
     TableService,
@@ -192,6 +204,7 @@ import {
   ],
   exports: [
     RestaurantAuthService,
+    RolesService,
     TableService,
     OrderService,
     CategoryService,

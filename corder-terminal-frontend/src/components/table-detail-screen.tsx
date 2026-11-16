@@ -6,6 +6,7 @@ import {
   Printer,
   User,
   ChevronRight,
+  Lock,
 } from "lucide-react"
 import { useApp } from "@/lib/store"
 import { formatCurrency } from "@/lib/format"
@@ -28,7 +29,14 @@ export function TableDetailScreen({
   onViewOpenOrders,
 }: TableDetailScreenProps) {
   const { showToast } = useToast()
-  const { tables, getTableOrders, getTableTotal, printReceipt, currentUser } = useApp()
+  const {
+    tables,
+    getTableOrders,
+    getTableTotal,
+    printReceipt,
+    currentUser,
+    hasPermission,
+  } = useApp()
   const [printing, setPrinting] = useState(false)
   const [showMoveConfirm, setShowMoveConfirm] = useState(false)
 
@@ -40,16 +48,29 @@ export function TableDetailScreen({
   const orderCount = tableOrders.length
   const isBillRequested = table.status === "bill-requested"
 
+  const canCreateOrder = hasPermission("order.create")
+  const canMoveTable = hasPermission("table.move")
+  const canPrintReceipt = hasPermission("order.print_receipt")
+
   const handleMoveConfirmed = () => {
     setShowMoveConfirm(false)
     onMoveTable()
   }
 
   const handlePrint = async () => {
+    if (!canPrintReceipt) {
+      showToast("Adisyon yazdırma yetkiniz bulunmuyor", "error")
+      return
+    }
     setPrinting(true)
-    await printReceipt(tableId)
-    showToast("Adisyon yazdirildi")
-    setPrinting(false)
+    try {
+      await printReceipt(tableId)
+      showToast("Adisyon yazdirildi")
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Yazdirilamadi", "error")
+    } finally {
+      setPrinting(false)
+    }
   }
 
   return (
@@ -60,7 +81,7 @@ export function TableDetailScreen({
           {table.name.replace(" ", " - #")}
         </h1>
 
-        {/* Waiter + Check Count - Clickable */}
+        {/* Waiter + Role + Check Count - Clickable */}
         <button
           onClick={onViewOpenOrders}
           className="flex items-center gap-3 text-white/70 mt-2 mb-1 active:text-white transition-colors py-2"
@@ -71,6 +92,11 @@ export function TableDetailScreen({
             <span className="text-[15px] font-medium capitalize">
               {table.activeWaiter || currentUser?.name || "-"}
             </span>
+            {currentUser?.roleLabel && (
+              <span className="rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-semibold text-white">
+                {currentUser.roleLabel}
+              </span>
+            )}
           </div>
           <span className="text-[15px] font-medium">{orderCount} Adisyon</span>
           {orderCount > 0 && <ChevronRight className="h-4 w-4" />}
@@ -86,21 +112,39 @@ export function TableDetailScreen({
           <ActionRow
             icon={<Plus className="h-[20px] w-[20px]" />}
             label="Yeni Adisyon"
-            onClick={onNewOrder}
+            locked={!canCreateOrder}
+            onClick={() => {
+              if (!canCreateOrder) {
+                showToast("Yeni sipariş açma yetkiniz bulunmuyor", "error")
+                return
+              }
+              onNewOrder()
+            }}
             disabled={isBillRequested}
             color="text-[#e63462]"
           />
           <ActionRow
             icon={<ArrowRightLeft className="h-[20px] w-[20px]" />}
             label="Masayi Tasi"
-            onClick={() => setShowMoveConfirm(true)}
-            disabled={isBillRequested}
+            locked={!canMoveTable}
+            onClick={() => {
+              if (!canMoveTable) {
+                showToast(
+                  "Masa taşıma yetkiniz bulunmuyor (Boss tarafından kısıtlandı)",
+                  "error"
+                )
+                return
+              }
+              setShowMoveConfirm(true)
+            }}
+            disabled={isBillRequested || orderCount === 0}
             color="text-[#e63462]"
           />
           <ActionRow
             icon={<Printer className="h-[20px] w-[20px]" />}
             label="Yazdir"
-            onClick={handlePrint}
+            locked={!canPrintReceipt}
+            onClick={() => void handlePrint()}
             disabled={printing || total === 0}
             color="text-[#e63462]"
           />
@@ -148,22 +192,31 @@ function ActionRow({
   label,
   onClick,
   disabled,
+  locked,
   color,
 }: {
   icon: React.ReactNode
   label: string
   onClick: () => void
   disabled?: boolean
+  locked?: boolean
   color: string
 }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`flex items-center gap-3.5 bg-white/95 backdrop-blur-sm ${color} font-semibold py-[14px] px-5 rounded-2xl shadow-sm transition-all active:scale-[0.98] active:bg-white/80 disabled:opacity-40`}
+      className={`flex items-center justify-between bg-white/95 backdrop-blur-sm ${color} font-semibold py-[14px] px-5 rounded-2xl shadow-sm transition-all active:scale-[0.98] active:bg-white/80 disabled:opacity-40`}
     >
-      {icon}
-      <span className="text-[16px]">{label}</span>
+      <div className="flex items-center gap-3.5">
+        {icon}
+        <span className="text-[16px]">{label}</span>
+      </div>
+      {locked && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-[11px] font-semibold text-red-600">
+          <Lock className="h-3 w-3" /> Yetki Yok
+        </span>
+      )}
     </button>
   )
 }

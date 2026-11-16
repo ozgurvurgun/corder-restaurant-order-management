@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { usePanelStore } from "@/lib/panel-store"
+import { usePanelAuth } from "@/lib/panel-auth"
 import type { PanelUserRole } from "@/lib/panel-types"
 import {
   Plus,
@@ -8,47 +9,91 @@ import {
   X,
   Users,
   Shield,
-  UserCheck,
   Lock,
+  Monitor,
+  Smartphone,
 } from "lucide-react"
 
 const ROLE_LABELS: Record<string, string> = {
-  root: "Root Admin",
-  manager: "Mudur",
+  root: "İşletme Sahibi (Boss)",
+  boss: "İşletme Sahibi (Boss)",
+  branch_manager: "Şube Müdürü",
+  manager: "Şube Müdürü",
+  shift_supervisor: "Vardiya Amiri / Şef",
   cashier: "Kasiyer",
+  head_waiter: "Şef Garson",
   waiter: "Garson",
+  runner: "Komi / Stajyer",
+  inventory_manager: "Depo & Stok Sorumlusu",
+  accountant: "Muhasebe & Finans",
 }
+
 const ROLE_COLORS: Record<string, string> = {
   root: "bg-red-50 text-red-600",
+  boss: "bg-red-50 text-red-600",
+  branch_manager: "bg-purple-50 text-purple-600",
   manager: "bg-purple-50 text-purple-600",
+  shift_supervisor: "bg-sky-50 text-sky-600",
   cashier: "bg-blue-50 text-blue-600",
+  head_waiter: "bg-teal-50 text-teal-600",
   waiter: "bg-green-50 text-green-600",
+  runner: "bg-slate-100 text-slate-600",
+  inventory_manager: "bg-amber-50 text-amber-700",
+  accountant: "bg-indigo-50 text-indigo-600",
 }
+
+const ROLE_OPTIONS: Array<{ value: PanelUserRole; label: string }> = [
+  { value: "branch_manager", label: "Şube Müdürü" },
+  { value: "shift_supervisor", label: "Vardiya Amiri / Şef" },
+  { value: "cashier", label: "Kasiyer" },
+  { value: "head_waiter", label: "Şef Garson" },
+  { value: "waiter", label: "Garson" },
+  { value: "runner", label: "Komi / Stajyer" },
+  { value: "inventory_manager", label: "Depo & Stok Sorumlusu" },
+  { value: "accountant", label: "Muhasebe & Finans" },
+]
 
 export default function UserManagement() {
   const { users, addUser, updateUser, deleteUser } = usePanelStore()
+  const { hasPermission } = usePanelAuth()
+  const canManageStaff = hasPermission("staff.manage")
+
   const [showAdd, setShowAdd] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formName, setFormName] = useState("")
-  const [formRole, setFormRole] = useState<PanelUserRole>("waiter")
+  const [formRole, setFormRole] = useState<PanelUserRole | string>("waiter")
   const [formPhone, setFormPhone] = useState("")
   const [formPin, setFormPin] = useState("")
+  const [formEmail, setFormEmail] = useState("")
+  const [formPassword, setFormPassword] = useState("")
+  const [formCanAccessPanel, setFormCanAccessPanel] = useState(false)
+  const [formCanAccessTerminal, setFormCanAccessTerminal] = useState(true)
 
   const resetForm = () => {
     setFormName("")
     setFormRole("waiter")
     setFormPhone("")
     setFormPin("")
+    setFormEmail("")
+    setFormPassword("")
+    setFormCanAccessPanel(false)
+    setFormCanAccessTerminal(true)
   }
 
   const handleAdd = () => {
     const pin = formPin.replace(/\D/g, "").slice(0, 8)
-    if (!formName.trim() || pin.length < 4) return
+    if (!formName.trim()) return
+    if (formCanAccessTerminal && !formCanAccessPanel && pin.length < 4) return
+    if (formCanAccessPanel && (!formEmail.trim() || formPassword.length < 6)) return
     addUser({
       name: formName,
       role: formRole,
       phone: formPhone || undefined,
-      pin,
+      ...(pin.length >= 4 ? { pin } : {}),
+      ...(formEmail.trim() ? { email: formEmail.trim() } : {}),
+      ...(formPassword ? { password: formPassword } : {}),
+      canAccessPanel: formCanAccessPanel,
+      canAccessTerminal: formCanAccessTerminal,
       active: true,
     })
     resetForm()
@@ -60,9 +105,13 @@ export default function UserManagement() {
     if (!u) return
     setEditingId(id)
     setFormName(u.name)
-    setFormRole(u.role === "root" ? "manager" : u.role)
+    setFormRole(u.role === "root" ? "branch_manager" : u.role)
     setFormPhone(u.phone || "")
+    setFormEmail(u.email || "")
+    setFormPassword("")
     setFormPin("")
+    setFormCanAccessPanel(Boolean(u.canAccessPanel || u.email))
+    setFormCanAccessTerminal(u.canAccessTerminal ?? true)
   }
 
   const handleUpdate = () => {
@@ -72,7 +121,11 @@ export default function UserManagement() {
       name: formName,
       role: formRole,
       phone: formPhone || undefined,
+      email: formEmail.trim() || undefined,
+      ...(formPassword.length >= 6 ? { password: formPassword } : {}),
       ...(pin.length >= 4 ? { pin } : {}),
+      canAccessPanel: formCanAccessPanel,
+      canAccessTerminal: formCanAccessTerminal,
     })
     resetForm()
     setEditingId(null)
@@ -80,38 +133,38 @@ export default function UserManagement() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Toolbar */}
       <div className="flex-shrink-0 h-[52px] border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl flex items-center justify-between px-5">
         <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
-          Kullanici Yonetimi
+          Kullanici &amp; Personel Yonetimi
         </h2>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 text-[12px] text-[#86868b]">
-            <Shield className="w-3.5 h-3.5" />{" "}
-            {users.filter((u) => u.role === "manager").length} Mudur
-            <UserCheck className="w-3.5 h-3.5 ml-1" />{" "}
-            {users.filter((u) => u.role === "waiter").length} Garson
+            <Shield className="w-3.5 h-3.5 text-[#e63462]" />
+            <span>
+              Detaylı rol ve 48 yetki kısıtlaması <strong>Corder Boss</strong> uygulamasından yönetilir.
+            </span>
           </div>
-          <button
-            onClick={() => {
-              setShowAdd(true)
-              resetForm()
-            }}
-            className="h-[30px] px-3 flex items-center gap-1.5 bg-[#e63462] text-white rounded-lg text-[12px] font-medium hover:bg-[#d42d56] transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" /> Kullanici Ekle
-          </button>
+          {canManageStaff && (
+            <button
+              onClick={() => {
+                setShowAdd(true)
+                resetForm()
+              }}
+              className="h-[30px] px-3 flex items-center gap-1.5 bg-[#e63462] text-white rounded-lg text-[12px] font-medium hover:bg-[#d42d56] transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" /> Kullanici Ekle
+            </button>
+          )}
         </div>
       </div>
 
       <div className="flex-1 overflow-auto p-5">
-        <div className="max-w-4xl">
-          {/* Add/Edit form */}
-          {(showAdd || editingId) && (
+        <div className="max-w-5xl">
+          {canManageStaff && (showAdd || editingId) && (
             <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4 mb-4">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-[13px] font-semibold text-[#1d1d1f]">
-                  {editingId ? "Kullaniciyi Duzenle" : "Yeni Kullanici"}
+                  {editingId ? "Kullaniciyi Duzenle" : "Yeni Kullanici / Personel"}
                 </h4>
                 <button
                   onClick={() => {
@@ -134,14 +187,14 @@ export default function UserManagement() {
                 />
                 <select
                   value={formRole}
-                  onChange={(e) =>
-                    setFormRole(e.target.value as PanelUserRole)
-                  }
-                  className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 appearance-none cursor-pointer"
+                  onChange={(e) => setFormRole(e.target.value)}
+                  className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 cursor-pointer"
                 >
-                  <option value="waiter">Garson</option>
-                  <option value="cashier">Kasiyer</option>
-                  <option value="manager">Mudur</option>
+                  {ROLE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
                 </select>
                 <input
                   type="tel"
@@ -155,16 +208,58 @@ export default function UserManagement() {
                   inputMode="numeric"
                   pattern="[0-9]*"
                   value={formPin}
-                  onChange={(e) =>
-                    setFormPin(e.target.value.replace(/\D/g, "").slice(0, 8))
-                  }
+                  onChange={(e) => setFormPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
                   placeholder={
                     editingId
-                      ? "Yeni PIN (degistirmek icin 4-8 rakam girin)"
-                      : "Kullanici kodu / PIN (4-8 rakam)"
+                      ? "Yeni Terminal PIN (degistirmek icin 4-8 rakam)"
+                      : "Terminal PIN Kodu (4-8 rakam)"
                   }
-                  className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 font-mono tracking-widest col-span-2"
+                  className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 font-mono tracking-widest"
                 />
+
+                <div className="col-span-2 flex items-center gap-4 pt-1">
+                  <label className="flex items-center gap-2 text-[12px] font-medium text-[#1d1d1f] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formCanAccessPanel}
+                      onChange={(e) => setFormCanAccessPanel(e.target.checked)}
+                      className="accent-[#e63462]"
+                    />
+                    Merchant Paneline Giriş Yapabilsin (E-posta &amp; Parola)
+                  </label>
+                  <label className="flex items-center gap-2 text-[12px] font-medium text-[#1d1d1f] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formCanAccessTerminal}
+                      onChange={(e) => setFormCanAccessTerminal(e.target.checked)}
+                      className="accent-[#e63462]"
+                    />
+                    El Terminaline Giriş Yapabilsin (PIN)
+                  </label>
+                </div>
+
+                {formCanAccessPanel && (
+                  <>
+                    <input
+                      type="email"
+                      value={formEmail}
+                      onChange={(e) => setFormEmail(e.target.value)}
+                      placeholder="Merchant Panel E-posta Adresi"
+                      className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
+                    />
+                    <input
+                      type="password"
+                      value={formPassword}
+                      onChange={(e) => setFormPassword(e.target.value)}
+                      placeholder={
+                        editingId
+                          ? "Yeni Parola (boş bırakılırsa değişmez)"
+                          : "Merchant Panel Parolası (en az 6 krk)"
+                      }
+                      className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
+                    />
+                  </>
+                )}
               </div>
               <div className="flex justify-end gap-2 mt-3">
                 <button
@@ -187,92 +282,74 @@ export default function UserManagement() {
             </div>
           )}
 
-          {/* Users table */}
           <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[#f0f0f0] bg-[#f9f9f9]">
-                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
-                    Kullanici
-                  </th>
-                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
-                    Rol
-                  </th>
-                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
-                    Iletisim
-                  </th>
-                  <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
-                    Kod (PIN)
-                  </th>
-                  <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
-                    Durum
-                  </th>
-                  <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide w-[100px]">
-                    Islem
-                  </th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Kullanici</th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Rol</th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Erişim &amp; Yetkiler</th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Iletisim</th>
+                  <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Durum</th>
+                  <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide w-[100px]">Islem</th>
                 </tr>
               </thead>
               <tbody>
                 {users.map((user, idx) => (
                   <tr
                     key={user.id}
-                    className={`border-b border-[#f0f0f0] hover:bg-[#f9f9fb] transition-colors ${
-                      idx % 2 === 1 ? "bg-[#fafafa]" : ""
-                    }`}
+                    className={`border-b border-[#f0f0f0] hover:bg-[#f9f9fb] transition-colors ${idx % 2 === 1 ? "bg-[#fafafa]" : ""}`}
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         <div className="w-8 h-8 rounded-full bg-[#e63462]/10 flex items-center justify-center">
-                          <span className="text-[11px] font-bold text-[#e63462]">
-                            {user.name.charAt(0).toUpperCase()}
-                          </span>
+                          <span className="text-[11px] font-bold text-[#e63462]">{user.name.charAt(0).toUpperCase()}</span>
                         </div>
-                        <span className="text-[13px] font-medium text-[#1d1d1f] capitalize">
-                          {user.name}
-                        </span>
+                        <div>
+                          <span className="text-[13px] font-medium text-[#1d1d1f] capitalize block">{user.name}</span>
+                          {user.email && <span className="text-[11px] text-[#86868b] block">{user.email}</span>}
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span
-                        className={`text-[11px] font-medium px-2 py-1 rounded-md ${
-                          ROLE_COLORS[user.role] ?? "bg-gray-50 text-gray-600"
-                        }`}
-                      >
-                        {ROLE_LABELS[user.role] ?? user.role}
+                      <span className={`text-[11px] font-medium px-2 py-1 rounded-md ${ROLE_COLORS[user.role] ?? "bg-gray-100 text-gray-700"}`}>
+                        {ROLE_LABELS[user.role] || user.roleLabel || user.role}
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-[12px] text-[#86868b]">
-                        {user.phone ? (
-                          <p>{user.phone}</p>
-                        ) : (
-                          <p className="text-[#d1d1d6]">-</p>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {user.canAccessPanel && (
+                          <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+                            <Monitor className="w-2.5 h-2.5" /> Panel
+                          </span>
+                        )}
+                        {user.canAccessTerminal !== false && (
+                          <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                            <Smartphone className="w-2.5 h-2.5" /> Terminal
+                          </span>
+                        )}
+                        {user.permissions && (
+                          <span className="rounded bg-[#f5f5f7] px-2 py-0.5 text-[10px] font-medium text-[#86868b]">
+                            {user.permissions.length} yetki • Maks %{user.limits?.maxDiscountPercent ?? 0} iskonto
+                          </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <span
-                        className={`text-[12px] font-mono tracking-wider ${
-                          user.isRoot ? "text-[#d1d1d6]" : "text-[#1d1d1f]"
-                        }`}
-                      >
-                        {user.isRoot ? "-" : "****"}
-                      </span>
+                    <td className="px-4 py-3">
+                      <div className="text-[12px] text-[#86868b]">
+                        {user.phone ? <p>{user.phone}</p> : <p className="text-[#d1d1d6]">-</p>}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      {user.isRoot ? (
+                      {user.isRoot || !canManageStaff ? (
                         <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-green-50 text-green-600">
-                          Aktif
+                          {user.active ? "Aktif" : "Pasif"}
                         </span>
                       ) : (
                         <button
-                          onClick={() =>
-                            updateUser(user.id, { active: !user.active })
-                          }
+                          onClick={() => updateUser(user.id, { active: !user.active })}
                           className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${
-                            user.active
-                              ? "bg-green-50 text-green-600"
-                              : "bg-red-50 text-red-500"
+                            user.active ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"
                           }`}
                         >
                           {user.active ? "Aktif" : "Pasif"}
@@ -280,7 +357,7 @@ export default function UserManagement() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {user.isRoot ? (
+                      {user.isRoot || !canManageStaff ? (
                         <div className="flex items-center justify-end">
                           <Lock className="w-3.5 h-3.5 text-[#aeaeb2]" />
                         </div>
@@ -303,19 +380,15 @@ export default function UserManagement() {
                     </td>
                   </tr>
                 ))}
-                {users.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={6}
-                      className="px-4 py-10 text-center text-[13px] text-[#86868b]"
-                    >
-                      <Users className="w-8 h-8 text-[#d1d1d6] mx-auto mb-2" />
-                      Kullanici bulunamadi
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
+
+            {users.length === 0 && (
+              <div className="text-center py-12">
+                <Users className="w-10 h-10 text-[#d1d1d6] mx-auto mb-2" />
+                <p className="text-[13px] text-[#86868b]">Henuz kullanici eklenmemis</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -4,8 +4,13 @@ import path from "path"
 
 export default defineConfig({
   plugins: [react()],
+  cacheDir: path.resolve(__dirname, ".vite-cache"),
   resolve: {
-    alias: { "@": path.resolve(__dirname, "src") },
+    dedupe: ["react", "react-dom"],
+    alias: {
+      "@": path.resolve(__dirname, "src"),
+      "react-router-dom": path.resolve(__dirname, "src/lib/router-shim.tsx"),
+    },
   },
   server: {
     port: 3003,

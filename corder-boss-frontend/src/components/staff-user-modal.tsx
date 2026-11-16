@@ -1,0 +1,291 @@
+import { useState } from "react"
+import type { PermissionCatalogResponse, RoleDefinition, StaffMemberDto } from "@/lib/types"
+import { getRoleDisplayName } from "@/lib/permission-labels"
+import { StaffPermissionOverrides } from "./staff-permission-overrides"
+import { Monitor, KeyRound, X } from "lucide-react"
+
+interface StaffUserModalProps {
+  branchName: string
+  editingUser: StaffMemberDto | null
+  roles: RoleDefinition[]
+  catalog: PermissionCatalogResponse | null
+  submitting: boolean
+  onClose: () => void
+  onSubmit: (payload: {
+    name: string
+    role: string
+    phone?: string
+    canAccessPanel: boolean
+    canAccessTerminal: boolean
+    email?: string
+    password?: string
+    pin?: string
+    grantedPermissions: string[]
+    revokedPermissions: string[]
+    maxDiscountPercentOverride: number | null
+    maxDiscountAmountOverride: number | null
+  }) => Promise<void>
+}
+
+export function StaffUserModal({
+  branchName,
+  editingUser,
+  roles,
+  catalog,
+  submitting,
+  onClose,
+  onSubmit,
+}: StaffUserModalProps) {
+  const defaultRole = roles.find((r) => r.key === "branch_manager") ?? roles[0]
+  const [name, setName] = useState(editingUser?.name ?? "")
+  const [role, setRole] = useState(editingUser?.role ?? defaultRole?.key ?? "waiter")
+  const [phone, setPhone] = useState(editingUser?.phone ?? "")
+  const [canAccessPanel, setCanAccessPanel] = useState(
+    editingUser ? editingUser.canAccessPanel : (defaultRole?.canAccessPanel ?? true)
+  )
+  const [canAccessTerminal, setCanAccessTerminal] = useState(
+    editingUser ? editingUser.canAccessTerminal : (defaultRole?.canAccessTerminal ?? true)
+  )
+  const [email, setEmail] = useState(editingUser?.email ?? "")
+  const [password, setPassword] = useState("")
+  const [pin, setPin] = useState("")
+  const [grantedPermissions, setGrantedPermissions] = useState<string[]>(
+    editingUser?.grantedPermissions ?? []
+  )
+  const [revokedPermissions, setRevokedPermissions] = useState<string[]>(
+    editingUser?.revokedPermissions ?? []
+  )
+  const [maxDiscountPctOverride, setMaxDiscountPctOverride] = useState<string>(
+    editingUser?.maxDiscountPercentOverride != null ? String(editingUser.maxDiscountPercentOverride) : ""
+  )
+  const [maxDiscountAmtOverride, setMaxDiscountAmtOverride] = useState<string>(
+    editingUser?.maxDiscountAmountOverride != null ? String(editingUser.maxDiscountAmountOverride) : ""
+  )
+  const [showCustomPerms, setShowCustomPerms] = useState(
+    Boolean(
+      editingUser &&
+        ((editingUser.grantedPermissions?.length ?? 0) > 0 ||
+          (editingUser.revokedPermissions?.length ?? 0) > 0 ||
+          editingUser.maxDiscountPercentOverride != null ||
+          editingUser.maxDiscountAmountOverride != null)
+    )
+  )
+
+  const selectedRoleDef = roles.find((r) => r.key === role)
+
+  const handleRoleChange = (nextRoleKey: string) => {
+    setRole(nextRoleKey)
+    const r = roles.find((x) => x.key === nextRoleKey)
+    if (r && !editingUser) {
+      setCanAccessPanel(r.canAccessPanel)
+      setCanAccessTerminal(r.canAccessTerminal)
+    }
+  }
+
+  const toggleUserPermissionException = (permKey: string) => {
+    const inRole = selectedRoleDef?.permissions.includes(permKey) ?? false
+    if (inRole) {
+      setRevokedPermissions((prev) =>
+        prev.includes(permKey) ? prev.filter((k) => k !== permKey) : [...prev, permKey]
+      )
+      setGrantedPermissions((prev) => prev.filter((k) => k !== permKey))
+    } else {
+      setGrantedPermissions((prev) =>
+        prev.includes(permKey) ? prev.filter((k) => k !== permKey) : [...prev, permKey]
+      )
+      setRevokedPermissions((prev) => prev.filter((k) => k !== permKey))
+    }
+  }
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim()) return
+    await onSubmit({
+      name: name.trim(),
+      role,
+      phone: phone.trim() || undefined,
+      canAccessPanel,
+      canAccessTerminal,
+      email: email.trim() || undefined,
+      ...(password.trim() ? { password: password.trim() } : {}),
+      ...(pin.trim() ? { pin: pin.trim() } : {}),
+      grantedPermissions,
+      revokedPermissions,
+      maxDiscountPercentOverride:
+        maxDiscountPctOverride.trim() !== "" ? Number(maxDiscountPctOverride) : null,
+      maxDiscountAmountOverride:
+        maxDiscountAmtOverride.trim() !== "" ? Number(maxDiscountAmtOverride) : null,
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4 backdrop-blur-xs">
+      <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white p-5 shadow-2xl safe-bottom">
+        <div className="flex items-center justify-between border-b border-[#f0f0f0] pb-3.5">
+          <div>
+            <h3 className="text-[16px] font-bold text-[#1d1d1f]">
+              {editingUser ? `${editingUser.name} — Düzenle` : "Yeni Kullanıcı / Personel Oluştur"}
+            </h3>
+            <p className="text-[11px] text-[#86868b]">Şube: {branchName}</p>
+          </div>
+          <button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f5f5f7]">
+            <X className="h-4 w-4 text-[#86868b]" />
+          </button>
+        </div>
+
+        <form onSubmit={handleFormSubmit} className="mt-4 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-[12px] font-semibold text-[#1d1d1f]">Ad Soyad *</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Örn: Ayşe Demir"
+                className="h-11 w-full rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3.5 text-[13px] text-[#1d1d1f] outline-none focus:border-[#e63462]"
+                required
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[12px] font-semibold text-[#1d1d1f]">Rolü *</label>
+              <select
+                value={role}
+                onChange={(e) => handleRoleChange(e.target.value)}
+                className="h-11 w-full rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3.5 text-[13px] font-semibold text-[#1d1d1f] outline-none focus:border-[#e63462]"
+              >
+                {roles.map((r) => (
+                  <option key={r.key} value={r.key}>
+                    {getRoleDisplayName(r.key, r.name)} ({r.permissions.length} yetki)
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-[12px] font-semibold text-[#1d1d1f]">Telefon</label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="05XX XXX XX XX"
+              className="h-11 w-full rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3.5 text-[13px] text-[#1d1d1f] outline-none focus:border-[#e63462]"
+            />
+          </div>
+
+          <div className="rounded-2xl border border-[#e5e5ea] bg-[#f9f9fb] p-3.5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Monitor className="h-4 w-4 text-[#e63462]" />
+                <div>
+                  <p className="text-[13px] font-bold text-[#1d1d1f]">Merchant Panel Giriş Yetkisi (Web / Kasa PC)</p>
+                  <p className="text-[11px] text-[#86868b]">Açıldığında bu kullanıcı e-posta ve parolasıyla Merchant Paneline giriş yapabilir.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCanAccessPanel((v) => !v)}
+                className={`h-6 w-11 flex-shrink-0 rounded-full p-0.5 transition-colors ${canAccessPanel ? "bg-[#e63462]" : "bg-[#d1d1d6]"}`}
+              >
+                <div className={`h-5 w-5 rounded-full bg-white transition-transform ${canAccessPanel ? "translate-x-5" : "translate-x-0"}`} />
+              </button>
+            </div>
+
+            {canAccessPanel && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="mb-1 block text-[11px] font-semibold text-[#1d1d1f]">Giriş E-postası *</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="mudur@restoran.com"
+                    className="h-10 w-full rounded-xl border border-[#d1d1d6] bg-white px-3 text-[13px] text-[#1d1d1f]"
+                    required={canAccessPanel}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-semibold text-[#1d1d1f]">
+                    {editingUser?.hasPassword ? "Yeni Parola (boş = değişmez)" : "Giriş Parolası (en az 6 krk) *"}
+                  </label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="h-10 w-full rounded-xl border border-[#d1d1d6] bg-white px-3 text-[13px] text-[#1d1d1f]"
+                    required={canAccessPanel && !editingUser?.hasPassword}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-[#e5e5ea] bg-[#f9f9fb] p-3.5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <KeyRound className="h-4 w-4 text-[#e63462]" />
+                <div>
+                  <p className="text-[13px] font-bold text-[#1d1d1f]">El Terminali (POS) PIN Giriş Yetkisi</p>
+                  <p className="text-[11px] text-[#86868b]">Garson ve saha ekranında PIN kodu ile işlem yapabilsin.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCanAccessTerminal((v) => !v)}
+                className={`h-6 w-11 flex-shrink-0 rounded-full p-0.5 transition-colors ${canAccessTerminal ? "bg-[#e63462]" : "bg-[#d1d1d6]"}`}
+              >
+                <div className={`h-5 w-5 rounded-full bg-white transition-transform ${canAccessTerminal ? "translate-x-5" : "translate-x-0"}`} />
+              </button>
+            </div>
+
+            {canAccessTerminal && (
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-[#1d1d1f]">
+                  {editingUser?.hasPin ? "Yeni PIN Kodu (değiştirmek için 4-8 rakam girin)" : "4-8 Haneli PIN Kodu *"}
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                  placeholder="Örn: 1453"
+                  className="h-10 w-full rounded-xl border border-[#d1d1d6] bg-white px-3 font-mono tracking-widest text-[14px] text-[#1d1d1f]"
+                  required={canAccessTerminal && !canAccessPanel && !editingUser?.hasPin}
+                />
+              </div>
+            )}
+          </div>
+
+          <StaffPermissionOverrides
+            catalog={catalog}
+            selectedRoleDef={selectedRoleDef}
+            showCustomPerms={showCustomPerms}
+            grantedPermissions={grantedPermissions}
+            revokedPermissions={revokedPermissions}
+            maxDiscountPctOverride={maxDiscountPctOverride}
+            maxDiscountAmtOverride={maxDiscountAmtOverride}
+            onToggleShow={() => setShowCustomPerms((v) => !v)}
+            onChangeMaxPctOverride={setMaxDiscountPctOverride}
+            onChangeMaxAmtOverride={setMaxDiscountAmtOverride}
+            onTogglePermissionException={toggleUserPermissionException}
+          />
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="h-11 rounded-xl border border-[#d1d1d6] px-4 text-[13px] font-semibold text-[#86868b]">
+              Vazgeç
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="h-11 rounded-xl bg-[#e63462] px-6 text-[13px] font-bold text-white shadow-md shadow-[#e63462]/20 hover:bg-[#d42d56] disabled:opacity-50"
+            >
+              {submitting ? "Kaydediliyor…" : editingUser ? "Kullanıcıyı Güncelle" : "Kullanıcıyı Oluştur"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}

@@ -48,6 +48,12 @@ export interface StaffSession {
   staffId: string
   name: string
   role: StaffRole
+  roleLabel?: string
+  permissions?: string[]
+  limits?: {
+    maxDiscountPercent: number
+    maxDiscountAmount: number | null
+  }
   staffToken: string
   expiresAt: number
 }
@@ -63,9 +69,7 @@ const STAFF_SESSION_KEY = "terminal_staff_session"
 const STAFF_SESSION_MS = 12 * 60 * 60 * 1000 // 12 hours
 
 export function normalizeStaffRole(role: string): StaffRole {
-  if (role === "manager") return "manager"
-  if (role === "cashier") return "cashier"
-  return "waiter"
+  return role || "waiter"
 }
 
 export function getStaffSession(): StaffSession | null {
@@ -89,6 +93,9 @@ export function getStaffSession(): StaffSession | null {
       staffId: data.staffId,
       name: data.name,
       role: normalizeStaffRole(data.role),
+      roleLabel: data.roleLabel,
+      permissions: Array.isArray(data.permissions) ? data.permissions : undefined,
+      limits: data.limits,
       staffToken: data.staffToken,
       expiresAt: data.expiresAt,
     }
@@ -151,7 +158,7 @@ async function request<T>(
     } catch {
       // Use raw response text when body is not JSON
     }
-    if ((res.status === 401 || res.status === 403) && token && !skipAuthExpired) {
+    if (res.status === 401 && token && !skipAuthExpired) {
       if (isStaffAuthError(res.status, message)) {
         staffExpiredHandler?.()
       } else {
@@ -183,8 +190,9 @@ export const api = {
       request<Record<string, { staffId: string; staffName: string }>>("/restaurant/tables/presence", { token }),
     sessionLock: async (
       token: string,
-      tableId: string
-    ): Promise<{ ok: true } | { ok: false; holderName: string }> => {
+      tableId: string,
+      force = false
+    ): Promise<{ ok: true } | { ok: false; holderName: string; canForceUnlock?: boolean }> => {
       const staffSession = getStaffSession()
       if (!staffSession?.staffToken) {
         staffExpiredHandler?.()
@@ -198,11 +206,12 @@ export const api = {
           Authorization: `Bearer ${token}`,
           "X-Staff-Token": staffSession.staffToken,
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify(force ? { force: true } : {}),
       })
       if (res.status === 409) {
         const parsed = (await res.json().catch(() => ({}))) as {
           holderName?: string
+          canForceUnlock?: boolean
           message?: unknown
         }
         const holderName =
@@ -213,7 +222,7 @@ export const api = {
                 typeof (parsed.message as { holderName?: string }).holderName === "string"
               ? (parsed.message as { holderName: string }).holderName
               : "Garson"
-        return { ok: false, holderName }
+        return { ok: false, holderName, canForceUnlock: Boolean(parsed.canForceUnlock) }
       }
       if (!res.ok) {
         const rawText = await res.text()
@@ -280,13 +289,13 @@ export const api = {
         token,
         body: JSON.stringify(body),
       }),
-    cancelItem: (token: string, orderId: string, itemId: string) =>
-      request<OrderDto>(
-        `/restaurant/orders/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/cancel`,
+    cancelItem: (token: string, _orderId: string, itemId: string, reason = "Terminal iptali") =>
+      request<{ ok: true }>(
+        "/restaurant/orders/cancel-item",
         {
-          method: "PATCH",
+          method: "POST",
           token,
-          body: JSON.stringify({}),
+          body: JSON.stringify({ itemId, reason }),
         }
       ),
     printReceipt: (
@@ -315,7 +324,13 @@ export const api = {
       request<{
         staffId: string
         name: string
-        role: "manager" | "cashier" | "waiter"
+        role: string
+        roleLabel?: string
+        permissions?: string[]
+        limits?: {
+          maxDiscountPercent: number
+          maxDiscountAmount: number | null
+        }
         staffToken: string
       }>("/restaurant/staff/verify-pin", {
         method: "POST",

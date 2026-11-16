@@ -15,11 +15,12 @@ The codebase includes NestJS modules, TypeORM migrations, PostgreSQL tenant isol
 
 | Application                | User                | Description                                                              | Default port |
 | -------------------------- | ------------------- | ------------------------------------------------------------------------ | ------------ |
-| `corder-admin-frontend`    | Platform admin      | Restaurant, root admin, terminal account, and print-agent token management | `3003`       |
-| `corder-panel-frontend`    | Restaurant manager  | Table, payment, cash register, product, inventory, staff, campaign, and report management | `3001`       |
+| `corder-admin-frontend`    | Platform admin      | Restaurant/branch, Boss (owner), terminal account, and print-agent management | `3003`       |
+| `corder-boss-frontend`     | Business owner (Boss) | Multi-branch live revenue, 48-permission RBAC matrix, and user provisioning (Mobile PWA) | `3004` |
+| `corder-panel-frontend`    | Branch manager / Staff | Table, payment, cash register, product, inventory, staff, campaign, and report management | `3001`       |
 | `corder-terminal-frontend` | Waiter / terminal   | Staff selection, table locking, ordering, check transfer, and receipt printing | `3000`       |
 | `corder-menu-frontend`     | Restaurant customer | Public digital menu, product search, campaigns, and contact information  | `3002`       |
-| `corder-backend`           | All clients         | REST API, Socket.IO, authentication, business rules, and data access     | `4000`       |
+| `corder-backend`           | All clients         | REST API, Socket.IO, authentication, RBAC policy engine, and data access | `4000`       |
 | `print-agent`              | Restaurant POS PC   | Windows Node.js service: Socket.IO + HTTP sync, ESC/POS kitchen/receipt printing | —            |
 
 

@@ -6,15 +6,47 @@ import type {
 } from "./api-types"
 import type { PanelUserRole } from "../panel-types"
 
+export interface PanelAuthLoginUserDto {
+  id: string
+  email: string
+  name: string
+  role: "root" | "staff" | "terminal"
+  staffRole?: string
+  roleLabel?: string
+  isBoss?: boolean
+  permissions?: string[]
+  limits?: {
+    maxDiscountPercent: number
+    maxDiscountAmount: number | null
+  }
+}
+
 export const restaurantApi = {
   login: (email: string, password: string) =>
     request<{
       accessToken: string
       restaurant: { id: string; name: string; slug: string }
-      user: { id: string; email: string; name: string; role: "root" | "terminal" }
+      restaurants?: Array<{ id: string; name: string; slug: string }>
+      user: PanelAuthLoginUserDto
     }>("/restaurant/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
+    }),
+  me: (token: string) =>
+    request<{
+      restaurant: { id: string; name: string; slug: string }
+      restaurants: Array<{ id: string; name: string; slug: string }>
+      user: PanelAuthLoginUserDto
+    }>("/restaurant/auth/me", { token }),
+  switchBranch: (token: string, restaurantId: string) =>
+    request<{
+      accessToken: string
+      restaurant: { id: string; name: string; slug: string }
+      restaurants: Array<{ id: string; name: string; slug: string }>
+    }>("/restaurant/auth/switch-branch", {
+      method: "POST",
+      token,
+      body: JSON.stringify({ restaurantId }),
     }),
   getSettings: (token: string) =>
     request<RestaurantSettingsDto>("/restaurant/settings", { token }),
@@ -26,32 +58,44 @@ export const restaurantApi = {
     }),
 }
 
+export interface StaffApiItemDto {
+  id: string
+  name: string
+  email: string | null
+  role: string
+  roleLabel?: string
+  roleColor?: string
+  phone?: string
+  isActive: boolean
+  canAccessPanel?: boolean
+  canAccessTerminal?: boolean
+  hasPin?: boolean
+  hasPassword?: boolean
+  permissions?: string[]
+  limits?: {
+    maxDiscountPercent: number
+    maxDiscountAmount: number | null
+  }
+  createdAt: string
+}
+
 export const staffApi = {
   list: (token: string) =>
-    request<
-      {
-        id: string
-        name: string
-        email: string | null
-        role: string
-        phone?: string
-        isActive: boolean
-        createdAt: string
-      }[]
-    >("/restaurant/staff", { token }),
+    request<StaffApiItemDto[]>("/restaurant/staff", { token }),
   create: (
     token: string,
-    body: { name: string; pin: string; role: PanelUserRole; phone?: string },
-  ) =>
-    request<{
-      id: string
+    body: {
       name: string
-      email: string | null
-      role: string
+      pin?: string
+      role: PanelUserRole | string
       phone?: string
-      isActive: boolean
-      createdAt: string
-    }>("/restaurant/staff", {
+      email?: string
+      password?: string
+      canAccessPanel?: boolean
+      canAccessTerminal?: boolean
+    },
+  ) =>
+    request<StaffApiItemDto>("/restaurant/staff", {
       method: "POST",
       token,
       body: JSON.stringify(body),
@@ -62,20 +106,16 @@ export const staffApi = {
     body: {
       name?: string
       pin?: string
-      role?: PanelUserRole
+      role?: PanelUserRole | string
       phone?: string
+      email?: string | null
+      password?: string
       isActive?: boolean
+      canAccessPanel?: boolean
+      canAccessTerminal?: boolean
     },
   ) =>
-    request<{
-      id: string
-      name: string
-      email: string | null
-      role: string
-      phone?: string
-      isActive: boolean
-      createdAt: string
-    }>(`/restaurant/staff/${id}`, {
+    request<StaffApiItemDto>(`/restaurant/staff/${id}`, {
       method: "PUT",
       token,
       body: JSON.stringify(body),

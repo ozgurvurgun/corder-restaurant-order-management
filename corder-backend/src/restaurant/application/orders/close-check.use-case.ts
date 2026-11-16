@@ -11,7 +11,11 @@ import { CashShiftEntity } from '../../domain/cash-shift.entity';
 import { CashTransactionEntity } from '../../domain/cash-transaction.entity';
 import { CompletedOrderEntity } from '../../domain/completed-order.entity';
 import { LedgerCustomerEntity } from '../../domain/ledger-customer.entity';
-import { CheckSettlementPolicy, CheckSettlementResult } from '../../domain/services/check-settlement.policy';
+import {
+  CheckSettlementPolicy,
+  CheckSettlementResult,
+  SettlementActorPolicy,
+} from '../../domain/services/check-settlement.policy';
 import { BilledOrderLineForStock } from '../../domain/services/recipe-stock.policy';
 import { OrderStatusPolicy } from '../../domain/services/order-status.policy';
 import { CloseCheckDto, CloseCheckWalkInItemDto } from '../../api/dto/close-check.dto';
@@ -50,7 +54,11 @@ export class CloseCheckUseCase {
     private readonly stockMovementsService: StockMovementsService,
   ) {}
 
-  async execute(restaurantId: string, dto: CloseCheckDto, actor: { id: string; name: string }) {
+  async execute(
+    restaurantId: string,
+    dto: CloseCheckDto,
+    actor: { id: string; name: string } & SettlementActorPolicy,
+  ) {
     const hasTable = Boolean(dto.tableId?.trim());
     const hasWalkInItems = Boolean(dto.items && dto.items.length > 0);
     if ((hasTable && hasWalkInItems) || (!hasTable && !hasWalkInItems)) {
@@ -86,6 +94,13 @@ export class CloseCheckUseCase {
         ledgerDebtAmount: dto.ledgerDebtAmount ?? null,
         tip: dto.tip ?? null,
       });
+
+      CheckSettlementPolicy.assertDiscountAllowedForActor(
+        settlement.rawTotalMinorUnits,
+        settlement.discountMinorUnits,
+        dto.discount,
+        actor,
+      );
 
       const ledgerCustomer = await this.resolveLedgerCustomer(em, restaurantId, dto, settlement);
       const savedCompleted = await this.saveCompletedOrder(

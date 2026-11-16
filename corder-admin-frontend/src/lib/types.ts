@@ -16,23 +16,28 @@ export interface Restaurant {
   status: "active" | "inactive"
   createdAt: string
   rootAdminId?: string
-  /** Terminal login email (independent of root admin). */
+  /** Terminal login email (independent of boss). */
   terminalEmail?: string | null
   /** Restaurant-scoped static token for print-agent. */
   printAgentToken?: string | null
 }
 
-export interface RootAdminCreateInput {
+export interface BossBranchSummary {
+  id: string
   name: string
-  email: string
-  password: string
+  slug: string
+  status: string
 }
 
 export interface RootAdmin {
   id: string
-  restaurantId: string
+  restaurantId: string | null
   email: string
   name: string
-  passwordHint?: string
+  phone?: string | null
+  isActive?: boolean
+  restaurants?: BossBranchSummary[]
   createdAt: string
 }
+
+export type BossUser = RootAdmin

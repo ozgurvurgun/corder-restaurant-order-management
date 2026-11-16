@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
 import { CampaignService } from '../application/campaign.service';
+import { ReorderItemsDto } from './dto/reorder-items.dto';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
 import { PanelRootGuard } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
@@ -75,7 +76,7 @@ export class CampaignsController {
   }
 
   @Post('reorder')
-  reorder(@RestaurantId() restaurantId: string, @Body() body: { ids: string[] }) {
+  reorder(@RestaurantId() restaurantId: string, @Body() body: ReorderItemsDto) {
     return this.service.reorder(restaurantId, body.ids ?? []);
   }
 }

@@ -15,11 +15,12 @@ Kod tabanında NestJS modülleri, TypeORM migration'ları, PostgreSQL tenant izo
 
 | Uygulama                   | Kullanıcı           | Açıklama                                                                 | Varsayılan port |
 | -------------------------- | ------------------- | ------------------------------------------------------------------------ | --------------- |
-| `corder-admin-frontend`    | Platform yöneticisi | Restoran, root admin, terminal hesabı ve print-agent token yönetimi      | `3003`          |
-| `corder-panel-frontend`    | Restoran yöneticisi | Masa, ödeme, kasa, ürün, stok, personel, kampanya ve rapor yönetimi      | `3001`          |
+| `corder-admin-frontend`    | Platform yöneticisi | Restoran/şube, Boss (İşletme Sahibi), terminal ve print-agent yönetimi   | `3003`          |
+| `corder-boss-frontend`     | İşletme sahibi (Boss) | Çoklu şube ciro takibi, 48 granüler yetki/rol matrisi ve kullanıcı oluşturma (Mobil PWA) | `3004` |
+| `corder-panel-frontend`    | Şube yöneticisi / Kasiyer | Masa, ödeme, kasa, ürün, stok, personel, kampanya ve rapor yönetimi | `3001`          |
 | `corder-terminal-frontend` | Garson / terminal   | Personel seçimi, masa kilitleme, sipariş, adisyon taşıma ve fiş yazdırma | `3000`          |
 | `corder-menu-frontend`     | Restoran müşterisi  | Herkese açık dijital menü, ürün arama, kampanyalar ve iletişim bilgileri | `3002`          |
-| `corder-backend`           | Tüm istemciler      | REST API, Socket.IO, kimlik doğrulama, iş kuralları ve veri erişimi      | `4000`          |
+| `corder-backend`           | Tüm istemciler      | REST API, Socket.IO, kimlik doğrulama, RBAC yetki motoru ve veri erişimi | `4000`          |
 | `print-agent`              | Restoran POS PC     | Windows Node.js servisi: Socket.IO + HTTP sync, ESC/POS mutfak/adisyon yazdırma | —            |
 
 

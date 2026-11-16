@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react"
 import type { Restaurant, RootAdmin } from "./types"
-import { platform, getPlatformToken } from "./api"
+import { platform, getPlatformToken, type BossDto } from "./api"
 
 function toRestaurant(r: {
   id: string
@@ -30,12 +30,15 @@ function toRestaurant(r: {
   }
 }
 
-function toRootAdmin(a: { id: string; restaurantId: string; email: string; name: string; createdAt: string }): RootAdmin {
+function toRootAdmin(a: BossDto): RootAdmin {
   return {
     id: a.id,
-    restaurantId: a.restaurantId,
+    restaurantId: a.restaurantId ?? null,
     email: a.email,
     name: a.name,
+    phone: a.phone ?? null,
+    isActive: a.isActive ?? true,
+    restaurants: a.restaurants ?? [],
     createdAt: typeof a.createdAt === "string" ? a.createdAt : new Date(a.createdAt).toISOString(),
   }
 }
@@ -46,15 +49,22 @@ type StoreContextType = {
   restaurantsError: string | null
   loadRestaurants: () => Promise<void>
   addRestaurant: (r: Omit<Restaurant, "id" | "createdAt" | "rootAdminId">) => Promise<void>
-  updateRestaurant: (id: string, r: Partial<Restaurant>) => Promise<void>
+  updateRestaurant: (id: string, r: Partial<Restaurant> & { terminalPassword?: string }) => Promise<void>
   deleteRestaurant: (id: string) => Promise<void>
   rootAdminsForRestaurant: RootAdmin[]
   rootAdminsLoading: boolean
   rootAdminsError: string | null
   loadRootAdmins: (restaurantId: string) => Promise<void>
-  addRootAdmin: (restaurantId: string, r: { name: string; email: string; password: string }) => Promise<void>
+  addRootAdmin: (restaurantId: string, r: { name: string; email: string; phone?: string; password: string }) => Promise<void>
+  linkExistingBoss: (restaurantId: string, bossId: string) => Promise<void>
   updateRootAdmin: (restaurantId: string, id: string, r: Partial<Pick<RootAdmin, "name" | "email"> & { password?: string }>) => Promise<void>
   deleteRootAdmin: (restaurantId: string, id: string) => Promise<void>
+  allBosses: RootAdmin[]
+  bossesLoading: boolean
+  loadAllBosses: () => Promise<void>
+  createBoss: (body: { name: string; email: string; phone?: string; password: string; restaurantIds: string[] }) => Promise<void>
+  updateBoss: (id: string, body: { name?: string; email?: string; phone?: string | null; password?: string; isActive?: boolean; restaurantIds?: string[] }) => Promise<void>
+  deleteBoss: (id: string) => Promise<void>
 }
 
 const StoreContext = createContext<StoreContextType | null>(null)
@@ -72,6 +82,8 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
   const [rootAdminsForRestaurant, setRootAdminsForRestaurant] = useState<RootAdmin[]>([])
   const [rootAdminsLoading, setRootAdminsLoading] = useState(false)
   const [rootAdminsError, setRootAdminsError] = useState<string | null>(null)
+  const [allBosses, setAllBosses] = useState<RootAdmin[]>([])
+  const [bossesLoading, setBossesLoading] = useState(false)
 
   const loadRestaurants = useCallback(async () => {
     if (!getPlatformToken()) return
@@ -84,6 +96,19 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
       setRestaurantsError(e instanceof Error ? e.message : "Restoranlar yüklenemedi")
     } finally {
       setRestaurantsLoading(false)
+    }
+  }, [])
+
+  const loadAllBosses = useCallback(async () => {
+    if (!getPlatformToken()) return
+    setBossesLoading(true)
+    try {
+      const list = await platform.bosses.list()
+      setAllBosses(list.map(toRootAdmin))
+    } catch {
+      // ignore
+    } finally {
+      setBossesLoading(false)
     }
   }, [])
 
@@ -124,30 +149,37 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
     setRootAdminsLoading(true)
     setRootAdminsError(null)
     try {
-      const list = await platform.rootAdmins.list(restaurantId)
+      const [list] = await Promise.all([
+        platform.rootAdmins.list(restaurantId),
+        loadAllBosses(),
+      ])
       setRootAdminsForRestaurant(list.map(toRootAdmin))
     } catch (e) {
-      setRootAdminsError(e instanceof Error ? e.message : "Root admin listesi yüklenemedi")
+      setRootAdminsError(e instanceof Error ? e.message : "Boss listesi yüklenemedi")
     } finally {
       setRootAdminsLoading(false)
     }
-  }, [])
+  }, [loadAllBosses])
 
   const addRootAdmin = useCallback(
-    async (restaurantId: string, r: { name: string; email: string; password: string }) => {
+    async (restaurantId: string, r: { name: string; email: string; phone?: string; password: string }) => {
       await platform.rootAdmins.create(restaurantId, r)
-      await loadRootAdmins(restaurantId)
+      await Promise.all([loadRootAdmins(restaurantId), loadRestaurants()])
     },
-    [loadRootAdmins]
+    [loadRootAdmins, loadRestaurants]
+  )
+
+  const linkExistingBoss = useCallback(
+    async (restaurantId: string, bossId: string) => {
+      await platform.rootAdmins.linkExisting(restaurantId, bossId)
+      await Promise.all([loadRootAdmins(restaurantId), loadRestaurants()])
+    },
+    [loadRootAdmins, loadRestaurants]
   )
 
   const updateRootAdmin = useCallback(
     async (restaurantId: string, id: string, r: Partial<Pick<RootAdmin, "name" | "email"> & { password?: string }>) => {
-      const body: { name?: string; email?: string; password?: string } = {}
-      if (r.name !== undefined) body.name = r.name
-      if (r.email !== undefined) body.email = r.email
-      if (r.password !== undefined) body.password = r.password
-      await platform.rootAdmins.update(restaurantId, id, body)
+      await platform.rootAdmins.update(restaurantId, id, r)
       await loadRootAdmins(restaurantId)
     },
     [loadRootAdmins]
@@ -156,9 +188,33 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
   const deleteRootAdmin = useCallback(
     async (restaurantId: string, id: string) => {
       await platform.rootAdmins.delete(restaurantId, id)
-      await loadRootAdmins(restaurantId)
+      await Promise.all([loadRootAdmins(restaurantId), loadRestaurants()])
     },
-    [loadRootAdmins]
+    [loadRootAdmins, loadRestaurants]
+  )
+
+  const createBoss = useCallback(
+    async (body: { name: string; email: string; phone?: string; password: string; restaurantIds: string[] }) => {
+      await platform.bosses.create(body)
+      await Promise.all([loadAllBosses(), loadRestaurants()])
+    },
+    [loadAllBosses, loadRestaurants]
+  )
+
+  const updateBoss = useCallback(
+    async (id: string, body: { name?: string; email?: string; phone?: string | null; password?: string; isActive?: boolean; restaurantIds?: string[] }) => {
+      await platform.bosses.update(id, body)
+      await Promise.all([loadAllBosses(), loadRestaurants()])
+    },
+    [loadAllBosses, loadRestaurants]
+  )
+
+  const deleteBoss = useCallback(
+    async (id: string) => {
+      await platform.bosses.delete(id)
+      await Promise.all([loadAllBosses(), loadRestaurants()])
+    },
+    [loadAllBosses, loadRestaurants]
   )
 
   return (
@@ -176,8 +232,15 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
         rootAdminsError,
         loadRootAdmins,
         addRootAdmin,
+        linkExistingBoss,
         updateRootAdmin,
         deleteRootAdmin,
+        allBosses,
+        bossesLoading,
+        loadAllBosses,
+        createBoss,
+        updateBoss,
+        deleteBoss,
       }}
     >
       {children}

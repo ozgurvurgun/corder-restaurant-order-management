@@ -4,7 +4,7 @@
 
 export type TableStatus = "empty" | "occupied" | "bill-requested" | "reserved"
 
-export type StaffRole = "manager" | "cashier" | "waiter"
+export type StaffRole = string
 
 export type PaymentMethod =
   | "cash"
@@ -27,6 +27,12 @@ export interface TerminalUser {
   id: string
   name: string
   role: StaffRole
+  roleLabel?: string
+  permissions?: string[]
+  limits?: {
+    maxDiscountPercent: number
+    maxDiscountAmount: number | null
+  }
 }
 
 export interface TerminalTable {

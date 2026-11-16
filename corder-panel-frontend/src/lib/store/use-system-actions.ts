@@ -4,7 +4,6 @@ import type {
   Branch,
   PanelNotification,
   PanelUser,
-  PanelUserRole,
   PrinterConfig,
   PrinterDepartment,
   RestaurantSettings,
@@ -13,31 +12,51 @@ import { api } from "../api"
 import { genId } from "./panel-local-storage"
 import type { LogActivityFn } from "./panel-store-context"
 
+type StateSetter<T> = (v: T | ((prev: T) => T)) => void
+
+function mapStaffDtoToPanelUser(dto: {
+  id: string
+  name: string
+  email?: string | null
+  phone?: string
+  role: string
+  roleLabel?: string
+  roleColor?: string
+  canAccessPanel?: boolean
+  canAccessTerminal?: boolean
+  permissions?: string[]
+  limits?: { maxDiscountPercent: number; maxDiscountAmount: number | null }
+  isActive: boolean
+  createdAt?: string
+}): PanelUser {
+  return {
+    id: dto.id,
+    name: dto.name,
+    email: dto.email ?? undefined,
+    phone: dto.phone,
+    role: dto.role,
+    roleLabel: dto.roleLabel,
+    roleColor: dto.roleColor,
+    canAccessPanel: dto.canAccessPanel,
+    canAccessTerminal: dto.canAccessTerminal,
+    permissions: dto.permissions,
+    limits: dto.limits,
+    active: dto.isActive,
+    createdAt: dto.createdAt ? new Date(dto.createdAt) : new Date(),
+  }
+}
+
 export function useSystemActions(params: {
   token: string | null
   currentUser: PanelUser | null
   printers: PrinterConfig[]
-  setUsers: (v: PanelUser[] | ((prev: PanelUser[]) => PanelUser[])) => void
-  setSettings: (
-    v:
-      | RestaurantSettings
-      | ((prev: RestaurantSettings) => RestaurantSettings),
-  ) => void
-  setNotifications: (
-    v:
-      | PanelNotification[]
-      | ((prev: PanelNotification[]) => PanelNotification[]),
-  ) => void
-  setAuditLogs: (v: AuditLog[] | ((prev: AuditLog[]) => AuditLog[])) => void
-  setBranches: (v: Branch[] | ((prev: Branch[]) => Branch[])) => void
-  setPrinters: (
-    v: PrinterConfig[] | ((prev: PrinterConfig[]) => PrinterConfig[]),
-  ) => void
-  setPrinterDepartments: (
-    v:
-      | PrinterDepartment[]
-      | ((prev: PrinterDepartment[]) => PrinterDepartment[]),
-  ) => void
+  setUsers: StateSetter<PanelUser[]>
+  setSettings: StateSetter<RestaurantSettings>
+  setNotifications: StateSetter<PanelNotification[]>
+  setAuditLogs: StateSetter<AuditLog[]>
+  setBranches: StateSetter<Branch[]>
+  setPrinters: StateSetter<PrinterConfig[]>
+  setPrinterDepartments: StateSetter<PrinterDepartment[]>
 }) {
   const {
     token,
@@ -55,10 +74,7 @@ export function useSystemActions(params: {
   const addAuditLog = useCallback(
     (log: Omit<AuditLog, "id" | "createdAt">) => {
       setAuditLogs((prev) =>
-        [{ ...log, id: genId("al"), createdAt: new Date() }, ...prev].slice(
-          0,
-          1000,
-        ),
+        [{ ...log, id: genId("al"), createdAt: new Date() }, ...prev].slice(0, 1000),
       )
       if (!token) return
       api.technical
@@ -90,23 +106,21 @@ export function useSystemActions(params: {
   const addUser = useCallback(
     (u: Omit<PanelUser, "id" | "createdAt">) => {
       if (!token) return
-      const role: PanelUserRole = u.role === "root" ? "manager" : u.role
+      const role = u.role === "root" ? "branch_manager" : u.role
       const pin = (u.pin ?? "").trim()
-      if (!pin) return
       api.staff
-        .create(token, { name: u.name, pin, role, phone: u.phone })
+        .create(token, {
+          name: u.name,
+          ...(pin ? { pin } : {}),
+          role,
+          phone: u.phone,
+          email: u.email,
+          password: u.password,
+          canAccessPanel: u.canAccessPanel,
+          canAccessTerminal: u.canAccessTerminal,
+        })
         .then((created) => {
-          setUsers((prev) => [
-            ...prev,
-            {
-              id: created.id,
-              name: created.name,
-              phone: created.phone,
-              role: created.role as PanelUser["role"],
-              active: created.isActive,
-              createdAt: new Date(created.createdAt),
-            },
-          ])
+          setUsers((prev) => [...prev, mapStaffDtoToPanelUser(created)])
           logActivity({
             action: "staff_created",
             category: "user",
@@ -125,29 +139,29 @@ export function useSystemActions(params: {
       const payload: {
         name?: string
         pin?: string
-        role?: PanelUserRole
+        role?: string
         phone?: string
+        email?: string | null
+        password?: string
         isActive?: boolean
+        canAccessPanel?: boolean
+        canAccessTerminal?: boolean
       } = {}
       if (data.name != null) payload.name = data.name
       if (data.pin != null && data.pin !== "") payload.pin = data.pin
       if (data.role != null && data.role !== "root") payload.role = data.role
       if (data.phone !== undefined) payload.phone = data.phone
+      if (data.email !== undefined) payload.email = data.email || null
+      if (data.password != null && data.password !== "") payload.password = data.password
       if (data.active !== undefined) payload.isActive = data.active
+      if (data.canAccessPanel !== undefined) payload.canAccessPanel = data.canAccessPanel
+      if (data.canAccessTerminal !== undefined) payload.canAccessTerminal = data.canAccessTerminal
       api.staff
         .update(token, id, payload)
         .then((updated) => {
           setUsers((prev) =>
             prev.map((u) =>
-              u.id === id
-                ? {
-                    ...u,
-                    name: updated.name,
-                    phone: updated.phone,
-                    role: updated.role as PanelUser["role"],
-                    active: updated.isActive,
-                  }
-                : u,
+              u.id === id ? { ...u, ...mapStaffDtoToPanelUser(updated), createdAt: u.createdAt } : u,
             ),
           )
           logActivity({
@@ -212,9 +226,7 @@ export function useSystemActions(params: {
 
   const markNotificationRead = useCallback(
     (id: string) => {
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
-      )
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
     },
     [setNotifications],
   )
@@ -236,9 +248,7 @@ export function useSystemActions(params: {
 
   const switchBranch = useCallback(
     (id: string) => {
-      setBranches((prev) =>
-        prev.map((b) => ({ ...b, isCurrent: b.id === id })),
-      )
+      setBranches((prev) => prev.map((b) => ({ ...b, isCurrent: b.id === id })))
       logActivity({
         action: "branch_switched",
         category: "settings",
@@ -261,9 +271,7 @@ export function useSystemActions(params: {
   )
   const updateBranch = useCallback(
     (id: string, data: Partial<Branch>) => {
-      setBranches((prev) =>
-        prev.map((b) => (b.id === id ? { ...b, ...data } : b)),
-      )
+      setBranches((prev) => prev.map((b) => (b.id === id ? { ...b, ...data } : b)))
       logActivity({
         action: "branch_updated",
         category: "settings",
@@ -322,9 +330,7 @@ export function useSystemActions(params: {
 
   const updatePrinter = useCallback(
     (id: string, data: Partial<PrinterConfig>) => {
-      setPrinters((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, ...data } : p)),
-      )
+      setPrinters((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p)))
       logActivity({
         action: "printer_updated",
         category: "settings",
@@ -368,9 +374,7 @@ export function useSystemActions(params: {
     (id: string) => {
       const pr = printers.find((p) => p.id === id)
       if (!pr || !token) return
-      setPrinters((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, status: "online" } : p)),
-      )
+      setPrinters((prev) => prev.map((p) => (p.id === id ? { ...p, status: "online" } : p)))
       logActivity({
         action: "printer_tested",
         category: "settings",

@@ -17,7 +17,7 @@ import { mkdir, writeFile } from 'fs/promises';
 import { dirname, resolve, sep } from 'path';
 import type { Request } from 'express';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
-import { PanelRootGuard } from '../infrastructure/panel-root.guard';
+import { PanelRootGuard, RequirePermissions } from '../infrastructure/panel-root.guard';
 import { R2UploadService } from '../infrastructure/r2-upload.service';
 import {
   detectImageMimeFromMagicBytes,
@@ -45,6 +45,7 @@ function tenantPrefix(user: RestaurantUser): string {
 
 @Controller('restaurant/upload')
 @UseGuards(RestaurantJwtGuard, PanelRootGuard)
+@RequirePermissions('catalog.manage_products', 'catalog.manage_campaigns')
 export class UploadController {
   private readonly logger = new Logger(UploadController.name);
 

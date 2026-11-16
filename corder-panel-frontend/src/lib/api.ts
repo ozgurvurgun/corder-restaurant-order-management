@@ -6,6 +6,8 @@ export {
   getSessionUser,
   setSessionUser,
   clearSessionUser,
+  getStoredBranches,
+  setStoredBranches,
   clearToken,
   getRestaurant,
   setRestaurant,

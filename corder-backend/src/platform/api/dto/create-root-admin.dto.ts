@@ -1,8 +1,21 @@
-import { IsString, IsUUID, MinLength, IsEmail, IsOptional } from 'class-validator';
+import {
+  IsArray,
+  IsEmail,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MinLength,
+} from 'class-validator';
 
 export class CreateRootAdminDto {
+  @IsOptional()
   @IsUUID()
-  restaurantId: string;
+  restaurantId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  restaurantIds?: string[];
 
   @IsString()
   @MinLength(1)
@@ -11,11 +24,15 @@ export class CreateRootAdminDto {
   @IsEmail()
   email: string;
 
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
   @IsString()
   @MinLength(8, { message: 'Password must be at least 8 characters' })
   password: string;
 
-  /** Terminal login (independent of root admin; stored on the restaurant). */
+  /** Terminal login (independent of boss; stored on the restaurant). */
   @IsOptional()
   @IsEmail()
   terminalEmail?: string;

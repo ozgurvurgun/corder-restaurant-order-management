@@ -1,18 +1,42 @@
-import { IsString, IsOptional, IsIn, IsBoolean, MinLength, MaxLength, Matches } from 'class-validator';
-import { STAFF_ROLES, StaffRole } from '../../domain/restaurant-staff.entity';
+import {
+  IsArray,
+  IsBoolean,
+  IsEmail,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+} from 'class-validator';
 
 export class UpdateStaffDto {
   @IsOptional()
   @IsString()
+  @MinLength(2)
+  @MaxLength(120)
   name?: string;
 
   @IsOptional()
-  @IsIn(STAFF_ROLES)
-  role?: StaffRole;
+  @IsString()
+  @MinLength(2)
+  @MaxLength(64)
+  role?: string;
 
   @IsOptional()
   @IsString()
-  phone?: string;
+  phone?: string | null;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(6, { message: 'Password must be at least 6 characters' })
+  password?: string;
 
   @IsOptional()
   @IsString()
@@ -24,4 +48,38 @@ export class UpdateStaffDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  canAccessPanel?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  canAccessTerminal?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  permissionsOverride?: string[] | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  grantedPermissions?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  revokedPermissions?: string[];
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  maxDiscountPercentOverride?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxDiscountAmountOverride?: number | null;
 }

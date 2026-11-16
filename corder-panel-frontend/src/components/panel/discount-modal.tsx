@@ -1,6 +1,7 @@
 import { useState } from "react"
-import { X, Percent, DollarSign, Gift } from "lucide-react"
+import { X, Percent, DollarSign, Gift, ShieldAlert } from "lucide-react"
 import { usePanelStore } from "@/lib/panel-store"
+import { usePanelAuth } from "@/lib/panel-auth"
 import type { PanelDiscountType } from "@/lib/panel-types"
 import { usePanelToast } from "./panel-toast"
 
@@ -31,15 +32,36 @@ export default function DiscountModal({
   onClose,
 }: DiscountModalProps) {
   const { tables, applyDiscount } = usePanelStore()
+  const { hasPermission, limits, isBoss } = usePanelAuth()
   const { showToast } = usePanelToast()
+
+  const canPercent = hasPermission("discount.apply_percent")
+  const canAmount = hasPermission("discount.apply_amount")
+  const canComplimentary = hasPermission("discount.complimentary")
+
+  const initialType: PanelDiscountType = canPercent
+    ? "percent"
+    : canAmount
+      ? "amount"
+      : "complimentary"
+
   const [discountType, setDiscountType] =
-    useState<PanelDiscountType>("percent")
+    useState<PanelDiscountType>(initialType)
   const [value, setValue] = useState<number>(0)
   const [customValue, setCustomValue] = useState("")
   const [selectedReason, setSelectedReason] = useState("owner")
   const [customReason, setCustomReason] = useState("")
 
   const table = tables.find((t) => t.id === tableId)
+
+  const maxPct = isBoss ? 100 : limits.maxDiscountPercent
+  const maxAmt = isBoss ? null : limits.maxDiscountAmount
+
+  const isExceedingLimit =
+    !isBoss &&
+    ((discountType === "percent" && value > maxPct) ||
+      (discountType === "amount" && maxAmt != null && value > maxAmt) ||
+      (discountType === "complimentary" && !canComplimentary))
 
   const calculatedDiscount =
     discountType === "percent"
@@ -51,6 +73,10 @@ export default function DiscountModal({
   const finalTotal = Math.max(0, total - calculatedDiscount)
 
   const handleApply = () => {
+    if (isExceedingLimit) {
+      showToast("Girilen indirim yetki limitinizi aşıyor!", "error")
+      return
+    }
     const reason =
       selectedReason === "other"
         ? customReason
@@ -93,9 +119,15 @@ export default function DiscountModal({
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#e5e5ea]">
-          <h2 className="text-[17px] font-semibold text-[#1d1d1f]">
-            Indirim/Ikram - {table?.name}
-          </h2>
+          <div>
+            <h2 className="text-[17px] font-semibold text-[#1d1d1f]">
+              Indirim/Ikram - {table?.name}
+            </h2>
+            <p className="text-[11px] text-[#86868b]">
+              Yetki Limitiniz: Maks %{maxPct}
+              {maxAmt != null ? ` • Maks ${maxAmt} TL` : " • Tutar Limitsiz"}
+            </p>
+          </div>
           <button
             onClick={onClose}
             className="p-1.5 hover:bg-[#f5f5f7] rounded-lg transition-colors"
@@ -109,22 +141,34 @@ export default function DiscountModal({
           {/* Discount Type Tabs */}
           <div className="flex gap-2">
             {[
-              { type: "percent" as const, icon: Percent, label: "Yuzde" },
-              { type: "amount" as const, icon: DollarSign, label: "Tutar" },
+              {
+                type: "percent" as const,
+                icon: Percent,
+                label: "Yuzde",
+                allowed: canPercent,
+              },
+              {
+                type: "amount" as const,
+                icon: DollarSign,
+                label: "Tutar",
+                allowed: canAmount,
+              },
               {
                 type: "complimentary" as const,
                 icon: Gift,
                 label: "Tam Ikram",
+                allowed: canComplimentary,
               },
-            ].map(({ type, icon: Icon, label }) => (
+            ].map(({ type, icon: Icon, label, allowed }) => (
               <button
                 key={type}
+                disabled={!allowed}
                 onClick={() => {
                   setDiscountType(type)
                   setValue(0)
                   setCustomValue("")
                 }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-[14px] font-medium transition-all ${
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-[14px] font-medium transition-all disabled:opacity-35 disabled:cursor-not-allowed ${
                   discountType === type
                     ? "bg-[#e63462] text-white"
                     : "bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e5e5ea]"
@@ -141,26 +185,33 @@ export default function DiscountModal({
             <div className="space-y-3">
               <label className="text-[13px] font-medium text-[#86868b] uppercase tracking-wide">
                 {discountType === "percent"
-                  ? "Indirim Orani"
-                  : "Indirim Tutari"}
+                  ? `Indirim Orani (Maks %${maxPct})`
+                  : `Indirim Tutari ${maxAmt != null ? `(Maks ${maxAmt} TL)` : ""}`}
               </label>
               <div className="grid grid-cols-3 gap-2">
                 {(discountType === "percent"
                   ? PRESET_PERCENTS
                   : PRESET_AMOUNTS
-                ).map((preset) => (
-                  <button
-                    key={preset}
-                    onClick={() => handlePresetClick(preset)}
-                    className={`py-2.5 rounded-lg text-[15px] font-medium transition-all ${
-                      value === preset && !customValue
-                        ? "bg-[#e63462] text-white"
-                        : "bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e5e5ea]"
-                    }`}
-                  >
-                    {discountType === "percent" ? `%${preset}` : `${preset} TL`}
-                  </button>
-                ))}
+                ).map((preset) => {
+                  const disabledPreset =
+                    !isBoss &&
+                    ((discountType === "percent" && preset > maxPct) ||
+                      (discountType === "amount" && maxAmt != null && preset > maxAmt))
+                  return (
+                    <button
+                      key={preset}
+                      disabled={disabledPreset}
+                      onClick={() => handlePresetClick(preset)}
+                      className={`py-2.5 rounded-lg text-[15px] font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
+                        value === preset && !customValue
+                          ? "bg-[#e63462] text-white"
+                          : "bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e5e5ea]"
+                      }`}
+                    >
+                      {discountType === "percent" ? `%${preset}` : `${preset} TL`}
+                    </button>
+                  )
+                })}
               </div>
               <input
                 type="number"
@@ -169,6 +220,14 @@ export default function DiscountModal({
                 placeholder="Ozel tutar girin..."
                 className="w-full h-[44px] px-4 text-[15px] bg-[#f5f5f7] rounded-lg border-0 focus:outline-none focus:ring-2 focus:ring-[#e63462]/50 text-[#1d1d1f]"
               />
+              {isExceedingLimit && (
+                <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-[12px] font-medium text-red-600">
+                  <ShieldAlert className="h-4 w-4 flex-shrink-0" />
+                  <span>
+                    Bu indirim oranı/tutarı Boss tarafından tanımlanan yetki limitinizi aşıyor.
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
@@ -236,7 +295,10 @@ export default function DiscountModal({
           </button>
           <button
             onClick={handleApply}
-            disabled={discountType !== "complimentary" && value === 0}
+            disabled={
+              isExceedingLimit ||
+              (discountType !== "complimentary" && value === 0)
+            }
             className="flex-1 py-3 rounded-xl text-[15px] font-semibold bg-[#e63462] text-white hover:bg-[#d42d58] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Indirimi Uygula

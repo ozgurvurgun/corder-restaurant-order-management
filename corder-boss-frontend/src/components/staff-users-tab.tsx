@@ -1,0 +1,294 @@
+import { useState } from "react"
+import { useBossStore } from "@/lib/boss-store"
+import { bossApi } from "@/lib/api"
+import type { StaffMemberDto } from "@/lib/types"
+import { getRoleDisplayName } from "@/lib/permission-labels"
+import { StaffUserModal } from "./staff-user-modal"
+import {
+  Users,
+  Plus,
+  Pencil,
+  Trash2,
+  Monitor,
+  Smartphone,
+  Shield,
+  Mail,
+  Phone,
+} from "lucide-react"
+
+export function StaffUsersTab() {
+  const {
+    staff,
+    roles,
+    catalog,
+    branches,
+    effectiveBranchId,
+    effectiveBranch,
+    setSelectedBranchId,
+    refreshBranchDetails,
+    showToast,
+  } = useBossStore()
+
+  const [showModal, setShowModal] = useState(false)
+  const [editingUser, setEditingUser] = useState<StaffMemberDto | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+
+  const openCreateModal = () => {
+    setEditingUser(null)
+    setShowModal(true)
+  }
+
+  const openEditModal = (u: StaffMemberDto) => {
+    setEditingUser(u)
+    setShowModal(true)
+  }
+
+  const handleSaveUser = async (payload: {
+    name: string
+    role: string
+    phone?: string
+    canAccessPanel: boolean
+    canAccessTerminal: boolean
+    email?: string
+    password?: string
+    pin?: string
+    grantedPermissions: string[]
+    revokedPermissions: string[]
+    maxDiscountPercentOverride: number | null
+    maxDiscountAmountOverride: number | null
+  }) => {
+    if (!effectiveBranchId) return
+    setSubmitting(true)
+    try {
+      if (editingUser) {
+        await bossApi.staff.update(effectiveBranchId, editingUser.id, payload)
+        showToast(`${payload.name} bilgileri ve yetkileri güncellendi`)
+      } else {
+        await bossApi.staff.create(effectiveBranchId, payload)
+        showToast(`${payload.name} kullanıcısı oluşturuldu`)
+      }
+      await refreshBranchDetails(effectiveBranchId)
+      setShowModal(false)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "İşlem başarısız", "error")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleToggleActive = async (u: StaffMemberDto) => {
+    if (!effectiveBranchId) return
+    try {
+      await bossApi.staff.update(effectiveBranchId, u.id, { isActive: !u.isActive })
+      await refreshBranchDetails(effectiveBranchId)
+      showToast(`${u.name} ${!u.isActive ? "aktif" : "pasif"} yapıldı`)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Güncellenemedi", "error")
+    }
+  }
+
+  const handleDelete = async (u: StaffMemberDto) => {
+    if (!effectiveBranchId) return
+    if (!confirm(`${u.name} kullanıcısını silmek istediğinize emin misiniz?`)) return
+    try {
+      await bossApi.staff.remove(effectiveBranchId, u.id)
+      await refreshBranchDetails(effectiveBranchId)
+      showToast(`${u.name} silindi`)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Silinemedi", "error")
+    }
+  }
+
+  return (
+    <div className="space-y-4 pb-8">
+      <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-[#e63462]" />
+              <h2 className="text-[16px] font-bold text-[#1d1d1f]">
+                Merchant Panel &amp; Terminal Kullanıcıları
+              </h2>
+            </div>
+            <p className="mt-0.5 text-[12px] text-[#86868b]">
+              Şube: <strong className="text-[#1d1d1f]">{effectiveBranch?.name}</strong> — Müdür, kasiyer, garson ve özel yetkili kullanıcıları buradan oluşturun.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {branches.length > 1 && (
+              <select
+                value={effectiveBranchId}
+                onChange={(e) => setSelectedBranchId(e.target.value)}
+                className="h-9 rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3 text-[12px] font-semibold text-[#1d1d1f]"
+              >
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    Şube: {b.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#e63462] px-3.5 text-[12px] font-bold text-white shadow-sm hover:bg-[#d42d56]"
+            >
+              <Plus className="h-4 w-4" />
+              Yeni Kullanıcı Oluştur
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {staff.length === 0 ? (
+          <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-10 text-center">
+            <Users className="mx-auto h-9 w-9 text-[#86868b]" />
+            <h3 className="mt-2 text-[15px] font-bold text-[#1d1d1f]">
+              Bu şubede henüz kullanıcı yok
+            </h3>
+            <p className="mt-1 text-[12px] text-[#86868b]">
+              Merchant Paneline e-posta/parola ile veya El Terminaline PIN ile girecek personelleri oluşturun.
+            </p>
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#e63462] px-4 py-2 text-[13px] font-bold text-white"
+            >
+              <Plus className="h-4 w-4" /> İlk Kullanıcıyı Ekle
+            </button>
+          </div>
+        ) : (
+          staff.map((u) => {
+            const hasOverrides =
+              u.grantedPermissions.length > 0 ||
+              u.revokedPermissions.length > 0 ||
+              u.maxDiscountPercentOverride != null ||
+              u.maxDiscountAmountOverride != null
+
+            return (
+              <div
+                key={u.id}
+                className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-4 shadow-2xs"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl text-[15px] font-bold text-white"
+                      style={{ backgroundColor: u.roleColor || "#e63462" }}
+                    >
+                      {u.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <h3 className="truncate text-[15px] font-bold text-[#1d1d1f]">
+                          {u.name}
+                        </h3>
+                        <span
+                          className="rounded-lg px-2 py-0.5 text-[11px] font-semibold text-white"
+                          style={{ backgroundColor: u.roleColor || "#e63462" }}
+                        >
+                          {getRoleDisplayName(u.role, u.roleLabel)}
+                        </span>
+                        {hasOverrides && (
+                          <span className="rounded-lg bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                            Özel Yetki Tanımlı
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-[#86868b]">
+                        {u.email && (
+                          <span className="flex items-center gap-1">
+                            <Mail className="h-3 w-3" /> {u.email}
+                          </span>
+                        )}
+                        {u.phone && (
+                          <span className="flex items-center gap-1">
+                            <Phone className="h-3 w-3" /> {u.phone}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => void handleToggleActive(u)}
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                        u.isActive
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-600"
+                      }`}
+                    >
+                      {u.isActive ? "Aktif" : "Pasif"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(u)}
+                      className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed]"
+                      title="Düzenle & Yetkileri Özelleştir"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete(u)}
+                      className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#f5f5f7] text-red-500 hover:bg-red-50"
+                      title="Sil"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#f0f0f0] pt-3">
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-semibold ${
+                      u.canAccessPanel
+                        ? "bg-blue-50 text-blue-700"
+                        : "bg-[#f5f5f7] text-[#86868b]"
+                    }`}
+                  >
+                    <Monitor className="h-3 w-3" />
+                    Merchant Panel: {u.canAccessPanel ? "Açık" : "Kapalı"}
+                  </span>
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-semibold ${
+                      u.canAccessTerminal
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-[#f5f5f7] text-[#86868b]"
+                    }`}
+                  >
+                    <Smartphone className="h-3 w-3" />
+                    El Terminali (PIN): {u.canAccessTerminal ? "Açık" : "Kapalı"}
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-lg bg-[#fef3f5] px-2.5 py-1 text-[11px] font-semibold text-[#e63462]">
+                    <Shield className="h-3 w-3" />
+                    {u.permissions.length} Yetki • Maks %{u.limits.maxDiscountPercent} İskonto
+                    {u.limits.maxDiscountAmount != null
+                      ? ` (Maks ${u.limits.maxDiscountAmount} ₺)`
+                      : ""}
+                  </span>
+                </div>
+              </div>
+            )
+          })
+        )}
+      </div>
+
+      {showModal && (
+        <StaffUserModal
+          branchName={effectiveBranch?.name ?? ""}
+          editingUser={editingUser}
+          roles={roles}
+          catalog={catalog}
+          submitting={submitting}
+          onClose={() => setShowModal(false)}
+          onSubmit={handleSaveUser}
+        />
+      )}
+    </div>
+  )
+}

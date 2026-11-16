@@ -51,6 +51,17 @@ async function platformFetch<T>(
   return res.json()
 }
 
+export interface BossDto {
+  id: string
+  restaurantId: string | null
+  email: string
+  name: string
+  phone?: string | null
+  isActive?: boolean
+  restaurants?: Array<{ id: string; name: string; slug: string; status: string }>
+  createdAt: string
+}
+
 export const platform = {
   auth: {
     async login(email: string, password: string) {
@@ -102,7 +113,6 @@ export const platform = {
         createdAt: string
       }>(`/platform/restaurants/${id}`)
     },
-    /** Product categories (defined in the restaurant panel); IDs for printer mapping. */
     async categories(restaurantId: string) {
       return platformFetch<
         Array<{
@@ -134,28 +144,64 @@ export const platform = {
   },
   rootAdmins: {
     async list(restaurantId: string) {
-      return platformFetch<Array<{
-        id: string
-        restaurantId: string
-        email: string
-        name: string
-        createdAt: string
-      }>>(`/platform/restaurants/${restaurantId}/root-admins`)
+      return platformFetch<BossDto[]>(`/platform/restaurants/${restaurantId}/root-admins`)
     },
-    async create(restaurantId: string, body: { name: string; email: string; password: string }) {
-      return platformFetch<{ id: string; restaurantId: string; email: string; name: string; createdAt: string }>(
+    async create(restaurantId: string, body: { name: string; email: string; phone?: string; password: string }) {
+      return platformFetch<BossDto>(
         `/platform/restaurants/${restaurantId}/root-admins`,
         { method: "POST", body: JSON.stringify(body) }
       )
     },
-    async update(restaurantId: string, id: string, body: { name?: string; email?: string; password?: string }) {
-      return platformFetch<{ id: string; restaurantId: string; email: string; name: string; createdAt: string }>(
+    async linkExisting(restaurantId: string, bossId: string) {
+      return platformFetch<BossDto>(
+        `/platform/restaurants/${restaurantId}/root-admins/link/${bossId}`,
+        { method: "POST" }
+      )
+    },
+    async update(restaurantId: string, id: string, body: { name?: string; email?: string; phone?: string; password?: string }) {
+      return platformFetch<BossDto>(
         `/platform/restaurants/${restaurantId}/root-admins/${id}`,
         { method: "PUT", body: JSON.stringify(body) }
       )
     },
     async delete(restaurantId: string, id: string) {
       return platformFetch<void>(`/platform/restaurants/${restaurantId}/root-admins/${id}`, { method: "DELETE" })
+    },
+  },
+  bosses: {
+    async list() {
+      return platformFetch<BossDto[]>("/platform/bosses")
+    },
+    async create(body: {
+      name: string
+      email: string
+      phone?: string
+      password: string
+      restaurantIds?: string[]
+    }) {
+      return platformFetch<BossDto>("/platform/bosses", {
+        method: "POST",
+        body: JSON.stringify(body),
+      })
+    },
+    async update(
+      id: string,
+      body: {
+        name?: string
+        email?: string
+        phone?: string | null
+        password?: string
+        isActive?: boolean
+        restaurantIds?: string[]
+      }
+    ) {
+      return platformFetch<BossDto>(`/platform/bosses/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(body),
+      })
+    },
+    async delete(id: string) {
+      return platformFetch<void>(`/platform/bosses/${id}`, { method: "DELETE" })
     },
   },
 }

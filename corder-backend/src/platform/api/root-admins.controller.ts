@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { RootAdminService } from '../application/root-admin.service';
 import { CreateRootAdminDto } from './dto/create-root-admin.dto';
 import { UpdateRootAdminDto } from './dto/update-root-admin.dto';
@@ -17,9 +26,17 @@ export class RootAdminsController {
   @Post()
   create(
     @Param('restaurantId') restaurantId: string,
-    @Body() dto: Omit<CreateRootAdminDto, 'restaurantId'>,
+    @Body() dto: CreateRootAdminDto,
   ) {
-    return this.service.create({ ...dto, restaurantId } as CreateRootAdminDto);
+    return this.service.create({ ...dto, restaurantId });
+  }
+
+  @Post('link/:bossId')
+  linkExisting(
+    @Param('restaurantId') restaurantId: string,
+    @Param('bossId') bossId: string,
+  ) {
+    return this.service.linkExistingBossToRestaurant(bossId, restaurantId);
   }
 
   @Get(':id')
@@ -30,6 +47,56 @@ export class RootAdminsController {
   @Put(':id')
   update(@Param('id') id: string, @Body() dto: UpdateRootAdminDto) {
     return this.service.update(id, dto);
+  }
+
+  @Delete(':id')
+  remove(
+    @Param('restaurantId') restaurantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.service.remove(id, restaurantId);
+  }
+}
+
+@Controller('platform/bosses')
+@UseGuards(PlatformJwtGuard)
+export class PlatformBossesController {
+  constructor(private readonly service: RootAdminService) {}
+
+  @Get()
+  findAll() {
+    return this.service.findAllBosses();
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.service.findOne(id);
+  }
+
+  @Post()
+  create(@Body() dto: CreateRootAdminDto) {
+    return this.service.create(dto);
+  }
+
+  @Put(':id')
+  update(@Param('id') id: string, @Body() dto: UpdateRootAdminDto) {
+    return this.service.update(id, dto);
+  }
+
+  @Post(':id/restaurants/:restaurantId')
+  linkRestaurant(
+    @Param('id') id: string,
+    @Param('restaurantId') restaurantId: string,
+  ) {
+    return this.service.linkExistingBossToRestaurant(id, restaurantId);
+  }
+
+  @Delete(':id/restaurants/:restaurantId')
+  unlinkRestaurant(
+    @Param('id') id: string,
+    @Param('restaurantId') restaurantId: string,
+  ) {
+    return this.service.unlinkBossFromRestaurant(id, restaurantId);
   }
 
   @Delete(':id')

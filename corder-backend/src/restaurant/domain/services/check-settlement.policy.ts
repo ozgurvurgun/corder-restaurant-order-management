@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import {
   computeDiscountMinorUnits,
   fromMinorUnits,
@@ -9,6 +9,13 @@ import {
   CloseCheckMethod,
   CloseCheckSplitDto,
 } from '../../api/dto/close-check.dto';
+import { EffectivePolicyLimits, PermissionKey } from '../permissions.catalog';
+
+export interface SettlementActorPolicy {
+  isBoss?: boolean;
+  permissions?: PermissionKey[];
+  limits?: EffectivePolicyLimits;
+}
 
 export interface CheckSettlementInput {
   rawTotalMinorUnits: number;
@@ -53,6 +60,57 @@ export interface MethodBreakdownMinorUnits {
 }
 
 export class CheckSettlementPolicy {
+  static assertDiscountAllowedForActor(
+    rawTotalMinorUnits: number,
+    discountMinorUnits: number,
+    discountDto: CloseCheckDiscountDto | null | undefined,
+    actor?: SettlementActorPolicy,
+  ): void {
+    if (discountMinorUnits <= 0 || !actor || actor.isBoss) {
+      return;
+    }
+    const perms = actor.permissions ?? [];
+    const limits = actor.limits ?? { maxDiscountPercent: 0, maxDiscountAmount: 0 };
+
+    if (rawTotalMinorUnits > 0 && discountMinorUnits >= rawTotalMinorUnits) {
+      if (!perms.includes('discount.complimentary')) {
+        throw new ForbiddenException(
+          'You do not have permission to apply a 100% complimentary discount (discount.complimentary)',
+        );
+      }
+      return;
+    }
+
+    if (discountDto?.type === 'percent' && !perms.includes('discount.apply_percent')) {
+      throw new ForbiddenException(
+        'You do not have permission to apply a percentage discount (discount.apply_percent)',
+      );
+    }
+    if (discountDto?.type === 'amount' && !perms.includes('discount.apply_amount')) {
+      throw new ForbiddenException(
+        'You do not have permission to apply an amount discount (discount.apply_amount)',
+      );
+    }
+
+    const maxAllowedByPercent = Math.round(
+      (rawTotalMinorUnits * limits.maxDiscountPercent) / 100,
+    );
+    if (discountMinorUnits > maxAllowedByPercent) {
+      throw new ForbiddenException(
+        `Discount exceeds your maximum percentage discount limit of ${limits.maxDiscountPercent}%`,
+      );
+    }
+
+    if (
+      limits.maxDiscountAmount != null &&
+      discountMinorUnits > toMinorUnits(limits.maxDiscountAmount)
+    ) {
+      throw new ForbiddenException(
+        `Discount exceeds your maximum amount discount limit of ${limits.maxDiscountAmount} TL`,
+      );
+    }
+  }
+
   static computeSettlement(input: CheckSettlementInput): CheckSettlementResult {
     const rawTotalMinorUnits = Math.max(0, input.rawTotalMinorUnits);
     const discountMinorUnits = computeDiscountMinorUnits(

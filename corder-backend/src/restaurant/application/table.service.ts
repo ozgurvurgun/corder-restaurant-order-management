@@ -155,9 +155,10 @@ export class TableService {
     restaurantId: string,
     tableId: string,
     staffId: string,
+    force = false,
   ): Promise<void> {
     const table = await this.findOne(tableId, restaurantId);
-    if (table.sessionStaffId === staffId) {
+    if (force || table.sessionStaffId === staffId) {
       table.releaseSession();
       await this.repo.save(table);
     }

@@ -7,10 +7,20 @@ import {
   Clock,
   ArrowRightLeft,
   CornerUpRight,
+  Trash2,
+  X,
 } from "lucide-react"
 import { useApp } from "@/lib/store"
 import { formatCurrency } from "@/lib/format"
+import { useToast } from "@/components/ios-toast"
 import type { TerminalOrderItem } from "@/lib/types"
+
+const CANCEL_REASONS = [
+  "Müşteri vazgeçti",
+  "Yanlış sipariş girildi",
+  "Ürün mutfakta kalmadı",
+  "Gecikme / Kalite sorunu",
+]
 
 interface OpenOrdersScreenProps {
   tableId: string
@@ -34,12 +44,30 @@ export function OpenOrdersScreen({
   onNewOrder,
   onMoveItem,
 }: OpenOrdersScreenProps) {
-  const { tables, getTableOrders } = useApp()
+  const {
+    tables,
+    getTableOrders,
+    hasPermission,
+    cancelOrderItemOnServer,
+  } = useApp()
+  const { showToast } = useToast()
   const table = tables.find((t) => t.id === tableId)
   const tableOrders = getTableOrders(tableId)
   const [activeTab, setActiveTab] = useState(0)
+  const [cancelTarget, setCancelTarget] = useState<{
+    orderId: string
+    itemId: string
+    productName: string
+  } | null>(null)
+  const [cancelReason, setCancelReason] = useState(CANCEL_REASONS[0])
+  const [cancelling, setCancelling] = useState(false)
+
   const tabsRef = useRef<HTMLDivElement>(null)
   const activeTabRef = useRef<HTMLButtonElement>(null)
+
+  const canMoveItems = hasPermission("order.move_items")
+  const canCancelItem = hasPermission("order.cancel_item")
+  const canCreateOrder = hasPermission("order.create")
 
   useEffect(() => {
     if (activeTabRef.current && tabsRef.current) {
@@ -58,6 +86,23 @@ export function OpenOrdersScreen({
   const activeOrder = tableOrders[safeTab]
   const allOrdersTotal = tableOrders.reduce((sum, order) => sum + order.totalAmount, 0)
   const visibleItems = (activeOrder?.items ?? []).filter((item) => item.status !== "cancelled")
+
+  const handleConfirmCancelItem = async () => {
+    if (!cancelTarget || !cancelReason.trim()) return
+    setCancelling(true)
+    const ok = await cancelOrderItemOnServer(
+      cancelTarget.orderId,
+      cancelTarget.itemId,
+      cancelReason
+    )
+    setCancelling(false)
+    if (ok) {
+      showToast(`${cancelTarget.productName} iptal edildi`)
+      setCancelTarget(null)
+    } else {
+      showToast("Ürün iptal edilemedi (yetki veya açık kasa vardiyası kontrol edin)", "error")
+    }
+  }
 
   return (
     <div className="h-dvh flex flex-col bg-background">
@@ -78,7 +123,7 @@ export function OpenOrdersScreen({
           </button>
           <button
             onClick={onNewOrder}
-            disabled={isBillRequested}
+            disabled={isBillRequested || !canCreateOrder}
             className="p-2 active:opacity-60 disabled:opacity-40"
             aria-label="Yeni Siparis"
           >
@@ -155,8 +200,23 @@ export function OpenOrdersScreen({
                 key={item.id}
                 item={item}
                 hasBottomBorder={idx < visibleItems.length - 1}
-                canMove={!isBillRequested && Boolean(onMoveItem)}
-                onMove={onMoveItem ? () => onMoveItem(item.id, item.product.name) : undefined}
+                canMove={!isBillRequested && canMoveItems && Boolean(onMoveItem)}
+                onMove={
+                  onMoveItem && canMoveItems
+                    ? () => onMoveItem(item.id, item.product.name)
+                    : undefined
+                }
+                canCancel={!isBillRequested && canCancelItem && Boolean(activeOrder)}
+                onCancel={
+                  activeOrder && canCancelItem
+                    ? () =>
+                        setCancelTarget({
+                          orderId: activeOrder.id,
+                          itemId: item.id,
+                          productName: item.product.name,
+                        })
+                    : undefined
+                }
               />
             ))}
           </div>
@@ -190,6 +250,61 @@ export function OpenOrdersScreen({
           </p>
         </div>
       )}
+
+      {/* Cancel Order Item Modal */}
+      {cancelTarget && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-t-3xl bg-white p-5 safe-bottom shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <h3 className="text-[16px] font-bold text-foreground">
+                Ürün İptali — {cancelTarget.productName}
+              </h3>
+              <button
+                onClick={() => setCancelTarget(null)}
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-muted"
+              >
+                <X className="h-4 w-4 text-muted-foreground" />
+              </button>
+            </div>
+            <p className="mt-3 text-[12px] font-semibold uppercase text-muted-foreground">
+              İptal Sebebi Seçin
+            </p>
+            <div className="mt-2 space-y-2">
+              {CANCEL_REASONS.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setCancelReason(r)}
+                  className={`w-full rounded-xl border px-3.5 py-2.5 text-left text-[14px] font-medium transition-colors ${
+                    cancelReason === r
+                      ? "border-[#e63462] bg-[#e63462]/10 text-[#e63462]"
+                      : "border-border text-foreground"
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setCancelTarget(null)}
+                className="flex-1 rounded-xl border border-border py-3 text-[14px] font-semibold text-muted-foreground"
+              >
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                disabled={cancelling}
+                onClick={() => void handleConfirmCancelItem()}
+                className="flex-1 rounded-xl bg-red-600 py-3 text-[14px] font-bold text-white disabled:opacity-50"
+              >
+                {cancelling ? "İptal Ediliyor…" : "Ürünü İptal Et"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -199,11 +314,15 @@ function OrderItemRow({
   hasBottomBorder,
   canMove,
   onMove,
+  canCancel,
+  onCancel,
 }: {
   item: TerminalOrderItem
   hasBottomBorder: boolean
   canMove: boolean
   onMove?: () => void
+  canCancel?: boolean
+  onCancel?: () => void
 }) {
   return (
     <div className={`py-3.5 ${hasBottomBorder ? "border-b border-border" : ""}`}>
@@ -225,15 +344,29 @@ function OrderItemRow({
           {item.quantity} Adet
         </span>
       </div>
-      {canMove && onMove && (
-        <button
-          type="button"
-          onClick={onMove}
-          className="mt-2 text-[13px] font-medium text-[#007aff] inline-flex items-center gap-1 active:opacity-70"
-        >
-          <CornerUpRight className="h-3.5 w-3.5" />
-          Baska masaya
-        </button>
+      {(canMove || canCancel) && (
+        <div className="mt-2 flex items-center gap-4">
+          {canMove && onMove && (
+            <button
+              type="button"
+              onClick={onMove}
+              className="text-[13px] font-medium text-[#007aff] inline-flex items-center gap-1 active:opacity-70"
+            >
+              <CornerUpRight className="h-3.5 w-3.5" />
+              Baska masaya
+            </button>
+          )}
+          {canCancel && onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="text-[13px] font-medium text-red-600 inline-flex items-center gap-1 active:opacity-70"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Iptal Et
+            </button>
+          )}
+        </div>
       )}
     </div>
   )

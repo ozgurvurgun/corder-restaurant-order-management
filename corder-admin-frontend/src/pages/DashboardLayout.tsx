@@ -1,7 +1,7 @@
 import { useEffect } from "react"
 import { Outlet, useNavigate, NavLink } from "react-router-dom"
 import { usePlatformAuth } from "@/lib/auth-context"
-import { LayoutDashboard, UtensilsCrossed, LogOut } from "lucide-react"
+import { LayoutDashboard, UtensilsCrossed, Crown, LogOut } from "lucide-react"
 
 export function DashboardLayout() {
   const { isAuthenticated, user, logout } = usePlatformAuth()
@@ -15,14 +15,21 @@ export function DashboardLayout() {
 
   const nav = [
     { to: "/dashboard", label: "Özet", icon: LayoutDashboard },
-    { to: "/dashboard/restaurants", label: "Restoranlar", icon: UtensilsCrossed },
+    { to: "/dashboard/bosses", label: "Patronlar (Boss)", icon: Crown },
+    { to: "/dashboard/restaurants", label: "Restoranlar & Şubeler", icon: UtensilsCrossed },
   ]
 
   return (
     <div className="min-h-dvh flex bg-[#0f0f0f]">
-      <aside className="w-56 flex-shrink-0 border-r border-[#2a2a2a] bg-[#1a1a1a] flex flex-col">
-        <div className="p-4 border-b border-[#2a2a2a]">
-          <span className="text-sm font-medium text-white">Corder Admin</span>
+      <aside className="w-60 flex-shrink-0 border-r border-[#2a2a2a] bg-[#1a1a1a] flex flex-col">
+        <div className="p-4 border-b border-[#2a2a2a] flex items-center gap-2.5">
+          <div className="h-8 w-8 rounded-lg bg-[#e63462] flex items-center justify-center text-white font-bold text-sm">
+            C
+          </div>
+          <div>
+            <span className="text-sm font-semibold text-white block leading-tight">Corder Cloud</span>
+            <span className="text-[11px] text-zinc-400 block leading-tight">Platform Admin</span>
+          </div>
         </div>
         <nav className="flex-1 p-2 space-y-0.5">
           {nav.map(({ to, label, icon: Icon }) => (
@@ -32,7 +39,9 @@ export function DashboardLayout() {
               end={to === "/dashboard"}
               className={({ isActive }) =>
                 `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${
-                  isActive ? "bg-blue-600/20 text-blue-400" : "text-zinc-400 hover:bg-[#2a2a2a] hover:text-white"
+                  isActive
+                    ? "bg-[#e63462]/15 text-[#e63462] font-medium"
+                    : "text-zinc-400 hover:bg-[#2a2a2a] hover:text-white"
                 }`
               }
             >

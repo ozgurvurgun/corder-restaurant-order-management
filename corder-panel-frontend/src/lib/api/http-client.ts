@@ -16,9 +16,23 @@ export function setToken(token: string) {
   localStorage.setItem("panel_token", token)
 }
 
-export type PanelSessionUser = { id: string; name: string; email: string; role: string }
+export type PanelSessionUser = {
+  id: string
+  name: string
+  email: string
+  role: string
+  staffRole?: string
+  roleLabel?: string
+  isBoss?: boolean
+  permissions?: string[]
+  limits?: {
+    maxDiscountPercent: number
+    maxDiscountAmount: number | null
+  }
+}
 
 const PANEL_SESSION_USER_KEY = "panel_session_user"
+const PANEL_BRANCHES_KEY = "panel_branches"
 
 export function getSessionUser(): PanelSessionUser | null {
   if (typeof window === "undefined") return null
@@ -39,9 +53,26 @@ export function clearSessionUser() {
   localStorage.removeItem(PANEL_SESSION_USER_KEY)
 }
 
+export function getStoredBranches(): Array<{ id: string; name: string; slug: string }> {
+  if (typeof window === "undefined") return []
+  const raw = localStorage.getItem(PANEL_BRANCHES_KEY)
+  if (!raw) return []
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return []
+  }
+}
+
+export function setStoredBranches(branches: Array<{ id: string; name: string; slug: string }>) {
+  if (typeof window === "undefined") return
+  localStorage.setItem(PANEL_BRANCHES_KEY, JSON.stringify(branches))
+}
+
 export function clearToken() {
   localStorage.removeItem("panel_token")
   localStorage.removeItem("panel_restaurant")
+  localStorage.removeItem(PANEL_BRANCHES_KEY)
   clearSessionUser()
 }
 
@@ -79,8 +110,12 @@ export async function request<T>(
   }
   if (!(init.body instanceof FormData)) headers["Content-Type"] = "application/json"
   if (token) headers["Authorization"] = `Bearer ${token}`
+  const currentRest = getRestaurant()
+  if (currentRest?.id && !headers["x-restaurant-id"]) {
+    headers["x-restaurant-id"] = currentRest.id
+  }
   const res = await fetch(url, { ...init, headers })
-  if ((res.status === 401 || res.status === 403) && token) {
+  if (res.status === 401 && token) {
     authExpiredHandler?.()
   }
   if (!res.ok) {
@@ -88,7 +123,7 @@ export async function request<T>(
     let message = body
     try {
       const j = JSON.parse(body)
-      message = j.message ?? body
+      message = Array.isArray(j.message) ? j.message.join(", ") : (j.message ?? body)
     } catch {}
     throw new Error(message || res.statusText)
   }

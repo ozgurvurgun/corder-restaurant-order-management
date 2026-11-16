@@ -7,12 +7,24 @@ import type {
 import {
   api, getToken, setToken, clearToken, getRestaurant, setRestaurant,
   getStaffSession, setStaffSession, clearStaffSession, getBase,
-  setAuthExpiredHandler, setStaffExpiredHandler, type RawTableDto, type OrderDto,
+  setAuthExpiredHandler, setStaffExpiredHandler, type RawTableDto, type OrderDto, type StaffSession,
 } from "./api"
 import {
   calculateOrderItemsTotal, mapMenuTreeToCategoriesAndProducts,
   mapOrderDtoToTerminalOrder, mapTablesWithOrders, upsertCartItem,
 } from "./terminal-mappers"
+
+function mapSessionToTerminalUser(s: Omit<StaffSession, "expiresAt" | "staffToken"> | null): TerminalUser | null {
+  if (!s) return null
+  return {
+    id: s.staffId,
+    name: s.name,
+    role: s.role,
+    roleLabel: s.roleLabel,
+    permissions: s.permissions,
+    limits: s.limits,
+  }
+}
 
 interface TerminalContextType {
   currentUser: TerminalUser | null; isLoggedIn: boolean; isOffline: boolean
@@ -35,9 +47,10 @@ interface TerminalContextType {
   closeTable: (tableId: string, method?: PaymentMethod) => Promise<boolean>
   moveTable: (fromTableId: string, toTableId: string) => Promise<boolean>
   moveOrderItemsToTable: (fromTableId: string, toTableId: string, itemIds: string[]) => Promise<boolean>
-  cancelOrderItemOnServer: (orderId: string, itemId: string) => Promise<boolean>
+  cancelOrderItemOnServer: (orderId: string, itemId: string, reason?: string) => Promise<boolean>
   processPayment: (orderId: string, method: PaymentMethod, amount?: number) => Promise<boolean>
   printReceipt: (tableId: string) => Promise<void>
+  hasPermission: (perm: string) => boolean
   getTableOrders: (tableId: string) => TerminalOrder[]
   getTableTotal: (tableId: string) => number
   getCartTotal: () => number; getCartItemCount: () => number
@@ -46,10 +59,7 @@ interface TerminalContextType {
 const TerminalContext = createContext<TerminalContextType | null>(null)
 
 export function TerminalProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<TerminalUser | null>(() => {
-    const s = getStaffSession()
-    return s ? { id: s.staffId, name: s.name, role: s.role } : null
-  })
+  const [currentUser, setCurrentUser] = useState<TerminalUser | null>(() => mapSessionToTerminalUser(getStaffSession()))
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isOffline, setIsOffline] = useState(false)
   const [restaurant, setRestaurantState] = useState<{ id: string; name: string; slug: string } | null>(null)
@@ -108,8 +118,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
         setProducts(mapped.products)
         setSelectedCategory((prev) => prev ?? mapped.categories.find((c) => !c.parentId)?.id ?? null)
       }
-      const s = getStaffSession()
-      setCurrentUser(s ? { id: s.staffId, name: s.name, role: s.role } : null)
+      setCurrentUser(mapSessionToTerminalUser(getStaffSession()))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Veri yuklenemedi")
     } finally {
@@ -224,8 +233,17 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     if (!token) return { ok: false, error: "Restoran oturumu gerekli" }
     try {
       const res = await api.staff.verifyPin(token, pin)
-      setStaffSession({ staffId: res.staffId, name: res.name, role: res.role, staffToken: res.staffToken })
-      setCurrentUser({ id: res.staffId, name: res.name, role: res.role })
+      const session = {
+        staffId: res.staffId,
+        name: res.name,
+        role: res.role,
+        roleLabel: res.roleLabel,
+        permissions: res.permissions,
+        limits: res.limits,
+        staffToken: res.staffToken,
+      }
+      setStaffSession(session)
+      setCurrentUser(mapSessionToTerminalUser(session))
       setActiveScreen("tables")
       return { ok: true }
     } catch (err) {
@@ -322,7 +340,19 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     if (itemIds.length === 0) return Promise.resolve(false)
     return runServerMutation((t) => api.orders.moveItems(t, { fromTableId, toTableId, itemIds }))
   }, [runServerMutation])
-  const cancelOrderItemOnServer = useCallback((orderId: string, itemId: string) => runServerMutation((t) => api.orders.cancelItem(t, orderId, itemId)), [runServerMutation])
+  const cancelOrderItemOnServer = useCallback(
+    (orderId: string, itemId: string, reason = "Terminal iptali") =>
+      runServerMutation((t) => api.orders.cancelItem(t, orderId, itemId, reason)),
+    [runServerMutation]
+  )
+  const hasPermission = useCallback(
+    (perm: string): boolean => {
+      if (!currentUser) return false
+      if (!currentUser.permissions) return true
+      return currentUser.permissions.includes(perm)
+    },
+    [currentUser]
+  )
   const processPayment = useCallback((orderId: string, method: PaymentMethod, amount?: number) => {
     const tableId = orders.find((o) => o.id === orderId)?.tableId ?? selectedTableId
     if (!tableId) return Promise.resolve(false)
@@ -342,7 +372,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
         selectedTable, cart, selectedCategory, isLoading, error, login, loginWithPin, logout, logoutRestaurant,
         toggleOffline, refreshData, setActiveScreen, selectTable, releaseTableSession, selectCategory, addToCart,
         removeFromCart, updateCartQuantity, updateCartNote, clearCart, submitOrder, requestBill, closeTable,
-        moveTable, moveOrderItemsToTable, cancelOrderItemOnServer, processPayment, printReceipt, getTableOrders,
+        moveTable, moveOrderItemsToTable, cancelOrderItemOnServer, processPayment, printReceipt, hasPermission, getTableOrders,
         getTableTotal, getCartTotal, getCartItemCount,
       }}
     >

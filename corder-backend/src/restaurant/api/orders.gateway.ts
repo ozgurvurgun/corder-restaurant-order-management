@@ -5,7 +5,10 @@ import { ConfigService } from '@nestjs/config';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { RestaurantTokenPayload } from '../application/restaurant-auth.service';
+import {
+  RestaurantAuthService,
+  RestaurantTokenPayload,
+} from '../application/restaurant-auth.service';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 import { TableService } from '../application/table.service';
 import { buildCorsOptions } from '../../common/security/cors.config';
@@ -27,6 +30,7 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly authService: RestaurantAuthService,
     private readonly tableService: TableService,
     @InjectRepository(RestaurantEntity)
     private readonly restaurantRepo: Repository<RestaurantEntity>,
@@ -45,23 +49,36 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (
         payload.type !== 'restaurant' ||
         !payload.restaurantId ||
-        (payload.role !== 'root' && payload.role !== 'terminal')
+        (payload.role !== 'root' && payload.role !== 'staff' && payload.role !== 'terminal')
       ) {
         client.disconnect(true);
         return;
       }
+      const requestedRestId =
+        payload.role === 'root' && typeof client.handshake.auth?.restaurantId === 'string'
+          ? client.handshake.auth.restaurantId.trim()
+          : '';
+      const targetRestId = requestedRestId || payload.restaurantId;
+      if (payload.role === 'root') {
+        try {
+          await this.authService.assertBossOwnsRestaurant(payload.sub, targetRestId);
+        } catch {
+          client.disconnect(true);
+          return;
+        }
+      }
       const activeRestaurant = await this.restaurantRepo.findOne({
-        where: { id: payload.restaurantId },
+        where: { id: targetRestId },
         select: { id: true, status: true },
       });
       if (!activeRestaurant || activeRestaurant.status !== 'active') {
         client.disconnect(true);
         return;
       }
-      client.data.restaurantId = payload.restaurantId;
+      client.data.restaurantId = targetRestId;
       client.data.authType = 'jwt';
-      client.join(getRestaurantRoom(payload.restaurantId));
-      const map = await this.tableService.buildSessionPresenceMap(payload.restaurantId);
+      client.join(getRestaurantRoom(targetRestId));
+      const map = await this.tableService.buildSessionPresenceMap(targetRestId);
       client.emit('tables:presence', map);
       return;
     } catch {

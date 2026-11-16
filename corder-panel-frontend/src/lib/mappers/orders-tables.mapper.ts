@@ -4,7 +4,6 @@ import {
   type PanelSection,
   type PanelTable,
   type PanelUser,
-  type PanelUserRole,
 } from "../panel-types"
 import type { OrderDto } from "../api"
 
@@ -128,20 +127,31 @@ export function mapApiStaffToPanelUser(s: {
   name: string
   email: string | null
   role: string
+  roleLabel?: string
+  roleColor?: string
   phone?: string
   isActive: boolean
+  canAccessPanel?: boolean
+  canAccessTerminal?: boolean
+  permissions?: string[]
+  limits?: {
+    maxDiscountPercent: number
+    maxDiscountAmount: number | null
+  }
   createdAt: string
 }): PanelUser {
-  const role: PanelUserRole =
-    s.role === "manager" || s.role === "cashier" || s.role === "waiter"
-      ? s.role
-      : "waiter"
   return {
     id: s.id,
     name: s.name,
     email: s.email ?? undefined,
     phone: s.phone,
-    role,
+    role: s.role || "waiter",
+    roleLabel: s.roleLabel,
+    roleColor: s.roleColor,
+    canAccessPanel: s.canAccessPanel,
+    canAccessTerminal: s.canAccessTerminal,
+    permissions: s.permissions,
+    limits: s.limits,
     active: s.isActive,
     createdAt: new Date(s.createdAt),
   }

@@ -1,4 +1,4 @@
-import { IsString, IsEmail, MinLength } from 'class-validator';
+import { IsString, IsEmail, IsOptional, MinLength } from 'class-validator';
 
 export class RestaurantLoginDto {
   @IsEmail()
@@ -7,4 +7,8 @@ export class RestaurantLoginDto {
   @IsString()
   @MinLength(1)
   password: string;
+
+  @IsOptional()
+  @IsString()
+  restaurantId?: string;
 }
