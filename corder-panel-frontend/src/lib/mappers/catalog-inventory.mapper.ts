@@ -18,11 +18,12 @@ import type {
   StockMovementDto,
   SupplierDto,
 } from "../api"
+import { formatTitleCaseTr } from "../format"
 
 export function mapApiCategoriesToPanel(cats: CategoryDto[]): PanelCategory[] {
   return cats.map((c) => ({
     id: c.id,
-    name: c.name,
+    name: formatTitleCaseTr(c.name),
     slug: c.slug,
     order: c.order,
     parentId: c.parentId?.trim() || undefined,
@@ -60,13 +61,13 @@ export function mapApiProductsToPanel(
       ? p.ingredients.map((row) => ({
           materialId: row.materialId,
           quantity: Number(row.quantity),
-          materialName: matMap.get(row.materialId)?.name ?? "",
+          materialName: formatTitleCaseTr(matMap.get(row.materialId)?.name ?? ""),
           unit: matMap.get(row.materialId)?.unit ?? "adet",
         }))
       : undefined
     return {
       id: p.id,
-      name: p.name,
+      name: formatTitleCaseTr(p.name),
       price: Number(p.price),
       costPrice: p.costPrice != null ? Number(p.costPrice) : undefined,
       categoryId: p.categoryId,
@@ -82,7 +83,7 @@ export function mapApiProductsToPanel(
 export function mapStockMaterialDtoToPanel(m: StockMaterialDto): StockMaterial {
   return {
     id: m.id,
-    name: m.name,
+    name: formatTitleCaseTr(m.name),
     unit: m.unit as StockMaterial["unit"],
     currentStock: Number(m.currentStock),
     minStock: Number(m.minStock),
@@ -96,8 +97,8 @@ export function mapStockMaterialDtoToPanel(m: StockMaterialDto): StockMaterial {
 export function mapSupplierDtoToPanel(s: SupplierDto): Supplier {
   return {
     id: s.id,
-    name: s.name,
-    contactPerson: s.contactPerson ?? undefined,
+    name: formatTitleCaseTr(s.name),
+    contactPerson: s.contactPerson ? formatTitleCaseTr(s.contactPerson) : undefined,
     phone: s.phone ?? undefined,
     email: s.email ?? undefined,
     address: s.address ?? undefined,
@@ -110,7 +111,7 @@ export function mapStockMovementDtoToPanel(mv: StockMovementDto): StockMovement 
   return {
     id: mv.id,
     materialId: mv.materialId,
-    materialName: mv.materialName,
+    materialName: formatTitleCaseTr(mv.materialName),
     type: mv.type,
     quantity: Number(mv.quantity),
     previousStock: Number(mv.previousStock),
@@ -119,7 +120,7 @@ export function mapStockMovementDtoToPanel(mv: StockMovementDto): StockMovement 
     totalCost: mv.totalCost != null ? Number(mv.totalCost) : undefined,
     supplierId: mv.supplierId ?? undefined,
     reason: mv.reason ?? undefined,
-    createdBy: mv.createdBy,
+    createdBy: formatTitleCaseTr(mv.createdBy),
     createdAt: new Date(mv.createdAt),
   }
 }
@@ -128,17 +129,17 @@ export function mapPurchaseOrderDtoToPanel(po: PurchaseOrderDto): PurchaseOrder 
   return {
     id: po.id,
     supplierId: po.supplierId,
-    supplierName: po.supplierName,
+    supplierName: formatTitleCaseTr(po.supplierName),
     items: po.items.map((it) => ({
       materialId: it.materialId,
-      materialName: it.materialName,
+      materialName: formatTitleCaseTr(it.materialName),
       quantity: it.quantity,
       unitCost: it.unitCost,
     })),
     totalAmount: Number(po.totalAmount),
     status: po.status,
     notes: po.notes ?? undefined,
-    createdBy: po.createdBy,
+    createdBy: formatTitleCaseTr(po.createdBy),
     createdAt: new Date(po.createdAt),
     receivedAt: po.receivedAt ? new Date(po.receivedAt) : undefined,
   }
@@ -150,10 +151,10 @@ export function mapInventoryCountDtoToPanel(
   return {
     id: ic.id,
     date: new Date(ic.date),
-    countedBy: ic.countedBy,
+    countedBy: formatTitleCaseTr(ic.countedBy),
     items: ic.items.map((item) => ({
       materialId: item.materialId,
-      materialName: item.materialName,
+      materialName: formatTitleCaseTr(item.materialName),
       expectedStock: item.expectedStock,
       actualStock: item.actualStock,
       difference: item.difference,
@@ -166,7 +167,7 @@ export function mapInventoryCountDtoToPanel(
 export function mapCampaignDtoToPanel(c: CampaignDto): Campaign {
   return {
     id: c.id,
-    title: c.title,
+    title: formatTitleCaseTr(c.title),
     description: c.description ?? undefined,
     image: c.imageUrl,
     discountPercent: c.discountPercent ?? undefined,

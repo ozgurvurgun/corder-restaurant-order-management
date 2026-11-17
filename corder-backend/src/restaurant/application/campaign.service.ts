@@ -6,6 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CampaignEntity } from '../domain/campaign.entity';
+import { normalizeStorageText } from '../../common/text/text-normalizer';
 
 export interface CreateCampaignDto {
   title: string;
@@ -59,7 +60,7 @@ export class CampaignService {
     restaurantId: string,
     dto: CreateCampaignDto,
   ): Promise<CampaignEntity> {
-    const title = dto.title.trim();
+    const title = normalizeStorageText(dto.title);
     const imageUrl = dto.imageUrl.trim();
     if (!title || !imageUrl) {
       throw new BadRequestException('Campaign title and imageUrl are required.');
@@ -104,7 +105,7 @@ export class CampaignService {
     if (!entity) throw new NotFoundException('Campaign not found.');
 
     if (dto.title !== undefined) {
-      const title = dto.title.trim();
+      const title = normalizeStorageText(dto.title);
       if (!title) throw new BadRequestException('Campaign title cannot be empty.');
       entity.title = title;
     }

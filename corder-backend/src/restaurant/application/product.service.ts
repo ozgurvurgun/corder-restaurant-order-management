@@ -12,6 +12,7 @@ import { RecipeStockPolicy } from '../domain/services/recipe-stock.policy';
 import { CreateProductDto } from '../api/dto/create-product.dto';
 import { UpdateProductDto } from '../api/dto/update-product.dto';
 import { ProductIngredientInputDto } from '../api/dto/product-ingredient-input.dto';
+import { normalizeStorageText } from '../../common/text/text-normalizer';
 
 @Injectable()
 export class ProductService {
@@ -119,7 +120,7 @@ export class ProductService {
       where: { id: dto.categoryId, restaurantId },
     });
     if (!cat) throw new NotFoundException('Category not found');
-    const name = dto.name.trim();
+    const name = normalizeStorageText(dto.name);
     if (!name) throw new BadRequestException('Product name cannot be empty');
 
     const entity = new ProductEntity();
@@ -154,7 +155,7 @@ export class ProductService {
       entity.categoryId = dto.categoryId;
     }
     if (dto.name !== undefined) {
-      const name = dto.name.trim();
+      const name = normalizeStorageText(dto.name);
       if (!name) throw new BadRequestException('Product name cannot be empty');
       entity.name = name;
     }

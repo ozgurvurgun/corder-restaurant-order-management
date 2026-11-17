@@ -40,14 +40,15 @@ export function useCatalogActions(params: {
             p.ingredients?.map((i) => ({ materialId: i.materialId, quantity: i.quantity })) ?? undefined,
         })
         .then((created) => {
-          setProducts((prev) => [...prev, mapApiProductsToPanel([created], stockMaterials)[0]])
+          const mapped = mapApiProductsToPanel([created], stockMaterials)[0]
+          setProducts((prev) => [...prev, mapped])
           logActivity({
             action: "product_created",
             category: "product",
-            details: `Ürün eklendi: ${created.name}`,
+            details: `Ürün eklendi: ${mapped.name}`,
             metadata: { productId: created.id, categoryId: created.categoryId, price: created.price },
           })
-          showPanelToast(`Ürün eklendi: ${created.name}`, "success")
+          showPanelToast(`Ürün eklendi: ${mapped.name}`, "success")
         })
         .catch((err) => showPanelToast(err instanceof Error ? err.message : "Ürün eklenemedi", "error"))
     },
@@ -169,14 +170,15 @@ export function useCatalogActions(params: {
           ...(parentId ? { parentId } : {}),
         })
         .then((created) => {
-          setCategories((prev) => [...prev, mapApiCategoriesToPanel([created])[0]])
+          const mapped = mapApiCategoriesToPanel([created])[0]
+          setCategories((prev) => [...prev, mapped])
           logActivity({
             action: "category_created",
             category: "product",
-            details: `Kategori eklendi: ${created.name}`,
+            details: `Kategori eklendi: ${mapped.name}`,
             metadata: { categoryId: created.id, parentId: created.parentId ?? undefined },
           })
-          showPanelToast(`Kategori eklendi: ${created.name}`, "success")
+          showPanelToast(`Kategori eklendi: ${mapped.name}`, "success")
         })
         .catch((err) => showPanelToast(err instanceof Error ? err.message : "Kategori eklenemedi", "error"))
     },

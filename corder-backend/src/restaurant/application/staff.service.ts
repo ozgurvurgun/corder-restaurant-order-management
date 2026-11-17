@@ -21,6 +21,7 @@ import { RolesService } from './roles.service';
 import { StaffSessionService } from './staff-session.service';
 import { CreateStaffDto } from '../api/dto/create-staff.dto';
 import { UpdateStaffDto } from '../api/dto/update-staff.dto';
+import { normalizeStorageText } from '../../common/text/text-normalizer';
 
 const DUMMY_PIN_HASH = bcrypt.hashSync('00000000', 10);
 
@@ -245,7 +246,7 @@ export class StaffService {
       email,
       passwordHash,
       pinHash,
-      name: dto.name.trim(),
+      name: normalizeStorageText(dto.name),
       role: roleEntity?.key ?? roleKey,
       phone: dto.phone?.trim() || null,
       isActive: true,
@@ -303,7 +304,7 @@ export class StaffService {
     this.assertActorCanGrantPolicies(actor, dto);
 
     if (dto.name != null && dto.name.trim()) {
-      staff.name = dto.name.trim();
+      staff.name = normalizeStorageText(dto.name);
     }
     if (dto.role != null && dto.role.trim()) {
       const normalized = normalizeRoleKey(dto.role);

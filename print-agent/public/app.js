@@ -51,6 +51,20 @@ function escapeHtml(str) {
     .replaceAll('"', "&quot;")
 }
 
+function formatTitleCaseTr(input) {
+  if (input === undefined || input === null) return ""
+  const normalized = String(input)
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("tr-TR")
+    .replace(/\u0307/g, "")
+  if (!normalized) return ""
+  return normalized.replace(
+    /(^|[\s\-/(&+.,:;])([a-zA-ZçğıöşüÇĞİÖŞÜ])/gu,
+    (_m, sep, ch) => `${sep}${ch.toLocaleUpperCase("tr-TR")}`,
+  )
+}
+
 function renderAuthGateAndHeader() {
   const isAuth = Boolean(state.settings.authenticated)
   $("loginView").classList.toggle("hidden", isAuth)
@@ -220,7 +234,7 @@ function renderRoutingDropdowns() {
         `<option value="none" ${selectedId === "none" ? "selected" : ""}>-- Bu Bilgisayarda Yazdırma --</option>`,
       ].join("")
       return `<div class="category-row ${cat.isSub ? "sub-category" : ""}">
-        <span class="category-name">${cat.isSub ? "↳ " : ""}${escapeHtml(cat.name)}</span>
+        <span class="category-name">${cat.isSub ? "↳ " : ""}${escapeHtml(formatTitleCaseTr(cat.name))}</span>
         <select class="category-select" data-category-id="${escapeHtml(cat.id)}">${opts}</select>
       </div>`
     })

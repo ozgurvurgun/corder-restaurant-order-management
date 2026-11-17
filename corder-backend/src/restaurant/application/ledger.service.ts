@@ -6,6 +6,7 @@ import { LedgerEntryEntity } from '../domain/ledger-entry.entity';
 import { CashShiftEntity } from '../domain/cash-shift.entity';
 import { CashTransactionEntity } from '../domain/cash-transaction.entity';
 import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
+import { normalizeStorageText } from '../../common/text/text-normalizer';
 import { CreateLedgerCustomerDto } from '../api/dto/create-ledger-customer.dto';
 
 export { CreateLedgerCustomerDto };
@@ -113,7 +114,7 @@ export class LedgerService {
   }
 
   async createCustomer(restaurantId: string, dto: CreateLedgerCustomerDto) {
-    const name = (dto.name || '').trim();
+    const name = normalizeStorageText(dto.name);
     if (!name) throw new BadRequestException('Ledger customer name is required');
     const row = this.customerRepo.create({
       restaurantId,

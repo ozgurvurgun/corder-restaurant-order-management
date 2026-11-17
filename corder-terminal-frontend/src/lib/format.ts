@@ -21,6 +21,21 @@ export function formatCurrency(amount: number): string {
   }).format(safe)
 }
 
+export function formatTitleCaseTr(input: string | null | undefined): string {
+  if (!input) return ""
+  const lower = String(input)
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("tr-TR")
+    .replace(/\u0307/g, "")
+  if (!lower) return ""
+  return lower.replace(
+    /([^\p{L}']|^)(\p{L})/gu,
+    (_match, prefix: string, letter: string) =>
+      `${prefix}${letter.toLocaleUpperCase("tr-TR")}`
+  )
+}
+
 export function resolveImageUrl(url: string | undefined): string | undefined {
   if (!url) return undefined
   const trimmed = url.trim()

@@ -58,6 +58,20 @@ function trSafe(text, asciiOnly = false) {
   return out
 }
 
+function formatTitleCaseTr(input) {
+  if (input === undefined || input === null) return ""
+  const normalized = String(input)
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("tr-TR")
+    .replace(/\u0307/g, "")
+  if (!normalized) return ""
+  return normalized.replace(
+    /(^|[\s\-/(&+.,:;])([a-zA-ZçğıöşüÇĞİÖŞÜ])/gu,
+    (_m, sep, ch) => `${sep}${ch.toLocaleUpperCase("tr-TR")}`,
+  )
+}
+
 function encodeCp857(str, asciiOnly = false) {
   const normalized = trSafe(str, asciiOnly)
   const bytes = new Uint8Array(normalized.length)
@@ -290,7 +304,7 @@ function appendKitchenItemsBlock(chunks, push, items, width, showLineNotes) {
   push(hrLine("-", width))
   for (const item of items || []) {
     chunks.push(BOLD_ON)
-    push(kitchenItemRows(Number(item.quantity || 0), item.productName || item.name || "Ürün", width))
+    push(kitchenItemRows(Number(item.quantity || 0), formatTitleCaseTr(item.productName || item.name) || "Ürün", width))
     chunks.push(BOLD_OFF)
     if (showLineNotes && item.note) {
       const nb = noteBlock(item.note, width, 8)
@@ -333,7 +347,7 @@ function buildKitchenTicket(payload, options = {}) {
   chunks.push(BOLD_ON)
   push(kvLine("Masa", payload.tableName || "-", width))
   chunks.push(BOLD_OFF)
-  push(kvLine("Garson", payload.waiterName || "-", width))
+  push(kvLine("Garson", formatTitleCaseTr(payload.waiterName) || "-", width))
 
   appendKitchenItemsBlock(chunks, push, payload.items, width, options.includeLineNotes !== false)
   if (footerLine) {
@@ -355,7 +369,7 @@ function buildReceipt(payload, options = {}) {
   push(kvLine("Tarih/Saat", formatTicketDate(payload.createdAt), width))
   push(kvLine("Fiş No", orderNumberFromId(payload.jobId), width))
   push(kvLine("Masa", payload.tableName || "-", width))
-  push(kvLine("Garson", payload.waiterName || "-", width))
+  push(kvLine("Garson", formatTitleCaseTr(payload.waiterName) || "-", width))
   if (payload.paymentMethod) {
     push(kvLine("Ödeme Tipi", formatPaymentMethodLabel(payload.paymentMethod), width))
   }
@@ -375,7 +389,7 @@ function buildReceipt(payload, options = {}) {
     const qty = Number(item.quantity || 0)
     const unit = Number(item.price || 0)
     computedSubtotalMinorUnits += toMinorUnits(unit) * qty
-    push(receiptItemRows(qty, unit, item.productName || item.name || "Ürün", width))
+    push(receiptItemRows(qty, unit, formatTitleCaseTr(item.productName || item.name) || "Ürün", width))
     if (showLineNotes && item.note) {
       const nb = noteBlock(item.note, width, noteIndent)
       if (nb) push(nb)
@@ -438,7 +452,7 @@ function buildKitchenCancelTicket(payload, options = {}) {
   chunks.push(BOLD_ON)
   push(kvLine("Masa", payload.tableName || "-", width))
   chunks.push(BOLD_OFF)
-  push(kvLine("İptal Eden", payload.cancelledBy || payload.waiterName || "-", width))
+  push(kvLine("İptal Eden", formatTitleCaseTr(payload.cancelledBy || payload.waiterName) || "-", width))
   push(kvWrappedLines("İptal Nedeni", payload.cancelReason || "-", width))
 
   appendKitchenItemsBlock(chunks, push, payload.items, width, options.includeLineNotes !== false)

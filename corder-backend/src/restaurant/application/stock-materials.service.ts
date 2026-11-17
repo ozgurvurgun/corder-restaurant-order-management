@@ -10,6 +10,7 @@ import { SupplierEntity } from '../domain/supplier.entity';
 import { ProductEntity } from '../domain/product.entity';
 import { CreateStockMaterialDto } from '../api/dto/create-stock-material.dto';
 import { UpdateStockMaterialDto } from '../api/dto/update-stock-material.dto';
+import { normalizeStorageText } from '../../common/text/text-normalizer';
 
 export { CreateStockMaterialDto, UpdateStockMaterialDto };
 
@@ -54,7 +55,7 @@ export class StockMaterialsService {
     );
     const entity = this.repo.create({
       restaurantId,
-      name: dto.name.trim(),
+      name: normalizeStorageText(dto.name),
       unit: dto.unit.trim(),
       currentStock: Number((dto.currentStock ?? 0).toFixed(3)),
       minStock: Number((dto.minStock ?? 0).toFixed(3)),
@@ -68,7 +69,7 @@ export class StockMaterialsService {
   async update(restaurantId: string, id: string, dto: UpdateStockMaterialDto) {
     const entity = await this.repo.findOne({ where: { id, restaurantId } });
     if (!entity) throw new NotFoundException('Stock material not found.');
-    if (dto.name != null) entity.name = dto.name.trim();
+    if (dto.name != null) entity.name = normalizeStorageText(dto.name);
     if (dto.unit != null) entity.unit = dto.unit.trim();
     if (dto.currentStock != null) {
       entity.currentStock = Number(dto.currentStock.toFixed(3));

@@ -43,6 +43,25 @@ export function formatCurrency(amount: number | null | undefined): string {
   }).format(safe)
 }
 
+export function normalizeStorageText(input: string | null | undefined): string {
+  if (!input) return ""
+  return String(input)
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("tr-TR")
+    .replace(/\u0307/g, "")
+}
+
+export function formatTitleCaseTr(input: string | null | undefined): string {
+  const lower = normalizeStorageText(input)
+  if (!lower) return ""
+  return lower.replace(
+    /([^\p{L}']|^)(\p{L})/gu,
+    (_match, prefix: string, letter: string) =>
+      `${prefix}${letter.toLocaleUpperCase("tr-TR")}`,
+  )
+}
+
 export function resolveAssetUrl(url: string | undefined | null): string {
   if (!url) return ""
   const trimmed = url.trim()

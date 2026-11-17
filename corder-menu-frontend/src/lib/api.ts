@@ -131,6 +131,44 @@ export function formatMenuPrice(amount: number): string {
   }).format(major)
 }
 
+export function formatTitleCaseTr(input: string | null | undefined): string {
+  if (!input) return ""
+  const lower = String(input)
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("tr-TR")
+    .replace(/\u0307/g, "")
+  if (!lower) return ""
+  return lower.replace(
+    /([^\p{L}']|^)(\p{L})/gu,
+    (_match, prefix: string, letter: string) =>
+      `${prefix}${letter.toLocaleUpperCase("tr-TR")}`
+  )
+}
+
+function normalizeMenuCategoryTree(cat: MenuCategory): MenuCategory {
+  return {
+    ...cat,
+    name: formatTitleCaseTr(cat.name),
+    products: (cat.products ?? []).map((p) => ({
+      ...p,
+      name: formatTitleCaseTr(p.name),
+    })),
+    children: cat.children ? cat.children.map(normalizeMenuCategoryTree) : undefined,
+  }
+}
+
+function normalizeMenuResponse(data: MenuResponse): MenuResponse {
+  return {
+    ...data,
+    categories: (data.categories ?? []).map(normalizeMenuCategoryTree),
+    campaigns: (data.campaigns ?? []).map((c) => ({
+      ...c,
+      title: formatTitleCaseTr(c.title),
+    })),
+  }
+}
+
 export async function fetchMenu(restaurant: string, options?: { forceRefresh?: boolean }): Promise<MenuResponse> {
   const cleanSlug = restaurant.trim()
   if (!cleanSlug) {
@@ -182,7 +220,8 @@ export async function fetchMenu(restaurant: string, options?: { forceRefresh?: b
       }
       throw new MenuFetchError("Menü yüklenirken bir sorun oluştu.", "network")
     }
-    const data = (await res.json()) as MenuResponse
+    const rawData = (await res.json()) as MenuResponse
+    const data = normalizeMenuResponse(rawData)
     writeCachedMenu(cleanSlug, data)
     return data
   } catch (err) {

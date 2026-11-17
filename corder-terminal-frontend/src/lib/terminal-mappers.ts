@@ -1,5 +1,5 @@
 import type { MenuCategoryTree, OrderDto, RawTableDto } from "./api"
-import { fromMinorUnits, toMinorUnits } from "./format"
+import { formatTitleCaseTr, fromMinorUnits, toMinorUnits } from "./format"
 import type {
   OrderItemStatus,
   OrderStatus,
@@ -40,7 +40,7 @@ export function mapMenuTreeToCategoriesAndProducts(
     nodes.forEach((node, index) => {
       categories.push({
         id: node.id,
-        name: node.name,
+        name: formatTitleCaseTr(node.name),
         productCount: countSubtreeProducts(node),
         parentId,
         sortOrder: index,
@@ -49,7 +49,7 @@ export function mapMenuTreeToCategoriesAndProducts(
       for (const product of node.products) {
         products.push({
           id: product.id,
-          name: product.name,
+          name: formatTitleCaseTr(product.name),
           price: fromMinorUnits(toMinorUnits(product.price)),
           categoryId: node.id,
           description: product.description,
@@ -110,9 +110,10 @@ export function mapOrderDtoToTerminalOrder(
 
   const items: TerminalOrderItem[] = dto.items.map((item) => {
     const cleanPrice = fromMinorUnits(toMinorUnits(item.price))
+    const formattedItemName = formatTitleCaseTr(item.productName)
     const product: TerminalProduct = productsById?.get(item.productId) ?? {
       id: item.productId,
-      name: item.productName,
+      name: formattedItemName,
       price: cleanPrice,
       categoryId: "",
       isAvailable: true,
@@ -121,7 +122,7 @@ export function mapOrderDtoToTerminalOrder(
       id: item.id,
       product: {
         ...product,
-        name: item.productName || product.name,
+        name: formattedItemName || product.name,
         price: cleanPrice,
       },
       quantity: item.quantity,
@@ -138,7 +139,7 @@ export function mapOrderDtoToTerminalOrder(
     tableNumber,
     items,
     waiterId: dto.userId ?? "",
-    waiterName: dto.userName?.trim() || "",
+    waiterName: dto.userName?.trim() ? formatTitleCaseTr(dto.userName) : "",
     createdAt: dto.createdAt,
     updatedAt: dto.updatedAt,
     status: (dto.status as OrderStatus) || "active",
@@ -214,7 +215,7 @@ export function mapTablesWithOrders(
       discount: rawTable.discount ?? null,
       lockedByStaffId: hasActiveLock ? sessionStaffId : undefined,
       lockedByStaffName: hasActiveLock
-        ? rawTable.sessionStaffName?.trim() || "Garson"
+        ? formatTitleCaseTr(rawTable.sessionStaffName?.trim() || "Garson")
         : undefined,
     }
   })

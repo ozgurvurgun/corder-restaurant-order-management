@@ -8,7 +8,7 @@ import {
   getStaffSession, setStaffSession, clearStaffSession,
   setAuthExpiredHandler, setStaffExpiredHandler, type RawTableDto, type OrderDto, type StaffSession,
 } from "./api"
-import { translateApiError } from "./format"
+import { formatTitleCaseTr, translateApiError } from "./format"
 import {
   calculateOrderItemsTotal, mapMenuTreeToCategoriesAndProducts,
   mapOrderDtoToTerminalOrder, mapTablesWithOrders, upsertCartItem,
@@ -22,7 +22,7 @@ function mapSessionToTerminalUser(s: Omit<StaffSession, "expiresAt" | "staffToke
   if (!s) return null
   return {
     id: s.staffId,
-    name: s.name,
+    name: formatTitleCaseTr(s.name),
     role: s.role,
     roleLabel: s.roleLabel,
     permissions: Array.isArray(s.permissions) ? s.permissions : [],
@@ -160,7 +160,9 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       ])
       setRawTables(tablesRes)
       setRawOrders(ordersRes)
-      if (staffUsersRes) setUsers(staffUsersRes)
+      if (staffUsersRes) {
+        setUsers(staffUsersRes.map((u) => ({ ...u, name: formatTitleCaseTr(u.name) })))
+      }
       if (menuRes) {
         const mapped = mapMenuTreeToCategoriesAndProducts(menuRes.categories)
         setCategories(mapped.categories)

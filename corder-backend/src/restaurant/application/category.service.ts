@@ -10,6 +10,7 @@ import { CategoryEntity } from '../domain/category.entity';
 import { CreateCategoryDto } from '../api/dto/create-category.dto';
 import { UpdateCategoryDto } from '../api/dto/update-category.dto';
 import { ReorderCategoriesDto } from '../api/dto/reorder-categories.dto';
+import { normalizeStorageText } from '../../common/text/text-normalizer';
 
 function toSlug(name: string): string {
   const slug = name
@@ -136,7 +137,7 @@ export class CategoryService {
   ): Promise<CategoryEntity> {
     const parentId = dto.parentId?.trim() || null;
     await this.assertParent(restaurantId, parentId);
-    const name = dto.name.trim();
+    const name = normalizeStorageText(dto.name);
     const slug = toSlug(name);
     if (await this.slugInUse(restaurantId, parentId, slug)) {
       throw new ConflictException('Category slug already exists in this group');
@@ -173,7 +174,7 @@ export class CategoryService {
       entity.parentId = raw;
     }
     if (dto.name !== undefined) {
-      entity.name = dto.name.trim();
+      entity.name = normalizeStorageText(dto.name);
       entity.slug = toSlug(entity.name);
     }
     if (dto.showInTerminal !== undefined) {

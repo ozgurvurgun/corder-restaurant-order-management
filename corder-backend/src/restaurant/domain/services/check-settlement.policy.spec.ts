@@ -12,6 +12,7 @@ import {
   computeIstanbulDateBoundaries,
   getIstanbulHour,
 } from './boss-overview.policy';
+import { formatTitleCaseTr, normalizeStorageText } from '../../../common/text/text-normalizer';
 import { CashShiftEntity } from '../cash-shift.entity';
 import { TableEntity } from '../table.entity';
 import { OrderItemEntity } from '../order-item.entity';
@@ -228,6 +229,17 @@ describe('CashShiftEntity & TableEntity & OrderItemEntity', () => {
     shift.recordCashMovement('expense', 40000, true, 'credit-card');
     assert.equal(shift.cashOut, 250);
     assert.equal(shift.transactionCount, 2);
+  });
+
+  it('normalizes Turkish text to lowercase for storage and Title Case for UI', () => {
+    assert.equal(normalizeStorageText('  NARGİLE   MENÜ  '), 'nargile menü');
+    assert.equal(normalizeStorageText('İZMİR   IŞIK'), 'izmir ışık');
+    assert.equal(formatTitleCaseTr('  NARGİLE   MENÜ  '), 'Nargile Menü');
+    assert.equal(formatTitleCaseTr('izmir romantik'), 'İzmir Romantik');
+    assert.equal(formatTitleCaseTr('ırmak'), 'Irmak');
+    assert.equal(formatTitleCaseTr('nargile  + çerez tabağı + çay'), 'Nargile + Çerez Tabağı + Çay');
+    assert.equal(formatTitleCaseTr('marilyn monroe (merlin)'), 'Marilyn Monroe (Merlin)');
+    assert.equal(formatTitleCaseTr('soda/limon'), 'Soda/Limon');
   });
 });
 

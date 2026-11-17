@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { SupplierEntity } from '../domain/supplier.entity';
 import { StockMaterialEntity } from '../domain/stock-material.entity';
+import { normalizeStorageText } from '../../common/text/text-normalizer';
 
 export interface CreateSupplierDto {
   name: string;
@@ -35,8 +36,8 @@ export class SuppliersService {
   create(restaurantId: string, dto: CreateSupplierDto) {
     const entity = this.repo.create({
       restaurantId,
-      name: dto.name.trim(),
-      contactPerson: dto.contactPerson?.trim() || null,
+      name: normalizeStorageText(dto.name),
+      contactPerson: dto.contactPerson ? normalizeStorageText(dto.contactPerson) : null,
       phone: dto.phone?.trim() || null,
       email: dto.email?.trim() || null,
       address: dto.address?.trim() || null,
@@ -49,9 +50,9 @@ export class SuppliersService {
   async update(restaurantId: string, id: string, dto: UpdateSupplierDto) {
     const entity = await this.repo.findOne({ where: { id, restaurantId } });
     if (!entity) throw new NotFoundException('Supplier not found.');
-    if (dto.name != null) entity.name = dto.name.trim();
+    if (dto.name != null) entity.name = normalizeStorageText(dto.name);
     if (dto.contactPerson !== undefined) {
-      entity.contactPerson = dto.contactPerson?.trim() || null;
+      entity.contactPerson = dto.contactPerson ? normalizeStorageText(dto.contactPerson) : null;
     }
     if (dto.phone !== undefined) entity.phone = dto.phone?.trim() || null;
     if (dto.email !== undefined) entity.email = dto.email?.trim() || null;

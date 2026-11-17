@@ -9,6 +9,7 @@ import type {
   RestaurantSettings,
 } from "../panel-types"
 import { api } from "../api"
+import { formatTitleCaseTr } from "../format"
 import { showPanelToast } from "@/components/panel/panel-toast"
 import { genId, getReadNotifIds, saveAppearanceSettings, saveReadNotifIds } from "./panel-local-storage"
 import type { LogActivityFn } from "./panel-store-context"
@@ -38,7 +39,7 @@ function mapStaffDtoToPanelUser(dto: {
 }): PanelUser {
   return {
     id: dto.id,
-    name: dto.name,
+    name: formatTitleCaseTr(dto.name),
     email: dto.email ?? undefined,
     phone: dto.phone,
     role: dto.role,
@@ -135,14 +136,15 @@ export function useSystemActions(params: {
           ...(u.maxDiscountAmountOverride !== undefined ? { maxDiscountAmountOverride: u.maxDiscountAmountOverride } : {}),
         })
         .then((created) => {
-          setUsers((prev) => [...prev, mapStaffDtoToPanelUser(created)])
+          const mapped = mapStaffDtoToPanelUser(created)
+          setUsers((prev) => [...prev, mapped])
           logActivity({
             action: "staff_created",
             category: "user",
-            details: `Kullanıcı eklendi: ${created.name}`,
+            details: `Kullanıcı eklendi: ${mapped.name}`,
             metadata: { userId: created.id, role: created.role },
           })
-          showPanelToast(`Kullanıcı eklendi: ${created.name}`, "success")
+          showPanelToast(`Kullanıcı eklendi: ${mapped.name}`, "success")
         })
         .catch((err) => showPanelToast(err instanceof Error ? err.message : "Kullanıcı eklenemedi", "error"))
     },

@@ -24,6 +24,7 @@ import {
   setStoredBranches,
   type StoredBossUser,
 } from "./api"
+import { formatTitleCaseTr } from "./format"
 import type {
   BossOverviewResponse,
   BranchSummary,
@@ -206,11 +207,31 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
         ])
       setCatalog(catRes)
       setRoles(rolesRes)
-      setStaff(staffRes)
+      setStaff(staffRes.map((s) => ({ ...s, name: formatTitleCaseTr(s.name) })))
       setTables(tablesRes)
-      setOrders(ordersRes)
-      setProducts(productsRes.map((p) => ({ ...p, price: Number(p.price) })))
-      setCategories(categoriesRes)
+      setOrders(
+        ordersRes.map((o) => ({
+          ...o,
+          waiterName: o.waiterName ? formatTitleCaseTr(o.waiterName) : o.waiterName,
+          items: (o.items ?? []).map((it) => ({
+            ...it,
+            productName: formatTitleCaseTr(it.productName),
+          })),
+        }))
+      )
+      setProducts(
+        productsRes.map((p) => ({
+          ...p,
+          name: formatTitleCaseTr(p.name),
+          price: Number(p.price),
+        }))
+      )
+      setCategories(
+        categoriesRes.map((c) => ({
+          ...c,
+          name: formatTitleCaseTr(c.name),
+        }))
+      )
     },
     [effectiveBranchId]
   )
@@ -226,7 +247,16 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
         ])
         setOverview(ovRes)
         setTables(tablesRes)
-        setOrders(ordersRes)
+        setOrders(
+          ordersRes.map((o) => ({
+            ...o,
+            waiterName: o.waiterName ? formatTitleCaseTr(o.waiterName) : o.waiterName,
+            items: (o.items ?? []).map((it) => ({
+              ...it,
+              productName: formatTitleCaseTr(it.productName),
+            })),
+          }))
+        )
       } catch {
         // 401 is handled globally via BOSS_UNAUTHORIZED_EVENT
       }
