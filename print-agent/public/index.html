@@ -302,6 +302,26 @@
     </main>
   </div>
 
+  <!-- Nickname / Rename Modal (Electron-compatible replacement for window.prompt) -->
+  <div id="nicknameModal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <h3 id="nicknameModalTitle" class="modal-title">Yazıcı Takma Adı</h3>
+      <p id="nicknameModalDesc" class="modal-desc">
+        Kategori ve fiş seçim listelerinde bu isim görünür (örn: Mutfak, Kasa, Bar).
+      </p>
+      <form id="formNicknameModal" class="form-stack">
+        <div class="field-group">
+          <label for="inputNicknameModal">Takma Ad</label>
+          <input type="text" id="inputNicknameModal" placeholder="Örn: Mutfak, Kasa" required />
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="btnNicknameCancel">Vazgeç</button>
+          <button type="submit" class="btn btn-primary" id="btnNicknameConfirm">Kaydet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="toastContainer" class="toast-container"></div>
   <script src="/app.js"></script>
 </body>

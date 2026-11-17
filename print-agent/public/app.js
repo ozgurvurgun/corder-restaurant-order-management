@@ -83,6 +83,40 @@ function printerLabel(p) {
   return String(p?.name || p?.systemPrinterName || p?.host || "Yazıcı").trim()
 }
 
+let activeModalResolver = null
+
+function closeNicknameModal(result = null) {
+  const modal = $("nicknameModal")
+  if (modal) modal.classList.add("hidden")
+  if (activeModalResolver) {
+    const resolve = activeModalResolver
+    activeModalResolver = null
+    resolve(result)
+  }
+}
+
+function askNicknameModal(title, defaultValue = "") {
+  const modal = $("nicknameModal")
+  const titleEl = $("nicknameModalTitle")
+  const input = $("inputNicknameModal")
+  if (!modal || !input) {
+    return Promise.resolve(defaultValue || null)
+  }
+  if (activeModalResolver) {
+    closeNicknameModal(null)
+  }
+  if (titleEl) titleEl.textContent = title || "Yazıcı Takma Adı"
+  input.value = defaultValue || ""
+  modal.classList.remove("hidden")
+  setTimeout(() => {
+    input.focus()
+    input.select()
+  }, 20)
+  return new Promise((resolve) => {
+    activeModalResolver = resolve
+  })
+}
+
 function renderPrinters() {
   const printers = state.settings.printers || []
   $("printerCountBadge").textContent = `${printers.length} Yazıcı`
@@ -278,6 +312,34 @@ async function loadState(rerenderAll = false) {
 document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll(".tab-btn").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)))
 
+  const formNickname = $("formNicknameModal")
+  if (formNickname) {
+    formNickname.addEventListener("submit", (e) => {
+      e.preventDefault()
+      const val = ($("inputNicknameModal")?.value || "").trim()
+      if (!val) {
+        showToast("Takma ad boş olamaz", true)
+        return
+      }
+      closeNicknameModal(val)
+    })
+  }
+  const btnNicknameCancel = $("btnNicknameCancel")
+  if (btnNicknameCancel) {
+    btnNicknameCancel.addEventListener("click", () => closeNicknameModal(null))
+  }
+  const nicknameModal = $("nicknameModal")
+  if (nicknameModal) {
+    nicknameModal.addEventListener("click", (e) => {
+      if (e.target === nicknameModal) closeNicknameModal(null)
+    })
+  }
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && activeModalResolver) {
+      closeNicknameModal(null)
+    }
+  })
+
   $("formLogin").addEventListener("submit", async (e) => {
     e.preventDefault()
     const errBox = $("loginErrorBox")
@@ -325,7 +387,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const p = (state.settings.printers || []).find((item) => item.id === id)
       if (!p) return
       const current = printerLabel(p)
-      const next = window.prompt("Takma ad (select listelerinde bu isim görünür)", current)
+      const next = await askNicknameModal("Yazıcı Takma Adını Düzenle", current)
       if (next == null) return
       const name = String(next).trim()
       if (!name) {
@@ -375,8 +437,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const btn = e.target.closest('button[data-action="use-system-printer"]')
     if (!btn) return
     const sysName = btn.dataset.name
-    const nickRaw = window.prompt(
-      "Takma ad (ör. Mutfak, Kasa — selectlerde bu görünür)",
+    const nickRaw = await askNicknameModal(
+      `Yazıcı Ekle (${sysName})`,
       sysName,
     )
     if (nickRaw == null) return
