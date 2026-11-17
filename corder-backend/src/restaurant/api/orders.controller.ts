@@ -135,7 +135,10 @@ export class OrdersController {
     return this.service.moveItemsToTable(restaurantId, {
       fromTableId: dto.fromTableId,
       toTableId: dto.toTableId,
-      items: dto.items,
+      items:
+        dto.items && dto.items.length > 0
+          ? dto.items
+          : (dto.itemIds ?? []).map((itemId) => ({ itemId })),
       userId: user.role === 'terminal' ? actor.actorId : null,
       actorDisplayName: actor.actorName,
     });

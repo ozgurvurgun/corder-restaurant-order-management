@@ -195,6 +195,24 @@ describe('CashShiftEntity & TableEntity & OrderItemEntity', () => {
     assert.equal(item1.status, 'cancelled');
     assert.equal(OrderStatusPolicy.resolveOrderStatus([item1]), 'closed');
   });
+
+  it('supports partial and full takeQuantity for item cancel and table transfer', () => {
+    const item = new OrderItemEntity();
+    item.price = 95;
+    item.quantity = 4;
+    item.status = 'sent';
+
+    const partial = item.takeQuantity(2);
+    assert.deepEqual(partial, { full: false, quantity: 2 });
+    assert.equal(item.quantity, 2);
+
+    assert.throws(() => item.takeQuantity(0));
+    assert.throws(() => item.takeQuantity(3));
+
+    const full = item.takeQuantity(2);
+    assert.deepEqual(full, { full: true, quantity: 2 });
+    assert.equal(item.quantity, 2);
+  });
 });
 
 describe('BossOverviewPolicy (Europe/Istanbul & Minor Units)', () => {

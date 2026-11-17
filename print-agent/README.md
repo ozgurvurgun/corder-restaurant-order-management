@@ -20,5 +20,28 @@ Cross-platform Electron desktop application (Linux, Windows, macOS) for automati
 
 ```bash
 cd print-agent
+npm install
 npm run electron
 ```
+
+## Build installers
+
+Produces runnable packages under `print-agent/release/`:
+
+```bash
+cd print-agent
+npm install
+npm run dist:all
+```
+
+| Platform | Artifacts |
+| --- | --- |
+| Linux | `Corder Print Agent-*-linux-x64.AppImage`, `*.deb` |
+| Windows | `Corder Print Agent-*-win-x64-portable.exe`, `*.zip` |
+
+- **Linux AppImage**: `chmod +x *.AppImage && ./Corder\ Print\ Agent-*-linux-x64.AppImage`
+- **Linux deb**: `sudo dpkg -i *.deb`
+- **Windows portable**: double-click the `*-portable.exe` (no install)
+- **Windows zip**: extract and run `Corder Print Agent.exe`
+
+Single-platform builds: `npm run dist:linux` / `npm run dist:win`.

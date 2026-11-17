@@ -12,9 +12,6 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: corder-backend
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,7 +25,7 @@ jobs:
           node-version: 20
 
       - name: Install backend dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Typecheck backend
         run: pnpm run typecheck

@@ -119,20 +119,28 @@ export function useTableOrderActions(params: {
   )
 
   const moveOrderItems = useCallback(
-    async (fromTableId: string, toTableId: string, itemIds: string[]): Promise<boolean> => {
+    async (
+      fromTableId: string,
+      toTableId: string,
+      itemIds: string[],
+      quantity?: number,
+    ): Promise<boolean> => {
       if (!token || itemIds.length === 0) return false
       try {
         await api.orders.moveItems(token, {
           fromTableId,
           toTableId,
-          items: itemIds.map((itemId) => ({ itemId })),
+          items: itemIds.map((itemId, idx) => ({
+            itemId,
+            ...(idx === 0 && quantity != null ? { quantity } : {}),
+          })),
         })
         await syncOrdersAndTablesFromServer()
         logActivity({
           action: "order_items_moved",
           category: "order",
           details: `${itemIds.length} kalem başka masaya taşındı`,
-          metadata: { fromTableId, toTableId, itemIds },
+          metadata: { fromTableId, toTableId, itemIds, ...(quantity != null ? { quantity } : {}) },
         })
         return true
       } catch (err) {
@@ -329,22 +337,34 @@ export function useTableOrderActions(params: {
   )
 
   const cancelOrderItem = useCallback(
-    async (orderId: string, itemId: string, reason: string): Promise<boolean> => {
+    async (
+      orderId: string,
+      itemId: string,
+      reason: string,
+      quantity?: number,
+    ): Promise<boolean> => {
       const order = orders.find((o) => o.id === orderId)
       const item = order?.items.find((i) => i.id === itemId)
       const trimmedReason = reason.trim()
       if (!order || !item || !token || !trimmedReason) return false
+      const effectiveQty =
+        quantity != null ? Math.min(Math.max(1, Math.floor(quantity)), item.quantity) : item.quantity
       try {
-        await api.orders.cancelItem(token, { itemId, reason: trimmedReason })
+        await api.orders.cancelItem(token, {
+          itemId,
+          reason: trimmedReason,
+          ...(quantity != null ? { quantity: effectiveQty } : {}),
+        })
       } catch (err) {
         showPanelToast(err instanceof Error ? err.message : "Ürün iptal edilemedi", "error")
         return false
       }
       const table = tables.find((t) => t.id === order.tableId)
       const cancelled: CancelledItem = {
-        id: `ci-${item.id}`,
+        id: `ci-${item.id}-${Date.now()}`,
         orderItem: {
           ...item,
+          quantity: effectiveQty,
           status: "cancelled",
           cancelReason: trimmedReason,
           cancelledBy: currentUser?.name,
@@ -361,8 +381,8 @@ export function useTableOrderActions(params: {
       logActivity({
         action: "order_item_cancelled",
         category: "order",
-        details: `${table?.name || "Masa"} - ${item.productName} iptal edildi (${trimmedReason})`,
-        metadata: { orderId, itemId, tableId: order.tableId, quantity: item.quantity, price: item.price, reason: trimmedReason },
+        details: `${table?.name || "Masa"} - ${item.productName} (${effectiveQty} adet) iptal edildi (${trimmedReason})`,
+        metadata: { orderId, itemId, tableId: order.tableId, quantity: effectiveQty, price: item.price, reason: trimmedReason },
       })
       return true
     },

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { X, ArrowRightLeft, Merge, Loader2 } from "lucide-react"
+import { X, ArrowRightLeft, Merge, Loader2, Minus, Plus } from "lucide-react"
 import { usePanelStore } from "@/lib/panel-store"
 import { usePanelToast } from "./panel-toast"
 import { formatCurrency } from "@/lib/format"
@@ -8,17 +8,27 @@ interface Props {
   sourceTableId: string
   itemIds: string[]
   productHint?: string
+  maxQuantity?: number
   onClose: () => void
 }
 
-export default function MoveOrderItemModal({ sourceTableId, itemIds, productHint, onClose }: Props) {
+export default function MoveOrderItemModal({
+  sourceTableId,
+  itemIds,
+  productHint,
+  maxQuantity = 1,
+  onClose,
+}: Props) {
   const { tables, sections, moveOrderItems } = usePanelStore()
   const { showToast } = usePanelToast()
+  const safeMax = Math.max(1, Math.floor(maxQuantity) || 1)
+  const [moveQuantity, setMoveQuantity] = useState(safeMax)
   const [selectedSection, setSelectedSection] = useState<string>("all")
   const [selectedTable, setSelectedTable] = useState<string | null>(null)
   const [showConfirm, setShowConfirm] = useState(false)
   const [moving, setMoving] = useState(false)
   const movingRef = useRef(false)
+  const qty = Math.min(Math.max(1, moveQuantity), safeMax)
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -52,10 +62,12 @@ export default function MoveOrderItemModal({ sourceTableId, itemIds, productHint
     movingRef.current = true
     setMoving(true)
     try {
-      const ok = await moveOrderItems(sourceTableId, selectedTable, itemIds)
+      const ok = await moveOrderItems(sourceTableId, selectedTable, itemIds, qty)
       if (!ok) return
       showToast(
-        `${productHint ? `"${productHint}" ` : ""}${targetTable?.name} masasında yeni adisyon olarak açıldı`,
+        qty < safeMax
+          ? `${productHint ? `"${productHint}" (${qty} adet) ` : ""}${targetTable?.name} masasında yeni adisyon olarak açıldı`
+          : `${productHint ? `"${productHint}" ` : ""}${targetTable?.name} masasında yeni adisyon olarak açıldı`,
         "success",
       )
       setShowConfirm(false)
@@ -83,6 +95,37 @@ export default function MoveOrderItemModal({ sourceTableId, itemIds, productHint
         </div>
 
         <div className="p-5 space-y-4 max-h-[min(70vh,520px)] overflow-auto">
+          {safeMax > 1 && itemIds.length === 1 && (
+            <div>
+              <p className="text-[12px] font-medium text-[#86868b] uppercase tracking-wide mb-2">
+                Taşınacak Adet
+              </p>
+              <div className="flex items-center justify-between rounded-xl border border-[#e5e5ea] px-3 py-2">
+                <button
+                  type="button"
+                  disabled={moving || qty <= 1}
+                  onClick={() => setMoveQuantity((q) => Math.max(1, q - 1))}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f5f5f7] hover:bg-[#e8e8ed] disabled:opacity-40"
+                  aria-label="Azalt"
+                >
+                  <Minus className="h-4 w-4 text-[#1d1d1f]" />
+                </button>
+                <div className="text-center">
+                  <p className="text-[18px] font-bold tabular-nums text-[#1d1d1f]">{qty}</p>
+                  <p className="text-[11px] text-[#86868b]">/ {safeMax} adet</p>
+                </div>
+                <button
+                  type="button"
+                  disabled={moving || qty >= safeMax}
+                  onClick={() => setMoveQuantity((q) => Math.min(safeMax, q + 1))}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f5f5f7] hover:bg-[#e8e8ed] disabled:opacity-40"
+                  aria-label="Artır"
+                >
+                  <Plus className="h-4 w-4 text-[#1d1d1f]" />
+                </button>
+              </div>
+            </div>
+          )}
           <div className="flex gap-2 overflow-x-auto pb-1">
             <button
               type="button"
@@ -202,7 +245,9 @@ export default function MoveOrderItemModal({ sourceTableId, itemIds, productHint
               <p className="text-[14px] text-[#86868b]">
                 {productHint ? (
                   <>
-                    <span className="font-medium text-[#1d1d1f]">{productHint}</span>
+                    <span className="font-medium text-[#1d1d1f]">
+                      {safeMax > 1 ? `${productHint} (${qty}/${safeMax} adet)` : productHint}
+                    </span>
                     {" "}
                   </>
                 ) : null}

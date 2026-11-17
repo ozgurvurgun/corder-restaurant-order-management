@@ -1,8 +1,10 @@
 {
   "name": "corder-print-agent",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Corder Desktop Print Agent & Control Center (Linux, Windows, macOS)",
+  "author": "Corder <dev@corders.uk>",
+  "homepage": "https://corders.uk",
   "engines": {
     "node": ">=18"
   },
@@ -13,12 +15,59 @@
     "electron": "node electron/main.js",
     "headless": "node src/index.js",
     "ui": "node src/index.js --open",
-    "dev": "node --watch src/index.js"
+    "dev": "node --watch src/index.js",
+    "dist": "electron-builder --publish never",
+    "dist:linux": "electron-builder --linux AppImage deb --x64 --publish never",
+    "dist:win": "electron-builder --win portable zip --x64 --publish never",
+    "dist:all": "electron-builder --linux AppImage deb --win portable zip --x64 --publish never"
   },
   "dependencies": {
     "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
-    "electron": "^41.7.1"
+    "electron": "^41.7.1",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "uk.corders.print-agent",
+    "productName": "Corder Print Agent",
+    "copyright": "Copyright © Corder",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "src/**/*",
+      "public/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Office",
+      "executableName": "corder-print-agent",
+      "maintainer": "Corder <dev@corders.uk>",
+      "vendor": "Corder",
+      "artifactName": "${productName}-${version}-linux-${arch}.${ext}",
+      "synopsis": "Kitchen and receipt print agent for Corder POS",
+      "description": "Desktop print agent that routes kitchen tickets and receipts to USB/CUPS/network thermal printers."
+    },
+    "deb": {
+      "packageCategory": "utils"
+    },
+    "win": {
+      "target": [
+        "portable",
+        "zip"
+      ],
+      "artifactName": "${productName}-${version}-win-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-win-${arch}-portable.${ext}"
+    }
   }
 }

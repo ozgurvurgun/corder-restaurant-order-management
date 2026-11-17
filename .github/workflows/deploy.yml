@@ -31,7 +31,7 @@ jobs:
           node-version: 20
 
       - name: Install backend dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Typecheck backend
         run: pnpm run typecheck

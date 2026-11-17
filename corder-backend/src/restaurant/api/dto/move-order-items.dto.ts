@@ -19,9 +19,17 @@ export class MoveOrderItemsDto {
   @IsUUID()
   toTableId!: string;
 
+  @IsOptional()
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => MoveOrderItemLineDto)
-  items!: MoveOrderItemLineDto[];
+  items?: MoveOrderItemLineDto[];
+
+  /** Legacy full-line selection fallback for backwards compatibility. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsUUID(undefined, { each: true })
+  itemIds?: string[];
 }

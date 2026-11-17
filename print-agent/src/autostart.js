@@ -18,10 +18,17 @@ function getMacLaunchAgentFile() {
   return path.join(os.homedir(), "Library", "LaunchAgents", "com.corder.print-agent.plist")
 }
 
+function resolveAppRoot(electronApp = null) {
+  if (electronApp && electronApp.isPackaged) {
+    return path.dirname(process.execPath)
+  }
+  return APP_ROOT
+}
+
 function resolveLaunchCommand(electronApp = null) {
   if (electronApp && electronApp.isPackaged) {
     const args = process.platform === "linux" ? ["--no-sandbox"] : []
-    return { binary: process.execPath, args }
+    return { binary: process.execPath, args, cwd: resolveAppRoot(electronApp) }
   }
   const electronBin = path.join(
     APP_ROOT,
@@ -32,9 +39,9 @@ function resolveLaunchCommand(electronApp = null) {
   )
   if (fs.existsSync(electronBin)) {
     const args = process.platform === "linux" ? ["--no-sandbox", MAIN_ENTRY] : [MAIN_ENTRY]
-    return { binary: electronBin, args }
+    return { binary: electronBin, args, cwd: APP_ROOT }
   }
-  return { binary: process.execPath, args: [MAIN_ENTRY] }
+  return { binary: process.execPath, args: [MAIN_ENTRY], cwd: APP_ROOT }
 }
 
 function configureLinuxAutostart(enabled, electronApp = null) {
@@ -44,7 +51,7 @@ function configureLinuxAutostart(enabled, electronApp = null) {
       if (fs.existsSync(desktopFile)) fs.unlinkSync(desktopFile)
       return true
     }
-    const { binary, args } = resolveLaunchCommand(electronApp)
+    const { binary, args, cwd } = resolveLaunchCommand(electronApp)
     const execLine = [binary, ...args].map((part) => `"${part}"`).join(" ")
     const content = [
       "[Desktop Entry]",
@@ -53,7 +60,7 @@ function configureLinuxAutostart(enabled, electronApp = null) {
       "Name=Corder Print Agent",
       "Comment=Corder Print Agent automatic thermal ticket service",
       `Exec=${execLine}`,
-      `Path=${APP_ROOT}`,
+      `Path=${cwd || APP_ROOT}`,
       "Terminal=false",
       "StartupNotify=false",
       "X-GNOME-Autostart-enabled=true",
@@ -74,7 +81,7 @@ function configureMacAutostart(enabled, electronApp = null) {
       if (fs.existsSync(plistFile)) fs.unlinkSync(plistFile)
       return true
     }
-    const { binary, args } = resolveLaunchCommand(electronApp)
+    const { binary, args, cwd } = resolveLaunchCommand(electronApp)
     const escXml = (s) =>
       String(s)
         .replaceAll("&", "&amp;")
@@ -93,7 +100,7 @@ function configureMacAutostart(enabled, electronApp = null) {
       programArgs,
       "  </array>",
       "  <key>WorkingDirectory</key>",
-      `  <string>${escXml(APP_ROOT)}</string>`,
+      `  <string>${escXml(cwd || APP_ROOT)}</string>`,
       "  <key>RunAtLoad</key>",
       "  <true/>",
       "</dict>",

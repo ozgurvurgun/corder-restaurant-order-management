@@ -103,6 +103,7 @@ export interface PanelStore {
     fromTableId: string,
     toTableId: string,
     itemIds: string[],
+    quantity?: number,
   ) => Promise<boolean>
 
   // Payment & close
@@ -139,7 +140,12 @@ export interface PanelStore {
   ) => Promise<{ ok: boolean; error?: string }>
 
   // Cancel & Ledger
-  cancelOrderItem: (orderId: string, itemId: string, reason: string) => Promise<boolean>
+  cancelOrderItem: (
+    orderId: string,
+    itemId: string,
+    reason: string,
+    quantity?: number,
+  ) => Promise<boolean>
   assignItemsToLedger: (
     lines: { itemId: string; quantity?: number }[],
     ledgerCustomerId: string,

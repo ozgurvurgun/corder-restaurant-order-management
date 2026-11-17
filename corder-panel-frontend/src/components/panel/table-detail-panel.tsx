@@ -48,11 +48,13 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
     orderId: string
     itemId: string
     itemName: string
+    maxQuantity: number
   } | null>(null)
   const [cancelItem, setCancelItem] = useState<{
     orderId: string
     itemId: string
     itemName: string
+    maxQuantity: number
   } | null>(null)
   const [assignLedger, setAssignLedger] = useState<AssignLedgerTarget | null>(null)
   const [revertLedgerItemId, setRevertLedgerItemId] = useState<string | null>(null); useEffect(() => {
@@ -323,13 +325,13 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
                       {showActions && (
                         <div className="mt-1 flex flex-wrap gap-2">
                           {canMoveItems && (
-                            <button type="button" onClick={() => setMoveItem({ orderId: activeOrder.id, itemId: item.id, itemName: item.productName, }) } className="text-[11px] text-[#007aff] hover:text-[#0051d5] font-medium inline-flex items-center gap-0.5"><CornerUpRight className="w-3 h-3" /> Başka masaya </button>
+                            <button type="button" onClick={() => setMoveItem({ orderId: activeOrder.id, itemId: item.id, itemName: item.productName, maxQuantity: item.quantity }) } className="text-[11px] text-[#007aff] hover:text-[#0051d5] font-medium inline-flex items-center gap-0.5"><CornerUpRight className="w-3 h-3" /> Başka masaya </button>
                           )}
                           {token && canAssignLedger && (
                             <button type="button" onClick={() => setAssignLedger({ orderId: activeOrder.id, itemId: item.id, itemName: item.productName, unitPrice: item.price, maxQty: item.quantity, }) } className="text-[11px] text-amber-700 hover:text-amber-800 font-medium inline-flex items-center gap-0.5"><BookUser className="w-3 h-3" /> Cariye at </button>
                           )}
                           {canCancelItem && (
-                            <button type="button" onClick={() => setCancelItem({ orderId: activeOrder.id, itemId: item.id, itemName: item.productName, }) } className="text-[11px] text-red-500 hover:text-red-600 font-medium"> İptal Et </button>
+                            <button type="button" onClick={() => setCancelItem({ orderId: activeOrder.id, itemId: item.id, itemName: item.productName, maxQuantity: item.quantity }) } className="text-[11px] text-red-500 hover:text-red-600 font-medium"> İptal Et </button>
                           )}
                         </div>
                       )}
@@ -459,10 +461,10 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
         <MoveTableModal tableId={tableId} onClose={() => setShowMoveTable(false)} />
       )}
       {moveItem && (
-        <MoveOrderItemModal sourceTableId={tableId} itemIds={[moveItem.itemId]} productHint={moveItem.itemName} onClose={() => setMoveItem(null)} />
+        <MoveOrderItemModal sourceTableId={tableId} itemIds={[moveItem.itemId]} productHint={moveItem.itemName} maxQuantity={moveItem.maxQuantity} onClose={() => setMoveItem(null)} />
       )}
       {cancelItem && (
-        <OrderCancelModal orderId={cancelItem.orderId} itemId={cancelItem.itemId} itemName={cancelItem.itemName} onClose={() => setCancelItem(null)} />
+        <OrderCancelModal orderId={cancelItem.orderId} itemId={cancelItem.itemId} itemName={cancelItem.itemName} maxQuantity={cancelItem.maxQuantity} onClose={() => setCancelItem(null)} />
       )}
       {assignLedger && (
         <TableLedgerModal
