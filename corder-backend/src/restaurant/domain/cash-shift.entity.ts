@@ -147,10 +147,17 @@ export class CashShiftEntity {
     this.transactionCount = (this.transactionCount ?? 0) + 1;
   }
 
-  recordCashMovement(type: string, amountMinorUnits: number, incrementCount = true): void {
+  recordCashMovement(
+    type: string,
+    amountMinorUnits: number,
+    incrementCount = true,
+    reference?: string | null,
+  ): void {
+    const normalizedRef = (reference ?? '').trim().toLowerCase();
+    const isCardExpense = type === 'expense' && normalizedRef === 'credit-card';
     if (type === 'cash-in' || type === 'sale') {
       this.cashIn = fromMinorUnits(toMinorUnits(this.cashIn) + amountMinorUnits);
-    } else {
+    } else if (!isCardExpense) {
       this.cashOut = fromMinorUnits(toMinorUnits(this.cashOut) + amountMinorUnits);
     }
     if (incrementCount) {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { AlertTriangle, Loader2, X } from "lucide-react"
+import { AlertTriangle, Banknote, CreditCard, Loader2, X } from "lucide-react"
 import type { CashShift } from "@/lib/panel-types"
 import { formatCurrency, fromMinorUnits, toMinorUnits } from "@/lib/format"
 
@@ -284,6 +284,8 @@ export function CloseShiftModal(props: {
 export function AddCashTransactionModal(props: {
   txType: "expense" | "cash-in" | "cash-out"
   setTxType: (v: "expense" | "cash-in" | "cash-out") => void
+  expenseMethod?: "cash" | "credit-card"
+  setExpenseMethod?: (v: "cash" | "credit-card") => void
   txAmount: string
   setTxAmount: (v: string) => void
   txDesc: string
@@ -296,6 +298,8 @@ export function AddCashTransactionModal(props: {
   const {
     txType,
     setTxType,
+    expenseMethod = "cash",
+    setExpenseMethod,
     txAmount,
     setTxAmount,
     txDesc,
@@ -383,6 +387,46 @@ export function AddCashTransactionModal(props: {
               </button>
             ))}
           </div>
+          {txType === "expense" && setExpenseMethod && (
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wide block">
+                Ödeme Yöntemi
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => setExpenseMethod("cash")}
+                  className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border text-[12px] font-medium transition-colors ${
+                    expenseMethod === "cash"
+                      ? "border-[#e63462] bg-[#e63462]/5 text-[#e63462]"
+                      : "border-[#d1d1d6]/60 text-[#86868b] hover:bg-[#f5f5f7]"
+                  }`}
+                >
+                  <Banknote className="w-3.5 h-3.5" />
+                  Nakit (Kasadan)
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => setExpenseMethod("credit-card")}
+                  className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border text-[12px] font-medium transition-colors ${
+                    expenseMethod === "credit-card"
+                      ? "border-[#007aff] bg-[#007aff]/5 text-[#007aff]"
+                      : "border-[#d1d1d6]/60 text-[#86868b] hover:bg-[#f5f5f7]"
+                  }`}
+                >
+                  <CreditCard className="w-3.5 h-3.5" />
+                  Kredi Kartı
+                </button>
+              </div>
+              <p className="text-[11px] text-[#86868b]">
+                {expenseMethod === "credit-card"
+                  ? "Kredi kartı ile yapılan giderler kasadaki fiziksel nakit bakiyesinden düşülmez."
+                  : "Nakit giderler kasadaki fiziksel nakit bakiyesinden (Beklenen Kasa) düşülür."}
+              </p>
+            </div>
+          )}
           <input
             type="number"
             min={0.01}

@@ -55,7 +55,7 @@ export class CashTransactionsService {
       });
       const savedTx = await em.save(CashTransactionEntity, tx);
 
-      shift.recordCashMovement(dto.type, amountMinorUnits);
+      shift.recordCashMovement(dto.type, amountMinorUnits, true, dto.reference);
       const savedShift = await em.save(CashShiftEntity, shift);
 
       return { transaction: savedTx, shift: savedShift };

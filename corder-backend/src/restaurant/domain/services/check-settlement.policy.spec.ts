@@ -213,6 +213,22 @@ describe('CashShiftEntity & TableEntity & OrderItemEntity', () => {
     assert.deepEqual(full, { full: true, quantity: 2 });
     assert.equal(item.quantity, 2);
   });
+
+  it('deducts cashOut for cash expenses but not for credit-card expenses', () => {
+    const shift = new CashShiftEntity();
+    shift.openingBalance = 1000;
+    shift.cashIn = 0;
+    shift.cashOut = 0;
+    shift.transactionCount = 0;
+
+    shift.recordCashMovement('expense', 25000, true, 'cash');
+    assert.equal(shift.cashOut, 250);
+    assert.equal(shift.transactionCount, 1);
+
+    shift.recordCashMovement('expense', 40000, true, 'credit-card');
+    assert.equal(shift.cashOut, 250);
+    assert.equal(shift.transactionCount, 2);
+  });
 });
 
 describe('BossOverviewPolicy (Europe/Istanbul & Minor Units)', () => {

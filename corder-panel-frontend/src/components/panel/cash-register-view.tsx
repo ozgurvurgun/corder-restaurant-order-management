@@ -90,6 +90,9 @@ export default function CashRegisterView() {
   const [txType, setTxType] = useState<"expense" | "cash-in" | "cash-out">(
     "expense",
   )
+  const [expenseMethod, setExpenseMethod] = useState<"cash" | "credit-card">(
+    "cash",
+  )
   const [txAmount, setTxAmount] = useState("")
   const [txDesc, setTxDesc] = useState("")
   const [shiftError, setShiftError] = useState("")
@@ -272,9 +275,10 @@ export default function CashRegisterView() {
       type: txType,
       amount,
       description: txDesc.trim(),
+      ...(txType === "expense" ? { reference: expenseMethod } : {}),
       createdBy: currentUser?.name || "Sistem",
     }); if (ok) {
-      setTxAmount(""); setTxDesc(""); setShowAddTransaction(false)
+      setTxAmount(""); setTxDesc(""); setExpenseMethod("cash"); setShowAddTransaction(false)
     }
   }
 
@@ -468,6 +472,8 @@ export default function CashRegisterView() {
         <AddCashTransactionModal
           txType={txType}
           setTxType={setTxType}
+          expenseMethod={expenseMethod}
+          setExpenseMethod={setExpenseMethod}
           txAmount={txAmount}
           setTxAmount={setTxAmount}
           txDesc={txDesc}

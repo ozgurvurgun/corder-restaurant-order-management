@@ -279,9 +279,22 @@ export function ShiftOverviewSection(props: {
                     )}
                   </div>
                   <div>
-                    <p className="text-[12px] font-medium text-[#1d1d1f]">
-                      {tx.description}
-                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-[12px] font-medium text-[#1d1d1f]">
+                        {tx.description}
+                      </p>
+                      {tx.type === "expense" && (
+                        <span
+                          className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                            tx.reference === "credit-card"
+                              ? "bg-blue-50 text-blue-600"
+                              : "bg-amber-50 text-amber-700"
+                          }`}
+                        >
+                          {tx.reference === "credit-card" ? "Kredi Kartı" : "Nakit"}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[10px] text-[#86868b]">
                       {formatIstanbulTime(tx.createdAt)} - {tx.createdBy}
                     </p>
@@ -370,7 +383,9 @@ export function CashTransactionsSection(props: {
                   {tx.type === "sale"
                     ? "Satış"
                     : tx.type === "expense"
-                      ? "Gider"
+                      ? tx.reference === "credit-card"
+                        ? "Gider · Kart"
+                        : "Gider · Nakit"
                       : tx.type === "cash-in"
                         ? "Giriş"
                         : tx.type === "cash-out"
