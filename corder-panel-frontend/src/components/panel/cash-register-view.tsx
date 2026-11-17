@@ -52,12 +52,21 @@ export default function CashRegisterView() {
   const { token } = usePanelAuth()
 
   const isBoss = currentUser?.role === "root"
+  const canViewCashTotals =
+    isBoss || hasPermission("cash.view", "reports.view_financial")
   const canOpenShift = isBoss || hasPermission("cash.shift_open")
   const canCloseShift = isBoss || hasPermission("cash.shift_close")
   const canTxIn = isBoss || hasPermission("cash.transaction_in")
   const canTxOut = isBoss || hasPermission("cash.transaction_out")
   const canViewHistory =
     isBoss || hasPermission("cash.view_history", "reports.view_financial")
+  const canViewLedger =
+    isBoss ||
+    hasPermission(
+      "ledger.view",
+      "ledger.manage_customers",
+      "ledger.collect_payment",
+    )
   const canManageLedger = isBoss || hasPermission("ledger.manage_customers")
   const canCollectLedger = isBoss || hasPermission("ledger.collect_payment")
 
@@ -277,12 +286,23 @@ export default function CashRegisterView() {
         : `Cariler (${(ledgerTabCustomers ?? []).length})`
     return [
       { id: "overview" as const, label: "Kasa Özeti" },
-      { id: "transactions" as const, label: "İşlemler" },
-      { id: "ledger" as const, label: ledgerLabel },
-      { id: "z-report" as const, label: "X / Z Raporu" },
-      { id: "detail-report" as const, label: "Detay Raporu" },
+      ...(canViewCashTotals || canTxIn || canTxOut
+        ? [{ id: "transactions" as const, label: "İşlemler" }]
+        : []),
+      ...(canViewLedger ? [{ id: "ledger" as const, label: ledgerLabel }] : []),
+      ...(canViewHistory
+        ? [
+            { id: "z-report" as const, label: "X / Z Raporu" },
+            { id: "detail-report" as const, label: "Detay Raporu" },
+          ]
+        : []),
     ]
   }, [
+    canTxIn,
+    canTxOut,
+    canViewCashTotals,
+    canViewHistory,
+    canViewLedger,
     ledgerBounds,
     ledgerTabLoading,
     ledgerTabCustomers,
@@ -358,8 +378,8 @@ export default function CashRegisterView() {
             </>
           )}
           <span className="text-[11px] text-[#86868b] ml-2">
-            {filteredClosedTables.length} sipariş | {"\u20BA"}
-            {formatCurrency(filteredNetTotal)}
+            {filteredClosedTables.length} sipariş
+            {canViewCashTotals ? ` | \u20BA${formatCurrency(filteredNetTotal)}` : ""}
           </span>
         </div>
       </div>
@@ -384,6 +404,7 @@ export default function CashRegisterView() {
               shiftTotals={shiftTotals}
               shiftTransactions={shiftTransactions}
               closedShifts={closedShifts}
+              canViewCashTotals={canViewCashTotals}
               canOpenShift={canOpenShift}
               canTxIn={canTxIn}
               canTxOut={canTxOut}

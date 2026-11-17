@@ -24,6 +24,7 @@ export function ShiftOverviewSection(props: {
   shiftTotals: ShiftTotalsSummary
   shiftTransactions: CashTransaction[]
   closedShifts: CashShift[]
+  canViewCashTotals?: boolean
   canOpenShift?: boolean
   canTxIn?: boolean
   canTxOut?: boolean
@@ -36,6 +37,7 @@ export function ShiftOverviewSection(props: {
     shiftTotals,
     shiftTransactions,
     closedShifts,
+    canViewCashTotals = true,
     canOpenShift = true,
     canTxIn = true,
     canTxOut = true,
@@ -105,64 +107,66 @@ export function ShiftOverviewSection(props: {
 
   return (
     <>
-      <div className="grid grid-cols-4 gap-3">
-        {[
-          {
-            label: "Toplam Ciro",
-            value: shiftTotals.totalRevenue,
-            icon: DollarSign,
-            color: "#34c759",
-          },
-          {
-            label: "Nakit",
-            value: shiftTotals.totalCash,
-            icon: Banknote,
-            color: "#007aff",
-          },
-          {
-            label: "Kredi Kartı",
-            value: shiftTotals.totalCard,
-            icon: CreditCard,
-            color: "#ff9500",
-          },
-          {
-            label: "Yemek Kartı",
-            value: fromMinorUnits(
-              toMinorUnits(shiftTotals.totalMealCard) +
-                toMinorUnits(shiftTotals.totalMultinet),
-            ),
-            icon: UtensilsCrossed,
-            color: "#af52de",
-          },
-        ].map((card) => {
-          const Icon = card.icon
-          return (
-            <div
-              key={card.label}
-              className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4"
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <div
-                  className="w-7 h-7 rounded-lg flex items-center justify-center"
-                  style={{ backgroundColor: `${card.color}15` }}
-                >
-                  <Icon
-                    className="w-3.5 h-3.5"
-                    style={{ color: card.color }}
-                  />
+      {canViewCashTotals && (
+        <div className="grid grid-cols-4 gap-3">
+          {[
+            {
+              label: "Toplam Ciro",
+              value: shiftTotals.totalRevenue,
+              icon: DollarSign,
+              color: "#34c759",
+            },
+            {
+              label: "Nakit",
+              value: shiftTotals.totalCash,
+              icon: Banknote,
+              color: "#007aff",
+            },
+            {
+              label: "Kredi Kartı",
+              value: shiftTotals.totalCard,
+              icon: CreditCard,
+              color: "#ff9500",
+            },
+            {
+              label: "Yemek Kartı",
+              value: fromMinorUnits(
+                toMinorUnits(shiftTotals.totalMealCard) +
+                  toMinorUnits(shiftTotals.totalMultinet),
+              ),
+              icon: UtensilsCrossed,
+              color: "#af52de",
+            },
+          ].map((card) => {
+            const Icon = card.icon
+            return (
+              <div
+                key={card.label}
+                className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <div
+                    className="w-7 h-7 rounded-lg flex items-center justify-center"
+                    style={{ backgroundColor: `${card.color}15` }}
+                  >
+                    <Icon
+                      className="w-3.5 h-3.5"
+                      style={{ color: card.color }}
+                    />
+                  </div>
+                  <span className="text-[11px] text-[#86868b] font-medium">
+                    {card.label}
+                  </span>
                 </div>
-                <span className="text-[11px] text-[#86868b] font-medium">
-                  {card.label}
-                </span>
+                <p className="text-[20px] font-bold text-[#1d1d1f]">
+                  {"\u20BA"}
+                  {formatCurrency(card.value)}
+                </p>
               </div>
-              <p className="text-[20px] font-bold text-[#1d1d1f]">
-                {"\u20BA"}
-                {formatCurrency(card.value)}
-              </p>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4">
         <h3 className="text-[13px] font-semibold text-[#1d1d1f] mb-3">
@@ -188,27 +192,31 @@ export function ShiftOverviewSection(props: {
               {formatCurrency(currentShift.openingBalance)}
             </span>
           </div>
-          <div>
-            <span className="text-[#86868b]">Nakit Giriş: </span>
-            <span className="text-green-600 font-medium">
-              +{"\u20BA"}
-              {formatCurrency(currentShift.cashIn)}
-            </span>
-          </div>
-          <div>
-            <span className="text-[#86868b]">Nakit Çıkış: </span>
-            <span className="text-red-500 font-medium">
-              -{"\u20BA"}
-              {formatCurrency(currentShift.cashOut)}
-            </span>
-          </div>
-          <div>
-            <span className="text-[#86868b]">Beklenen Kasa: </span>
-            <span className="text-[#1d1d1f] font-bold">
-              {"\u20BA"}
-              {formatCurrency(expectedCash)}
-            </span>
-          </div>
+          {canViewCashTotals && (
+            <>
+              <div>
+                <span className="text-[#86868b]">Nakit Giriş: </span>
+                <span className="text-green-600 font-medium">
+                  +{"\u20BA"}
+                  {formatCurrency(currentShift.cashIn)}
+                </span>
+              </div>
+              <div>
+                <span className="text-[#86868b]">Nakit Çıkış: </span>
+                <span className="text-red-500 font-medium">
+                  -{"\u20BA"}
+                  {formatCurrency(currentShift.cashOut)}
+                </span>
+              </div>
+              <div>
+                <span className="text-[#86868b]">Beklenen Kasa: </span>
+                <span className="text-[#1d1d1f] font-bold">
+                  {"\u20BA"}
+                  {formatCurrency(expectedCash)}
+                </span>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

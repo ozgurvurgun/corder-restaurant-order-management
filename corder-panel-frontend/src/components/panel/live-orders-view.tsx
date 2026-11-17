@@ -38,6 +38,7 @@ export default function CompletedOrdersView() {
   const [currentPage, setCurrentPage] = useState(1)
 
   const isBoss = currentUser?.role === "root"
+  const canViewFinancial = isBoss || hasPermission("reports.view_financial")
   const canEditCompletedOrder =
     isBoss || hasPermission("billing.edit_completed_order")
   const canPrintReceipt = isBoss || hasPermission("order.print_receipt")
@@ -147,10 +148,12 @@ export default function CompletedOrdersView() {
               {filteredTables.length}{" "}
               {locale === "tr" ? "sipariş" : "orders"}
             </span>
-            <span className="text-[#e63462] font-semibold">
-              {"₺"}
-              {formatCurrency(totalRevenue)}
-            </span>
+            {canViewFinancial && (
+              <span className="text-[#e63462] font-semibold">
+                {"₺"}
+                {formatCurrency(totalRevenue)}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">

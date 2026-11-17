@@ -175,11 +175,15 @@ export default function ReportsView() {
     const rows: string[][] = [
       ["Rapor Özeti", settings.name || "Restoran"],
       ["Tarih", getIstanbulYmd(new Date())],
-      ["Toplam Ciro (TL)", formatCurrency(filteredReport.totalRevenue)],
+      ...(canViewFinancial
+        ? [["Toplam Ciro (TL)", formatCurrency(filteredReport.totalRevenue)]]
+        : []),
       ["Toplam Sipariş", String(filteredReport.totalOrders)],
       ["Kapanan Masa", String(filteredReport.totalTables)],
       ["İptal Tutarı (TL)", formatCurrency(filteredReport.cancelledAmount)],
-      ["İndirim Tutarı (TL)", formatCurrency(filteredReport.discountAmount)],
+      ...(canViewFinancial
+        ? [["İndirim Tutarı (TL)", formatCurrency(filteredReport.discountAmount)]]
+        : []),
       [],
       [
         "Masa",
