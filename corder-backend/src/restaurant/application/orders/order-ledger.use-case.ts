@@ -4,9 +4,12 @@ import { OrderEntity } from '../../domain/order.entity';
 import { OrderItemEntity } from '../../domain/order-item.entity';
 import { TableEntity } from '../../domain/table.entity';
 import { LedgerCustomerEntity } from '../../domain/ledger-customer.entity';
+import { OrderStatusPolicy } from '../../domain/services/order-status.policy';
+import { BilledOrderLineForStock } from '../../domain/services/recipe-stock.policy';
 import { OrdersGateway } from '../../api/orders.gateway';
 import { CashShiftService } from '../cash-shift.service';
 import { LedgerService } from '../ledger.service';
+import { StockMovementsService } from '../stock-movements.service';
 import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
 
 interface StagedLedgerItem {
@@ -22,6 +25,7 @@ export class OrderLedgerUseCase {
     private readonly ordersGateway: OrdersGateway,
     private readonly cashShiftService: CashShiftService,
     private readonly ledgerService: LedgerService,
+    private readonly stockMovementsService: StockMovementsService,
   ) {}
 
   async assignItemsToLedger(
@@ -40,6 +44,7 @@ export class OrderLedgerUseCase {
     await this.cashShiftService.requireCurrent(restaurantId);
 
     let total = 0;
+    let tableEmptied = false;
     await this.dataSource.transaction(async (em) => {
       const customer = await em.findOne(LedgerCustomerEntity, {
         where: { id: ledgerCustomerId, restaurantId },
@@ -68,12 +73,18 @@ export class OrderLedgerUseCase {
       const tableName = (table.name ?? '').trim() || null;
 
       const snapshotLines: Array<Record<string, unknown>> = [];
+      const stockLines: BilledOrderLineForStock[] = [];
       const now = new Date();
       let totalMinorUnits = 0;
 
       for (const { line, item } of staged) {
         const assignment = item.assignToLedger(line.quantity);
         totalMinorUnits += toMinorUnits(assignment.lineTotal);
+        stockLines.push({
+          productId: item.productId,
+          productName: item.productName,
+          quantity: assignment.assignedQuantity,
+        });
 
         if (!assignment.fullAssignment) {
           await em.save(OrderItemEntity, item);
@@ -127,12 +138,51 @@ export class OrderLedgerUseCase {
         recordedBy: (staffName ?? '').trim() || null,
       });
 
+      await this.stockMovementsService.deductRecipeIngredients(
+        em,
+        restaurantId,
+        stockLines,
+        (staffName ?? '').trim() || 'System',
+        'Ledger item',
+      );
+
       const orderIds = [...new Set(staged.map((s) => s.item.orderId))].sort();
       for (const oid of orderIds) {
-        await em.update(OrderEntity, { id: oid, restaurantId }, { updatedAt: now });
+        const orderItems = await em.find(OrderItemEntity, { where: { orderId: oid } });
+        const nextStatus = OrderStatusPolicy.resolveOrderStatus(orderItems);
+        await em.update(OrderEntity, { id: oid, restaurantId }, { status: nextStatus, updatedAt: now });
+      }
+
+      const activeTableOrders = await em.find(OrderEntity, {
+        where: { restaurantId, tableId, status: 'active' },
+      });
+      if (activeTableOrders.length === 0) {
+        table.markEmpty();
+        await em.save(TableEntity, table);
+        tableEmptied = true;
+      } else {
+        const activeOrderItems = await em.find(OrderItemEntity, {
+          where: { orderId: In(activeTableOrders.map((o) => o.id)) },
+        });
+        const anyBillable = activeOrderItems.some((i) =>
+          OrderStatusPolicy.isItemOnActiveBill(i.status),
+        );
+        if (!anyBillable) {
+          await em.update(
+            OrderEntity,
+            { id: In(activeTableOrders.map((o) => o.id)), restaurantId },
+            { status: 'closed', updatedAt: now },
+          );
+          table.markEmpty();
+          await em.save(TableEntity, table);
+          tableEmptied = true;
+        }
       }
     });
 
+    if (tableEmptied) {
+      void this.ordersGateway.emitTableSessionPresence(restaurantId).catch(() => undefined);
+    }
     this.ordersGateway.emitOrdersUpdated(restaurantId);
     return { ok: true, amount: total };
   }
@@ -143,8 +193,27 @@ export class OrderLedgerUseCase {
     lines: { itemId: string; quantity?: number }[],
   ): Promise<StagedLedgerItem[]> {
     const sortedItemIds = [...new Set(lines.map((l) => l.itemId))].sort();
-    const lockedItems = await em.find(OrderItemEntity, {
+    const itemProbes = await em.find(OrderItemEntity, {
       where: { id: In(sortedItemIds) },
+      select: { id: true, orderId: true },
+    });
+    if (itemProbes.length !== sortedItemIds.length) {
+      throw new NotFoundException('Order item not found');
+    }
+
+    const sortedOrderIds = [...new Set(itemProbes.map((i) => i.orderId))].sort();
+    const lockedOrders = await em.find(OrderEntity, {
+      where: { id: In(sortedOrderIds), restaurantId },
+      order: { id: 'ASC' },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (lockedOrders.length !== sortedOrderIds.length) {
+      throw new BadRequestException('Invalid order item');
+    }
+    const orderById = new Map(lockedOrders.map((o) => [o.id, o]));
+
+    const lockedItems = await em.find(OrderItemEntity, {
+      where: { id: In(sortedItemIds), orderId: In(sortedOrderIds) },
       order: { id: 'ASC' },
       lock: { mode: 'pessimistic_write' },
     });
@@ -153,22 +222,11 @@ export class OrderLedgerUseCase {
       throw new NotFoundException('Order item not found');
     }
 
-    const sortedOrderIds = [...new Set(lockedItems.map((i) => i.orderId))].sort();
-    const lockedOrders = await em.find(OrderEntity, {
-      where: { id: In(sortedOrderIds) },
-      order: { id: 'ASC' },
-      lock: { mode: 'pessimistic_write' },
-    });
-    const orderById = new Map(lockedOrders.map((o) => [o.id, o]));
-
     const staged: StagedLedgerItem[] = [];
     for (const line of lines) {
       const item = itemById.get(line.itemId)!;
       const order = orderById.get(item.orderId);
-      if (!order) {
-        throw new NotFoundException('Order not found');
-      }
-      if (order.restaurantId !== restaurantId) {
+      if (!order || order.restaurantId !== restaurantId) {
         throw new BadRequestException('Invalid order item');
       }
       if (order.status !== 'active') {
@@ -194,26 +252,31 @@ export class OrderLedgerUseCase {
     let amountOut = 0;
 
     await this.dataSource.transaction(async (em) => {
-      const item = await em.findOne(OrderItemEntity, {
+      const itemProbe = await em.findOne(OrderItemEntity, {
         where: { id: itemId },
-        lock: { mode: 'pessimistic_write' },
+        select: { id: true, orderId: true },
       });
-      if (!item) {
+      if (!itemProbe) {
         throw new NotFoundException('Order item not found');
       }
 
       const order = await em.findOne(OrderEntity, {
-        where: { id: item.orderId },
+        where: { id: itemProbe.orderId, restaurantId },
         lock: { mode: 'pessimistic_write' },
       });
       if (!order) {
         throw new NotFoundException('Order not found');
       }
-      if (order.restaurantId !== restaurantId) {
-        throw new BadRequestException('Invalid order item');
-      }
       if (order.status !== 'active') {
         throw new BadRequestException('Order is not active');
+      }
+
+      const item = await em.findOne(OrderItemEntity, {
+        where: { id: itemId, orderId: order.id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!item) {
+        throw new NotFoundException('Order item not found');
       }
       if (item.status !== 'ledger') {
         throw new BadRequestException('Only ledger-assigned order items can be reverted');
@@ -264,7 +327,25 @@ export class OrderLedgerUseCase {
         recordedBy: (actorName ?? '').trim() || null,
       });
 
+      await this.stockMovementsService.reverseRecipeIngredients(
+        em,
+        restaurantId,
+        [
+          {
+            productId: item.productId,
+            productName: item.productName,
+            quantity: item.quantity,
+          },
+        ],
+        (actorName ?? '').trim() || 'System',
+        'Ledger revert',
+      );
+
       await this.mergeOrRestoreRevertedItem(em, item);
+      if (table.status === 'empty') {
+        table.status = 'occupied';
+        await em.save(TableEntity, table);
+      }
       await em.update(OrderEntity, { id: order.id, restaurantId }, { updatedAt: new Date() });
     });
 

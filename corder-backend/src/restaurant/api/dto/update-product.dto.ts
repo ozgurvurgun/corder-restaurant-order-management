@@ -24,8 +24,9 @@ export class UpdateProductDto {
   name?: string;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsString()
-  description?: string;
+  description?: string | null;
 
   @IsOptional()
   @IsNumber()
@@ -39,8 +40,9 @@ export class UpdateProductDto {
   costPrice?: number | null;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsString()
-  imageUrl?: string;
+  imageUrl?: string | null;
 
   @IsOptional()
   @IsBoolean()
@@ -51,6 +53,7 @@ export class UpdateProductDto {
   order?: number;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ProductIngredientInputDto)

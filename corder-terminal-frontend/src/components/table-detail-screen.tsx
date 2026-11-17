@@ -7,9 +7,10 @@ import {
   User,
   ChevronRight,
   Lock,
+  ListOrdered,
 } from "lucide-react"
 import { useApp } from "@/lib/store"
-import { formatCurrency } from "@/lib/format"
+import { formatCurrency, translateApiError } from "@/lib/format"
 import { useToast } from "@/components/ios-toast"
 import { ConfirmDialog } from "./confirm-dialog"
 
@@ -33,6 +34,7 @@ export function TableDetailScreen({
     tables,
     getTableOrders,
     getTableTotal,
+    getCartItemCount,
     printReceipt,
     currentUser,
     hasPermission,
@@ -45,7 +47,10 @@ export function TableDetailScreen({
 
   const tableOrders = getTableOrders(tableId)
   const total = getTableTotal(tableId)
+  const subtotal = table.subtotalAmount
+  const hasDiscount = Boolean(table.discount && subtotal > total)
   const orderCount = tableOrders.length
+  const cartCount = getCartItemCount()
   const isBillRequested = table.status === "bill-requested"
 
   const canCreateOrder = hasPermission("order.create")
@@ -66,9 +71,9 @@ export function TableDetailScreen({
     setIsPrinting(true)
     try {
       await printReceipt(tableId)
-      showToast("Adisyon yazdırıldı")
+      showToast("Adisyon yazıcıya gönderildi")
     } catch (e) {
-      showToast(e instanceof Error ? e.message : "Yazdırılamadı", "error")
+      showToast(translateApiError(e, "Yazdırılamadı"), "error")
     } finally {
       setIsPrinting(false)
     }
@@ -84,8 +89,9 @@ export function TableDetailScreen({
 
         {/* Waiter + Role + Check Count - Clickable */}
         <button
+          type="button"
           onClick={onViewOpenOrders}
-          className="flex items-center gap-3 text-white/70 mt-2 mb-1 active:text-white transition-colors py-2"
+          className="flex items-center gap-3 text-white/75 mt-2 mb-1 active:text-white transition-colors py-2"
           disabled={orderCount === 0}
         >
           <div className="flex items-center gap-1.5">
@@ -103,16 +109,24 @@ export function TableDetailScreen({
           {orderCount > 0 && <ChevronRight className="h-4 w-4" />}
         </button>
 
-        <p className="text-white text-[22px] font-bold mt-1 mb-10">
-          {"Hesap ₺"}
-          {formatCurrency(total)}
-        </p>
+        <div className="mt-1 mb-8 text-center">
+          {hasDiscount && (
+            <p className="text-white/60 text-[13px] line-through">
+              {"Ara Toplam ₺"}
+              {formatCurrency(subtotal)}
+            </p>
+          )}
+          <p className="text-white text-[24px] font-bold">
+            {"Hesap ₺"}
+            {formatCurrency(total)}
+          </p>
+        </div>
 
         {/* iOS-style Action List */}
         <div className="w-full max-w-xs flex flex-col gap-3">
           <ActionRow
             icon={<Plus className="h-[20px] w-[20px]" />}
-            label="Yeni Adisyon"
+            label={cartCount > 0 ? `Siparişe Devam Et (${cartCount})` : "Yeni Adisyon / Ürün Ekle"}
             locked={!canCreateOrder}
             onClick={() => {
               if (!canCreateOrder) {
@@ -124,14 +138,22 @@ export function TableDetailScreen({
             disabled={isBillRequested}
             color="text-[#e63462]"
           />
+          {orderCount > 0 && (
+            <ActionRow
+              icon={<ListOrdered className="h-[20px] w-[20px]" />}
+              label={`Açık Adisyonlar (${orderCount})`}
+              onClick={onViewOpenOrders}
+              color="text-[#e63462]"
+            />
+          )}
           <ActionRow
             icon={<ArrowRightLeft className="h-[20px] w-[20px]" />}
-            label="Masayı Taşı"
+            label="Masayı Taşı / Birleştir"
             locked={!canMoveTable}
             onClick={() => {
               if (!canMoveTable) {
                 showToast(
-                  "Masa taşıma yetkiniz bulunmuyor (Boss tarafından kısıtlandı)",
+                  "Masa taşıma yetkiniz bulunmuyor",
                   "error"
                 )
                 return
@@ -143,15 +165,15 @@ export function TableDetailScreen({
           />
           <ActionRow
             icon={<Printer className="h-[20px] w-[20px]" />}
-            label={isPrinting ? "Yazdırılıyor..." : "Yazdır"}
+            label={isPrinting ? "Yazdırılıyor..." : "Adisyon Yazdır"}
             locked={!canPrintReceipt}
             onClick={() => void handlePrint()}
-            disabled={isPrinting || total === 0}
+            disabled={isPrinting || orderCount === 0}
             color="text-[#e63462]"
           />
         </div>
         {isBillRequested && (
-          <p className="mt-3 text-[12px] font-medium text-white/90 bg-[#0a84ff]/30 border border-white/25 rounded-xl px-3 py-2">
+          <p className="mt-4 text-[12px] font-medium text-white/90 bg-[#0a84ff]/30 border border-white/25 rounded-xl px-3.5 py-2.5 text-center max-w-xs">
             Bu masada hesap kesme penceresi açık. Pencere kapanana kadar terminalden yeni sipariş alınamaz.
           </p>
         )}
@@ -159,6 +181,7 @@ export function TableDetailScreen({
 
       {/* Back Button */}
       <button
+        type="button"
         onClick={onBack}
         className="flex items-center justify-center gap-2 text-white/80 active:text-white py-4 mx-6 transition-colors"
       >
@@ -178,8 +201,8 @@ export function TableDetailScreen({
       <ConfirmDialog
         open={showMoveConfirm}
         title="Masayı Taşı"
-        message={`${table.name} masasını başka bir masaya taşımak istediğinize emin misiniz?`}
-        confirmText="Evet, Taşı"
+        message={`${table.name} masasını başka bir masaya taşımak veya birleştirmek istediğinize emin misiniz?`}
+        confirmText="Hedef Masa Seç"
         cancelText="Vazgeç"
         onConfirm={handleMoveConfirmed}
         onCancel={() => setShowMoveConfirm(false)}
@@ -205,6 +228,7 @@ function ActionRow({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
       className={`flex items-center justify-between bg-white/95 backdrop-blur-sm ${color} font-semibold py-[14px] px-5 rounded-2xl shadow-sm transition-all active:scale-[0.98] active:bg-white/80 disabled:opacity-40`}

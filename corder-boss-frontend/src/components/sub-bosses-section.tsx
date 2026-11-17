@@ -8,6 +8,7 @@ export function SubBossesSection() {
   const { branches, effectiveBranchId, showToast } = useBossStore()
 
   const [subBosses, setSubBosses] = useState<SubBossItemDto[]>([])
+  const [loadingList, setLoadingList] = useState(false)
   const [showSubBossModal, setShowSubBossModal] = useState(false)
   const [sbName, setSbName] = useState("")
   const [sbEmail, setSbEmail] = useState("")
@@ -18,16 +19,29 @@ export function SubBossesSection() {
   const [sbSubmitting, setSbSubmitting] = useState(false)
 
   useEffect(() => {
+    setLoadingList(true)
     bossApi.overview
       .listSubBosses()
       .then(setSubBosses)
       .catch(() => {})
-  }, [effectiveBranchId])
+      .finally(() => setLoadingList(false))
+  }, [])
 
   const handleCreateSubBoss = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!sbName.trim() || !sbEmail.trim() || sbBranchIds.length === 0) {
       showToast("Ad, e-posta ve en az bir şube seçimi zorunludur", "error")
+      return
+    }
+    const existingAccount = subBosses.some(
+      (b) => b.email.toLowerCase() === sbEmail.trim().toLowerCase()
+    )
+    if (!existingAccount && sbPassword.trim().length < 8) {
+      showToast("Yeni Şube Boss hesabı için en az 8 karakterli bir parola girin", "error")
+      return
+    }
+    if (sbPassword.trim().length > 0 && sbPassword.trim().length < 8) {
+      showToast("Parola en az 8 karakter olmalıdır", "error")
       return
     }
     setSbSubmitting(true)
@@ -36,7 +50,7 @@ export function SubBossesSection() {
         name: sbName.trim(),
         email: sbEmail.trim(),
         phone: sbPhone.trim() || undefined,
-        password: sbPassword || undefined,
+        password: sbPassword.trim() || undefined,
         bossTier: sbTier,
         restaurantIds: sbBranchIds,
       })
@@ -92,6 +106,10 @@ export function SubBossesSection() {
             Şube / Franchise Boss Ata
           </button>
         </div>
+
+        {loadingList && subBosses.length === 0 && (
+          <p className="mt-3 text-[12px] text-[#86868b]">Şube yöneticileri yükleniyor…</p>
+        )}
 
         {subBosses.length > 0 && (
           <div className="mt-3 grid gap-2.5 sm:grid-cols-2">

@@ -131,6 +131,23 @@ export function StaffAccountModal({
     const maxDiscountAmountOverride =
       formMaxAmtOverride.trim() !== "" ? Number(formMaxAmtOverride) : null
 
+    if (!formCanAccessPanel && !formCanAccessTerminal) {
+      showToast("En az bir giriş kanalı (Panel veya Terminal) seçilmelidir.", "error")
+      return
+    }
+    if (formCanAccessTerminal && !editingUser?.hasPin && pin.length < 4) {
+      showToast("Terminal girişi için 4-8 haneli PIN girin.", "error")
+      return
+    }
+    if (formCanAccessPanel && (!formEmail.trim() || !formEmail.includes("@"))) {
+      showToast("Panel girişi için geçerli bir e-posta adresi girin.", "error")
+      return
+    }
+    if (formCanAccessPanel && !editingUser?.hasPassword && formPassword.length < 6) {
+      showToast("Panel girişi için en az 6 karakterli parola girin.", "error")
+      return
+    }
+
     if (editingUser) {
       onUpdateUser(editingUser.id, {
         name: formName.trim(),
@@ -147,15 +164,6 @@ export function StaffAccountModal({
         maxDiscountAmountOverride,
       })
       onClose()
-      return
-    }
-
-    if (formCanAccessTerminal && !formCanAccessPanel && pin.length < 4) {
-      showToast("Terminal girişi için 4-8 haneli PIN girin.", "error")
-      return
-    }
-    if (formCanAccessPanel && (!formEmail.trim() || formPassword.length < 6)) {
-      showToast("Panel girişi için geçerli e-posta ve en az 6 karakterli parola girin.", "error")
       return
     }
 

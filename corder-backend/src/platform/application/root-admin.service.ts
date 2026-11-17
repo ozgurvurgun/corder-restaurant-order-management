@@ -160,10 +160,28 @@ export class RootAdminService {
     return this.enrichBosses(bosses);
   }
 
-  async findOne(id: string): Promise<BossWithRestaurantsDto> {
+  async findOne(id: string, contextRestaurantId?: string): Promise<BossWithRestaurantsDto> {
     const a = await this.rootAdminRepo.findOne({ where: { id } });
     if (!a) throw new NotFoundException('Boss account not found');
-    return this.enrichBoss(a);
+    const enriched = await this.enrichBoss(a);
+    if (
+      contextRestaurantId &&
+      !enriched.restaurants.some((r) => r.id === contextRestaurantId)
+    ) {
+      throw new NotFoundException('Boss account is not linked to this restaurant');
+    }
+    return enriched;
+  }
+
+  private async assertUniqueTerminalEmail(
+    terminalEmail: string | null,
+    excludeRestaurantId?: string,
+  ): Promise<void> {
+    if (!terminalEmail) return;
+    const owner = await this.restaurantRepo.findOne({ where: { terminalEmail } });
+    if (owner && owner.id !== excludeRestaurantId) {
+      throw new ConflictException('Terminal email already in use by another branch');
+    }
   }
 
   async findOneByEmail(email: string): Promise<RootAdminEntity | null> {
@@ -241,8 +259,12 @@ export class RootAdminService {
     // If Boss already exists and a restaurantId is being attached, link them to the new branch!
     if (existingGlobal) {
       if (targetRestaurantIds.length > 0) {
-        if (dto.bossTier) existingGlobal.bossTier = dto.bossTier;
-        if (brandName) existingGlobal.brandName = brandName;
+        if (dto.bossTier && existingGlobal.bossTier !== 'brand_owner') {
+          existingGlobal.bossTier = dto.bossTier;
+        }
+        if (brandName && !existingGlobal.brandName) {
+          existingGlobal.brandName = brandName;
+        }
         await this.ensureBossRestaurantLinks(
           existingGlobal.id,
           targetRestaurantIds,
@@ -257,8 +279,13 @@ export class RootAdminService {
       throw new ConflictException('A Boss account with this email address already exists');
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
     const primaryRestaurantId = targetRestaurantIds[0] ?? null;
+    const normalizedTerminalEmail = dto.terminalEmail?.toLowerCase().trim() || null;
+    if (primaryRestaurantId && normalizedTerminalEmail) {
+      await this.assertUniqueTerminalEmail(normalizedTerminalEmail, primaryRestaurantId);
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, 10);
     const entity = this.rootAdminRepo.create({
       restaurantId: primaryRestaurantId,
       email,
@@ -275,10 +302,10 @@ export class RootAdminService {
       await this.ensureBossRestaurantLinks(saved.id, targetRestaurantIds, bossTier);
     }
 
-    if (primaryRestaurantId && dto.terminalEmail?.trim() && dto.terminalPassword) {
+    if (primaryRestaurantId && normalizedTerminalEmail && dto.terminalPassword) {
       const terminalPasswordHash = await bcrypt.hash(dto.terminalPassword, 10);
       await this.restaurantRepo.update(primaryRestaurantId, {
-        terminalEmail: dto.terminalEmail.toLowerCase().trim(),
+        terminalEmail: normalizedTerminalEmail,
         terminalPasswordHash,
       });
     }
@@ -327,9 +354,22 @@ export class RootAdminService {
     }
   }
 
-  async update(id: string, dto: UpdateRootAdminDto): Promise<BossWithRestaurantsDto> {
+  async update(
+    id: string,
+    dto: UpdateRootAdminDto,
+    contextRestaurantId?: string,
+  ): Promise<BossWithRestaurantsDto> {
     const entity = await this.rootAdminRepo.findOne({ where: { id } });
     if (!entity) throw new NotFoundException('Boss account not found');
+    if (contextRestaurantId) {
+      const enrichedBefore = await this.enrichBoss(entity);
+      const belongsToContext =
+        enrichedBefore.restaurants.some((r) => r.id === contextRestaurantId) ||
+        Boolean(dto.restaurantIds?.includes(contextRestaurantId));
+      if (!belongsToContext) {
+        throw new NotFoundException('Boss account is not linked to this restaurant');
+      }
+    }
 
     if (dto.name !== undefined) entity.name = dto.name.trim();
     if (dto.phone !== undefined) entity.phone = dto.phone?.trim() || null;
@@ -370,20 +410,23 @@ export class RootAdminService {
 
     const saved = await this.rootAdminRepo.save(entity);
 
+    const terminalTargetRestaurantId = contextRestaurantId ?? saved.restaurantId;
     if (
-      saved.restaurantId &&
+      terminalTargetRestaurantId &&
       (dto.terminalEmail !== undefined ||
         (dto.terminalPassword !== undefined && dto.terminalPassword.length > 0))
     ) {
       const update: { terminalEmail?: string | null; terminalPasswordHash?: string } = {};
       if (dto.terminalEmail !== undefined) {
-        update.terminalEmail = dto.terminalEmail?.toLowerCase().trim() || null;
+        const nextTerminalEmail = dto.terminalEmail?.toLowerCase().trim() || null;
+        await this.assertUniqueTerminalEmail(nextTerminalEmail, terminalTargetRestaurantId);
+        update.terminalEmail = nextTerminalEmail;
       }
       if (dto.terminalPassword !== undefined && dto.terminalPassword.length > 0) {
         update.terminalPasswordHash = await bcrypt.hash(dto.terminalPassword, 10);
       }
       if (Object.keys(update).length) {
-        await this.restaurantRepo.update(saved.restaurantId, update);
+        await this.restaurantRepo.update(terminalTargetRestaurantId, update);
       }
     }
     return this.enrichBoss(saved);
@@ -394,11 +437,8 @@ export class RootAdminService {
     if (!entity) throw new NotFoundException('Boss account not found');
 
     if (fromRestaurantId) {
-      const links = await this.bossRestaurantRepo.find({ where: { bossId: id } });
-      if (links.length > 1) {
-        await this.unlinkBossFromRestaurant(id, fromRestaurantId);
-        return;
-      }
+      await this.unlinkBossFromRestaurant(id, fromRestaurantId);
+      return;
     }
 
     const links = await this.bossRestaurantRepo.find({ where: { bossId: id } });

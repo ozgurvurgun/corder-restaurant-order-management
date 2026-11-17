@@ -23,6 +23,7 @@ interface BossFormModalProps {
       phone: string | null
       bossTier: BossTier
       brandName: string | null
+      isActive?: boolean
       password?: string
       restaurantIds: string[]
     }
@@ -39,11 +40,18 @@ export function BossFormModal({
   const [name, setName] = useState(editingBoss?.name ?? "")
   const [email, setEmail] = useState(editingBoss?.email ?? "")
   const [phone, setPhone] = useState(editingBoss?.phone ?? "")
-  const [bossTier, setBossTier] = useState<BossTier>(editingBoss?.bossTier ?? "franchise_owner")
+  const [bossTier, setBossTier] = useState<BossTier>(
+    editingBoss?.bossTier ?? "franchise_owner"
+  )
   const [brandName, setBrandName] = useState(editingBoss?.brandName ?? "")
+  const [isActive, setIsActive] = useState(editingBoss?.isActive !== false)
   const [password, setPassword] = useState("")
   const [selectedRestaurantIds, setSelectedRestaurantIds] = useState<string[]>(
-    editingBoss ? (editingBoss.restaurants?.map((r) => r.id) ?? []) : restaurants[0] ? [restaurants[0].id] : []
+    editingBoss
+      ? (editingBoss.restaurants?.map((r) => r.id) ?? [])
+      : restaurants[0]
+        ? [restaurants[0].id]
+        : []
   )
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
@@ -71,7 +79,9 @@ export function BossFormModal({
     const matchingIds = restaurants
       .filter((r) => r.brandName && r.brandName.trim().toLowerCase() === norm)
       .map((r) => r.id)
-    setSelectedRestaurantIds((prev) => Array.from(new Set([...prev, ...matchingIds])))
+    setSelectedRestaurantIds((prev) =>
+      Array.from(new Set([...prev, ...matchingIds]))
+    )
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -82,26 +92,32 @@ export function BossFormModal({
       return
     }
     if ((!editingBoss || password.length > 0) && password.length < 8) {
-      setError(editingBoss ? "Yeni parola en az 8 karakter olmalıdır." : "Parola en az 8 karakter olmalıdır.")
+      setError(
+        editingBoss
+          ? "Yeni parola en az 8 karakter olmalıdır."
+          : "Parola en az 8 karakter olmalıdır."
+      )
       return
     }
     setSubmitting(true)
     try {
-      const normalizedBrand = bossTier === "brand_owner" ? brandName.trim() || null : null
+      const normalizedBrand =
+        bossTier === "brand_owner" ? brandName.trim() || null : null
       if (editingBoss) {
         await onUpdateBoss(editingBoss.id, {
           name: name.trim(),
-          email: email.trim(),
+          email: email.trim().toLowerCase(),
           phone: phone.trim() || null,
           bossTier,
           brandName: normalizedBrand,
+          isActive,
           ...(password ? { password } : {}),
           restaurantIds: selectedRestaurantIds,
         })
       } else {
         await onCreateBoss({
           name: name.trim(),
-          email: email.trim(),
+          email: email.trim().toLowerCase(),
           phone: phone.trim() || undefined,
           bossTier,
           brandName: normalizedBrand,
@@ -117,7 +133,8 @@ export function BossFormModal({
     }
   }
 
-  const fieldCls = "w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] px-3.5 py-2.5 text-sm text-white outline-none focus:border-[#e63462]"
+  const fieldCls =
+    "w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] px-3.5 py-2.5 text-sm text-white outline-none focus:border-[#e63462]"
 
   return (
     <div
@@ -130,7 +147,9 @@ export function BossFormModal({
       >
         <div className="flex items-center justify-between border-b border-[#2a2a2a] pb-4">
           <h2 className="text-lg font-semibold text-white">
-            {editingBoss ? "Boss Hesabını Düzenle" : "Yeni Boss (Marka Sahibi / Franchise Sahibi) Oluştur"}
+            {editingBoss
+              ? "Boss Hesabını Düzenle"
+              : "Yeni Boss (Marka Sahibi / Franchise Sahibi) Oluştur"}
           </h2>
           <button
             onClick={() => !submitting && onClose()}
@@ -143,8 +162,14 @@ export function BossFormModal({
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-zinc-300">Boss Hiyerarşi Seviyesi *</label>
-            <select value={bossTier} onChange={(e) => setBossTier(e.target.value as BossTier)} className={fieldCls}>
+            <label className="mb-1.5 block text-xs font-medium text-zinc-300">
+              Boss Hiyerarşi Seviyesi *
+            </label>
+            <select
+              value={bossTier}
+              onChange={(e) => setBossTier(e.target.value as BossTier)}
+              className={fieldCls}
+            >
               <option value="franchise_owner">
                 Şube / Franchise Sahibi (Şube Boss&apos;u — Kendi Dükkanının Ciro, Metrik ve Ekibini Yönetir)
               </option>
@@ -172,7 +197,9 @@ export function BossFormModal({
                   className="flex-1 rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white outline-none focus:border-purple-400"
                 />
                 <datalist id="boss-brands-list">
-                  {existingBrands.map((b) => <option key={b} value={b} />)}
+                  {existingBrands.map((b) => (
+                    <option key={b} value={b} />
+                  ))}
                 </datalist>
                 {brandName.trim() && (
                   <button
@@ -185,33 +212,81 @@ export function BossFormModal({
                 )}
               </div>
               <p className="text-[11px] text-purple-200/80">
-                Bu marka adı altında açılan mevcut ve gelecekteki tüm şubeler (ör. 40 şube) otomatik olarak bu Marka Sahibinin ekranına düşer.
+                Bu marka adı altında açılan mevcut ve gelecekteki tüm şubeler otomatik olarak bu Marka Sahibinin ekranına düşer.
               </p>
             </div>
           )}
 
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-zinc-300">Ad Soyad *</label>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Örn. Mehmet Kaya" className={fieldCls} required />
+            <label className="mb-1.5 block text-xs font-medium text-zinc-300">
+              Ad Soyad *
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Örn. Mehmet Kaya"
+              className={fieldCls}
+              required
+            />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-zinc-300">E-posta (Boss &amp; Panel Girişi) *</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="patron@isletme.com" className={fieldCls} required />
+              <label className="mb-1.5 block text-xs font-medium text-zinc-300">
+                E-posta (Boss &amp; Panel Girişi) *
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="patron@isletme.com"
+                className={fieldCls}
+                required
+              />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-zinc-300">Telefon</label>
-              <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0532 000 00 00" className={fieldCls} />
+              <label className="mb-1.5 block text-xs font-medium text-zinc-300">
+                Telefon
+              </label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="0532 000 00 00"
+                className={fieldCls}
+              />
             </div>
           </div>
 
           <div>
             <label className="mb-1.5 block text-xs font-medium text-zinc-300">
-              {editingBoss ? "Yeni Parola (değiştirmek istemiyorsanız boş bırakın)" : "Parola (en az 8 karakter) *"}
+              {editingBoss
+                ? "Yeni Parola (değiştirmek istemiyorsanız boş bırakın)"
+                : "Parola (en az 8 karakter) *"}
             </label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className={fieldCls} required={!editingBoss} />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              autoComplete="new-password"
+              className={fieldCls}
+              required={!editingBoss}
+            />
           </div>
+
+          {editingBoss && (
+            <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+                className="accent-[#e63462]"
+              />
+              Boss hesabı aktif (Boss ve Merchant Paneline giriş yapabilir)
+            </label>
+          )}
 
           <div>
             <div className="mb-1.5 flex items-center justify-between">
@@ -219,10 +294,20 @@ export function BossFormModal({
                 Yöneteceği Dükkan / Şubeler ({selectedRestaurantIds.length} seçili)
               </label>
               <div className="flex gap-2">
-                <button type="button" onClick={() => setSelectedRestaurantIds(restaurants.map((r) => r.id))} className="text-[11px] text-[#e63462] hover:underline">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedRestaurantIds(restaurants.map((r) => r.id))
+                  }
+                  className="text-[11px] text-[#e63462] hover:underline"
+                >
                   Tümünü Seç
                 </button>
-                <button type="button" onClick={() => setSelectedRestaurantIds([])} className="text-[11px] text-zinc-400 hover:underline">
+                <button
+                  type="button"
+                  onClick={() => setSelectedRestaurantIds([])}
+                  className="text-[11px] text-zinc-400 hover:underline"
+                >
                   Temizle
                 </button>
               </div>
@@ -236,21 +321,43 @@ export function BossFormModal({
                     type="button"
                     onClick={() => toggleBranch(r.id)}
                     className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                      checked ? "bg-[#e63462]/15 text-white" : "text-zinc-400 hover:bg-[#1a1a1a]"
+                      checked
+                        ? "bg-[#e63462]/15 text-white"
+                        : "text-zinc-400 hover:bg-[#1a1a1a]"
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
-                      <Building2 className={`h-4 w-4 ${checked ? "text-[#e63462]" : "text-zinc-500"}`} />
+                      <Building2
+                        className={`h-4 w-4 ${
+                          checked ? "text-[#e63462]" : "text-zinc-500"
+                        }`}
+                      />
                       <div>
                         <p className="font-medium leading-tight">
-                          {r.name} {r.brandName && <span className="text-[11px] text-purple-300">({r.brandName})</span>}
+                          {r.name}{" "}
+                          {r.brandName && (
+                            <span className="text-[11px] text-purple-300">
+                              ({r.brandName})
+                            </span>
+                          )}
                         </p>
                         <p className="text-[11px] text-zinc-500">
-                          {r.slug} • {r.branchType === "franchise" ? "Franchise" : r.branchType === "company_owned" ? "Merkez Şube" : "Bağımsız"}
+                          {r.slug} •{" "}
+                          {r.branchType === "franchise"
+                            ? "Franchise"
+                            : r.branchType === "company_owned"
+                              ? "Merkez Şube"
+                              : "Bağımsız"}
                         </p>
                       </div>
                     </div>
-                    <div className={`flex h-5 w-5 items-center justify-center rounded-md border ${checked ? "border-[#e63462] bg-[#e63462] text-white" : "border-zinc-700"}`}>
+                    <div
+                      className={`flex h-5 w-5 items-center justify-center rounded-md border ${
+                        checked
+                          ? "border-[#e63462] bg-[#e63462] text-white"
+                          : "border-zinc-700"
+                      }`}
+                    >
                       {checked && <Check className="h-3.5 w-3.5" />}
                     </div>
                   </button>
@@ -262,11 +369,23 @@ export function BossFormModal({
           {error && <p className="text-xs text-red-400">{error}</p>}
 
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="rounded-xl border border-[#2a2a2a] px-4 py-2.5 text-sm text-zinc-300 hover:bg-[#2a2a2a]">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-[#2a2a2a] px-4 py-2.5 text-sm text-zinc-300 hover:bg-[#2a2a2a]"
+            >
               İptal
             </button>
-            <button type="submit" disabled={submitting} className="rounded-xl bg-[#e63462] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#d42d56] disabled:opacity-50">
-              {submitting ? "Kaydediliyor…" : editingBoss ? "Güncelle" : "Boss Hesabını Oluştur"}
+            <button
+              type="submit"
+              disabled={submitting}
+              className="rounded-xl bg-[#e63462] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#d42d56] disabled:opacity-50"
+            >
+              {submitting
+                ? "Kaydediliyor…"
+                : editingBoss
+                  ? "Güncelle"
+                  : "Boss Hesabını Oluştur"}
             </button>
           </div>
         </form>

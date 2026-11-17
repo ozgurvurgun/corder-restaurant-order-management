@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { OpenAccountsService } from '../application/open-accounts.service';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
-import { PanelRootGuard } from '../infrastructure/panel-root.guard';
+import { PanelRootGuard, RequirePermissions } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
 import { CreateOpenAccountDto } from './dto/create-open-account.dto';
@@ -21,11 +21,13 @@ export class OpenAccountsController {
   constructor(private readonly service: OpenAccountsService) {}
 
   @Get()
+  @RequirePermissions('ledger.view', 'cash.view')
   list(@RestaurantId() restaurantId: string) {
     return this.service.list(restaurantId);
   }
 
   @Post()
+  @RequirePermissions('ledger.manage_customers', 'ledger.assign_order')
   create(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { id: string; name: string },
@@ -42,6 +44,7 @@ export class OpenAccountsController {
   }
 
   @Post(':id/pay')
+  @RequirePermissions('ledger.collect_payment')
   pay(
     @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,

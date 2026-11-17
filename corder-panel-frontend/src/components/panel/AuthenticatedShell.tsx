@@ -1,6 +1,7 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { PanelProvider } from "@/lib/panel-store"
 import { I18nProvider } from "@/lib/panel-i18n"
+import { usePanelAuth } from "@/lib/panel-auth"
 import type { PanelViewId } from "@/lib/panel-types"
 import { PanelToastProvider } from "@/components/panel/panel-toast"
 import { PanelFontSizeProvider } from "@/components/panel/panel-font-size-provider"
@@ -19,6 +20,63 @@ import CashRegisterView from "@/components/panel/cash-register-view"
 import StockView from "@/components/panel/stock-view"
 import TechnicalView from "@/components/panel/technical-view"
 import CampaignManagement from "@/components/panel/campaign-management"
+
+function isViewPermitted(
+  view: PanelViewId,
+  isBoss: boolean,
+  hasPermission: (...keys: string[]) => boolean,
+): boolean {
+  if (isBoss || view === "dashboard") return true
+  switch (view) {
+    case "tables":
+      return hasPermission("order.view", "order.create", "billing.close_check")
+    case "quick-sale":
+      return hasPermission("order.quick_sale", "billing.close_check")
+    case "live-orders":
+      return hasPermission(
+        "reports.view_operational",
+        "billing.close_check",
+        "billing.edit_completed_order",
+      )
+    case "cash-register":
+      return hasPermission(
+        "cash.view",
+        "cash.shift_open",
+        "cash.shift_close",
+        "ledger.view",
+      )
+    case "products":
+      return hasPermission(
+        "catalog.view",
+        "catalog.manage_products",
+        "catalog.change_price",
+        "catalog.toggle_stock",
+      )
+    case "campaigns":
+      return hasPermission("catalog.manage_campaigns")
+    case "stock":
+      return hasPermission(
+        "inventory.view",
+        "inventory.manage_materials",
+        "inventory.stock_movement",
+        "inventory.count_adjust",
+      )
+    case "users":
+      return hasPermission("staff.view", "staff.manage", "roles.manage")
+    case "reports":
+      return hasPermission(
+        "reports.view_operational",
+        "reports.view_financial",
+        "reports.view_staff_performance",
+      )
+    case "technical":
+      return hasPermission("system.manage_printers", "reports.view_audit_logs")
+    case "billing":
+      return hasPermission("system.manage_settings", "reports.view_financial")
+    case "settings":
+      return hasPermission("system.manage_settings", "system.manage_tables")
+  }
+}
 
 function renderScreen(
   activeView: PanelViewId,
@@ -56,6 +114,13 @@ function renderScreen(
 
 export function AuthenticatedShell() {
   const [activeView, setActiveView] = useState<PanelViewId>("dashboard")
+  const { isBoss, hasPermission } = usePanelAuth()
+
+  useEffect(() => {
+    if (!isViewPermitted(activeView, isBoss, hasPermission)) {
+      setActiveView("dashboard")
+    }
+  }, [activeView, isBoss, hasPermission])
 
   return (
     <PanelProvider>

@@ -34,19 +34,27 @@ export function LoginPage() {
     <div className="min-h-dvh flex items-center justify-center bg-[#0f0f0f] p-4">
       <div className="w-full max-w-sm rounded-2xl border border-[#2a2a2a] bg-[#1a1a1a] p-8 shadow-xl">
         <div className="mb-8 text-center">
-          <h1 className="text-xl font-semibold text-white">Platform Admin</h1>
-          <p className="mt-1 text-sm text-zinc-500">Restoran ve erişim yönetimi</p>
+          <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-[#e63462] text-lg font-bold text-white">
+            C
+          </div>
+          <h1 className="text-xl font-semibold text-white">Corder Platform Admin</h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            Restoran, franchise ve abonelik yönetimi
+          </p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-zinc-400">E-posta</label>
+            <label className="mb-1.5 block text-xs font-medium text-zinc-400">
+              E-posta
+            </label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@example.com"
+                placeholder="admin@corder.com"
+                autoComplete="email"
                 className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] py-2.5 pl-10 pr-4 text-sm text-white outline-none focus:border-blue-500"
                 required
                 disabled={loading}
@@ -54,7 +62,9 @@ export function LoginPage() {
             </div>
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-zinc-400">Parola</label>
+            <label className="mb-1.5 block text-xs font-medium text-zinc-400">
+              Parola
+            </label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
               <input
@@ -62,6 +72,7 @@ export function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
+                autoComplete="current-password"
                 className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] py-2.5 pl-10 pr-4 text-sm text-white outline-none focus:border-blue-500"
                 required
                 disabled={loading}
@@ -78,7 +89,7 @@ export function LoginPage() {
           </button>
         </form>
         <p className="mt-6 text-center text-xs text-zinc-500">
-          Backend .env içindeki PLATFORM_ADMIN_EMAIL / PLATFORM_ADMIN_PASSWORD ile giriş yapın
+          Yetkili platform yöneticisi hesabınızla oturum açın.
         </p>
       </div>
     </div>

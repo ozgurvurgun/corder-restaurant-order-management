@@ -49,12 +49,13 @@ export function StaffUsersTab() {
   const handleSaveUser = async (payload: {
     name: string
     role: string
-    phone?: string
+    phone?: string | null
     canAccessPanel: boolean
     canAccessTerminal: boolean
-    email?: string
+    email?: string | null
     password?: string
     pin?: string
+    permissionsOverride: null
     grantedPermissions: string[]
     revokedPermissions: string[]
     maxDiscountPercentOverride: number | null
@@ -67,7 +68,11 @@ export function StaffUsersTab() {
         await bossApi.staff.update(effectiveBranchId, editingUser.id, payload)
         showToast(`${payload.name} bilgileri ve yetkileri güncellendi`)
       } else {
-        await bossApi.staff.create(effectiveBranchId, payload)
+        await bossApi.staff.create(effectiveBranchId, {
+          ...payload,
+          phone: payload.phone ?? undefined,
+          email: payload.email ?? undefined,
+        })
         showToast(`${payload.name} kullanıcısı oluşturuldu`)
       }
       await refreshBranchDetails(effectiveBranchId)
@@ -175,6 +180,7 @@ export function StaffUsersTab() {
         ) : (
           staff.map((u) => {
             const hasOverrides =
+              (u.permissionsOverride?.length ?? 0) > 0 ||
               u.grantedPermissions.length > 0 ||
               u.revokedPermissions.length > 0 ||
               u.maxDiscountPercentOverride != null ||
@@ -191,7 +197,7 @@ export function StaffUsersTab() {
                       className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl text-[15px] font-bold text-white"
                       style={{ backgroundColor: u.roleColor || "#e63462" }}
                     >
-                      {u.name.charAt(0).toUpperCase()}
+                      {u.name.charAt(0).toLocaleUpperCase("tr-TR")}
                     </div>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -270,12 +276,19 @@ export function StaffUsersTab() {
                   <span
                     className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-semibold ${
                       u.canAccessTerminal
-                        ? "bg-emerald-50 text-emerald-700"
+                        ? u.hasPin
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-amber-100 text-amber-800"
                         : "bg-[#f5f5f7] text-[#86868b]"
                     }`}
                   >
                     <Smartphone className="h-3 w-3" />
-                    El Terminali (PIN): {u.canAccessTerminal ? "Açık" : "Kapalı"}
+                    El Terminali (PIN):{" "}
+                    {u.canAccessTerminal
+                      ? u.hasPin
+                        ? "Açık"
+                        : "Açık (PIN Eksik)"
+                      : "Kapalı"}
                   </span>
                   <span className="inline-flex items-center gap-1 rounded-lg bg-[#fef3f5] px-2.5 py-1 text-[11px] font-semibold text-[#e63462]">
                     <Shield className="h-3 w-3" />

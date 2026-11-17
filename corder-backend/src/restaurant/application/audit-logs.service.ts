@@ -23,7 +23,10 @@ export class AuditLogsService {
     restaurantId: string,
     opts?: { category?: AuditCategory; limit?: number; from?: Date; to?: Date },
   ) {
-    const limit = opts?.limit ?? 200;
+    const rawLimit = Number(opts?.limit ?? 200);
+    const limit = Number.isFinite(rawLimit)
+      ? Math.max(1, Math.min(500, Math.floor(rawLimit)))
+      : 200;
     const where: any = { restaurantId };
     if (opts?.category) where.category = opts.category;
     if (opts?.from && opts?.to) where.createdAt = Between(opts.from, opts.to);

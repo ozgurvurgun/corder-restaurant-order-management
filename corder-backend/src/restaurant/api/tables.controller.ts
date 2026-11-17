@@ -35,14 +35,49 @@ export class TablesController {
     private readonly ordersGateway: OrdersGateway,
   ) {}
 
+  private assertCanReadTables(user?: {
+    role?: string;
+    isBoss?: boolean;
+    permissions?: PermissionKey[];
+  }): void {
+    if (!user) {
+      throw new ForbiddenException('Session authentication is required');
+    }
+    if (user.role === 'print_agent') {
+      throw new ForbiddenException('Print agent cannot access table endpoints');
+    }
+    if (user.role === 'root' || user.isBoss || user.role === 'terminal') {
+      return;
+    }
+    const perms = user.permissions ?? [];
+    if (
+      !perms.includes('order.view') &&
+      !perms.includes('order.create') &&
+      !perms.includes('billing.close_check') &&
+      !perms.includes('system.manage_tables')
+    ) {
+      throw new ForbiddenException('You do not have permission to view tables (order.view)');
+    }
+  }
+
   /** Declared first so it is not shadowed by `GET :id`. */
   @Get('presence')
-  tablePresence(@RestaurantId() restaurantId: string) {
+  @RequirePermissions('order.view', 'order.create', 'billing.close_check', 'system.manage_tables')
+  tablePresence(
+    @RestaurantId() restaurantId: string,
+    @RestaurantUser() user: { role?: string; isBoss?: boolean; permissions?: PermissionKey[] },
+  ) {
+    this.assertCanReadTables(user);
     return this.service.buildSessionPresenceMap(restaurantId);
   }
 
   @Get()
-  findAll(@RestaurantId() restaurantId: string) {
+  @RequirePermissions('order.view', 'order.create', 'billing.close_check', 'system.manage_tables')
+  findAll(
+    @RestaurantId() restaurantId: string,
+    @RestaurantUser() user: { role?: string; isBoss?: boolean; permissions?: PermissionKey[] },
+  ) {
+    this.assertCanReadTables(user);
     return this.service.findByRestaurant(restaurantId);
   }
 
@@ -96,18 +131,23 @@ export class TablesController {
   }
 
   @Get(':id')
+  @RequirePermissions('order.view', 'order.create', 'billing.close_check', 'system.manage_tables')
   findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
+    @RestaurantUser() user: { role?: string; isBoss?: boolean; permissions?: PermissionKey[] },
   ) {
+    this.assertCanReadTables(user);
     return this.service.findOne(id, restaurantId);
   }
 
   @Post()
   @UseGuards(PanelRootGuard)
   @RequirePermissions('system.manage_tables')
-  create(@RestaurantId() restaurantId: string, @Body() dto: CreateTableDto) {
-    return this.service.create(restaurantId, dto);
+  async create(@RestaurantId() restaurantId: string, @Body() dto: CreateTableDto) {
+    const created = await this.service.create(restaurantId, dto);
+    this.ordersGateway.emitOrdersUpdated(restaurantId);
+    return created;
   }
 
   @Patch(':id')
@@ -137,6 +177,19 @@ export class TablesController {
     if (isStructuralEdit && !user.isBoss && !perms.includes('system.manage_tables')) {
       throw new ForbiddenException(
         'You do not have permission to edit tables (system.manage_tables)',
+      );
+    }
+
+    if (
+      dto.status !== undefined &&
+      !user.isBoss &&
+      !perms.includes('system.manage_tables') &&
+      !perms.includes('billing.close_check') &&
+      !perms.includes('billing.split_bill') &&
+      !perms.includes('order.create')
+    ) {
+      throw new ForbiddenException(
+        'You do not have permission to update table status',
       );
     }
 
@@ -212,10 +265,13 @@ export class TablesController {
   @Delete(':id')
   @UseGuards(PanelRootGuard)
   @RequirePermissions('system.manage_tables')
-  remove(
+  async remove(
     @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
   ) {
-    return this.service.remove(id, restaurantId);
+    await this.service.remove(id, restaurantId);
+    await this.ordersGateway.emitTableSessionPresence(restaurantId);
+    this.ordersGateway.emitOrdersUpdated(restaurantId);
+    return { ok: true };
   }
 }

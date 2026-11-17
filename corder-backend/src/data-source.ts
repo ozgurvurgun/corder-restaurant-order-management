@@ -1,11 +1,26 @@
+import { existsSync } from 'fs';
 import { join } from 'path';
 import { DataSource } from 'typeorm';
+
+const envCandidates = [join(process.cwd(), '.env'), join(__dirname, '..', '.env')];
+for (const envPath of envCandidates) {
+  if (existsSync(envPath) && typeof process.loadEnvFile === 'function') {
+    try {
+      process.loadEnvFile(envPath);
+      break;
+    } catch {
+      // Ignore if already loaded or unreadable
+    }
+  }
+}
 
 const isProd = process.env.NODE_ENV === 'production';
 const password = process.env.DB_PASSWORD ?? '';
 if (isProd && !password.trim()) {
   throw new Error('Missing required environment variable: DB_PASSWORD');
 }
+
+const sslEnabled = process.env.DB_SSL === 'true';
 
 export default new DataSource({
   type: 'postgres',
@@ -18,5 +33,8 @@ export default new DataSource({
   migrations: [join(__dirname, 'migrations', '*.js')],
   synchronize: false,
   migrationsRun: false,
+  migrationsTransactionMode: 'each',
+  ssl: sslEnabled
+    ? { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' }
+    : false,
 });
-

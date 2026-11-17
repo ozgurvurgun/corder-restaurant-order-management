@@ -12,23 +12,14 @@ import type {
   ClosedTable,
   RestaurantSettings,
 } from "@/lib/panel-types"
-
-function formatCurrency(n: number) {
-  return n.toLocaleString("tr-TR", { minimumFractionDigits: 2 })
-}
-function formatTime(d: Date) {
-  return new Date(d).toLocaleTimeString("tr-TR", {
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-}
-function formatFullDate(d: Date) {
-  return new Date(d).toLocaleDateString("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  })
-}
+import {
+  formatCurrency,
+  formatIstanbulDate,
+  formatIstanbulDateTime,
+  formatIstanbulTime,
+  fromMinorUnits,
+  toMinorUnits,
+} from "@/lib/format"
 
 export interface ShiftTotalsSummary {
   totalRevenue: number
@@ -39,14 +30,35 @@ export interface ShiftTotalsSummary {
   totalLedger: number
 }
 
+const SPLIT_METHOD_LABELS: Record<string, string> = {
+  cash: "Nakit",
+  "credit-card": "Kredi Kartı",
+  "meal-card": "Yemek Kartı",
+  multinet: "Multinet",
+  ledger: "Cari",
+}
+
 export function ZReportSection(props: {
   settings: RestaurantSettings
-  currentShift: CashShift | null
+  selectedShift: CashShift | null
+  allShifts: CashShift[]
+  onSelectShift: (shiftId: string) => void
   shiftTotals: ShiftTotalsSummary
-  todaysClosedCount: number
+  shiftClosedCount: number
 }) {
-  const { settings, currentShift, shiftTotals, todaysClosedCount } = props
+  const {
+    settings,
+    selectedShift,
+    allShifts,
+    onSelectShift,
+    shiftTotals,
+    shiftClosedCount,
+  } = props
   const zReportRef = useRef<HTMLDivElement>(null)
+  const isOpenShift = selectedShift?.status === "open"
+  const reportTitle = isOpenShift
+    ? "X RAPORU (ANLIK VARDİYA ÖZETİ)"
+    : "Z RAPORU (VARDİYA KAPANIŞ RAPORU)"
 
   const handlePrintZReport = () => {
     if (!zReportRef.current) return
@@ -57,9 +69,9 @@ export function ZReportSection(props: {
         <!DOCTYPE html>
         <html>
           <head>
-            <title>Z Raporu</title>
+            <title>${isOpenShift ? "X Raporu" : "Z Raporu"}</title>
             <style>
-              body { font-family: 'Courier New', monospace; padding: 20px; max-width: 300px; margin: 0 auto; }
+              body { font-family: 'Courier New', monospace; padding: 20px; max-width: 320px; margin: 0 auto; }
               .text-center { text-align: center; }
               .font-bold { font-weight: bold; }
               .border-b { border-bottom: 1px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
@@ -79,14 +91,51 @@ export function ZReportSection(props: {
     }
   }
 
+  if (!selectedShift) {
+    return (
+      <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-10 text-center text-[13px] text-[#86868b]">
+        Henüz görüntülenebilecek açık veya kapalı vardiya kaydı bulunmuyor.
+      </div>
+    )
+  }
+
+  const expectedMinorUnits =
+    toMinorUnits(selectedShift.openingBalance || 0) +
+    toMinorUnits(selectedShift.cashIn || 0) -
+    toMinorUnits(selectedShift.cashOut || 0)
+  const expectedCash = fromMinorUnits(expectedMinorUnits)
+  const hasClosingBalance =
+    selectedShift.status === "closed" && selectedShift.closingBalance != null
+  const closingDiffMinorUnits = hasClosingBalance
+    ? toMinorUnits(selectedShift.closingBalance || 0) - expectedMinorUnits
+    : 0
+
   return (
     <>
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <span className="text-[12px] font-medium text-[#86868b]">Vardiya:</span>
+          <select
+            value={selectedShift.id}
+            onChange={(e) => onSelectShift(e.target.value)}
+            className="h-[34px] px-3 text-[12px] bg-white rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
+          >
+            {allShifts.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.status === "open"
+                  ? `Açık Vardiya — ${s.openedBy} (${formatIstanbulDateTime(s.openedAt)})`
+                  : `Kapalı — ${s.openedBy} (${formatIstanbulDateTime(s.openedAt)} - ${s.closedAt ? formatIstanbulTime(s.closedAt) : "-"})`}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <button
           onClick={handlePrintZReport}
           className="h-[34px] px-4 flex items-center gap-2 bg-[#1d1d1f] text-white rounded-lg text-[12px] font-medium hover:bg-[#3a3a3c] transition-colors"
         >
-          <Printer className="w-3.5 h-3.5" /> Z Raporu Yazdır
+          <Printer className="w-3.5 h-3.5" />{" "}
+          {isOpenShift ? "X Raporu Yazdır" : "Z Raporu Yazdır"}
         </button>
       </div>
 
@@ -98,17 +147,26 @@ export function ZReportSection(props: {
           <h3 className="text-[18px] font-bold text-[#1d1d1f]">
             {settings.name}
           </h3>
-          <p className="text-[11px] text-[#86868b] mt-1">{settings.address}</p>
-          <p className="text-[11px] text-[#86868b]">VKN: {settings.taxId}</p>
+          {settings.address && (
+            <p className="text-[11px] text-[#86868b] mt-1">{settings.address}</p>
+          )}
+          {settings.taxId && (
+            <p className="text-[11px] text-[#86868b]">VKN: {settings.taxId}</p>
+          )}
           <div className="mt-3 h-px bg-[#d1d1d6]/40" />
-          <p className="text-[14px] font-bold text-[#1d1d1f] mt-3">Z RAPORU</p>
-          <p className="text-[12px] text-[#86868b]">
-            {new Date().toLocaleDateString("tr-TR", {
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-            })}
+          <p className="text-[14px] font-bold text-[#1d1d1f] mt-3">
+            {reportTitle}
           </p>
+          <p className="text-[11px] text-[#86868b] mt-1">
+            Açılış: {formatIstanbulDateTime(selectedShift.openedAt)} (
+            {selectedShift.openedBy})
+          </p>
+          {selectedShift.closedAt && (
+            <p className="text-[11px] text-[#86868b]">
+              Kapanış: {formatIstanbulDateTime(selectedShift.closedAt)} (
+              {selectedShift.closedBy || "-"})
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col gap-3 text-[13px]">
@@ -120,13 +178,13 @@ export function ZReportSection(props: {
             </span>
           </div>
           <div className="flex justify-between py-1.5 border-b border-dashed border-[#d1d1d6]">
-            <span className="text-[#86868b]">Kapanan Masa Sayısı</span>
-            <span className="font-bold text-[#1d1d1f]">{todaysClosedCount}</span>
+            <span className="text-[#86868b]">Kapanan Adisyon Sayısı</span>
+            <span className="font-bold text-[#1d1d1f]">{shiftClosedCount}</span>
           </div>
           <div className="flex justify-between py-1.5 border-b border-dashed border-[#d1d1d6]">
-            <span className="text-[#86868b]">İşlem Sayısı</span>
+            <span className="text-[#86868b]">Kasa İşlem Sayısı</span>
             <span className="font-bold text-[#1d1d1f]">
-              {currentShift?.transactionCount || 0}
+              {selectedShift.transactionCount || 0}
             </span>
           </div>
 
@@ -161,34 +219,64 @@ export function ZReportSection(props: {
             <span className="text-[#86868b]">Açılış Bakiye</span>
             <span className="font-medium text-[#1d1d1f]">
               {"\u20BA"}
-              {formatCurrency(currentShift?.openingBalance || 0)}
+              {formatCurrency(selectedShift.openingBalance || 0)}
             </span>
           </div>
           <div className="flex justify-between py-1">
             <span className="text-[#86868b]">Nakit Giriş</span>
             <span className="font-medium text-green-600">
               +{"\u20BA"}
-              {formatCurrency(currentShift?.cashIn || 0)}
+              {formatCurrency(selectedShift.cashIn || 0)}
             </span>
           </div>
           <div className="flex justify-between py-1">
             <span className="text-[#86868b]">Nakit Çıkış</span>
             <span className="font-medium text-red-500">
               -{"\u20BA"}
-              {formatCurrency(currentShift?.cashOut || 0)}
+              {formatCurrency(selectedShift.cashOut || 0)}
             </span>
           </div>
           <div className="flex justify-between py-1.5 border-t border-[#d1d1d6] font-bold">
             <span className="text-[#1d1d1f]">Kasada Beklenen</span>
             <span className="text-[#e63462]">
               {"\u20BA"}
-              {formatCurrency(
-                (currentShift?.openingBalance || 0) +
-                  (currentShift?.cashIn || 0) -
-                  (currentShift?.cashOut || 0),
-              )}
+              {formatCurrency(expectedCash)}
             </span>
           </div>
+          {hasClosingBalance && (
+            <>
+              <div className="flex justify-between py-1 font-semibold">
+                <span className="text-[#1d1d1f]">Sayılan Kasa (Kapanış)</span>
+                <span className="text-[#1d1d1f]">
+                  {"\u20BA"}
+                  {formatCurrency(selectedShift.closingBalance || 0)}
+                </span>
+              </div>
+              <div className="flex justify-between py-1 font-semibold">
+                <span className="text-[#86868b]">Kasa Farkı</span>
+                <span
+                  className={
+                    closingDiffMinorUnits === 0
+                      ? "text-green-600"
+                      : closingDiffMinorUnits > 0
+                        ? "text-blue-600"
+                        : "text-red-600"
+                  }
+                >
+                  {closingDiffMinorUnits === 0
+                    ? `Tam (\u20BA0,00)`
+                    : closingDiffMinorUnits > 0
+                      ? `+\u20BA${formatCurrency(fromMinorUnits(closingDiffMinorUnits))} (Fazla)`
+                      : `-\u20BA${formatCurrency(fromMinorUnits(Math.abs(closingDiffMinorUnits)))} (Açık)`}
+                </span>
+              </div>
+            </>
+          )}
+          {selectedShift.notes && (
+            <div className="mt-2 pt-2 border-t border-dashed border-[#d1d1d6] text-[12px] text-[#86868b]">
+              Not: {selectedShift.notes}
+            </div>
+          )}
         </div>
       </div>
     </>
@@ -280,6 +368,9 @@ export function DetailReportSection(props: {
         const list = groups[block.key] ?? []
         if (list.length === 0) return null
         const Icon = block.icon
+        const blockTotal = fromMinorUnits(
+          list.reduce((s, ct) => s + toMinorUnits(ct.netAmount), 0),
+        )
         return (
           <div key={block.key} className="border-b border-[#f0f0f0]">
             <div
@@ -296,10 +387,10 @@ export function DetailReportSection(props: {
               </div>
               <span className={`text-[14px] font-bold ${block.titleText}`}>
                 {"\u20BA"}
-                {formatCurrency(list.reduce((s, ct) => s + ct.netAmount, 0))}
+                {formatCurrency(blockTotal)}
               </span>
             </div>
-            <div className="max-h-[200px] overflow-auto">
+            <div className="max-h-[220px] overflow-auto">
               {list.map((ct, idx) => (
                 <div
                   key={ct.id}
@@ -307,14 +398,29 @@ export function DetailReportSection(props: {
                     idx % 2 === 1 ? "bg-[#fafafa]" : ""
                   }`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <span className="text-[#1d1d1f] font-medium">
                       {ct.tableName}
                     </span>
                     <span className="text-[#86868b]">{ct.waiter}</span>
                     <span className="text-[#aeaeb2]">
-                      {formatFullDate(ct.closedAt)} {formatTime(ct.closedAt)}
+                      {formatIstanbulDate(ct.closedAt)}{" "}
+                      {formatIstanbulTime(ct.closedAt)}
                     </span>
+                    {ct.payment.method === "split" &&
+                      ct.payment.splitDetails &&
+                      ct.payment.splitDetails.length > 0 && (
+                        <span className="text-[11px] text-[#86868b]">
+                          (
+                          {ct.payment.splitDetails
+                            .map(
+                              (sd) =>
+                                `${SPLIT_METHOD_LABELS[sd.method] || sd.method}: \u20BA${formatCurrency(sd.amount)}`,
+                            )
+                            .join(" + ")}
+                          )
+                        </span>
+                      )}
                   </div>
                   <span className="font-semibold text-[#1d1d1f]">
                     {"\u20BA"}

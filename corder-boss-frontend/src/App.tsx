@@ -9,7 +9,9 @@ import { StaffUsersTab } from "@/components/staff-users-tab"
 import { AnalyticsAuditTab } from "@/components/analytics-audit-tab"
 import { OperationsCatalogTab } from "@/components/operations-catalog-tab"
 import {
+  AlertTriangle,
   LayoutDashboard,
+  RefreshCw,
   ShieldCheck,
   Users,
   BarChart3,
@@ -29,7 +31,7 @@ const NAV_TABS: Array<{
 ]
 
 function BossShell() {
-  const { isAuthenticated, toast } = useBossStore()
+  const { isAuthenticated, toast, error, loading, refreshAll } = useBossStore()
   const [activeTab, setActiveTab] = useState<BossTabId>("dashboard")
 
   if (!isAuthenticated) {
@@ -44,6 +46,8 @@ function BossShell() {
       {toast && (
         <div className="fixed top-16 left-1/2 z-50 -translate-x-1/2 px-4 w-full max-w-sm">
           <div
+            role="status"
+            aria-live="polite"
             className={`rounded-2xl px-4 py-3 text-center text-[13px] font-semibold text-white shadow-xl ${
               toast.type === "error" ? "bg-red-600" : "bg-[#1d1d1f]"
             }`}
@@ -55,6 +59,27 @@ function BossShell() {
 
       {/* Main Content Area */}
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-4 pb-24">
+        {error && (
+          <div
+            role="alert"
+            className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[12px] text-red-700"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0 text-red-600" />
+              <span className="font-medium leading-snug">{error}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => void refreshAll()}
+              disabled={loading}
+              className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl bg-red-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
+              Tekrar Dene
+            </button>
+          </div>
+        )}
+
         {activeTab === "dashboard" && <DashboardTab onNavigate={setActiveTab} />}
         {activeTab === "permissions" && <RolesPermissionsTab />}
         {activeTab === "staff" && <StaffUsersTab />}
@@ -63,7 +88,10 @@ function BossShell() {
       </main>
 
       {/* Mobile-First Bottom Tab Navigation Bar */}
-      <nav className="fixed bottom-0 inset-x-0 z-30 border-t border-[#d1d1d6]/70 bg-white/90 backdrop-blur-2xl safe-bottom">
+      <nav
+        aria-label="Alt Gezinme Menüsü"
+        className="fixed bottom-0 inset-x-0 z-30 border-t border-[#d1d1d6]/70 bg-white/90 backdrop-blur-2xl safe-bottom"
+      >
         <div className="mx-auto flex h-[62px] max-w-xl items-center justify-around px-2">
           {NAV_TABS.map((tab) => {
             const Icon = tab.icon
@@ -97,4 +125,3 @@ export default function App() {
     </BossStoreProvider>
   )
 }
-

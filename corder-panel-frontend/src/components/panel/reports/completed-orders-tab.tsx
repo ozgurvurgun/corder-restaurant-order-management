@@ -5,9 +5,20 @@ import type {
   ClosedTable,
   LedgerCustomer,
 } from "@/lib/panel-types"
+import {
+  formatCurrency,
+  formatIstanbulDateTime,
+  fromMinorUnits,
+  toMinorUnits,
+} from "@/lib/format"
 
-function formatCurrency(n: number) {
-  return n.toLocaleString("tr-TR", { minimumFractionDigits: 2 })
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: "Nakit",
+  "credit-card": "Kredi Kartı",
+  "meal-card": "Yemek Kartı",
+  multinet: "Multinet",
+  split: "Çoklu Ödeme",
+  ledger: "Cari",
 }
 
 export function HistoryTab(props: {
@@ -28,7 +39,7 @@ export function HistoryTab(props: {
           ?.name?.trim()
       return n ? `Cari (${n})` : "Cari"
     }
-    return ct.payment.method.replace("-", " ")
+    return PAYMENT_METHOD_LABELS[ct.payment.method] || ct.payment.method
   }
 
   return (
@@ -101,14 +112,11 @@ export function HistoryTab(props: {
                     {"\u20BA"}
                     {formatCurrency(ct.netAmount)}
                   </td>
-                  <td className="px-4 py-2 text-[12px] text-[#86868b] capitalize">
+                  <td className="px-4 py-2 text-[12px] text-[#86868b]">
                     {formatPaymentLabel(ct)}
                   </td>
                   <td className="px-4 py-2 text-[12px] text-right text-[#86868b]">
-                    {new Date(ct.closedAt).toLocaleTimeString("tr-TR", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {formatIstanbulDateTime(ct.closedAt)}
                   </td>
                 </tr>
               ))}
@@ -175,7 +183,9 @@ export function HistoryTab(props: {
                   <td className="px-4 py-2 text-[12px] text-right text-red-500">
                     {"\u20BA"}
                     {formatCurrency(
-                      ci.orderItem.price * ci.orderItem.quantity,
+                      fromMinorUnits(
+                        toMinorUnits(ci.orderItem.price) * ci.orderItem.quantity,
+                      ),
                     )}
                   </td>
                 </tr>

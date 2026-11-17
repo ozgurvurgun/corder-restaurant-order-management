@@ -1,30 +1,29 @@
-import { useEffect, useState } from "react"
+import { useMemo, useState } from "react"
 import { useBossStore } from "@/lib/boss-store"
 import { bossApi } from "@/lib/api"
-import type { CatalogProductDto } from "@/lib/types"
+import type { CatalogProductDto, LiveTableDto } from "@/lib/types"
+import {
+  computeTableTotals,
+  formatMoney,
+  getWaiterDisplayName,
+} from "@/lib/format"
+import { LiveTableDetailSheet } from "./live-table-detail-sheet"
 import {
   LayoutGrid,
   Package,
   AlertTriangle,
   Search,
-  User,
   Check,
   X,
   Building2,
 } from "lucide-react"
-
-function formatMoney(n: number): string {
-  return Number(n || 0).toLocaleString("tr-TR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
 
 export function OperationsCatalogTab() {
   const {
     tables,
     orders,
     products,
+    categories,
     overview,
     branches,
     selectedBranchId,
@@ -38,34 +37,23 @@ export function OperationsCatalogTab() {
   const [subTab, setSubTab] = useState<"tables" | "catalog" | "stock">("tables")
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null)
   const [searchProduct, setSearchProduct] = useState("")
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("ALL")
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null)
   const [priceDraft, setPriceDraft] = useState<string>("")
 
-  useEffect(() => {
-    if (!selectedTableId) return
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSelectedTableId(null)
-    }
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [selectedTableId])
+  const categoryNameById = useMemo(
+    () => new Map(categories.map((c) => [c.id, c.name])),
+    [categories]
+  )
 
   const criticalMaterials = overview?.criticalMaterials ?? []
 
   const getTableActiveOrders = (tableId: string) =>
     orders.filter((o) => o.tableId === tableId && o.status === "active")
 
-  const getTableTotal = (tableId: string) => {
-    const tOrders = getTableActiveOrders(tableId)
-    let sum = 0
-    for (const o of tOrders) {
-      for (const item of o.items) {
-        if (item.status !== "cancelled" && item.status !== "ledger") {
-          sum += Number(item.price) * item.quantity
-        }
-      }
-    }
-    return sum
+  const getTableNetTotal = (table: LiveTableDto) => {
+    const tOrders = getTableActiveOrders(table.id)
+    return computeTableTotals(tOrders, table.discount).netTotal
   }
 
   const handleToggleStock = async (prod: CatalogProductDto) => {
@@ -104,11 +92,13 @@ export function OperationsCatalogTab() {
     ? getTableActiveOrders(selectedTable.id)
     : []
 
-  const filteredProducts = products.filter((p) =>
-    !searchProduct.trim()
-      ? true
-      : p.name.toLowerCase().includes(searchProduct.toLowerCase())
-  )
+  const filteredProducts = products.filter((p) => {
+    if (selectedCategoryId !== "ALL" && p.categoryId !== selectedCategoryId) {
+      return false
+    }
+    if (!searchProduct.trim()) return true
+    return p.name.toLowerCase().includes(searchProduct.toLowerCase())
+  })
 
   return (
     <div className="space-y-4 pb-8">
@@ -177,11 +167,13 @@ export function OperationsCatalogTab() {
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {tables.map((t) => {
-              const total = getTableTotal(t.id)
               const tOrders = getTableActiveOrders(t.id)
-              const occupied = total > 0 || tOrders.length > 0
+              const totals = computeTableTotals(tOrders, t.discount)
+              const hasActiveBill = totals.subtotal > 0 || tOrders.length > 0
+              const occupied = hasActiveBill || t.status === "occupied" || t.status === "checkout"
               const waiter =
-                t.sessionStaffName || tOrders[0]?.userDisplayName || null
+                t.sessionStaffName ||
+                (tOrders[0] ? getWaiterDisplayName(tOrders[0]) : null)
               return (
                 <button
                   key={t.id}
@@ -210,7 +202,7 @@ export function OperationsCatalogTab() {
                     />
                   </div>
                   <p className="mt-1 text-[15px] font-extrabold text-[#1d1d1f] tabular-nums">
-                    {occupied ? `₺${formatMoney(total)}` : "Boş"}
+                    {occupied ? `₺${formatMoney( getTableNetTotal(t) )}` : "Boş"}
                   </p>
                   <p className="mt-0.5 truncate text-[10px] text-[#86868b]">
                     {waiter ? `Garson: ${waiter}` : t.section}
@@ -236,68 +228,112 @@ export function OperationsCatalogTab() {
             />
           </div>
 
-          <div className="divide-y divide-[#f0f0f0]">
-            {filteredProducts.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center justify-between gap-3 py-3"
+          {categories.length > 0 && (
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+              <button
+                type="button"
+                onClick={() => setSelectedCategoryId("ALL")}
+                className={`flex-shrink-0 rounded-xl px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                  selectedCategoryId === "ALL"
+                    ? "bg-[#e63462] text-white"
+                    : "bg-[#f5f5f7] text-[#86868b] hover:text-[#1d1d1f]"
+                }`}
               >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-bold text-[#1d1d1f]">
-                    {p.name}
-                  </p>
-                  {editingPriceId === p.id ? (
-                    <div className="mt-1 flex items-center gap-1.5">
-                      <input
-                        type="number"
-                        step="0.5"
-                        value={priceDraft}
-                        onChange={(e) => setPriceDraft(e.target.value)}
-                        className="h-8 w-24 rounded-lg border border-[#e63462] px-2 text-[13px] font-bold"
-                        autoFocus
-                      />
-                      <button
-                        type="button"
-                        onClick={() => void handleSavePrice(p)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#34c759] text-white"
-                      >
-                        <Check className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditingPriceId(null)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f5f5f7] text-[#86868b]"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingPriceId(p.id)
-                        setPriceDraft(String(p.price))
-                      }}
-                      className="mt-0.5 text-[13px] font-bold text-[#e63462] hover:underline"
-                    >
-                      ₺{formatMoney(p.price)} (Fiyatı Değiştir)
-                    </button>
-                  )}
-                </div>
+                Tüm Kategoriler ({products.length})
+              </button>
+              {categories.map((cat) => {
+                const active = selectedCategoryId === cat.id
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setSelectedCategoryId(cat.id)}
+                    className={`flex-shrink-0 rounded-xl px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                      active
+                        ? "bg-[#e63462] text-white"
+                        : "bg-[#f5f5f7] text-[#86868b] hover:text-[#1d1d1f]"
+                    }`}
+                  >
+                    {cat.name}
+                  </button>
+                )
+              })}
+            </div>
+          )}
 
-                <button
-                  type="button"
-                  onClick={() => void handleToggleStock(p)}
-                  className={`rounded-xl px-3 py-1.5 text-[11px] font-bold transition-colors ${
-                    p.inStock
-                      ? "bg-green-100 text-green-700"
-                      : "bg-red-100 text-red-600"
-                  }`}
+          <div className="divide-y divide-[#f0f0f0]">
+            {filteredProducts.map((p) => {
+              const catName = categoryNameById.get(p.categoryId)
+              return (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between gap-3 py-3"
                 >
-                  {p.inStock ? "Stokta Açık" : "Tükendi"}
-                </button>
-              </div>
-            ))}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="truncate text-[13px] font-bold text-[#1d1d1f]">
+                        {p.name}
+                      </p>
+                      {catName && (
+                        <span className="rounded bg-[#f5f5f7] px-1.5 py-0.5 text-[10px] font-medium text-[#86868b]">
+                          {catName}
+                        </span>
+                      )}
+                    </div>
+                    {editingPriceId === p.id ? (
+                      <div className="mt-1 flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          step="0.5"
+                          min={0}
+                          value={priceDraft}
+                          onChange={(e) => setPriceDraft(e.target.value)}
+                          className="h-8 w-24 rounded-lg border border-[#e63462] px-2 text-[13px] font-bold"
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void handleSavePrice(p)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#34c759] text-white"
+                        >
+                          <Check className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingPriceId(null)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f5f5f7] text-[#86868b]"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingPriceId(p.id)
+                          setPriceDraft(String(p.price))
+                        }}
+                        className="mt-0.5 text-[13px] font-bold text-[#e63462] hover:underline"
+                      >
+                        ₺{formatMoney(p.price)} (Fiyatı Değiştir)
+                      </button>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => void handleToggleStock(p)}
+                    className={`rounded-xl px-3 py-1.5 text-[11px] font-bold transition-colors ${
+                      p.inStock
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-600"
+                    }`}
+                  >
+                    {p.inStock ? "Stokta Açık" : "Tükendi"}
+                  </button>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
@@ -342,85 +378,13 @@ export function OperationsCatalogTab() {
         </div>
       )}
 
-      {/* Selected Table Live Order Detail Sheet */}
       {selectedTable && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4 backdrop-blur-xs"
-          onClick={() => setSelectedTableId(null)}
-        >
-          <div
-            className="w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white p-5 shadow-2xl safe-bottom"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-[#f0f0f0] pb-3">
-              <div>
-                <h3 className="text-[16px] font-bold text-[#1d1d1f]">
-                  {selectedTable.name} — Canlı Adisyon Detayı
-                </h3>
-                <p className="text-[11px] text-[#86868b]">
-                  Toplam: ₺{formatMoney(getTableTotal(selectedTable.id))}
-                </p>
-              </div>
-              <button
-                onClick={() => setSelectedTableId(null)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f5f5f7]"
-              >
-                <X className="h-4 w-4 text-[#86868b]" />
-              </button>
-            </div>
-
-            <div className="mt-3 max-h-[55vh] overflow-y-auto space-y-3">
-              {selectedTableOrders.length === 0 ? (
-                <p className="py-6 text-center text-[13px] text-[#86868b]">
-                  Bu masada açık adisyon bulunmuyor.
-                </p>
-              ) : (
-                selectedTableOrders.map((ord, idx) => (
-                  <div
-                    key={ord.id}
-                    className="rounded-2xl border border-[#e5e5ea] bg-[#f9f9fb] p-3"
-                  >
-                    <div className="flex items-center justify-between text-[11px] text-[#86868b] mb-2">
-                      <span className="flex items-center gap-1 font-semibold text-[#1d1d1f]">
-                        <User className="h-3 w-3" /> Adisyon #{idx + 1} (
-                        {ord.userDisplayName || "Personel"})
-                      </span>
-                      <span>
-                        {new Date(ord.createdAt).toLocaleTimeString("tr-TR", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                    </div>
-                    <div className="divide-y divide-[#e5e5ea]">
-                      {ord.items.map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between py-1.5 text-[12px]"
-                        >
-                          <span
-                            className={
-                              item.status === "cancelled"
-                                ? "line-through text-red-400"
-                                : "font-medium text-[#1d1d1f]"
-                            }
-                          >
-                            {item.quantity}x {item.productName}
-                          </span>
-                          <span className="font-semibold text-[#1d1d1f]">
-                            ₺{formatMoney(Number(item.price) * item.quantity)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
+        <LiveTableDetailSheet
+          table={selectedTable}
+          orders={selectedTableOrders}
+          onClose={() => setSelectedTableId(null)}
+        />
       )}
     </div>
   )
 }
-

@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Utensils, Phone } from "lucide-react"
 import { useApp } from "@/lib/store"
+import { useToast } from "@/components/ios-toast"
 
 interface LoginScreenProps {
   onLogin: () => void
@@ -8,6 +9,7 @@ interface LoginScreenProps {
 
 export function LoginScreen({ onLogin }: LoginScreenProps) {
   const { login, error } = useApp()
+  const { showToast } = useToast()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
@@ -38,6 +40,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
             <input
               type="email"
               placeholder="E-posta"
+              autoComplete="username"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full bg-transparent text-white placeholder:text-white/50 py-4 px-4 text-[17px] focus:outline-none border-b border-white/10"
@@ -45,6 +48,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
             <input
               type="password"
               placeholder="Parola"
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full bg-transparent text-white placeholder:text-white/50 py-4 px-4 text-[17px] focus:outline-none"
@@ -79,7 +83,13 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
           </button>
         </form>
 
-        <button className="flex items-center gap-2 text-white/70 active:text-white transition-colors">
+        <button
+          type="button"
+          onClick={() =>
+            showToast("Destek için işletme yöneticiniz veya Compart Software ile iletişime geçin.", "info")
+          }
+          className="flex items-center gap-2 text-white/70 active:text-white transition-colors"
+        >
           <Phone className="h-[18px] w-[18px]" />
           <span className="text-[15px] font-medium">Müşteri Hizmetleri</span>
         </button>

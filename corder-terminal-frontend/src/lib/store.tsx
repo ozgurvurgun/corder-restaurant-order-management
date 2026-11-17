@@ -1,18 +1,22 @@
 import { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef, type ReactNode } from "react"
-import { io, type Socket } from "socket.io-client"
 import type {
   PaymentMethod, TerminalCategory, TerminalOrder, TerminalOrderItem,
-  TerminalProduct, TerminalScreen, TerminalTable, TerminalUser,
+  TerminalProduct, TerminalScreen, TerminalStaffMember, TerminalTable, TerminalUser,
 } from "./types"
 import {
   api, getToken, setToken, clearToken, getRestaurant, setRestaurant,
-  getStaffSession, setStaffSession, clearStaffSession, getBase,
+  getStaffSession, setStaffSession, clearStaffSession,
   setAuthExpiredHandler, setStaffExpiredHandler, type RawTableDto, type OrderDto, type StaffSession,
 } from "./api"
+import { translateApiError } from "./format"
 import {
   calculateOrderItemsTotal, mapMenuTreeToCategoriesAndProducts,
   mapOrderDtoToTerminalOrder, mapTablesWithOrders, upsertCartItem,
 } from "./terminal-mappers"
+import {
+  CARTS_STORAGE_KEY, LOCKED_TABLE_STORAGE_KEY,
+  loadStoredCarts, saveStoredCarts, useTerminalLifecycle,
+} from "./use-terminal-lifecycle"
 
 function mapSessionToTerminalUser(s: Omit<StaffSession, "expiresAt" | "staffToken"> | null): TerminalUser | null {
   if (!s) return null
@@ -21,35 +25,50 @@ function mapSessionToTerminalUser(s: Omit<StaffSession, "expiresAt" | "staffToke
     name: s.name,
     role: s.role,
     roleLabel: s.roleLabel,
-    permissions: s.permissions,
+    permissions: Array.isArray(s.permissions) ? s.permissions : [],
     limits: s.limits,
   }
 }
 
 interface TerminalContextType {
-  currentUser: TerminalUser | null; isLoggedIn: boolean; isOffline: boolean
+  currentUser: TerminalUser | null; users: TerminalStaffMember[]; usersError: string | null
+  isLoggedIn: boolean; isOffline: boolean
   restaurant: { id: string; name: string; slug: string } | null
   activeScreen: TerminalScreen; tables: TerminalTable[]; categories: TerminalCategory[]
   products: TerminalProduct[]; orders: TerminalOrder[]; selectedTable: TerminalTable | null
   cart: TerminalOrderItem[]; selectedCategory: string | null; isLoading: boolean; error: string | null
   login: (email: string, password: string) => Promise<boolean>
-  loginWithPin: (pin: string) => Promise<{ ok: boolean; error?: string }>
+  loginWithPin: (pin: string, staffId?: string) => Promise<{ ok: boolean; error?: string }>
   logout: () => void; logoutRestaurant: () => void; toggleOffline: () => void; refreshData: () => Promise<void>
   setActiveScreen: (screen: TerminalScreen) => void
-  selectTable: (tableOrId: TerminalTable | string | null) => Promise<{ ok: boolean; holderName?: string }>
+  selectTable: (
+    tableOrId: TerminalTable | string | null,
+    force?: boolean
+  ) => Promise<{ ok: boolean; holderName?: string; canForceUnlock?: boolean }>
   releaseTableSession: () => void; selectCategory: (categoryId: string | null) => void
   addToCart: (product: TerminalProduct, quantity?: number, note?: string) => void
   removeFromCart: (itemOrProductId: string) => void
   updateCartQuantity: (itemOrProductId: string, quantity: number) => void
   updateCartNote: (itemOrProductId: string, note: string) => void
-  clearCart: () => void; submitOrder: (tableId?: string) => Promise<boolean>
+  splitCartItem: (itemId: string) => string | null
+  clearCart: (tableId?: string) => void
+  submitOrder: (tableId?: string, noteOverrides?: Record<string, string>) => Promise<boolean>
   requestBill: (tableId: string) => Promise<boolean>
   closeTable: (tableId: string, method?: PaymentMethod) => Promise<boolean>
   moveTable: (fromTableId: string, toTableId: string) => Promise<boolean>
-  moveOrderItemsToTable: (fromTableId: string, toTableId: string, itemIds: string[]) => Promise<boolean>
-  cancelOrderItemOnServer: (orderId: string, itemId: string, reason?: string) => Promise<boolean>
+  moveOrderItemsToTable: (
+    fromTableId: string,
+    toTableId: string,
+    items: Array<{ itemId: string; quantity?: number }>
+  ) => Promise<boolean>
+  cancelOrderItemOnServer: (
+    orderId: string,
+    itemId: string,
+    reason?: string,
+    quantity?: number
+  ) => Promise<boolean>
   processPayment: (orderId: string, method: PaymentMethod, amount?: number) => Promise<boolean>
-  printReceipt: (tableId: string) => Promise<void>
+  printReceipt: (tableId: string, orderId?: string) => Promise<void>
   hasPermission: (perm: string) => boolean
   getTableOrders: (tableId: string) => TerminalOrder[]
   getTableTotal: (tableId: string) => number
@@ -60,8 +79,12 @@ const TerminalContext = createContext<TerminalContextType | null>(null)
 
 export function TerminalProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<TerminalUser | null>(() => mapSessionToTerminalUser(getStaffSession()))
+  const [users, setUsers] = useState<TerminalStaffMember[]>([])
+  const [usersError, setUsersError] = useState<string | null>(null)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [isOffline, setIsOffline] = useState(false)
+  const [isOffline, setIsOffline] = useState<boolean>(() =>
+    typeof navigator !== "undefined" ? !navigator.onLine : false
+  )
   const [restaurant, setRestaurantState] = useState<{ id: string; name: string; slug: string } | null>(null)
   const [activeScreen, setActiveScreen] = useState<TerminalScreen>("tables")
   const [rawTables, setRawTables] = useState<RawTableDto[]>([])
@@ -70,18 +93,23 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<TerminalProduct[]>([])
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
-  const [cart, setCart] = useState<TerminalOrderItem[]>([])
+  const [cartsByTableId, setCartsByTableId] = useState<Record<string, TerminalOrderItem[]>>(() => loadStoredCarts())
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const socketRef = useRef<Socket | null>(null)
   const submitInFlightRef = useRef(false)
   const lockedTableIdRef = useRef<string | null>(null)
   const pendingUnlockTableIdRef = useRef<string | null>(null)
   const currentUserRef = useRef<TerminalUser | null>(currentUser)
+  const lastActivityRef = useRef<number>(Date.now())
 
   useEffect(() => { currentUserRef.current = currentUser }, [currentUser])
+  useEffect(() => { saveStoredCarts(cartsByTableId) }, [cartsByTableId])
 
+  const cart = useMemo(
+    () => (selectedTableId ? cartsByTableId[selectedTableId] ?? [] : []),
+    [cartsByTableId, selectedTableId]
+  )
   const productsById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products])
   const orders = useMemo(
     () => rawOrders.map((dto) => mapOrderDtoToTerminalOrder(dto, rawTables, productsById)),
@@ -99,19 +127,40 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     try { setRawTables(await api.tables.list(token)) } catch { /* ignore polling errors */ }
   }, [])
 
+  const refreshLiveState = useCallback(async () => {
+    const token = getToken()
+    if (!token) return
+    try {
+      const [tablesRes, ordersRes] = await Promise.all([
+        api.tables.list(token),
+        api.orders.list(token),
+      ])
+      setRawTables(tablesRes)
+      setRawOrders(ordersRes)
+    } catch {
+      /* ignore background sync errors */
+    }
+  }, [])
+
   const refreshData = useCallback(async () => {
     const token = getToken()
     if (!token) return
     setIsLoading(true)
     setError(null)
+    setUsersError(null)
     try {
-      const [tablesRes, ordersRes, menuRes] = await Promise.all([
+      const [tablesRes, ordersRes, menuRes, staffUsersRes] = await Promise.all([
         api.tables.list(token),
         api.orders.list(token),
         api.menu.terminal(token).catch(() => null),
+        api.staff.listTerminalUsers(token).catch((err: unknown) => {
+          setUsersError(translateApiError(err, "Personel listesi yüklenemedi"))
+          return null
+        }),
       ])
       setRawTables(tablesRes)
       setRawOrders(ordersRes)
+      if (staffUsersRes) setUsers(staffUsersRes)
       if (menuRes) {
         const mapped = mapMenuTreeToCategoriesAndProducts(menuRes.categories)
         setCategories(mapped.categories)
@@ -120,7 +169,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       }
       setCurrentUser(mapSessionToTerminalUser(getStaffSession()))
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Veri yüklenemedi")
+      setError(translateApiError(err, "Veri yüklenemedi"))
     } finally {
       setIsLoading(false)
     }
@@ -130,54 +179,23 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     const token = getToken()
     const rest = getRestaurant()
     if (token && rest) {
+      const leftoverLockedId = sessionStorage.getItem(LOCKED_TABLE_STORAGE_KEY)
+      if (leftoverLockedId) {
+        sessionStorage.removeItem(LOCKED_TABLE_STORAGE_KEY)
+        void api.tables.sessionUnlock(token, leftoverLockedId).catch(() => undefined)
+      }
       setIsLoggedIn(true)
       setRestaurantState(rest)
       void refreshData()
     }
   }, [refreshData])
 
-  useEffect(() => {
-    if (!isLoggedIn) return
-    const syncOnVisible = () => { if (document.visibilityState === "visible") void refreshData() }
-    const syncOnOnline = () => void refreshData()
-    document.addEventListener("visibilitychange", syncOnVisible)
-    window.addEventListener("online", syncOnOnline)
-    const intervalId = window.setInterval(syncOnVisible, 45_000)
-    return () => {
-      document.removeEventListener("visibilitychange", syncOnVisible)
-      window.removeEventListener("online", syncOnOnline)
-      window.clearInterval(intervalId)
-    }
-  }, [isLoggedIn, refreshData])
-
-  useEffect(() => {
-    if (!isLoggedIn) return
-    const token = getToken()
-    const base = getBase()
-    if (!token || !base) return
-    const socket = io(base, {
-      path: "/ws", auth: { token }, transports: ["websocket", "polling"],
-      reconnectionAttempts: Infinity, reconnectionDelayMax: 10000, timeout: 20000,
-    })
-    socketRef.current = socket
-    const syncAll = () => void refreshData()
-    socket.on("order:created", syncAll)
-    socket.on("orders:moved", syncAll)
-    socket.on("orders:updated", syncAll)
-    socket.on("reconnect", syncAll)
-    socket.on("tables:presence", () => void pullTables())
-    socket.on("connect", syncAll)
-    return () => {
-      socketRef.current?.disconnect()
-      socketRef.current = null
-    }
-  }, [isLoggedIn, refreshData, pullTables])
-
   const releaseTableSession = useCallback(() => {
     const tableId = lockedTableIdRef.current ?? pendingUnlockTableIdRef.current
     const user = currentUserRef.current
     const token = getToken()
     lockedTableIdRef.current = null
+    sessionStorage.removeItem(LOCKED_TABLE_STORAGE_KEY)
     setSelectedTableId(null)
     if (!tableId || !user || !token) return
     void api.tables.sessionUnlock(token, tableId).then(() => {
@@ -187,13 +205,33 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   }, [pullTables])
 
   const logout = useCallback(() => {
-    releaseTableSession(); clearStaffSession(); setCurrentUser(null); setActiveScreen("tables")
+    releaseTableSession()
+    clearStaffSession()
+    setCurrentUser(null)
+    setCartsByTableId({})
+    sessionStorage.removeItem(CARTS_STORAGE_KEY)
+    setError(null)
+    setActiveScreen("tables")
   }, [releaseTableSession])
+
+  useTerminalLifecycle({
+    isLoggedIn,
+    currentUser,
+    selectedTableId,
+    lockedTableIdRef,
+    lastActivityRef,
+    setIsOffline,
+    refreshData,
+    refreshLiveState,
+    pullTables,
+    logout,
+  })
 
   const logoutRestaurant = useCallback(() => {
     releaseTableSession(); clearToken(); clearStaffSession()
-    setIsLoggedIn(false); setRestaurantState(null); setCurrentUser(null); setActiveScreen("tables")
-    setRawTables([]); setRawOrders([]); setCategories([]); setProducts([]); setCart([]); setError(null)
+    sessionStorage.removeItem(CARTS_STORAGE_KEY)
+    setIsLoggedIn(false); setRestaurantState(null); setCurrentUser(null); setUsers([]); setActiveScreen("tables")
+    setRawTables([]); setRawOrders([]); setCategories([]); setProducts([]); setCartsByTableId({}); setError(null)
   }, [releaseTableSession])
 
   useEffect(() => {
@@ -201,6 +239,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     setStaffExpiredHandler(() => {
       clearStaffSession(); setCurrentUser(null); setSelectedTableId(null); setActiveScreen("tables")
       lockedTableIdRef.current = null; pendingUnlockTableIdRef.current = null
+      sessionStorage.removeItem(LOCKED_TABLE_STORAGE_KEY)
     })
     return () => { setAuthExpiredHandler(null); setStaffExpiredHandler(null) }
   }, [logoutRestaurant])
@@ -218,16 +257,16 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       await refreshData()
       return true
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Giriş başarısız")
+      setError(translateApiError(err, "Giriş başarısız"))
       return false
     }
   }, [refreshData])
 
-  const loginWithPin = useCallback(async (pin: string): Promise<{ ok: boolean; error?: string }> => {
+  const loginWithPin = useCallback(async (pin: string, staffId?: string): Promise<{ ok: boolean; error?: string }> => {
     const token = getToken()
     if (!token) return { ok: false, error: "Restoran oturumu gerekli" }
     try {
-      const res = await api.staff.verifyPin(token, pin)
+      const res = await api.staff.verifyPin(token, pin, staffId)
       const session = {
         staffId: res.staffId,
         name: res.name,
@@ -238,60 +277,126 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
         staffToken: res.staffToken,
       }
       setStaffSession(session)
+      lastActivityRef.current = Date.now()
       setCurrentUser(mapSessionToTerminalUser(session))
       setActiveScreen("tables")
       return { ok: true }
     } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : "Geçersiz PIN kodu" }
+      return { ok: false, error: translateApiError(err, "Geçersiz PIN kodu") }
     }
   }, [])
 
-  const selectTable = useCallback(async (tableOrId: TerminalTable | string | null): Promise<{ ok: boolean; holderName?: string }> => {
+  const selectTable = useCallback(async (
+    tableOrId: TerminalTable | string | null,
+    force = false
+  ): Promise<{ ok: boolean; holderName?: string; canForceUnlock?: boolean }> => {
     if (!tableOrId) { releaseTableSession(); return { ok: true } }
     const tableId = typeof tableOrId === "string" ? tableOrId : tableOrId.id
-    if (isOffline) { lockedTableIdRef.current = tableId; setSelectedTableId(tableId); return { ok: true } }
+    if (!navigator.onLine) {
+      return { ok: false, holderName: "İnternet bağlantısı yok. Masa açılamadı." }
+    }
     const user = currentUserRef.current
     const token = getToken()
     if (!user) return { ok: false, holderName: "Garson seçilmedi" }
     if (!token) return { ok: false, holderName: "Bağlantı yok" }
+    const prevLocked = lockedTableIdRef.current
+    if (prevLocked && prevLocked !== tableId) {
+      void api.tables.sessionUnlock(token, prevLocked).catch(() => undefined)
+    }
     try {
-      const res = await api.tables.sessionLock(token, tableId)
-      if (!res.ok) return { ok: false, holderName: res.holderName }
+      const res = await api.tables.sessionLock(token, tableId, force)
+      if (!res.ok) return { ok: false, holderName: res.holderName, canForceUnlock: res.canForceUnlock }
       lockedTableIdRef.current = tableId
       pendingUnlockTableIdRef.current = tableId
+      sessionStorage.setItem(LOCKED_TABLE_STORAGE_KEY, tableId)
       setSelectedTableId(tableId)
       void pullTables()
       return { ok: true }
     } catch (err) {
-      return { ok: false, holderName: err instanceof Error && err.message ? err.message : "Bağlantı yok" }
+      return { ok: false, holderName: translateApiError(err, "Masa kilitlenemedi") }
     }
-  }, [isOffline, pullTables, releaseTableSession])
+  }, [pullTables, releaseTableSession])
 
-  const toggleOffline = useCallback(() => setIsOffline((prev) => !prev), [])
+  const toggleOffline = useCallback(() => {
+    setIsOffline(typeof navigator !== "undefined" ? !navigator.onLine : false)
+  }, [])
   const selectCategory = useCallback((categoryId: string | null) => setSelectedCategory(categoryId), [])
+
+  const updateActiveTableCart = useCallback(
+    (updater: (prev: TerminalOrderItem[]) => TerminalOrderItem[], explicitTableId?: string) => {
+      const tid = explicitTableId ?? selectedTableId
+      if (!tid) return
+      setCartsByTableId((prev) => {
+        const current = prev[tid] ?? []
+        const next = updater(current)
+        if (next.length === 0) {
+          const copy = { ...prev }
+          delete copy[tid]
+          return copy
+        }
+        return { ...prev, [tid]: next }
+      })
+    },
+    [selectedTableId]
+  )
+
   const addToCart = useCallback((product: TerminalProduct, quantity = 1, note?: string) => {
-    setCart((prev) => upsertCartItem(prev, product, quantity, note))
-  }, [])
+    updateActiveTableCart((prev) => upsertCartItem(prev, product, quantity, note))
+  }, [updateActiveTableCart])
   const removeFromCart = useCallback((id: string) => {
-    setCart((prev) => prev.filter((i) => i.id !== id && i.product.id !== id))
-  }, [])
+    updateActiveTableCart((prev) => prev.filter((i) => i.id !== id && i.product.id !== id))
+  }, [updateActiveTableCart])
   const updateCartQuantity = useCallback((id: string, quantity: number) => {
-    setCart((prev) =>
+    updateActiveTableCart((prev) =>
       quantity <= 0
         ? prev.filter((i) => i.id !== id && i.product.id !== id)
         : prev.map((i) => (i.id === id || i.product.id === id ? { ...i, quantity } : i))
     )
-  }, [])
+  }, [updateActiveTableCart])
   const updateCartNote = useCallback((id: string, note: string) => {
-    setCart((prev) => prev.map((i) => (i.id === id || i.product.id === id ? { ...i, note } : i)))
-  }, [])
-  const clearCart = useCallback(() => setCart([]), [])
+    const cleaned = note.trim()
+    updateActiveTableCart((prev) =>
+      prev.map((i) => (i.id === id || i.product.id === id ? { ...i, note: cleaned || undefined } : i))
+    )
+  }, [updateActiveTableCart])
+  const splitCartItem = useCallback((itemId: string): string | null => {
+    let createdId: string | null = null
+    updateActiveTableCart((prev) => {
+      const idx = prev.findIndex((i) => i.id === itemId)
+      if (idx === -1 || prev[idx].quantity <= 1) return prev
+      const target = prev[idx]
+      const newId = `cart-${target.product.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+      createdId = newId
+      const next = [...prev]
+      next[idx] = { ...target, quantity: target.quantity - 1 }
+      next.splice(idx + 1, 0, {
+        id: newId,
+        product: target.product,
+        quantity: 1,
+        note: undefined,
+        status: "pending",
+      })
+      return next
+    })
+    return createdId
+  }, [updateActiveTableCart])
+  const clearCart = useCallback((explicitTableId?: string) => {
+    updateActiveTableCart(() => [], explicitTableId)
+  }, [updateActiveTableCart])
   const getCartTotal = useCallback(() => calculateOrderItemsTotal(cart), [cart])
   const getCartItemCount = useCallback(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart])
 
-  const submitOrder = useCallback(async (explicitTableId?: string): Promise<boolean> => {
+  const submitOrder = useCallback(async (
+    explicitTableId?: string,
+    noteOverrides?: Record<string, string>
+  ): Promise<boolean> => {
     const targetTableId = explicitTableId ?? selectedTableId
-    if (!targetTableId || cart.length === 0 || submitInFlightRef.current) return false
+    const targetCart = targetTableId ? (cartsByTableId[targetTableId] ?? []) : []
+    if (!targetTableId || targetCart.length === 0 || submitInFlightRef.current) return false
+    if (!navigator.onLine) {
+      setError("İnternet bağlantısı yok. Bağlantı geldiğinde tekrar deneyin; sepetiniz korunuyor.")
+      return false
+    }
     if (tables.find((t) => t.id === targetTableId)?.status === "bill-requested") {
       setError("Masa hesap kesiminde. Hesap penceresi kapatılmadan sipariş gönderilemez.")
       return false
@@ -303,70 +408,89 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     try {
       await api.orders.create(token, {
         tableId: targetTableId,
-        items: cart.map((i) => ({ productId: i.product.id, quantity: i.quantity, note: i.note })),
+        items: targetCart.map((i) => {
+          const override = noteOverrides?.[i.id] ?? noteOverrides?.[i.product.id]
+          const finalNote = (override !== undefined ? override : i.note)?.trim() || undefined
+          return { productId: i.product.id, quantity: i.quantity, note: finalNote }
+        }),
       })
-      await refreshData()
-      setCart([])
+      clearCart(targetTableId)
+      await refreshLiveState()
       return true
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sipariş gönderilemedi")
+      setError(translateApiError(err, "Sipariş gönderilemedi"))
       return false
     } finally {
       submitInFlightRef.current = false
     }
-  }, [cart, selectedTableId, tables, refreshData])
+  }, [cartsByTableId, selectedTableId, tables, clearCart, refreshLiveState])
 
-  const printReceipt = useCallback(async (tableId: string) => {
+  const printReceipt = useCallback(async (tableId: string, orderId?: string) => {
     const token = getToken()
     if (!token) throw new Error("Oturum yok")
-    await api.orders.printReceipt(token, { tableId })
+    await api.orders.printReceipt(token, orderId ? { tableId, orderId } : { tableId })
   }, [])
 
   const runServerMutation = useCallback(async (fn: (token: string) => Promise<unknown>): Promise<boolean> => {
     const token = getToken()
     if (!token) return false
-    try { await fn(token); await refreshData(); return true } catch { return false }
-  }, [refreshData])
+    setError(null)
+    try {
+      await fn(token)
+      await refreshLiveState()
+      return true
+    } catch (err) {
+      setError(translateApiError(err, "İşlem gerçekleştirilemedi"))
+      return false
+    }
+  }, [refreshLiveState])
 
   const requestBill = useCallback((tableId: string) => runServerMutation((t) => api.orders.printReceipt(t, { tableId })), [runServerMutation])
-  const closeTable = useCallback((tableId: string, method: PaymentMethod = "cash") => runServerMutation((t) => api.tables.closeCheck(t, tableId, { method })), [runServerMutation])
+  const closeTable = useCallback((tableId: string, method: PaymentMethod = "cash") => runServerMutation((t) => api.orders.closeCheck(t, { tableId, method })), [runServerMutation])
   const moveTable = useCallback((fromTableId: string, toTableId: string) => runServerMutation((t) => api.orders.move(t, fromTableId, toTableId)), [runServerMutation])
-  const moveOrderItemsToTable = useCallback((fromTableId: string, toTableId: string, itemIds: string[]) => {
-    if (itemIds.length === 0) return Promise.resolve(false)
-    return runServerMutation((t) => api.orders.moveItems(t, { fromTableId, toTableId, itemIds }))
+  const moveOrderItemsToTable = useCallback((
+    fromTableId: string,
+    toTableId: string,
+    items: Array<{ itemId: string; quantity?: number }>
+  ) => {
+    if (items.length === 0) return Promise.resolve(false)
+    return runServerMutation((t) => api.orders.moveItems(t, { fromTableId, toTableId, items }))
   }, [runServerMutation])
   const cancelOrderItemOnServer = useCallback(
-    (orderId: string, itemId: string, reason = "Terminal iptali") =>
-      runServerMutation((t) => api.orders.cancelItem(t, orderId, itemId, reason)),
+    (orderId: string, itemId: string, reason = "Terminal iptali", quantity?: number) =>
+      runServerMutation((t) => api.orders.cancelItem(t, orderId, itemId, reason, quantity)),
     [runServerMutation]
   )
   const hasPermission = useCallback(
     (perm: string): boolean => {
-      if (!currentUser) return false
-      if (!currentUser.permissions) return true
+      if (!currentUser || !Array.isArray(currentUser.permissions)) return false
       return currentUser.permissions.includes(perm)
     },
     [currentUser]
   )
-  const processPayment = useCallback((orderId: string, method: PaymentMethod, amount?: number) => {
+  const processPayment = useCallback((orderId: string, method: PaymentMethod) => {
     const tableId = orders.find((o) => o.id === orderId)?.tableId ?? selectedTableId
     if (!tableId) return Promise.resolve(false)
-    return runServerMutation((t) => api.tables.closeCheck(t, tableId, { method, paidAmount: amount }))
+    return runServerMutation((t) => api.orders.closeCheck(t, { tableId, method }))
   }, [orders, selectedTableId, runServerMutation])
 
   const getTableOrders = useCallback((tableId: string) => orders.filter((o) => o.tableId === tableId && o.status === "active"), [orders])
   const getTableTotal = useCallback(
-    (tableId: string) => orders.filter((o) => o.tableId === tableId && o.status === "active").reduce((sum, o) => sum + calculateOrderItemsTotal(o.items), 0),
-    [orders]
+    (tableId: string) => {
+      const matched = tables.find((t) => t.id === tableId)
+      if (matched) return matched.currentTotal
+      return orders.filter((o) => o.tableId === tableId && o.status === "active").reduce((sum, o) => sum + calculateOrderItemsTotal(o.items), 0)
+    },
+    [orders, tables]
   )
 
   return (
     <TerminalContext.Provider
       value={{
-        currentUser, isLoggedIn, isOffline, restaurant, activeScreen, tables, categories, products, orders,
+        currentUser, users, usersError, isLoggedIn, isOffline, restaurant, activeScreen, tables, categories, products, orders,
         selectedTable, cart, selectedCategory, isLoading, error, login, loginWithPin, logout, logoutRestaurant,
         toggleOffline, refreshData, setActiveScreen, selectTable, releaseTableSession, selectCategory, addToCart,
-        removeFromCart, updateCartQuantity, updateCartNote, clearCart, submitOrder, requestBill, closeTable,
+        removeFromCart, updateCartQuantity, updateCartNote, splitCartItem, clearCart, submitOrder, requestBill, closeTable,
         moveTable, moveOrderItemsToTable, cancelOrderItemOnServer, processPayment, printReceipt, hasPermission, getTableOrders,
         getTableTotal, getCartTotal, getCartItemCount,
       }}

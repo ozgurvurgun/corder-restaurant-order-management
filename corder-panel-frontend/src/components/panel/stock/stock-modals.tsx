@@ -1,5 +1,5 @@
 import { X } from "lucide-react"
-import type { StockMaterial } from "@/lib/panel-types"
+import type { StockMaterial, Supplier } from "@/lib/panel-types"
 
 export function AddMaterialForm(props: {
   matName: string
@@ -14,6 +14,9 @@ export function AddMaterialForm(props: {
   setMatStock: (v: string) => void
   matMin: string
   setMatMin: (v: string) => void
+  matSupplier?: string
+  setMatSupplier?: (v: string) => void
+  suppliers?: Supplier[]
   onClose: () => void
   onSubmit: () => void
 }) {
@@ -30,6 +33,9 @@ export function AddMaterialForm(props: {
     setMatStock,
     matMin,
     setMatMin,
+    matSupplier = "",
+    setMatSupplier,
+    suppliers = [],
     onClose,
     onSubmit,
   } = props
@@ -103,6 +109,22 @@ export function AddMaterialForm(props: {
           placeholder="Min. Stok"
           className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
         />
+        {setMatSupplier && (
+          <select
+            value={matSupplier}
+            onChange={(e) => setMatSupplier(e.target.value)}
+            className="col-span-2 h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none"
+          >
+            <option value="">Tedarikçi seçin (opsiyonel)</option>
+            {suppliers
+              .filter((s) => s.active)
+              .map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+          </select>
+        )}
       </div>
       <div className="flex justify-end gap-2 mt-3">
         <button

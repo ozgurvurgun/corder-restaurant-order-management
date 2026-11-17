@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from "react"
 import { Upload, Loader2 } from "lucide-react"
+import { resolveAssetUrl } from "@/lib/format"
 
 interface ImageUploadProps {
   value: string
@@ -102,7 +103,7 @@ export default function ImageUpload({ value, onChange, label, placeholder, requi
       {value ? (
         <div className="flex items-center gap-3">
           <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-stone-100 border border-[#d1d1d6]/60 flex-shrink-0">
-            <img src={value} alt="Preview" className="w-full h-full object-cover" />
+            <img src={resolveAssetUrl(value)} alt="Preview" className="w-full h-full object-cover" />
           </div>
           <div className="flex gap-2">
             <button

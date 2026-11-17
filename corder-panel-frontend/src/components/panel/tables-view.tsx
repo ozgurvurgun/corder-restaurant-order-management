@@ -1,11 +1,8 @@
 import { useState, useMemo } from "react"
 import { usePanelStore } from "@/lib/panel-store"
+import { formatCurrency, formatIstanbulTime } from "@/lib/format"
 import TableDetailPanel from "./table-detail-panel"
-import { Search } from "lucide-react"
-
-function formatCurrency(n: number) {
-  return n.toLocaleString("tr-TR", { minimumFractionDigits: 2 })
-}
+import { Search, Lock } from "lucide-react"
 
 export default function TablesView() {
   const { tables, sections, settings } = usePanelStore()
@@ -32,6 +29,8 @@ export default function TablesView() {
   }, [tables, activeSection, search])
 
   const selectedTable = tables.find((t) => t.id === selectedTableId)
+  const occupiedCount = tables.filter((t) => t.status !== "empty").length
+  const emptyCount = tables.filter((t) => t.status === "empty").length
 
   return (
     <div className="h-full flex">
@@ -53,20 +52,20 @@ export default function TablesView() {
             </div>
             <div className="flex items-center gap-1.5 text-[11px] text-[#86868b]">
               <span className="inline-block w-2 h-2 rounded-full bg-[#e63462]" />
-              Dolu: {tables.filter((t) => t.status === "occupied").length}
+              Dolu: {occupiedCount}
               <span className="inline-block w-2 h-2 rounded-full bg-[#d1d1d6] ml-2" />
-              Boş: {tables.filter((t) => t.status === "empty").length}
+              Boş: {emptyCount}
             </div>
           </div>
         </div>
 
         {/* Section tabs */}
-        <div className="flex-shrink-0 bg-white/50 border-b border-[#d1d1d6]/40 px-5 py-2.5 flex gap-1.5">
+        <div className="flex-shrink-0 bg-white/50 border-b border-[#d1d1d6]/40 px-5 py-2.5 flex gap-1.5 overflow-x-auto">
           {allSections.map((s) => (
             <button
               key={s}
               onClick={() => setActiveSection(s)}
-              className={`px-3.5 py-[5px] rounded-lg text-[12px] font-medium transition-colors ${
+              className={`px-3.5 py-[5px] rounded-lg text-[12px] font-medium transition-colors whitespace-nowrap ${
                 activeSection === s
                   ? "bg-[#e63462] text-white"
                   : "text-[#86868b] hover:bg-black/[0.04]"
@@ -81,7 +80,8 @@ export default function TablesView() {
         <div className="flex-1 overflow-auto p-5">
           <div className={`grid ${gridClass} gap-3`}>
             {filteredTables.map((table) => {
-              const isOccupied = table.status === "occupied"
+              const isOccupied = table.status !== "empty"
+              const isCheckout = table.status === "checkout"
               const isSelected = selectedTableId === table.id
               return (
                 <button
@@ -90,32 +90,71 @@ export default function TablesView() {
                   className={`relative rounded-xl border ${cardPadding} text-left transition-all hover:shadow-md ${
                     isSelected
                       ? "border-[#e63462] ring-2 ring-[#e63462]/20 bg-white shadow-md"
-                      : isOccupied
-                        ? "border-[#e63462]/30 bg-[#e63462]/[0.04] hover:border-[#e63462]/50"
-                        : "border-[#d1d1d6]/60 bg-white hover:border-[#86868b]/40"
+                      : isCheckout
+                        ? "border-amber-400/70 bg-amber-50/40 hover:border-amber-500"
+                        : isOccupied
+                          ? "border-[#e63462]/30 bg-[#e63462]/[0.04] hover:border-[#e63462]/50"
+                          : "border-[#d1d1d6]/60 bg-white hover:border-[#86868b]/40"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1.5">
                     <span className={`text-[13px] font-semibold ${isOccupied ? "text-[#1d1d1f]" : "text-[#86868b]"}`}>
                       {table.name}
                     </span>
-                    <span className={`w-2 h-2 rounded-full ${isOccupied ? "bg-[#e63462]" : "bg-[#d1d1d6]"}`} />
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        isCheckout
+                          ? "bg-amber-500"
+                          : isOccupied
+                            ? "bg-[#e63462]"
+                            : "bg-[#d1d1d6]"
+                      }`}
+                    />
                   </div>
                   {isOccupied ? (
                     <>
-                      <p className="text-[15px] font-bold text-[#e63462]">{"₺"}{formatCurrency(table.totalAmount)}</p>
-                      <div className="flex items-center justify-between mt-1.5">
-                        <span className="text-[11px] text-[#86868b] capitalize">{table.waiter}</span>
-                        <span className="text-[11px] text-[#86868b]">{table.orderCount} adisyon</span>
-                      </div>
-                      {table.lastUpdated && (
-                        <span className="text-[10px] text-[#86868b]/70 mt-0.5 block">
-                          {new Date(table.lastUpdated).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}
+                      <p className="text-[15px] font-bold text-[#e63462]">
+                        {"₺"}
+                        {formatCurrency(table.totalAmount)}
+                      </p>
+                      <div className="flex items-center justify-between mt-1.5 gap-1">
+                        <span className="text-[11px] text-[#86868b] capitalize truncate">
+                          {table.waiter || "-"}
                         </span>
-                      )}
+                        <span className="text-[11px] text-[#86868b] flex-shrink-0">
+                          {table.orderCount} adisyon
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between mt-0.5 gap-1">
+                        {table.lastUpdated ? (
+                          <span className="text-[10px] text-[#86868b]/70">
+                            {formatIstanbulTime(table.lastUpdated)}
+                          </span>
+                        ) : (
+                          <span />
+                        )}
+                        {isCheckout ? (
+                          <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                            Hesap Kesimde
+                          </span>
+                        ) : table.lockedByStaffName ? (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded truncate max-w-[110px]">
+                            <Lock className="w-2.5 h-2.5 flex-shrink-0" />
+                            {table.lockedByStaffName}
+                          </span>
+                        ) : null}
+                      </div>
                     </>
                   ) : (
-                    <p className="text-[12px] text-[#86868b] mt-0.5">Boş</p>
+                    <div className="flex items-center justify-between mt-0.5">
+                      <p className="text-[12px] text-[#86868b]">Boş</p>
+                      {table.lockedByStaffName && (
+                        <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded truncate max-w-[110px]">
+                          <Lock className="w-2.5 h-2.5 flex-shrink-0" />
+                          {table.lockedByStaffName}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </button>
               )

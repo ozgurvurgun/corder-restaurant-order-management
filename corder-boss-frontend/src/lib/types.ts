@@ -7,19 +7,42 @@ export type PermissionCategory =
   | "inventory"
   | "reports_system"
 
+export type AuditCategory =
+  | "order"
+  | "table"
+  | "payment"
+  | "cash"
+  | "stock"
+  | "product"
+  | "staff"
+  | "system"
+
 export interface PermissionDefinition {
   key: string
-  category: PermissionCategory
+  category: PermissionCategory | string
   title: string
   description: string
   scope: "terminal" | "panel" | "both"
   isCritical?: boolean
 }
 
+export interface RoleTemplateDefinition {
+  key: string
+  name: string
+  description: string
+  color: string
+  isSystem: boolean
+  canAccessPanel: boolean
+  canAccessTerminal: boolean
+  maxDiscountPercent: number
+  maxDiscountAmount: number | null
+  permissions: string[]
+}
+
 export interface PermissionCatalogResponse {
-  categories: Record<PermissionCategory, { title: string; description: string }>
+  categories: Record<string, { title: string; description: string }>
   permissions: PermissionDefinition[]
-  defaultRoleTemplates: RoleDefinition[]
+  defaultRoleTemplates: RoleTemplateDefinition[]
 }
 
 export interface RoleDefinition {
@@ -129,6 +152,19 @@ export interface BranchLivePulse {
   } | null
 }
 
+export interface AuditLogDto {
+  id: string
+  restaurantId: string
+  branchName?: string
+  userId?: string
+  userName: string
+  action: string
+  category: AuditCategory | string
+  details: string
+  metadata?: Record<string, unknown> | null
+  createdAt: string
+}
+
 export interface BossOverviewResponse {
   branches: BranchLivePulse[]
   allOwnedBranches: Array<{
@@ -190,16 +226,12 @@ export interface BossOverviewResponse {
     currentStock: number
     minStock: number
   }>
-  recentAudits: Array<{
-    id: string
-    restaurantId: string
-    branchName: string
-    userName: string
-    action: string
-    category: string
-    details: string
-    createdAt: string
-  }>
+  recentAudits: AuditLogDto[]
+}
+
+export interface TableDiscountDto {
+  type: "percent" | "amount" | "complimentary"
+  value: number
 }
 
 export interface LiveTableDto {
@@ -209,12 +241,16 @@ export interface LiveTableDto {
   status: string
   sessionStaffId?: string | null
   sessionStaffName?: string | null
+  sessionLockedAt?: string | null
+  discount?: TableDiscountDto | null
+  splitInfo?: unknown | null
 }
 
 export interface LiveOrderDto {
   id: string
   tableId: string
   userId?: string | null
+  userName?: string | null
   userDisplayName?: string | null
   status: string
   mergedFrom?: string | null
@@ -227,6 +263,9 @@ export interface LiveOrderDto {
     quantity: number
     note?: string | null
     status: string
+    cancelReason?: string
+    cancelledBy?: string
+    cancelledAt?: string
   }>
 }
 
@@ -269,4 +308,3 @@ export type BossTabId =
   | "staff"
   | "analytics"
   | "operations"
-

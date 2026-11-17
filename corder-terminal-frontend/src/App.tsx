@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react"
+import { WifiOff } from "lucide-react"
 import { useApp } from "@/lib/store"
 import { useToast } from "@/components/ios-toast"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { LoginScreen } from "@/components/login-screen"
 import { UserSelectScreen } from "@/components/user-select-screen"
 import { TablesScreen } from "@/components/tables-screen"
@@ -14,9 +16,12 @@ import { MoveOrderItemScreen } from "@/components/move-order-item-screen"
 export default function App() {
   const {
     isLoggedIn,
+     isOffline,
     currentUser,
     activeScreen,
     selectedTable,
+    cart,
+    clearCart,
     logout,
     setActiveScreen,
     selectTable,
@@ -24,7 +29,14 @@ export default function App() {
   } = useApp()
   const { showToast } = useToast()
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null)
-  const [moveItemPick, setMoveItemPick] = useState<{ itemId: string; productName: string } | null>(null)
+  const [moveItemPick, setMoveItemPick] = useState<{
+    itemId: string
+    productName: string
+    maxQuantity: number
+  } | null>(null)
+  const [forceUnlockPrompt, setForceUnlockPrompt] = useState<{ tableId: string; holderName: string } | null>(null)
+  const [forceUnlockLoading, setForceUnlockLoading] = useState(false)
+  const [leaveCartConfirm, setLeaveCartConfirm] = useState(false)
 
   const currentTableId = selectedTable?.id ?? selectedTableId
 
@@ -32,6 +44,8 @@ export default function App() {
     if (!currentUser) {
       setSelectedTableId(null)
       setMoveItemPick(null)
+      setForceUnlockPrompt(null)
+      setLeaveCartConfirm(false)
     }
   }, [currentUser])
 
@@ -46,6 +60,13 @@ export default function App() {
   const handleTableSelect = async (tableId: string) => {
     const res = await selectTable(tableId)
     if (!res.ok) {
+      if (res.canForceUnlock) {
+        setForceUnlockPrompt({
+          tableId,
+          holderName: res.holderName || "Başka bir garson",
+        })
+        return
+      }
       showToast(
         res.holderName ? `Bu masada şu an ${res.holderName} çalışıyor.` : "Masa başka garsonda açık.",
         "error"
@@ -56,13 +77,44 @@ export default function App() {
     setActiveScreen("table-detail")
   }
 
+  const handleConfirmForceUnlock = async () => {
+    if (!forceUnlockPrompt || forceUnlockLoading) return
+    setForceUnlockLoading(true)
+    try {
+      const res = await selectTable(forceUnlockPrompt.tableId, true)
+      if (!res.ok) {
+        showToast(res.holderName || "Masa kilidi devralınamadı", "error")
+        return
+      }
+      const targetId = forceUnlockPrompt.tableId
+      setForceUnlockPrompt(null)
+      setSelectedTableId(targetId)
+      setActiveScreen("table-detail")
+      showToast("Masa kilidi devralındı")
+    } finally {
+      setForceUnlockLoading(false)
+    }
+  }
+
   const handleNewOrder = () => setActiveScreen("order")
   const handleOpenCart = () => setActiveScreen("cart")
 
-  const handleBackToTables = () => {
+  const exitTableToFloor = () => {
+    if (currentTableId) {
+      clearCart(currentTableId)
+    }
     releaseTableSession()
     setSelectedTableId(null)
+    setLeaveCartConfirm(false)
     setActiveScreen("tables")
+  }
+
+  const handleBackToTables = () => {
+    if (cart.length > 0) {
+      setLeaveCartConfirm(true)
+      return
+    }
+    exitTableToFloor()
   }
 
   const handleBackToTableDetail = () => setActiveScreen("table-detail")
@@ -70,6 +122,7 @@ export default function App() {
   const handleMoveTable = () => setActiveScreen("move-table")
 
   const handleTableMoved = () => {
+    if (currentTableId) clearCart(currentTableId)
     releaseTableSession()
     setSelectedTableId(null)
     setActiveScreen("tables")
@@ -84,9 +137,17 @@ export default function App() {
     setMoveItemPick(null)
   }
 
+  const offlineBanner = isOffline ? (
+    <div className="bg-amber-600 text-white px-4 py-1.5 text-[12px] font-semibold flex items-center justify-center gap-2 z-[60]">
+      <WifiOff className="h-3.5 w-3.5 flex-shrink-0" />
+      <span>İnternet bağlantısı yok — bağlantı bekleniyor, sepetiniz korunuyor</span>
+    </div>
+  ) : null
+
   if (!isLoggedIn) {
     return (
-      <div className="mx-auto max-w-md min-h-dvh relative">
+      <div className="mx-auto max-w-md min-h-dvh relative flex flex-col">
+        {offlineBanner}
         <LoginScreen onLogin={handleLogin} />
       </div>
     )
@@ -94,7 +155,8 @@ export default function App() {
 
   if (!currentUser) {
     return (
-      <div className="mx-auto max-w-md min-h-dvh relative">
+      <div className="mx-auto max-w-md min-h-dvh relative flex flex-col">
+        {offlineBanner}
         <UserSelectScreen onSelect={handleUserSelect} />
       </div>
     )
@@ -150,8 +212,8 @@ export default function App() {
             onBack={handleBackToTableDetail}
             onCartOpen={handleOpenCart}
             onNewOrder={handleNewOrder}
-            onMoveItem={(itemId, productName) => {
-              setMoveItemPick({ itemId, productName })
+            onMoveItem={(itemId, productName, maxQuantity) => {
+              setMoveItemPick({ itemId, productName, maxQuantity })
               setActiveScreen("move-item")
             }}
           />
@@ -163,6 +225,7 @@ export default function App() {
             fromTableId={currentTableId}
             itemId={moveItemPick.itemId}
             productName={moveItemPick.productName}
+            maxQuantity={moveItemPick.maxQuantity}
             onBack={() => {
               setMoveItemPick(null)
               setActiveScreen("open-orders")
@@ -174,5 +237,39 @@ export default function App() {
     }
   }
 
-  return <div className="mx-auto max-w-md min-h-dvh relative">{renderTerminalScreen()}</div>
+  return (
+    <div className="mx-auto max-w-md min-h-dvh relative flex flex-col">
+      {offlineBanner}
+      <div className="flex-1 relative">{renderTerminalScreen()}</div>
+
+      <ConfirmDialog
+        open={Boolean(forceUnlockPrompt)}
+        title="Masa Kilidini Devral"
+        message={
+          forceUnlockPrompt
+            ? `Bu masa şu an ${forceUnlockPrompt.holderName} tarafından açık görünüyor. Kilidi devralıp masayı açmak istiyor musunuz?`
+            : ""
+        }
+        confirmText="Kilidi Devral"
+        cancelText="Vazgeç"
+        loading={forceUnlockLoading}
+        destructive
+        onConfirm={() => void handleConfirmForceUnlock()}
+        onCancel={() => {
+          if (!forceUnlockLoading) setForceUnlockPrompt(null)
+        }}
+      />
+
+      <ConfirmDialog
+        open={leaveCartConfirm}
+        title="Sepette Gönderilmemiş Ürünler Var"
+        message="Masadan çıkarsanız sepetteki gönderilmemiş ürünler silinecektir. Masadan çıkmak istiyor musunuz?"
+        confirmText="Sepeti Sil ve Çık"
+        cancelText="Masada Kal"
+        destructive
+        onConfirm={exitTableToFloor}
+        onCancel={() => setLeaveCartConfirm(false)}
+      />
+    </div>
+  )
 }

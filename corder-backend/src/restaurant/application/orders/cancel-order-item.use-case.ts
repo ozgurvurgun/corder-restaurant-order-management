@@ -1,14 +1,17 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { DataSource, EntityManager } from 'typeorm';
+import { DataSource, EntityManager, In } from 'typeorm';
 import { OrderEntity } from '../../domain/order.entity';
 import { OrderItemEntity } from '../../domain/order-item.entity';
 import { TableEntity } from '../../domain/table.entity';
 import { RestaurantStaffEntity } from '../../domain/restaurant-staff.entity';
 import { PrintJobEntity } from '../../domain/print-job.entity';
+import { OrderStatusPolicy } from '../../domain/services/order-status.policy';
 import { OrdersGateway } from '../../api/orders.gateway';
 import { CashShiftService } from '../cash-shift.service';
+import { TableService } from '../table.service';
 import { OrderQueryService } from './order-query.service';
+import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
 
 @Injectable()
 export class CancelOrderItemUseCase {
@@ -16,6 +19,7 @@ export class CancelOrderItemUseCase {
     private readonly dataSource: DataSource,
     private readonly ordersGateway: OrdersGateway,
     private readonly cashShiftService: CashShiftService,
+    private readonly tableService: TableService,
     private readonly orderQuery: OrderQueryService,
   ) {}
 
@@ -24,44 +28,117 @@ export class CancelOrderItemUseCase {
     itemId: string,
     reason?: string,
     cancelledByName?: string,
+    actorStaffId?: string | null,
+    quantity?: number | null,
   ): Promise<{ ok: true }> {
     await this.cashShiftService.requireCurrent(restaurantId);
 
-    const cancelPayload = await this.dataSource.transaction(async (em) => {
-      const item = await em.findOne(OrderItemEntity, {
+    const { cancelPayload, tableEmptied } = await this.dataSource.transaction(async (em) => {
+      const itemProbe = await em.findOne(OrderItemEntity, {
         where: { id: itemId },
-        lock: { mode: 'pessimistic_write' },
+        select: { id: true, orderId: true },
       });
-      if (!item) throw new NotFoundException('Order item not found');
+      if (!itemProbe) throw new NotFoundException('Order item not found');
 
       const order = await em.findOne(OrderEntity, {
-        where: { id: item.orderId },
+        where: { id: itemProbe.orderId, restaurantId },
         lock: { mode: 'pessimistic_write' },
       });
       if (!order) throw new NotFoundException('Order not found');
-      if (order.restaurantId !== restaurantId) {
-        throw new BadRequestException('Invalid restaurant');
-      }
       if (order.status !== 'active') {
         throw new BadRequestException('Order is not active');
       }
+
+      const item = await em.findOne(OrderItemEntity, {
+        where: { id: itemId, orderId: order.id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!item) throw new NotFoundException('Order item not found');
 
       const table = await em.findOne(TableEntity, {
         where: { id: order.tableId, restaurantId },
         lock: { mode: 'pessimistic_write' },
       });
       if (!table) throw new NotFoundException('Table not found');
-      if (table.status === 'checkout') {
-        throw new BadRequestException('Cannot cancel an order item while table is in checkout');
+      this.tableService.assertStaffMayUseTable(table, actorStaffId);
+
+      const now = new Date();
+      const taken = item.takeQuantity(quantity);
+      let cancelledLine: OrderItemEntity;
+      if (taken.full) {
+        item.cancel(reason, cancelledByName, now);
+        cancelledLine = await em.save(OrderItemEntity, item);
+      } else {
+        // Keep remaining units on the original line; audit the void as its own cancelled row.
+        await em.save(OrderItemEntity, item);
+        const voidRow = em.create(OrderItemEntity, {
+          orderId: order.id,
+          productId: item.productId,
+          productName: item.productName,
+          price: item.price,
+          quantity: taken.quantity,
+          note: item.note ?? undefined,
+          status: 'sent',
+        });
+        voidRow.cancel(reason, cancelledByName, now);
+        cancelledLine = await em.save(OrderItemEntity, voidRow);
       }
 
-      item.cancel(reason, cancelledByName);
-      await em.save(OrderItemEntity, item);
-      await em.update(OrderEntity, { id: order.id, restaurantId }, { updatedAt: new Date() });
+      const siblingItems = await em.find(OrderItemEntity, {
+        where: { orderId: order.id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      const nextOrderStatus = OrderStatusPolicy.resolveOrderStatus(siblingItems);
+      await em.update(
+        OrderEntity,
+        { id: order.id, restaurantId },
+        { status: nextOrderStatus, updatedAt: now },
+      );
 
-      return this.persistKitchenCancelTicket(em, restaurantId, order, table, item);
+      let isTableNowEmpty = false;
+      if (nextOrderStatus === 'closed') {
+        const remainingActiveOrders = await em.find(OrderEntity, {
+          where: { restaurantId, tableId: table.id, status: 'active' },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (remainingActiveOrders.length === 0) {
+          table.markEmpty();
+          await em.save(TableEntity, table);
+          isTableNowEmpty = true;
+        } else {
+          const remOrderIds = remainingActiveOrders.map((o) => o.id);
+          const remItems = await em.find(OrderItemEntity, {
+            where: { orderId: In(remOrderIds) },
+          });
+          const anyBillable = remItems.some((i) =>
+            OrderStatusPolicy.isItemOnActiveBill(i.status),
+          );
+          if (!anyBillable) {
+            await em.update(
+              OrderEntity,
+              { id: In(remOrderIds), restaurantId },
+              { status: 'closed', updatedAt: now },
+            );
+            table.markEmpty();
+            await em.save(TableEntity, table);
+            isTableNowEmpty = true;
+          }
+        }
+      }
+
+      const payload = await this.persistKitchenCancelTicket(
+        em,
+        restaurantId,
+        order,
+        table,
+        cancelledLine,
+      );
+      return { cancelPayload: payload, tableEmptied: isTableNowEmpty };
     });
 
+    if (tableEmptied) {
+      void this.ordersGateway.emitTableSessionPresence(restaurantId).catch(() => undefined);
+    }
     this.ordersGateway.emitOrdersUpdated(restaurantId);
     this.ordersGateway.emitPrintJob(restaurantId, cancelPayload);
     return { ok: true };
@@ -104,7 +181,7 @@ export class CancelOrderItemUseCase {
         cancelledBy: item.cancelledBy ?? '-',
         cancelReason: item.cancelReason ?? '-',
         items: printItems,
-        total: Number(item.price) * item.quantity,
+        total: fromMinorUnits(toMinorUnits(item.price) * item.quantity),
       },
     };
     await em.save(

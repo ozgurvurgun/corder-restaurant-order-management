@@ -1,14 +1,9 @@
 import { useEffect, useState } from "react"
 import type { PlatformBillingConfig } from "@/lib/types"
+import { formatMoney } from "@/lib/money"
 import { Landmark, Save } from "lucide-react"
 
-export function formatMoney(amount: number): string {
-  return new Intl.NumberFormat("tr-TR", {
-    style: "currency",
-    currency: "TRY",
-    maximumFractionDigits: 2,
-  }).format(amount || 0)
-}
+export { formatMoney }
 
 interface BillingKpiCardsProps {
   totalMrr: number
@@ -34,7 +29,7 @@ export function BillingKpiCards({
       <div className="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-5">
         <p className="text-xs font-medium text-zinc-400">Toplam Aylık Tahsilat Hedefi</p>
         <p className="mt-2 text-2xl font-bold text-white">{formatMoney(totalMrr)}</p>
-        <p className="mt-1 text-xs text-zinc-500">{restaurantsCount} kayıtlı mekan</p>
+        <p className="mt-1 text-xs text-zinc-500">{restaurantsCount} aktif mekan</p>
       </div>
       <div className="rounded-xl border border-emerald-500/30 bg-[#1a1a1a] p-5">
         <p className="text-xs font-medium text-emerald-400">Ödeme Alınan Mekanlar</p>
@@ -66,6 +61,7 @@ interface BillingConfigModalProps {
     collectionStartDay: number
     collectionEndDay: number
     supportPhone: string | null
+    supportEmail: string | null
     paymentInstructions: string | null
   }) => Promise<void>
   onNotice: (text: string, type?: "ok" | "err") => void
@@ -82,6 +78,7 @@ export function BillingConfigModal({
   const [collectionStartDay, setCollectionStartDay] = useState(25)
   const [collectionEndDay, setCollectionEndDay] = useState(30)
   const [supportPhone, setSupportPhone] = useState("")
+  const [supportEmail, setSupportEmail] = useState("")
   const [paymentInstructions, setPaymentInstructions] = useState("")
   const [savingConfig, setSavingConfig] = useState(false)
   const [configSavedMsg, setConfigSavedMsg] = useState("")
@@ -94,22 +91,30 @@ export function BillingConfigModal({
       setCollectionStartDay(billingConfig.collectionStartDay ?? 25)
       setCollectionEndDay(billingConfig.collectionEndDay ?? 30)
       setSupportPhone(billingConfig.supportPhone ?? "")
+      setSupportEmail(billingConfig.supportEmail ?? "")
       setPaymentInstructions(billingConfig.paymentInstructions ?? "")
     }
   }, [billingConfig])
 
   const handleSaveConfig = async (e: React.FormEvent) => {
     e.preventDefault()
-    setSavingConfig(true)
     setConfigSavedMsg("")
+    const start = Math.max(1, Math.min(31, Number(collectionStartDay) || 25))
+    const end = Math.max(1, Math.min(31, Number(collectionEndDay) || 30))
+    if (start > end) {
+      onNotice("Tahsilat başlangıç günü, son günden büyük olamaz.", "err")
+      return
+    }
+    setSavingConfig(true)
     try {
       await onUpdateConfig({
         receiverName: receiverName.trim(),
         iban: iban.trim(),
         bankName: bankName.trim(),
-        collectionStartDay: Number(collectionStartDay) || 25,
-        collectionEndDay: Number(collectionEndDay) || 30,
+        collectionStartDay: start,
+        collectionEndDay: end,
         supportPhone: supportPhone.trim() || null,
+        supportEmail: supportEmail.trim() || null,
         paymentInstructions: paymentInstructions.trim() || null,
       })
       setConfigSavedMsg("Banka ve tahsilat bilgileri güncellendi.")
@@ -132,7 +137,7 @@ export function BillingConfigModal({
             Tahsilat Banka / IBAN Bilgileri (Merchant Panelinde Gösterilir)
           </h2>
           <p className="text-xs text-zinc-400">
-            Restoranların Merchant Panelindeki &ldquo;Ödeme &amp; Abonelik&rdquo; sayfasında göreceği ve tek tıkla kopyalayabileceği Ad Soyad ve IBAN bilgileri.
+            Restoranların Merchant Panelindeki &ldquo;Ödeme &amp; Abonelik&rdquo; sayfasında göreceği ve tek tıkla kopyalayabileceği Ad Soyad, IBAN ve destek bilgileri.
           </p>
         </div>
       </div>
@@ -146,7 +151,7 @@ export function BillingConfigModal({
             type="text"
             value={receiverName}
             onChange={(e) => setReceiverName(e.target.value)}
-            placeholder="Örn: Özgür Kaya"
+            placeholder="Örn: Corder Yazılım ve Teknoloji A.Ş."
             className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-3.5 py-2 text-sm text-white outline-none focus:border-[#e63462]"
             required
           />
@@ -160,6 +165,7 @@ export function BillingConfigModal({
             value={iban}
             onChange={(e) => setIban(e.target.value)}
             placeholder="TR00 0000 0000 0000 0000 0000 00"
+            minLength={10}
             className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-3.5 py-2 font-mono text-sm text-white outline-none focus:border-[#e63462]"
             required
           />
@@ -176,17 +182,31 @@ export function BillingConfigModal({
             className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-3.5 py-2 text-sm text-white outline-none focus:border-[#e63462]"
           />
         </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-zinc-300">
-            Sağlayıcı İletişim / Destek Telefonu
-          </label>
-          <input
-            type="text"
-            value={supportPhone}
-            onChange={(e) => setSupportPhone(e.target.value)}
-            placeholder="05XX XXX XX XX"
-            className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-3.5 py-2 text-sm text-white outline-none focus:border-[#e63462]"
-          />
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-300">
+              Destek Telefonu
+            </label>
+            <input
+              type="text"
+              value={supportPhone}
+              onChange={(e) => setSupportPhone(e.target.value)}
+              placeholder="0850 300 00 00"
+              className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white outline-none focus:border-[#e63462]"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-300">
+              Destek E-postası
+            </label>
+            <input
+              type="email"
+              value={supportEmail}
+              onChange={(e) => setSupportEmail(e.target.value)}
+              placeholder="finans@corder.com"
+              className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white outline-none focus:border-[#e63462]"
+            />
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>

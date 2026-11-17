@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { AlertTriangle, Loader2, X } from "lucide-react"
 import type { CashShift } from "@/lib/panel-types"
-
-function formatCurrency(n: number) {
-  return n.toLocaleString("tr-TR", { minimumFractionDigits: 2 })
-}
+import { formatCurrency, fromMinorUnits, toMinorUnits } from "@/lib/format"
 
 export function OpenShiftModal(props: {
   openBalance: string
@@ -32,7 +29,8 @@ export function OpenShiftModal(props: {
   }, [shiftLoading, onClose])
 
   const parsedBalance = parseFloat(openBalance)
-  const isValidBalance = openBalance.trim() !== "" && Number.isFinite(parsedBalance) && parsedBalance >= 0
+  const isValidBalance =
+    openBalance.trim() !== "" && Number.isFinite(parsedBalance) && parsedBalance >= 0
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 backdrop-blur-sm">
@@ -109,6 +107,8 @@ export function CloseShiftModal(props: {
   setCloseNotes: (v: string) => void
   shiftError: string
   shiftLoading: boolean
+  canViewExpected?: boolean
+  openTablesCount?: number
   onClose: () => void
   onSubmit: () => void
 }) {
@@ -120,6 +120,8 @@ export function CloseShiftModal(props: {
     setCloseNotes,
     shiftError,
     shiftLoading,
+    canViewExpected = true,
+    openTablesCount = 0,
     onClose,
     onSubmit,
   } = props
@@ -132,16 +134,20 @@ export function CloseShiftModal(props: {
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [shiftLoading, onClose])
 
-  const expected =
-    (currentShift?.openingBalance || 0) +
-    (currentShift?.cashIn || 0) -
-    (currentShift?.cashOut || 0)
-  const parsedClose = closeBalance.trim() === "" ? 0 : parseFloat(closeBalance)
-  const isValidClose = Number.isFinite(parsedClose) && parsedClose >= 0
+  const expectedMinorUnits =
+    toMinorUnits(currentShift?.openingBalance || 0) +
+    toMinorUnits(currentShift?.cashIn || 0) -
+    toMinorUnits(currentShift?.cashOut || 0)
+  const expected = fromMinorUnits(expectedMinorUnits)
+
+  const parsedClose = parseFloat(closeBalance)
+  const isValidClose =
+    closeBalance.trim() !== "" && Number.isFinite(parsedClose) && parsedClose >= 0
+  const diffMinorUnits = isValidClose ? toMinorUnits(parsedClose) - expectedMinorUnits : 0
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-[400px] animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-[420px] animate-in fade-in zoom-in-95 duration-200">
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#f0f0f0]">
           <h3 className="text-[15px] font-semibold text-[#1d1d1f]">
             Kasa Kapat
@@ -156,19 +162,41 @@ export function CloseShiftModal(props: {
           </button>
         </div>
         <div className="px-6 py-5 flex flex-col gap-3">
+          {openTablesCount > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+              <div className="text-[12px] text-red-700">
+                <p className="font-semibold mb-0.5">
+                  Dikkat: Şu anda açık olan {openTablesCount} masa var!
+                </p>
+                <p>Açık masaların adisyonları bu vardiya kapanışına dahil edilmez.</p>
+              </div>
+            </div>
+          )}
+
           <div className="bg-amber-50 rounded-xl p-3 flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
             <div className="text-[12px] text-amber-700">
-              <p className="font-semibold mb-0.5">
-                Beklenen bakiye: {"\u20BA"}
-                {formatCurrency(expected)}
-              </p>
-              <p>Kasadaki fiziksel tutarı girin.</p>
+              {canViewExpected ? (
+                <>
+                  <p className="font-semibold mb-0.5">
+                    Beklenen bakiye: {"\u20BA"}
+                    {formatCurrency(expected)}
+                  </p>
+                  <p>Kasadaki fiziksel nakit tutarını sayarak girin.</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold mb-0.5">Kör Sayım</p>
+                  <p>Kasadaki fiziksel nakit tutarını sayarak girin.</p>
+                </>
+              )}
             </div>
           </div>
+
           <div>
             <label className="text-[12px] font-medium text-[#86868b] mb-1.5 block">
-              Kapanış Bakiyesi
+              Sayılan Kapanış Bakiyesi *
             </label>
             <input
               type="number"
@@ -181,11 +209,33 @@ export function CloseShiftModal(props: {
                 if (v !== "" && Number(v) < 0) return
                 setCloseBalance(v)
               }}
-              placeholder="0.00"
+              placeholder="Fiziksel nakit tutarını girin..."
               autoFocus
               className="w-full h-[40px] px-3 text-[15px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
             />
           </div>
+
+          {canViewExpected && isValidClose && (
+            <div
+              className={`rounded-xl px-3 py-2 text-[12px] font-medium flex items-center justify-between ${
+                diffMinorUnits === 0
+                  ? "bg-green-50 text-green-700"
+                  : diffMinorUnits > 0
+                    ? "bg-blue-50 text-blue-700"
+                    : "bg-red-50 text-red-700"
+              }`}
+            >
+              <span>Kasa Farkı</span>
+              <span className="font-bold">
+                {diffMinorUnits === 0
+                  ? `Tam (\u20BA0,00)`
+                  : diffMinorUnits > 0
+                    ? `+\u20BA${formatCurrency(fromMinorUnits(diffMinorUnits))} (Fazla)`
+                    : `-\u20BA${formatCurrency(fromMinorUnits(Math.abs(diffMinorUnits)))} (Açık)`}
+              </span>
+            </div>
+          )}
+
           <div>
             <label className="text-[12px] font-medium text-[#86868b] mb-1.5 block">
               Not (opsiyonel)
@@ -238,6 +288,8 @@ export function AddCashTransactionModal(props: {
   setTxAmount: (v: string) => void
   txDesc: string
   setTxDesc: (v: string) => void
+  canTxIn?: boolean
+  canTxOut?: boolean
   onClose: () => void
   onSubmit: () => Promise<void> | void
 }) {
@@ -248,11 +300,23 @@ export function AddCashTransactionModal(props: {
     setTxAmount,
     txDesc,
     setTxDesc,
+    canTxIn = true,
+    canTxOut = true,
     onClose,
     onSubmit,
   } = props
   const [isSubmitting, setIsSubmitting] = useState(false)
   const submittingRef = useRef(false)
+
+  const allowedTypes = (["expense", "cash-in", "cash-out"] as const).filter((t) =>
+    t === "cash-in" ? canTxIn : canTxOut,
+  )
+
+  useEffect(() => {
+    if (allowedTypes.length > 0 && !allowedTypes.includes(txType)) {
+      setTxType(allowedTypes[0])
+    }
+  }, [allowedTypes, txType, setTxType])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -263,7 +327,11 @@ export function AddCashTransactionModal(props: {
   }, [isSubmitting, onClose])
 
   const parsedAmount = parseFloat(txAmount)
-  const isValid = Number.isFinite(parsedAmount) && parsedAmount > 0 && txDesc.trim().length > 0
+  const isValid =
+    allowedTypes.includes(txType) &&
+    Number.isFinite(parsedAmount) &&
+    parsedAmount > 0 &&
+    txDesc.trim().length > 0
 
   const handleConfirm = async () => {
     if (!isValid || isSubmitting || submittingRef.current) return
@@ -295,7 +363,7 @@ export function AddCashTransactionModal(props: {
         </div>
         <div className="px-6 py-5 flex flex-col gap-3">
           <div className="flex gap-2">
-            {(["expense", "cash-in", "cash-out"] as const).map((t) => (
+            {allowedTypes.map((t) => (
               <button
                 key={t}
                 type="button"

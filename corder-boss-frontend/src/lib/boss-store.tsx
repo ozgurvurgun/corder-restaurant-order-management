@@ -10,6 +10,7 @@ import {
 } from "react"
 import { io, type Socket } from "socket.io-client"
 import {
+  BOSS_UNAUTHORIZED_EVENT,
   bossApi,
   clearBossSession,
   getApiBase,
@@ -18,7 +19,10 @@ import {
   getStoredBossUser,
   getStoredBranches,
   setBossSession,
+  setBossToken,
   setStoredActiveBranchId,
+  setStoredBranches,
+  type StoredBossUser,
 } from "./api"
 import type {
   BossOverviewResponse,
@@ -34,13 +38,7 @@ import type {
 
 interface BossStoreContextValue {
   isAuthenticated: boolean
-  user: {
-    id: string
-    name: string
-    email: string
-    phone?: string | null
-    roleLabel: string
-  } | null
+  user: StoredBossUser | null
   branches: BranchSummary[]
   /** Either 'ALL' (for consolidated multi-branch view) or a specific restaurantId */
   selectedBranchId: string
@@ -57,6 +55,7 @@ interface BossStoreContextValue {
   products: CatalogProductDto[]
   categories: CatalogCategoryDto[]
   loading: boolean
+  error: string | null
   toast: { message: string; type: "success" | "error" } | null
   showToast: (message: string, type?: "success" | "error") => void
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>
@@ -74,7 +73,9 @@ export function useBossStore() {
 }
 
 export function BossStoreProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState(getStoredBossUser)
+  const [user, setUser] = useState<StoredBossUser | null>(() =>
+    getBossToken() ? getStoredBossUser() : null
+  )
   const [branches, setBranches] = useState<BranchSummary[]>(getStoredBranches)
   const [selectedBranchId, setSelectedBranchIdState] = useState<string>(() => {
     const saved = getStoredActiveBranchId()
@@ -82,6 +83,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     const stored = getStoredBranches()
     return stored.length > 1 ? "ALL" : (stored[0]?.id ?? "")
   })
+  const [tokenVersion, setTokenVersion] = useState(0)
   const [overview, setOverview] = useState<BossOverviewResponse | null>(null)
   const [catalog, setCatalog] = useState<PermissionCatalogResponse | null>(null)
   const [roles, setRoles] = useState<RoleDefinition[]>([])
@@ -91,15 +93,69 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<CatalogProductDto[]>([])
   const [categories, setCategories] = useState<CatalogCategoryDto[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
+
   const socketRef = useRef<Socket | null>(null)
+  const toastTimerRef = useRef<number | null>(null)
+  const liveRefreshTimerRef = useRef<number | null>(null)
+  const lastSwitchedBranchRef = useRef<string | null>(null)
 
   const showToast = useCallback((message: string, type: "success" | "error" = "success") => {
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current)
+    }
     setToast({ message, type })
-    window.setTimeout(() => {
-      setToast((cur) => (cur?.message === message ? null : cur))
-    }, 3200)
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast(null)
+      toastTimerRef.current = null
+    }, 3400)
   }, [])
+
+  const resetBranchScopedState = useCallback(() => {
+    setRoles([])
+    setStaff([])
+    setTables([])
+    setOrders([])
+    setProducts([])
+    setCategories([])
+  }, [])
+
+  const logout = useCallback(() => {
+    if (socketRef.current) {
+      socketRef.current.disconnect()
+      socketRef.current = null
+    }
+    if (liveRefreshTimerRef.current !== null) {
+      window.clearTimeout(liveRefreshTimerRef.current)
+      liveRefreshTimerRef.current = null
+    }
+    lastSwitchedBranchRef.current = null
+    clearBossSession()
+    setUser(null)
+    setBranches([])
+    setOverview(null)
+    setCatalog(null)
+    setError(null)
+    resetBranchScopedState()
+  }, [resetBranchScopedState])
+
+  useEffect(() => {
+    const onUnauthorized = () => {
+      logout()
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible" && user && !getBossToken()) {
+        logout()
+      }
+    }
+    window.addEventListener(BOSS_UNAUTHORIZED_EVENT, onUnauthorized)
+    document.addEventListener("visibilitychange", onVisibilityChange)
+    return () => {
+      window.removeEventListener(BOSS_UNAUTHORIZED_EVENT, onUnauthorized)
+      document.removeEventListener("visibilitychange", onVisibilityChange)
+    }
+  }, [logout, user])
 
   const effectiveBranchId = useMemo(() => {
     if (selectedBranchId && selectedBranchId !== "ALL") return selectedBranchId
@@ -111,97 +167,190 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     [branches, effectiveBranchId]
   )
 
-  const setSelectedBranchId = useCallback((id: string) => {
-    setSelectedBranchIdState(id)
-    setStoredActiveBranchId(id)
-  }, [])
+  const setSelectedBranchId = useCallback(
+    (id: string) => {
+      if (id === selectedBranchId) return
+      const prevEffective =
+        selectedBranchId && selectedBranchId !== "ALL"
+          ? selectedBranchId
+          : (branches[0]?.id ?? "")
+      const nextEffective = id && id !== "ALL" ? id : (branches[0]?.id ?? "")
+
+      if (prevEffective !== nextEffective) {
+        if (socketRef.current) {
+          socketRef.current.disconnect()
+          socketRef.current = null
+        }
+        resetBranchScopedState()
+      }
+      setError(null)
+      setSelectedBranchIdState(id)
+      setStoredActiveBranchId(id)
+    },
+    [selectedBranchId, branches, resetBranchScopedState]
+  )
 
   const refreshBranchDetails = useCallback(
     async (explicitBranchId?: string) => {
       const targetId = explicitBranchId || effectiveBranchId
       if (!targetId || !getBossToken()) return
-      try {
-        const [catRes, rolesRes, staffRes, tablesRes, ordersRes, productsRes, categoriesRes] =
-          await Promise.all([
-            bossApi.roles.catalog(targetId),
-            bossApi.roles.list(targetId),
-            bossApi.staff.list(targetId),
-            bossApi.operations.tables(targetId),
-            bossApi.operations.orders(targetId),
-            bossApi.operations.products(targetId),
-            bossApi.operations.categories(targetId),
-          ])
-        setCatalog(catRes)
-        setRoles(rolesRes)
-        setStaff(staffRes)
-        setTables(tablesRes)
-        setOrders(ordersRes)
-        setProducts(productsRes.map((p) => ({ ...p, price: Number(p.price) })))
-        setCategories(categoriesRes)
-      } catch {
-        // ignore background refresh error
-      }
+      const [catRes, rolesRes, staffRes, tablesRes, ordersRes, productsRes, categoriesRes] =
+        await Promise.all([
+          bossApi.roles.catalog(targetId),
+          bossApi.roles.list(targetId),
+          bossApi.staff.list(targetId),
+          bossApi.operations.tables(targetId),
+          bossApi.operations.orders(targetId),
+          bossApi.operations.products(targetId),
+          bossApi.operations.categories(targetId),
+        ])
+      setCatalog(catRes)
+      setRoles(rolesRes)
+      setStaff(staffRes)
+      setTables(tablesRes)
+      setOrders(ordersRes)
+      setProducts(productsRes.map((p) => ({ ...p, price: Number(p.price) })))
+      setCategories(categoriesRes)
     },
     [effectiveBranchId]
+  )
+
+  const refreshLiveOperations = useCallback(
+    async (branchId: string, overviewFilter: string) => {
+      if (!branchId || !getBossToken()) return
+      try {
+        const [ovRes, tablesRes, ordersRes] = await Promise.all([
+          bossApi.overview.get(overviewFilter),
+          bossApi.operations.tables(branchId),
+          bossApi.operations.orders(branchId),
+        ])
+        setOverview(ovRes)
+        setTables(tablesRes)
+        setOrders(ordersRes)
+      } catch {
+        // 401 is handled globally via BOSS_UNAUTHORIZED_EVENT
+      }
+    },
+    []
   )
 
   const refreshAll = useCallback(async () => {
     if (!getBossToken()) return
     setLoading(true)
+    setError(null)
     try {
+      let targetBranchId = effectiveBranchId
+      if (targetBranchId && lastSwitchedBranchRef.current !== targetBranchId) {
+        const switched = await bossApi.auth.switchBranch(targetBranchId)
+        setBossToken(switched.accessToken)
+        setStoredBranches(switched.restaurants)
+        setBranches(switched.restaurants)
+        lastSwitchedBranchRef.current = targetBranchId
+        setTokenVersion((v) => v + 1)
+      }
+
       const [meRes, ovRes] = await Promise.all([
-        bossApi.auth.me().catch(() => null),
+        bossApi.auth.me(),
         bossApi.overview.get(selectedBranchId),
       ])
-      if (meRes) {
-        setBranches(meRes.restaurants)
-        setUser({
-          id: meRes.user.id,
-          name: meRes.user.name,
-          email: meRes.user.email,
-          phone: meRes.user.phone,
-          roleLabel: meRes.user.roleLabel,
-        })
+
+      if (!meRes.user.isBoss && meRes.user.role !== "root") {
+        logout()
+        return
       }
+
+      const u: StoredBossUser = {
+        id: meRes.user.id,
+        name: meRes.user.name,
+        email: meRes.user.email,
+        phone: meRes.user.phone,
+        roleLabel: meRes.user.roleLabel,
+        bossTier: meRes.user.bossTier,
+        brandName: meRes.user.brandName,
+      }
+      setBranches(meRes.restaurants)
+      setStoredBranches(meRes.restaurants)
+      setUser(u)
       setOverview(ovRes)
-      await refreshBranchDetails()
-    } catch (e) {
-      if (e instanceof Error && e.message.includes("Oturum")) {
-        setUser(null)
+
+      targetBranchId =
+        selectedBranchId && selectedBranchId !== "ALL"
+          ? selectedBranchId
+          : (meRes.restaurants[0]?.id ?? "")
+      if (targetBranchId) {
+        await refreshBranchDetails(targetBranchId)
       }
+    } catch (e) {
+      if (!getBossToken()) {
+        logout()
+        return
+      }
+      const msg = e instanceof Error ? e.message : "Veriler yüklenemedi."
+      setError(msg)
     } finally {
       setLoading(false)
     }
-  }, [selectedBranchId, refreshBranchDetails])
+  }, [effectiveBranchId, selectedBranchId, refreshBranchDetails, logout])
 
   useEffect(() => {
-    if (!user || !getBossToken()) return
+    if (!user?.id || !getBossToken()) return
     void refreshAll()
   }, [user?.id, selectedBranchId, refreshAll])
 
   // Real-time Socket.IO connection for live updates on the active branch
   useEffect(() => {
     const token = getBossToken()
-    if (!token || !effectiveBranchId) return
-    const socket = io(getApiBase(), {
+    if (!token || !effectiveBranchId || !user?.id) return
+    const apiBase = getApiBase()
+    const socket = io(apiBase || undefined, {
       path: "/ws",
       auth: { token, restaurantId: effectiveBranchId },
       transports: ["websocket", "polling"],
     })
     socketRef.current = socket
-    const onRealtimeChange = () => {
-      void bossApi.overview.get(selectedBranchId).then(setOverview).catch(() => {})
-      void refreshBranchDetails(effectiveBranchId)
+
+    const scheduleLiveRefresh = () => {
+      if (liveRefreshTimerRef.current !== null) {
+        window.clearTimeout(liveRefreshTimerRef.current)
+      }
+      liveRefreshTimerRef.current = window.setTimeout(() => {
+        liveRefreshTimerRef.current = null
+        void refreshLiveOperations(effectiveBranchId, selectedBranchId)
+      }, 250)
     }
-    socket.on("order:created", onRealtimeChange)
-    socket.on("orders:moved", onRealtimeChange)
-    socket.on("orders:updated", onRealtimeChange)
-    socket.on("tables:presence", onRealtimeChange)
+
+    const onTablesPresence = (
+      presenceMap?: Record<string, { staffId: string; staffName: string }>
+    ) => {
+      if (!presenceMap || typeof presenceMap !== "object") return
+      setTables((prev) =>
+        prev.map((t) => {
+          const entry = presenceMap[t.id]
+          return {
+            ...t,
+            sessionStaffId: entry?.staffId ?? null,
+            sessionStaffName: entry?.staffName ?? null,
+          }
+        })
+      )
+    }
+
+    socket.on("order:created", scheduleLiveRefresh)
+    socket.on("orders:moved", scheduleLiveRefresh)
+    socket.on("orders:updated", scheduleLiveRefresh)
+    socket.on("tables:presence", onTablesPresence)
+
     return () => {
-      socketRef.current?.disconnect()
-      socketRef.current = null
+      if (liveRefreshTimerRef.current !== null) {
+        window.clearTimeout(liveRefreshTimerRef.current)
+        liveRefreshTimerRef.current = null
+      }
+      socket.disconnect()
+      if (socketRef.current === socket) {
+        socketRef.current = null
+      }
     }
-  }, [effectiveBranchId, selectedBranchId, refreshBranchDetails])
+  }, [effectiveBranchId, selectedBranchId, tokenVersion, user?.id, refreshLiveOperations])
 
   const login = useCallback(
     async (email: string, password: string): Promise<{ ok: boolean; error?: string }> => {
@@ -216,22 +365,27 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
         }
         const initialBranch =
           res.restaurants.length > 1 ? "ALL" : (res.restaurant?.id ?? res.restaurants[0]?.id ?? "")
-        const u = {
+        const u: StoredBossUser = {
           id: res.user.id,
           name: res.user.name,
           email: res.user.email,
           phone: res.user.phone,
           roleLabel: res.user.roleLabel || "İşletme Sahibi (Boss)",
+          bossTier: res.user.bossTier,
+          brandName: res.user.brandName,
         }
+        lastSwitchedBranchRef.current = res.restaurant?.id ?? res.restaurants[0]?.id ?? null
         setBossSession({
           accessToken: res.accessToken,
           user: u,
           restaurants: res.restaurants,
           activeBranchId: initialBranch,
         })
+        setError(null)
         setUser(u)
         setBranches(res.restaurants)
         setSelectedBranchIdState(initialBranch)
+        setTokenVersion((v) => v + 1)
         return { ok: true }
       } catch (e) {
         return {
@@ -242,13 +396,6 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     },
     []
   )
-
-  const logout = useCallback(() => {
-    clearBossSession()
-    setUser(null)
-    setBranches([])
-    setOverview(null)
-  }, [])
 
   const isAuthenticated = Boolean(user && getBossToken())
 
@@ -271,6 +418,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
         products,
         categories,
         loading,
+        error,
         toast,
         showToast,
         login,
@@ -283,4 +431,3 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     </BossStoreContext.Provider>
   )
 }
-

@@ -4,6 +4,7 @@ import { RestaurantAuthService, RestaurantJwtRole } from '../application/restaur
 import { RestaurantLoginDto } from './dto/restaurant-login.dto';
 import { SwitchBranchDto } from './dto/switch-branch.dto';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
+import { BossOnly, PanelRootGuard } from '../infrastructure/panel-root.guard';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
 import {
   extractClientIp,
@@ -18,9 +19,12 @@ export class RestaurantAuthController {
   ) {}
 
   @Post('login')
-  login(@Req() req: Request, @Body() dto: RestaurantLoginDto) {
-    this.rateLimiter.consumeLoginAttempt('restaurant', extractClientIp(req), dto.email);
-    return this.auth.login(dto);
+  async login(@Req() req: Request, @Body() dto: RestaurantLoginDto) {
+    const ip = extractClientIp(req);
+    this.rateLimiter.consumeLoginAttempt('restaurant', ip, dto.email);
+    const result = await this.auth.login(dto);
+    this.rateLimiter.resetLoginAttempts('restaurant', ip, dto.email);
+    return result;
   }
 
   @Get('me')
@@ -33,7 +37,8 @@ export class RestaurantAuthController {
   }
 
   @Post('switch-branch')
-  @UseGuards(RestaurantJwtGuard)
+  @UseGuards(RestaurantJwtGuard, PanelRootGuard)
+  @BossOnly()
   switchBranch(
     @RestaurantUser()
     user: { sub: string; role: RestaurantJwtRole },

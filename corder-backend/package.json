@@ -8,6 +8,9 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
+    "test": "node scripts/run-tests.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "seed:demo": "node scripts/seed-demo.js",
     "migration:run": "node ./node_modules/typeorm/cli.js migration:run -d dist/data-source.js",
     "migration:revert": "node ./node_modules/typeorm/cli.js migration:revert -d dist/data-source.js"
   },
@@ -42,5 +45,10 @@
     "@types/node": "^22.10.2",
     "@types/passport-jwt": "^4.0.1",
     "typescript": "^5.7.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core"
+    ]
   }
 }

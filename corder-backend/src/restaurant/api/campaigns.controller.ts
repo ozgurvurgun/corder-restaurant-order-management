@@ -16,7 +16,10 @@ import {
   UpdateCampaignBodyDto,
 } from './dto/create-campaign.dto';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
-import { PanelRootGuard } from '../infrastructure/panel-root.guard';
+import {
+  PanelRootGuard,
+  RequirePermissions,
+} from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 
 @Controller('restaurant/campaigns')
@@ -25,11 +28,13 @@ export class CampaignsController {
   constructor(private readonly service: CampaignService) {}
 
   @Get()
+  @RequirePermissions('catalog.view', 'catalog.manage_campaigns')
   list(@RestaurantId() restaurantId: string) {
     return this.service.list(restaurantId);
   }
 
   @Post()
+  @RequirePermissions('catalog.manage_campaigns')
   create(
     @RestaurantId() restaurantId: string,
     @Body() body: CreateCampaignBodyDto,
@@ -41,12 +46,16 @@ export class CampaignsController {
       discountPercent: body.discountPercent,
       originalPrice: body.originalPrice,
       discountedPrice: body.discountedPrice,
-      validUntil: body.validUntil ? new Date(body.validUntil) : undefined,
+      validUntil:
+        body.validUntil && body.validUntil.trim()
+          ? new Date(body.validUntil)
+          : null,
       isActive: body.isActive,
     });
   }
 
   @Put(':id')
+  @RequirePermissions('catalog.manage_campaigns')
   update(
     @RestaurantId() restaurantId: string,
     @Param('id', ParseUUIDPipe) id: string,
@@ -59,12 +68,18 @@ export class CampaignsController {
       discountPercent: body.discountPercent,
       originalPrice: body.originalPrice,
       discountedPrice: body.discountedPrice,
-      validUntil: body.validUntil ? new Date(body.validUntil) : undefined,
+      validUntil:
+        body.validUntil === undefined
+          ? undefined
+          : body.validUntil && body.validUntil.trim()
+            ? new Date(body.validUntil)
+            : null,
       isActive: body.isActive,
     });
   }
 
   @Delete(':id')
+  @RequirePermissions('catalog.manage_campaigns')
   remove(
     @RestaurantId() restaurantId: string,
     @Param('id', ParseUUIDPipe) id: string,
@@ -73,6 +88,7 @@ export class CampaignsController {
   }
 
   @Post('reorder')
+  @RequirePermissions('catalog.manage_campaigns')
   reorder(@RestaurantId() restaurantId: string, @Body() body: ReorderItemsDto) {
     return this.service.reorder(restaurantId, body.ids ?? []);
   }

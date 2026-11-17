@@ -35,8 +35,18 @@ async function refreshAgentSession(config) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refreshToken: config.refreshToken }),
       })
+      if (res.status === 401 || res.status === 403) {
+        warn("Print Agent refresh token revoked or expired; clearing session", { status: res.status })
+        saveSettings({ authToken: "", refreshToken: "" })
+        config.agentToken = ""
+        config.refreshToken = ""
+        if (typeof config.onAuthRevoked === "function") {
+          config.onAuthRevoked("Oturum süresi doldu veya parola değiştirildi. Lütfen tekrar giriş yapın.")
+        }
+        return { revoked: true }
+      }
       if (!res.ok) {
-        warn("Print Agent token refresh rejected", { status: res.status })
+        warn("Print Agent token refresh temporary failure", { status: res.status })
         return null
       }
       const data = await res.json()
@@ -47,6 +57,9 @@ async function refreshAgentSession(config) {
       })
       config.agentToken = saved.authToken
       config.refreshToken = saved.refreshToken
+      if (typeof config.onTokenRefreshed === "function") {
+        config.onTokenRefreshed(saved.authToken)
+      }
       info("Print Agent session token refreshed automatically")
       return saved
     } catch (e) {
@@ -70,6 +83,13 @@ async function authorizedFetch(config, url, options = {}) {
       },
     })
 
+  if (!config.agentToken && config.refreshToken) {
+    const refreshed = await refreshAgentSession(config)
+    if (!refreshed?.authToken) {
+      return new Response(JSON.stringify({ message: "Unauthorized" }), { status: 401 })
+    }
+  }
+
   let res = await doCall(config.agentToken)
   if (res.status === 401 && config.refreshToken) {
     const refreshed = await refreshAgentSession(config)
@@ -83,6 +103,7 @@ async function authorizedFetch(config, url, options = {}) {
 async function patchWithRetry(config, url, logLabel, meta) {
   let lastErr = ""
   for (let i = 0; i < 6; i++) {
+    if (!config.agentToken && !config.refreshToken) return false
     try {
       const res = await authorizedFetch(config, url, {
         method: "PATCH",
@@ -92,38 +113,46 @@ async function patchWithRetry(config, url, logLabel, meta) {
         if (i > 0) info(`${logLabel} ack succeeded after retry`, { ...meta, attempt: i + 1 })
         return true
       }
+      if (res.status === 404) {
+        warn(`${logLabel} ack target no longer pending (404); treating as settled`, meta)
+        return true
+      }
+      if (res.status === 400 || res.status === 401 || res.status === 403) {
+        lastErr = await res.text()
+        break
+      }
       lastErr = await res.text()
     } catch (e) {
       lastErr = e instanceof Error ? e.message : String(e)
     }
     await new Promise((r) => setTimeout(r, 350 * (i + 1)))
   }
-  warn(`${logLabel} ack failed after retries`, { ...meta, lastErr: lastErr?.slice?.(0, 180) })
+  warn(`${logLabel} ack failed`, { ...meta, lastErr: lastErr?.slice?.(0, 180) })
   return false
 }
 
 async function ackKitchenPrinted(config, orderId) {
   const base = httpBaseUrl(config)
-  if (!base || !orderId || !config.agentToken) return false
+  if (!base || !orderId || (!config.agentToken && !config.refreshToken)) return false
   const url = `${base}/restaurant/print-agent/orders/${encodeURIComponent(orderId)}/kitchen-printed`
   return patchWithRetry(config, url, "Kitchen", { orderId })
 }
 
 async function ackPrintJobPrinted(config, jobId) {
   const base = httpBaseUrl(config)
-  if (!base || !jobId || !config.agentToken) return false
+  if (!base || !jobId || (!config.agentToken && !config.refreshToken)) return false
   const url = `${base}/restaurant/print-agent/print-jobs/${encodeURIComponent(jobId)}/printed`
   return patchWithRetry(config, url, "PrintJob", { jobId })
 }
 
 async function fetchPendingKitchenOrders(config) {
   const base = httpBaseUrl(config)
-  if (!base || !config.agentToken) return []
+  if (!base || (!config.agentToken && !config.refreshToken)) return []
   const url = `${base}/restaurant/print-agent/pending-kitchen-orders`
   try {
     const res = await authorizedFetch(config, url)
     if (!res.ok) {
-      warn("pending-kitchen HTTP failed", { status: res.status })
+      if (res.status !== 401) warn("pending-kitchen HTTP failed", { status: res.status })
       return []
     }
     const data = await res.json()
@@ -136,12 +165,12 @@ async function fetchPendingKitchenOrders(config) {
 
 async function fetchPendingPrintJobs(config) {
   const base = httpBaseUrl(config)
-  if (!base || !config.agentToken) return []
+  if (!base || (!config.agentToken && !config.refreshToken)) return []
   const url = `${base}/restaurant/print-agent/pending-print-jobs`
   try {
     const res = await authorizedFetch(config, url)
     if (!res.ok) {
-      warn("pending-print-jobs HTTP failed", { status: res.status })
+      if (res.status !== 401) warn("pending-print-jobs HTTP failed", { status: res.status })
       return []
     }
     const data = await res.json()
@@ -152,14 +181,14 @@ async function fetchPendingPrintJobs(config) {
   }
 }
 
-async function loginPrintAgent(username, password) {
+async function loginPrintAgent(username, password, preferredBackendUrl = null) {
   const cleanUser = String(username || "").trim().toLowerCase()
   const cleanPass = String(password || "")
   if (!cleanUser || !cleanPass) {
     throw new Error("Kullanıcı adı ve parola zorunludur.")
   }
 
-  const base = await resolveEmbeddedBackendUrl(true)
+  const base = await resolveEmbeddedBackendUrl(true, preferredBackendUrl)
   const url = `${base}/restaurant/print-agent/login`
   const res = await fetch(url, {
     method: "POST",

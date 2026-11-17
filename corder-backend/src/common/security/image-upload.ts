@@ -43,7 +43,14 @@ export function validateOriginalImageFilename(
   originalName: string,
 ): { ext: string; expectedMime: string } | null {
   const raw = (originalName ?? '').trim();
-  if (!raw || raw.includes('\0') || raw.includes('/') || raw.includes('\\') || raw.includes('..')) {
+  if (
+    !raw ||
+    raw === '.' ||
+    raw === '..' ||
+    raw.includes('\0') ||
+    raw.includes('/') ||
+    raw.includes('\\')
+  ) {
     return null;
   }
   const ext = extname(raw).toLowerCase();

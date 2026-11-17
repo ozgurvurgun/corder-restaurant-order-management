@@ -117,11 +117,18 @@ export class CloseCheckUseCase {
       }
 
       const tableFullyClosed = billContext.table
-        ? await this.applyTableOrderSettlement(em, restaurantId, billContext, now)
+        ? await this.applyTableOrderSettlement(
+            em,
+            restaurantId,
+            billContext,
+            settlement.discountMinorUnits,
+            dto.discount ?? null,
+            now,
+          )
         : true;
 
       const savedCashTx = await this.recordCashSaleIfNeeded(
-        em, restaurantId, shift.id, billContext.tableName, dto.method, settlement.cashMinorUnits, actorName,
+        em, restaurantId, shift.id, billContext.tableName, savedCompleted.id, dto.method, settlement.cashMinorUnits, actorName,
       );
 
       shift.recordCheckSettlement({
@@ -139,8 +146,8 @@ export class CloseCheckUseCase {
 
     if (hasTable) {
       void this.ordersGateway.emitTableSessionPresence(restaurantId).catch(() => undefined);
-      this.ordersGateway.emitOrdersUpdated(restaurantId);
     }
+    this.ordersGateway.emitOrdersUpdated(restaurantId);
 
     return {
       completedOrder: serializeCompletedOrder(txResult.savedCompleted),
@@ -206,6 +213,10 @@ export class CloseCheckUseCase {
       ordersSnapshot.push(buildClosedOrderSnapshot(order, lines, staffNameById, actorId, now));
     }
 
+    if (billLinesForStock.length === 0) {
+      throw new BadRequestException('No billable items found on this table');
+    }
+
     return {
       table, tableName: (table.name || '').trim() || table.id, section: (table.section || '').trim() || 'default',
       waiterName, openedAt: activeOrders[0].createdAt ?? now, rawTotalMinorUnits,
@@ -264,7 +275,12 @@ export class CloseCheckUseCase {
   }
 
   private async applyTableOrderSettlement(
-    em: EntityManager, restaurantId: string, ctx: BillContext, now: Date,
+    em: EntityManager,
+    restaurantId: string,
+    ctx: BillContext,
+    discountMinorUnits: number,
+    appliedDiscount: CloseCheckDto['discount'] | null,
+    now: Date,
   ): Promise<boolean> {
     const table = ctx.table!;
     if (!ctx.partialMutations) {
@@ -295,8 +311,27 @@ export class CloseCheckUseCase {
     if (hasRemainingBillable) {
       for (const order of activeOrders) {
         const remainingInOrder = (itemsByOrderId.get(order.id) ?? []).filter((i) => !removedItems.has(i));
-        const patch = remainingInOrder.length === 0 ? { status: 'closed', updatedAt: now } : { updatedAt: now };
+        const hasBillableInOrder = remainingInOrder.some((i) =>
+          OrderStatusPolicy.isItemOnActiveBill(i.status),
+        );
+        const patch = !hasBillableInOrder
+          ? { status: 'closed', updatedAt: now }
+          : { updatedAt: now };
         await em.update(OrderEntity, { id: order.id, restaurantId }, patch);
+      }
+      if (
+        table.discount?.type === 'amount' &&
+        appliedDiscount?.type === 'amount' &&
+        discountMinorUnits > 0
+      ) {
+        const remDiscountMinor = Math.max(
+          0,
+          toMinorUnits(table.discount.value) - discountMinorUnits,
+        );
+        table.discount =
+          remDiscountMinor > 0
+            ? { ...table.discount, value: fromMinorUnits(remDiscountMinor) }
+            : null;
       }
       table.status = 'occupied';
       table.splitInfo = null;
@@ -324,6 +359,9 @@ export class CloseCheckUseCase {
     for (const reqItem of walkInItems) {
       const product = productById.get(reqItem.productId);
       if (!product) throw new BadRequestException('Product not found or does not belong to this restaurant');
+      if (product.inStock === false) {
+        throw new BadRequestException(`Product "${product.name}" is out of stock`);
+      }
       const unitMinor = toMinorUnits(product.price);
       if (unitMinor < 0) throw new BadRequestException('Invalid product price');
       rawTotalMinorUnits += unitMinor * reqItem.quantity;
@@ -380,13 +418,13 @@ export class CloseCheckUseCase {
   }
 
   private async recordCashSaleIfNeeded(
-    em: EntityManager, restaurantId: string, shiftId: string, tableName: string, method: string, cashMinorUnits: number, actorName: string,
+    em: EntityManager, restaurantId: string, shiftId: string, tableName: string, completedOrderId: string, method: string, cashMinorUnits: number, actorName: string,
   ): Promise<CashTransactionEntity | null> {
     if (cashMinorUnits <= 0) return null;
     const tx = em.create(CashTransactionEntity, {
       restaurantId, shiftId, type: 'sale', amount: fromMinorUnits(cashMinorUnits),
       description: method === 'split' ? `${tableName} - Check (split cash)` : `${tableName} - Check`,
-      reference: tableName, createdBy: actorName,
+      reference: completedOrderId, createdBy: actorName,
     });
     return em.save(CashTransactionEntity, tx);
   }

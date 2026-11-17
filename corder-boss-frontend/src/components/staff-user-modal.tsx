@@ -14,17 +14,36 @@ interface StaffUserModalProps {
   onSubmit: (payload: {
     name: string
     role: string
-    phone?: string
+    phone?: string | null
     canAccessPanel: boolean
     canAccessTerminal: boolean
-    email?: string
+    email?: string | null
     password?: string
     pin?: string
+    permissionsOverride: null
     grantedPermissions: string[]
     revokedPermissions: string[]
     maxDiscountPercentOverride: number | null
     maxDiscountAmountOverride: number | null
   }) => Promise<void>
+}
+
+function deriveInitialOverrides(
+  editingUser: StaffMemberDto | null,
+  roleDef: RoleDefinition | undefined
+): { granted: string[]; revoked: string[] } {
+  if (!editingUser) return { granted: [], revoked: [] }
+  if (editingUser.permissionsOverride && roleDef) {
+    const roleSet = new Set(roleDef.permissions)
+    const effectiveSet = new Set(editingUser.permissions)
+    const granted = editingUser.permissions.filter((k) => !roleSet.has(k))
+    const revoked = roleDef.permissions.filter((k) => !effectiveSet.has(k))
+    return { granted, revoked }
+  }
+  return {
+    granted: editingUser.grantedPermissions ?? [],
+    revoked: editingUser.revokedPermissions ?? [],
+  }
 }
 
 export function StaffUserModal({
@@ -37,8 +56,12 @@ export function StaffUserModal({
   onSubmit,
 }: StaffUserModalProps) {
   const defaultRole = roles.find((r) => r.key === "branch_manager") ?? roles[0]
+  const initialRoleKey = editingUser?.role ?? defaultRole?.key ?? "waiter"
+  const initialRoleDef = roles.find((r) => r.key === initialRoleKey) ?? defaultRole
+  const initialOverrides = deriveInitialOverrides(editingUser, initialRoleDef)
+
   const [name, setName] = useState(editingUser?.name ?? "")
-  const [role, setRole] = useState(editingUser?.role ?? defaultRole?.key ?? "waiter")
+  const [role, setRole] = useState(initialRoleKey)
   const [phone, setPhone] = useState(editingUser?.phone ?? "")
   const [canAccessPanel, setCanAccessPanel] = useState(
     editingUser ? editingUser.canAccessPanel : (defaultRole?.canAccessPanel ?? true)
@@ -50,10 +73,10 @@ export function StaffUserModal({
   const [password, setPassword] = useState("")
   const [pin, setPin] = useState("")
   const [grantedPermissions, setGrantedPermissions] = useState<string[]>(
-    editingUser?.grantedPermissions ?? []
+    initialOverrides.granted
   )
   const [revokedPermissions, setRevokedPermissions] = useState<string[]>(
-    editingUser?.revokedPermissions ?? []
+    initialOverrides.revoked
   )
   const [maxDiscountPctOverride, setMaxDiscountPctOverride] = useState<string>(
     editingUser?.maxDiscountPercentOverride != null ? String(editingUser.maxDiscountPercentOverride) : ""
@@ -64,8 +87,8 @@ export function StaffUserModal({
   const [showCustomPerms, setShowCustomPerms] = useState(
     Boolean(
       editingUser &&
-        ((editingUser.grantedPermissions?.length ?? 0) > 0 ||
-          (editingUser.revokedPermissions?.length ?? 0) > 0 ||
+        (initialOverrides.granted.length > 0 ||
+          initialOverrides.revoked.length > 0 ||
           editingUser.maxDiscountPercentOverride != null ||
           editingUser.maxDiscountAmountOverride != null)
     )
@@ -86,9 +109,14 @@ export function StaffUserModal({
     setRole(nextRoleKey)
     setFormError(null)
     const r = roles.find((x) => x.key === nextRoleKey)
-    if (r && !editingUser) {
-      setCanAccessPanel(r.canAccessPanel)
-      setCanAccessTerminal(r.canAccessTerminal)
+    if (r) {
+      if (!editingUser) {
+        setCanAccessPanel(r.canAccessPanel)
+        setCanAccessTerminal(r.canAccessTerminal)
+      }
+      const nextRolePerms = new Set(r.permissions)
+      setGrantedPermissions((prev) => prev.filter((k) => !nextRolePerms.has(k)))
+      setRevokedPermissions((prev) => prev.filter((k) => nextRolePerms.has(k)))
     }
   }
 
@@ -107,6 +135,13 @@ export function StaffUserModal({
     }
   }
 
+  const handleResetOverrides = () => {
+    setGrantedPermissions([])
+    setRevokedPermissions([])
+    setMaxDiscountPctOverride("")
+    setMaxDiscountAmtOverride("")
+  }
+
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (submitting) return
@@ -116,6 +151,7 @@ export function StaffUserModal({
     const trimmedEmail = email.trim()
     const trimmedPassword = password.trim()
     const trimmedPin = pin.trim()
+    const trimmedPhone = phone.trim()
 
     if (trimmedName.length < 2) {
       setFormError("Lütfen en az 2 karakterli bir ad soyad girin.")
@@ -138,8 +174,8 @@ export function StaffUserModal({
       }
     }
 
-    if (canAccessTerminal && !canAccessPanel && !editingUser?.hasPin && !/^\d{4,8}$/.test(trimmedPin)) {
-      setFormError("El Terminali (POS) girişi için 4 ile 8 haneli rakamlardan oluşan bir PIN kodu girin.")
+    if (canAccessTerminal && !editingUser?.hasPin && !/^\d{4,8}$/.test(trimmedPin)) {
+      setFormError("El Terminali (POS) girişi açık olduğu için 4 ile 8 haneli rakamlardan oluşan bir PIN kodu girin.")
       return
     }
 
@@ -151,12 +187,13 @@ export function StaffUserModal({
     await onSubmit({
       name: trimmedName,
       role,
-      phone: phone.trim() || undefined,
+      phone: trimmedPhone || (editingUser ? null : undefined),
       canAccessPanel,
       canAccessTerminal,
-      email: trimmedEmail || undefined,
+      email: trimmedEmail || (editingUser ? null : undefined),
       ...(trimmedPassword ? { password: trimmedPassword } : {}),
       ...(trimmedPin ? { pin: trimmedPin } : {}),
+      permissionsOverride: null,
       grantedPermissions,
       revokedPermissions,
       maxDiscountPercentOverride:
@@ -306,7 +343,7 @@ export function StaffUserModal({
                   onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
                   placeholder="Örn: 1453"
                   className="h-10 w-full rounded-xl border border-[#d1d1d6] bg-white px-3 font-mono tracking-widest text-[14px] text-[#1d1d1f]"
-                  required={canAccessTerminal && !canAccessPanel && !editingUser?.hasPin}
+                  required={canAccessTerminal && !editingUser?.hasPin}
                 />
               </div>
             )}
@@ -324,6 +361,7 @@ export function StaffUserModal({
             onChangeMaxPctOverride={setMaxDiscountPctOverride}
             onChangeMaxAmtOverride={setMaxDiscountAmtOverride}
             onTogglePermissionException={toggleUserPermissionException}
+            onResetOverrides={handleResetOverrides}
           />
 
           {formError && (

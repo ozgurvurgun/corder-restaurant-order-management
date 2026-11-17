@@ -33,7 +33,7 @@ export interface NormalizedPaymentSplit {
 }
 
 export interface DiscountSnapshot {
-  type: 'percent' | 'amount';
+  type: 'percent' | 'amount' | 'complimentary';
   value: number;
   reason: string;
 }
@@ -57,6 +57,7 @@ export interface MethodBreakdownMinorUnits {
   cardMinorUnits: number;
   mealCardMinorUnits: number;
   multinetMinorUnits: number;
+  ledgerMinorUnits: number;
 }
 
 export class CheckSettlementPolicy {
@@ -72,7 +73,10 @@ export class CheckSettlementPolicy {
     const perms = actor.permissions ?? [];
     const limits = actor.limits ?? { maxDiscountPercent: 0, maxDiscountAmount: 0 };
 
-    if (rawTotalMinorUnits > 0 && discountMinorUnits >= rawTotalMinorUnits) {
+    if (
+      discountDto?.type === 'complimentary' ||
+      (rawTotalMinorUnits > 0 && discountMinorUnits >= rawTotalMinorUnits)
+    ) {
       if (!perms.includes('discount.complimentary')) {
         throw new ForbiddenException(
           'You do not have permission to apply a 100% complimentary discount (discount.complimentary)',
@@ -142,10 +146,15 @@ export class CheckSettlementPolicy {
           'A ledger customer must be selected for ledger settlement',
         );
       }
-      ledgerMinorUnits =
-        input.ledgerDebtAmount != null
-          ? Math.min(netMinorUnits, Math.max(0, toMinorUnits(input.ledgerDebtAmount)))
-          : netMinorUnits;
+      if (input.ledgerDebtAmount != null) {
+        const requestedLedgerMinor = Math.max(0, toMinorUnits(input.ledgerDebtAmount));
+        if (requestedLedgerMinor !== netMinorUnits) {
+          throw new BadRequestException(
+            'Ledger settlement amount must equal the net check amount (use split payment for partial ledger)',
+          );
+        }
+      }
+      ledgerMinorUnits = netMinorUnits;
     } else if (input.method === 'split') {
       if (netMinorUnits > 0 && (!input.splitDetails || input.splitDetails.length === 0)) {
         throw new BadRequestException('Split payment breakdown is required');
@@ -194,18 +203,32 @@ export class CheckSettlementPolicy {
       }
     }
 
+    const totalSettledMinorUnits =
+      cashMinorUnits +
+      cardMinorUnits +
+      mealCardMinorUnits +
+      multinetMinorUnits +
+      ledgerMinorUnits;
+    if (totalSettledMinorUnits !== netMinorUnits) {
+      throw new BadRequestException(
+        'Payment settlement total must equal the net check amount',
+      );
+    }
+
     if ((ledgerMinorUnits > 0 || input.method === 'ledger') && !input.ledgerCustomerId) {
       throw new BadRequestException(
         'ledgerCustomerId is required when recording a ledger debt',
       );
     }
 
-    const discountSnapshot =
+    const discountSnapshot: DiscountSnapshot | undefined =
       input.discount && discountMinorUnits > 0
         ? {
             type: input.discount.type,
-            value: input.discount.value,
-            reason: input.discount.reason?.trim() || 'Discount',
+            value: input.discount.type === 'complimentary' ? 100 : input.discount.value,
+            reason:
+              input.discount.reason?.trim() ||
+              (input.discount.type === 'complimentary' ? 'Complimentary' : 'Discount'),
           }
         : undefined;
 
@@ -233,11 +256,13 @@ export class CheckSettlementPolicy {
     let cardMinorUnits = 0;
     let mealCardMinorUnits = 0;
     let multinetMinorUnits = 0;
+    let ledgerMinorUnits = 0;
 
     if (method === 'cash') cashMinorUnits = netMinorUnits;
     else if (method === 'credit-card') cardMinorUnits = netMinorUnits;
     else if (method === 'meal-card') mealCardMinorUnits = netMinorUnits;
     else if (method === 'multinet') multinetMinorUnits = netMinorUnits;
+    else if (method === 'ledger') ledgerMinorUnits = netMinorUnits;
     else if (method === 'split' && Array.isArray(splitDetails)) {
       for (const s of splitDetails) {
         const part = Math.max(0, toMinorUnits(s.amount));
@@ -245,6 +270,7 @@ export class CheckSettlementPolicy {
         else if (s.method === 'credit-card') cardMinorUnits += part;
         else if (s.method === 'meal-card') mealCardMinorUnits += part;
         else if (s.method === 'multinet') multinetMinorUnits += part;
+        else if (s.method === 'ledger') ledgerMinorUnits += part;
       }
     }
 
@@ -253,6 +279,7 @@ export class CheckSettlementPolicy {
       cardMinorUnits,
       mealCardMinorUnits,
       multinetMinorUnits,
+      ledgerMinorUnits,
     };
   }
 }

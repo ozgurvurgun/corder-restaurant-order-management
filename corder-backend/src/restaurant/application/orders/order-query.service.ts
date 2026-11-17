@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, Repository } from 'typeorm';
+import { In, IsNull, MoreThanOrEqual, Repository } from 'typeorm';
 import { OrderEntity } from '../../domain/order.entity';
 import { RestaurantStaffEntity } from '../../domain/restaurant-staff.entity';
 import { ProductEntity } from '../../domain/product.entity';
@@ -119,11 +119,13 @@ export class OrderQueryService {
   async findPendingKitchenOrdersForPrintAgent(
     restaurantId: string,
   ): Promise<Record<string, unknown>[]> {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const orders = await this.orderRepo.find({
       where: {
         restaurantId,
         status: 'active',
         kitchenTicketPrintedAt: IsNull(),
+        createdAt: MoreThanOrEqual(cutoff),
       },
       relations: ['items', 'table'],
       order: { createdAt: 'ASC' },
@@ -134,12 +136,16 @@ export class OrderQueryService {
       restaurantId,
       orders.map((o) => o.userId),
     );
+    const emptyOrderIdsToMark: string[] = [];
     const allRowItems: Array<{ productId?: string; categoryId?: string }> = [];
     const out: Record<string, unknown>[] = [];
     for (const order of orders) {
       const items =
         order.items?.filter((i) => OrderStatusPolicy.isItemOnActiveBill(i.status)) ?? [];
-      if (!items.length) continue;
+      if (!items.length) {
+        emptyOrderIdsToMark.push(order.id);
+        continue;
+      }
       const uid = order.userId?.trim() ?? '';
       const snapshot = { ...order, items };
       const row = {
@@ -158,6 +164,12 @@ export class OrderQueryService {
       }
       out.push(row);
     }
+    if (emptyOrderIdsToMark.length) {
+      await this.orderRepo.update(
+        { id: In(emptyOrderIdsToMark), restaurantId },
+        { kitchenTicketPrintedAt: new Date() },
+      );
+    }
     if (allRowItems.length) {
       await this.attachCategoryIdsToItems(allRowItems, restaurantId);
     }
@@ -168,12 +180,18 @@ export class OrderQueryService {
     restaurantId: string,
     orderId: string,
   ): Promise<{ ok: true }> {
-    const res = await this.orderRepo.update(
-      { id: orderId, restaurantId, status: 'active' },
-      { kitchenTicketPrintedAt: new Date() },
-    );
-    if (!res.affected) {
-      throw new NotFoundException('Order not found or already closed');
+    const existing = await this.orderRepo.findOne({
+      where: { id: orderId, restaurantId },
+      select: { id: true, kitchenTicketPrintedAt: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('Order not found');
+    }
+    if (!existing.kitchenTicketPrintedAt) {
+      await this.orderRepo.update(
+        { id: orderId, restaurantId },
+        { kitchenTicketPrintedAt: new Date() },
+      );
     }
     return { ok: true };
   }
@@ -181,10 +199,12 @@ export class OrderQueryService {
   async findPendingPrintJobsForPrintAgent(
     restaurantId: string,
   ): Promise<Record<string, unknown>[]> {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const jobs = await this.printJobRepo.find({
       where: {
         restaurantId,
         printedAt: IsNull(),
+        createdAt: MoreThanOrEqual(cutoff),
       },
       order: { createdAt: 'ASC' },
       take: 100,
@@ -199,12 +219,18 @@ export class OrderQueryService {
   }
 
   async markPrintJobPrinted(restaurantId: string, jobId: string): Promise<{ ok: true }> {
-    const res = await this.printJobRepo.update(
-      { id: jobId, restaurantId },
-      { printedAt: new Date() },
-    );
-    if (!res.affected) {
+    const existing = await this.printJobRepo.findOne({
+      where: { id: jobId, restaurantId },
+      select: { id: true, printedAt: true },
+    });
+    if (!existing) {
       throw new NotFoundException('Print job not found');
+    }
+    if (!existing.printedAt) {
+      await this.printJobRepo.update(
+        { id: jobId, restaurantId },
+        { printedAt: new Date() },
+      );
     }
     return { ok: true };
   }

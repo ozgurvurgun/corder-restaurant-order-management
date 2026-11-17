@@ -1,19 +1,10 @@
-import type {
-  PermissionCatalogResponse,
-  PermissionCategory,
-} from "@/lib/types"
-import { getCategoryLabel, getPermissionLabel } from "@/lib/permission-labels"
+import type { PermissionCatalogResponse } from "@/lib/types"
+import {
+  getCategoryLabel,
+  getOrderedCatalogCategories,
+  getPermissionLabel,
+} from "@/lib/permission-labels"
 import { AlertCircle, Check, Search } from "lucide-react"
-
-const CATEGORY_ORDER: PermissionCategory[] = [
-  "orders_tables",
-  "discounts",
-  "billing_cash",
-  "ledger",
-  "catalog",
-  "inventory",
-  "reports_system",
-]
 
 interface RolePermissionMatrixProps {
   catalog: PermissionCatalogResponse | null
@@ -21,7 +12,7 @@ interface RolePermissionMatrixProps {
   searchQuery: string
   onSearchChange: (q: string) => void
   onTogglePermission: (key: string) => void
-  onToggleCategoryAll: (cat: PermissionCategory) => void
+  onToggleCategoryAll: (cat: string) => void
 }
 
 export function RolePermissionMatrix({
@@ -32,6 +23,8 @@ export function RolePermissionMatrix({
   onTogglePermission,
   onToggleCategoryAll,
 }: RolePermissionMatrixProps) {
+  const orderedCategories = getOrderedCatalogCategories(catalog)
+
   return (
     <>
       <div className="relative">
@@ -46,8 +39,8 @@ export function RolePermissionMatrix({
       </div>
 
       {catalog &&
-        CATEGORY_ORDER.map((catKey) => {
-          const catMeta = getCategoryLabel(catKey, catalog.categories[catKey])
+        orderedCategories.map((catKey) => {
+          const catMeta = getCategoryLabel(catKey, catalog.categories?.[catKey])
           const items = catalog.permissions.filter((p) => {
             if (p.category !== catKey) return false
             if (!searchQuery.trim()) return true

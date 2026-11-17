@@ -47,23 +47,55 @@ export class OrdersController {
     private readonly staffSession: StaffSessionService,
   ) {}
 
+  private assertCanReadOrders(user?: {
+    role?: string;
+    isBoss?: boolean;
+    permissions?: PermissionKey[];
+  }): void {
+    if (!user) {
+      throw new ForbiddenException('Session authentication is required');
+    }
+    if (user.role === 'print_agent') {
+      throw new ForbiddenException('Print agent cannot access order endpoints');
+    }
+    if (user.role === 'root' || user.isBoss || user.role === 'terminal') {
+      return;
+    }
+    const perms = user.permissions ?? [];
+    if (
+      !perms.includes('order.view') &&
+      !perms.includes('order.create') &&
+      !perms.includes('billing.close_check') &&
+      !perms.includes('reports.view_operational')
+    ) {
+      throw new ForbiddenException('You do not have permission to view orders (order.view)');
+    }
+  }
+
   @Get()
+  @RequirePermissions('order.view', 'order.create', 'billing.close_check', 'reports.view_operational')
   findAll(
     @RestaurantId() restaurantId: string,
+    @RestaurantUser() user: JwtActorUser,
     @Query('tableId') tableId?: string,
   ) {
+    this.assertCanReadOrders(user);
     return this.service.findByRestaurant(restaurantId, tableId);
   }
 
   @Get(':id')
+  @RequirePermissions('order.view', 'order.create', 'billing.close_check', 'reports.view_operational')
   findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
+    @RestaurantUser() user: JwtActorUser,
   ) {
+    this.assertCanReadOrders(user);
     return this.service.findOne(id, restaurantId);
   }
 
   @Post()
+  @RequirePermissions('order.create')
   async create(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: JwtActorUser,
@@ -87,6 +119,7 @@ export class OrdersController {
   }
 
   @Post('move-items')
+  @RequirePermissions('order.move_items')
   async moveOrderItems(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: JwtActorUser,
@@ -102,13 +135,14 @@ export class OrdersController {
     return this.service.moveItemsToTable(restaurantId, {
       fromTableId: dto.fromTableId,
       toTableId: dto.toTableId,
-      itemIds: dto.itemIds,
+      items: dto.items,
       userId: user.role === 'terminal' ? actor.actorId : null,
       actorDisplayName: actor.actorName,
     });
   }
 
   @Post('cancel-item')
+  @RequirePermissions('order.cancel_item')
   async cancelItem(
     @RestaurantId() restaurantId: string,
     @Body() dto: CancelOrderItemDto,
@@ -126,6 +160,8 @@ export class OrdersController {
       dto.itemId,
       dto.reason,
       actor.actorName,
+      user.role === 'terminal' ? actor.actorId : null,
+      dto.quantity,
     );
   }
 
@@ -157,22 +193,29 @@ export class OrdersController {
   }
 
   @Patch('move')
+  @RequirePermissions('table.move')
   async moveTable(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: JwtActorUser,
     @Req() req: Request,
     @Body() dto: MoveOrdersDto,
   ) {
-    await this.staffSession.assertActorPermission(
+    const actor = await this.staffSession.assertActorPermission(
       req,
       restaurantId,
       'table.move',
       user,
     );
-    return this.service.moveTable(restaurantId, dto.fromTableId, dto.toTableId);
+    return this.service.moveTable(
+      restaurantId,
+      dto.fromTableId,
+      dto.toTableId,
+      user.role === 'terminal' ? actor.actorId : null,
+    );
   }
 
   @Post('close-check')
+  @RequirePermissions('billing.close_check', 'billing.split_bill', 'order.quick_sale')
   async closeCheck(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: JwtActorUser,
@@ -215,9 +258,10 @@ export class OrdersController {
       throw new ForbiddenException('You do not have permission to assign checks to a customer ledger (ledger.assign_order)');
     }
 
-    if (dto.discount && dto.discount.value > 0) {
+    if (dto.discount && (dto.discount.type === 'complimentary' || dto.discount.value > 0)) {
       const isComplimentary =
-        dto.discount.type === 'percent' && dto.discount.value >= 100;
+        dto.discount.type === 'complimentary' ||
+        (dto.discount.type === 'percent' && dto.discount.value >= 100);
       if (isComplimentary) {
         if (!actor.isBoss && !actor.permissions.includes('discount.complimentary')) {
           throw new ForbiddenException('You do not have permission to apply a 100% complimentary discount (discount.complimentary)');
@@ -257,6 +301,7 @@ export class OrdersController {
   }
 
   @Post('print-receipt')
+  @RequirePermissions('order.print_receipt')
   async printReceipt(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: JwtActorUser,

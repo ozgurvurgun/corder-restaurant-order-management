@@ -41,10 +41,37 @@ export function useBillingActions(params: {
   logActivity: LogActivityFn
 }) {
   const {
-    token, currentShift, ledgerCustomers,
-    setCashShifts, setCashTransactions, setClosedTables,
-    setStockMovements, setStockMaterials, setOpenAccounts, setLedgerCustomers, logActivity,
+    token,
+    currentShift,
+    ledgerCustomers,
+    setCashShifts,
+    setCashTransactions,
+    setClosedTables,
+    setStockMovements,
+    setStockMaterials,
+    setOpenAccounts,
+    setLedgerCustomers,
+    logActivity,
   } = params
+
+  const refreshCurrentShiftAndTx = useCallback(async () => {
+    if (!token) return
+    const freshShift = await api.shifts.getCurrent(token).catch(() => null)
+    if (freshShift) {
+      const mappedShift = mapShiftDtoToPanel(freshShift)
+      setCashShifts((prev) =>
+        prev.some((s) => s.id === mappedShift.id)
+          ? prev.map((s) => (s.id === mappedShift.id ? mappedShift : s))
+          : [mappedShift, ...prev],
+      )
+      const cashTxRes = await api.cashTransactions
+        .list(token, freshShift.id)
+        .catch(() => null)
+      if (cashTxRes) {
+        setCashTransactions(cashTxRes.map(mapCashTransactionDtoToPanel))
+      }
+    }
+  }, [token, setCashShifts, setCashTransactions])
 
   const applyCloseCheckResult = useCallback(
     (res: CloseCheckResponseDto): ClosedTable => {
@@ -87,7 +114,12 @@ export function useBillingActions(params: {
       if (!token) return
       try {
         const res = await api.shifts.open(token, openingBalance)
-        setCashShifts((prev) => [...prev, mapShiftDtoToPanel(res)])
+        const mappedShift = mapShiftDtoToPanel(res)
+        setCashShifts((prev) => [
+          mappedShift,
+          ...prev.filter((s) => s.id !== mappedShift.id),
+        ])
+        setCashTransactions([])
         logActivity({
           action: "shift_opened",
           category: "cash-register",
@@ -100,7 +132,7 @@ export function useBillingActions(params: {
         throw err
       }
     },
-    [token, setCashShifts, logActivity],
+    [token, setCashShifts, setCashTransactions, logActivity],
   )
 
   const closeShift = useCallback(
@@ -151,12 +183,20 @@ export function useBillingActions(params: {
           action: "cash_transaction_created",
           category: "cash-register",
           details: `${t.type} işlemi: ${t.amount} - ${t.description}`,
-          metadata: { shiftId: res.shift.id, type: t.type, amount: t.amount, reference: t.reference },
+          metadata: {
+            shiftId: res.shift.id,
+            type: t.type,
+            amount: t.amount,
+            reference: t.reference,
+          },
         })
         showPanelToast("Kasa işlemi kaydedildi", "success")
         return true
       } catch (err) {
-        showPanelToast(err instanceof Error ? err.message : "Kasa işlemi eklenemedi", "error")
+        showPanelToast(
+          err instanceof Error ? err.message : "Kasa işlemi eklenemedi",
+          "error",
+        )
         return false
       }
     },
@@ -169,12 +209,19 @@ export function useBillingActions(params: {
       const list = await api.ledgerCustomers.list(token)
       setLedgerCustomers(list.map(mapLedgerCustomerDtoToPanel))
     } catch (err) {
-      showPanelToast(err instanceof Error ? err.message : "Cari listesi yenilenemedi", "error")
+      showPanelToast(
+        err instanceof Error ? err.message : "Cari listesi yenilenemedi",
+        "error",
+      )
     }
   }, [token, setLedgerCustomers])
 
   const createLedgerCustomer = useCallback(
-    async (body: { name: string; phone?: string; notes?: string }): Promise<LedgerCustomer | null> => {
+    async (body: {
+      name: string
+      phone?: string
+      notes?: string
+    }): Promise<LedgerCustomer | null> => {
       const name = body.name.trim()
       if (!name || !token) return null
       try {
@@ -198,7 +245,10 @@ export function useBillingActions(params: {
         showPanelToast(`Cari hesap oluşturuldu: ${mapped.name}`, "success")
         return mapped
       } catch (err) {
-        showPanelToast(err instanceof Error ? err.message : "Cari müşteri oluşturulamadı", "error")
+        showPanelToast(
+          err instanceof Error ? err.message : "Cari müşteri oluşturulamadı",
+          "error",
+        )
         return null
       }
     },
@@ -206,41 +256,66 @@ export function useBillingActions(params: {
   )
 
   const addLedgerPayment = useCallback(
-    async (customerId: string, amount: number): Promise<boolean> => {
+    async (
+      customerId: string,
+      amount: number,
+      paymentMethod: "cash" | "credit-card" | "meal-card" | "multinet" = "cash",
+    ): Promise<boolean> => {
       if (!token) return false
       const pay = Number(amount)
       if (!Number.isFinite(pay) || pay <= 0) return false
       try {
-        const updated = await api.ledgerCustomers.pay(token, customerId, pay)
-        setLedgerCustomers((prev) =>
-          prev.map((x) => (x.id === customerId ? { ...x, balance: Number(updated.balance) } : x)),
+        const updated = await api.ledgerCustomers.pay(
+          token,
+          customerId,
+          pay,
+          paymentMethod,
         )
-        const customerName = ledgerCustomers.find((c) => c.id === customerId)?.name || customerId
+        setLedgerCustomers((prev) =>
+          prev.map((x) =>
+            x.id === customerId ? { ...x, balance: Number(updated.balance) } : x,
+          ),
+        )
+        await refreshCurrentShiftAndTx()
+        const customerName =
+          ledgerCustomers.find((c) => c.id === customerId)?.name || customerId
         logActivity({
           action: "ledger_payment_added",
           category: "payment",
-          details: `${customerName} hesabına ödeme eklendi: ${pay}`,
-          metadata: { customerId, amount: pay },
+          details: `${customerName} hesabına ödeme eklendi: ${pay} (${paymentMethod})`,
+          metadata: { customerId, amount: pay, paymentMethod },
         })
         showPanelToast("Tahsilat kaydedildi", "success")
         return true
       } catch (err) {
-        showPanelToast(err instanceof Error ? err.message : "Tahsilat kaydedilemedi", "error")
+        showPanelToast(
+          err instanceof Error ? err.message : "Tahsilat kaydedilemedi",
+          "error",
+        )
         return false
       }
     },
-    [token, ledgerCustomers, setLedgerCustomers, logActivity],
+    [
+      token,
+      ledgerCustomers,
+      setLedgerCustomers,
+      refreshCurrentShiftAndTx,
+      logActivity,
+    ],
   )
 
   const addOpenAccount = useCallback(
-    (
-      a: Omit<OpenAccount, "id" | "createdAt" | "status" | "paidAt" | "items" | "payments"> & {
+    async (
+      a: Omit<
+        OpenAccount,
+        "id" | "createdAt" | "status" | "paidAt" | "items" | "payments"
+      > & {
         items?: OpenAccountCreateLine[]
       },
-    ) => {
-      if (!token) return
-      api.openAccounts
-        .create(token, {
+    ): Promise<boolean> => {
+      if (!token) return false
+      try {
+        const created = await api.openAccounts.create(token, {
           customerName: a.customerName,
           customerPhone: a.customerPhone,
           amount: a.items?.length ? undefined : a.amount,
@@ -256,68 +331,91 @@ export function useBillingActions(params: {
               }))
             : undefined,
         })
-        .then((created) => {
-          setOpenAccounts((prev) => [...prev, mapOpenAccountDtoToPanel(created)])
-          logActivity({
-            action: "open_account_created",
-            category: "payment",
-            details: `Veresiye hesap oluşturuldu: ${created.customerName}`,
-            metadata: { accountId: created.id, amount: created.amount },
-          })
-          showPanelToast("Veresiye hesap oluşturuldu", "success")
+        setOpenAccounts((prev) => [mapOpenAccountDtoToPanel(created), ...prev])
+        logActivity({
+          action: "open_account_created",
+          category: "payment",
+          details: `Veresiye hesap oluşturuldu: ${created.customerName}`,
+          metadata: { accountId: created.id, amount: created.amount },
         })
-        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Veresiye hesap oluşturulamadı", "error"))
+        showPanelToast("Veresiye hesap oluşturuldu", "success")
+        return true
+      } catch (err) {
+        showPanelToast(
+          err instanceof Error ? err.message : "Veresiye hesap oluşturulamadı",
+          "error",
+        )
+        return false
+      }
     },
     [token, setOpenAccounts, logActivity],
   )
 
   const payOpenAccount = useCallback(
-    (id: string, amount: number) => {
-      if (!token) return
-      api.openAccounts
-        .pay(token, id, amount)
-        .then((updated) => {
-          setOpenAccounts((prev) =>
-            prev.map((a) => (a.id === updated.id ? mapOpenAccountDtoToPanel(updated) : a)),
-          )
-          logActivity({
-            action: "open_account_payment_received",
-            category: "payment",
-            details: `Veresiye tahsilat alındı: ${updated.customerName} - ${amount}`,
-            metadata: { accountId: id, amount },
-          })
-          showPanelToast("Veresiye tahsilatı alındı", "success")
+    async (
+      id: string,
+      amount: number,
+      paymentMethod: "cash" | "credit-card" | "meal-card" | "multinet" = "cash",
+    ): Promise<boolean> => {
+      if (!token) return false
+      try {
+        const updated = await api.openAccounts.pay(token, id, amount, paymentMethod)
+        setOpenAccounts((prev) =>
+          prev.map((a) => (a.id === updated.id ? mapOpenAccountDtoToPanel(updated) : a)),
+        )
+        await refreshCurrentShiftAndTx()
+        logActivity({
+          action: "open_account_payment_received",
+          category: "payment",
+          details: `Veresiye tahsilat alındı: ${updated.customerName} - ${amount}`,
+          metadata: { accountId: id, amount, paymentMethod },
         })
-        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Veresiye tahsilatı alınamadı", "error"))
+        showPanelToast("Veresiye tahsilatı alındı", "success")
+        return true
+      } catch (err) {
+        showPanelToast(
+          err instanceof Error ? err.message : "Veresiye tahsilatı alınamadı",
+          "error",
+        )
+        return false
+      }
     },
-    [token, setOpenAccounts, logActivity],
+    [token, setOpenAccounts, refreshCurrentShiftAndTx, logActivity],
   )
 
   const updateCompletedOrder = useCallback(
-    async (completedId: string, body: CompletedOrderUpdateBody): Promise<ClosedTable | null> => {
+    async (
+      completedId: string,
+      body: CompletedOrderUpdateBody,
+    ): Promise<ClosedTable | null> => {
       if (!token) return null
       try {
         const updated = await api.completedOrders.update(token, completedId, body)
         const mapped = mapCompletedOrderDtoToClosedTable(updated)
         setClosedTables((prev) => prev.map((c) => (c.id === completedId ? mapped : c)))
-        const freshShift = await api.shifts.getCurrent(token).catch(() => null)
-        if (freshShift) {
-          const mappedShift = mapShiftDtoToPanel(freshShift)
-          setCashShifts((prev) => prev.map((s) => (s.id === mappedShift.id ? mappedShift : s)))
-          const cashTxRes = await api.cashTransactions.list(token, freshShift.id).catch(() => null)
-          if (cashTxRes) setCashTransactions(cashTxRes.map(mapCashTransactionDtoToPanel))
-        }
+        await refreshCurrentShiftAndTx()
         return mapped
       } catch (err) {
-        showPanelToast(err instanceof Error ? err.message : "Tamamlanan sipariş güncellenemedi", "error")
+        showPanelToast(
+          err instanceof Error ? err.message : "Tamamlanan sipariş güncellenemedi",
+          "error",
+        )
         return null
       }
     },
-    [token, setClosedTables, setCashShifts, setCashTransactions],
+    [token, setClosedTables, refreshCurrentShiftAndTx],
   )
 
   return {
-    applyCloseCheckResult, openShift, closeShift, addCashTransaction, ledgerRefresh,
-    createLedgerCustomer, addLedgerPayment, addOpenAccount, payOpenAccount, updateCompletedOrder,
+    applyCloseCheckResult,
+    openShift,
+    closeShift,
+    addCashTransaction,
+    ledgerRefresh,
+    createLedgerCustomer,
+    addLedgerPayment,
+    addOpenAccount,
+    payOpenAccount,
+    updateCompletedOrder,
   }
 }

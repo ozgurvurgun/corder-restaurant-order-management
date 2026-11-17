@@ -29,6 +29,8 @@ export interface PanelUser {
   password?: string
   phone?: string
   pin?: string
+  hasPin?: boolean
+  hasPassword?: boolean
   canAccessPanel?: boolean
   canAccessTerminal?: boolean
   permissions?: string[]
@@ -124,6 +126,8 @@ export interface PanelTable {
   status: PanelTableStatus
   activeOrderId?: string
   waiter?: string
+  lockedByStaffId?: string
+  lockedByStaffName?: string
   totalAmount: number
   orderCount: number
   lastUpdated?: Date

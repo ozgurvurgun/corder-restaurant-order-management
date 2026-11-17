@@ -19,14 +19,21 @@ function openDesktopBrowser(url) {
 }
 
 async function startPrintAgentApp(options = {}) {
-  const detectedBackendUrl = await resolveEmbeddedBackendUrl(true)
+  const existingSettings = loadSettings()
+  const detectedBackendUrl = await resolveEmbeddedBackendUrl(true, existingSettings.backendUrl)
   const settings = saveSettings({ backendUrl: detectedBackendUrl })
   await applyAutoStartSetting(settings.autoStartOnBoot, options.electronApp || null)
   const config = buildRuntimeConfig(settings)
   const store = new JobStore(config.queueFile)
   const printer = createPrinter(config)
-  const agent = startAgent({ config, store, printer })
-  const uiServer = createUiServer({ store, agent })
+  let uiServer = null
+  const agent = startAgent({
+    config,
+    store,
+    printer,
+    onContextInvalidated: () => uiServer?.syncContextFromBackend?.(),
+  })
+  uiServer = createUiServer({ store, agent })
 
   const preferredPort = options.port !== undefined ? Number(options.port) : 4190
   const { port, url: uiUrl } = await uiServer.listen(preferredPort)

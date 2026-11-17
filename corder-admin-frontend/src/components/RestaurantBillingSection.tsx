@@ -3,7 +3,8 @@ import type {
   RestaurantBillingStatus,
   RestaurantBranchType,
 } from "@/lib/types"
-import { CreditCard, CheckCircle2, Ban, Clock } from "lucide-react"
+import { formatIstanbulDate, formatIstanbulDateTime, formatMoney } from "@/lib/money"
+import { CreditCard, CheckCircle2, Ban, Clock, ReceiptText } from "lucide-react"
 
 interface RestaurantBillingBannerProps {
   restaurant: Restaurant
@@ -51,7 +52,9 @@ export function RestaurantBillingBanner({
                 restaurant.billingStatus === "overdue" ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-3 py-0.5 text-xs font-semibold text-amber-300">
                   <Clock className="h-3.5 w-3.5" />
-                  Tahsilat Bekleniyor (25-30)
+                  {restaurant.billingStatus === "overdue"
+                    ? "Ödeme Gecikti (25-30)"
+                    : "Tahsilat Bekleniyor (25-30)"}
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-3 py-0.5 text-xs font-semibold text-emerald-300">
@@ -63,6 +66,28 @@ export function RestaurantBillingBanner({
             <p className="mt-1 text-xs text-zinc-400">
               Ödeme alınmadığında &ldquo;Erişimi Durdur&rdquo; ile mekanın tüm panellerini kapatabilir, ödeme yapıldığında &ldquo;Ödeme Alındı İşaretle&rdquo; ile erişimi anında otomatik açabilirsiniz.
             </p>
+            <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-zinc-400">
+              <span>
+                Aylık Ücret:{" "}
+                <strong className="text-white">
+                  {formatMoney(restaurant.monthlyFee ?? 0)}
+                </strong>
+              </span>
+              {restaurant.lastPaymentDate && (
+                <span>
+                  Son Ödeme:{" "}
+                  <strong className="text-emerald-300">
+                    {formatIstanbulDate(restaurant.lastPaymentDate)}
+                  </strong>
+                  {restaurant.lastPaidPeriod ? ` (${restaurant.lastPaidPeriod})` : ""}
+                </span>
+              )}
+              {isSuspended && restaurant.suspendedAt && (
+                <span className="text-red-300">
+                  Askıya Alınma: <strong>{formatIstanbulDateTime(restaurant.suspendedAt)}</strong>
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -110,6 +135,7 @@ interface RestaurantBillingSectionProps {
   onBillingStatusChange: (value: RestaurantBillingStatus) => void
   billingNotes: string
   onBillingNotesChange: (value: string) => void
+  paymentHistory?: Restaurant["paymentHistory"]
   disabled: boolean
 }
 
@@ -128,6 +154,7 @@ export function RestaurantBillingSection({
   onBillingStatusChange,
   billingNotes,
   onBillingNotesChange,
+  paymentHistory,
   disabled,
 }: RestaurantBillingSectionProps) {
   return (
@@ -210,7 +237,7 @@ export function RestaurantBillingSection({
             <input
               type="number"
               min={0}
-              step="50"
+              step="0.01"
               value={monthlyFee}
               onChange={(e) => onMonthlyFeeChange(e.target.value)}
               className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm font-semibold text-white outline-none focus:border-emerald-500"
@@ -247,6 +274,34 @@ export function RestaurantBillingSection({
             disabled={disabled}
           />
         </div>
+
+        {paymentHistory && paymentHistory.length > 0 && (
+          <div className="rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] p-3">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-300 mb-2">
+              <ReceiptText className="h-3.5 w-3.5 text-emerald-400" />
+              <span>Tahsilat Geçmişi ({paymentHistory.length} kayıt)</span>
+            </div>
+            <div className="max-h-36 overflow-y-auto divide-y divide-[#2a2a2a] text-xs">
+              {paymentHistory.map((item) => (
+                <div key={item.id} className="py-1.5 flex items-center justify-between gap-2">
+                  <div>
+                    <span className="font-mono text-zinc-300">{item.period}</span>
+                    <span className="mx-1.5 text-zinc-600">•</span>
+                    <span className="text-zinc-400">
+                      {formatIstanbulDateTime(item.paidAt)}
+                    </span>
+                    {item.note && (
+                      <span className="block text-[11px] text-zinc-500">{item.note}</span>
+                    )}
+                  </div>
+                  <span className="font-semibold text-emerald-400 shrink-0">
+                    {formatMoney(item.amount, true)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </>
   )

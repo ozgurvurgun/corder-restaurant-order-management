@@ -173,12 +173,13 @@ export interface PanelStore {
 
   // Sections & Tables CRUD
   addSection: (name: string) => void
-  updateSection: (id: string, name: string) => void
-  deleteSection: (id: string) => void
+  updateSection: (id: string, name: string) => void | Promise<boolean>
+  deleteSection: (id: string) => void | Promise<boolean>
   addTable: (name: string, section: string) => void
   deleteTable: (id: string) => void
 
   // Settings & Receipt
+  hasPermission: (...keys: string[]) => boolean
   updateSettings: (s: Partial<RestaurantSettings>) => void
   reprintReceipt: (
     target:
@@ -197,7 +198,7 @@ export interface PanelStore {
           }[]
           total: number
         },
-  ) => Promise<void>
+  ) => Promise<boolean | void>
   updateCompletedOrder: (
     completedId: string,
     body: CompletedOrderUpdateBody,
@@ -243,15 +244,23 @@ export interface PanelStore {
       OpenAccount,
       "id" | "createdAt" | "status" | "paidAt" | "items" | "payments"
     > & { items?: OpenAccountCreateLine[] },
-  ) => void
-  payOpenAccount: (id: string, amount: number) => void
+  ) => void | Promise<boolean>
+  payOpenAccount: (
+    id: string,
+    amount: number,
+    paymentMethod?: "cash" | "credit-card" | "meal-card" | "multinet",
+  ) => void | Promise<boolean>
   ledgerRefresh: () => Promise<void>
   createLedgerCustomer: (body: {
     name: string
     phone?: string
     notes?: string
   }) => Promise<LedgerCustomer | null>
-  addLedgerPayment: (customerId: string, amount: number) => Promise<boolean>
+  addLedgerPayment: (
+    customerId: string,
+    amount: number,
+    paymentMethod?: "cash" | "credit-card" | "meal-card" | "multinet",
+  ) => Promise<boolean>
 
   // Notifications & Audit
   markNotificationRead: (id: string) => void
@@ -276,15 +285,15 @@ export interface PanelStore {
   applyDiscount: (
     tableId: string,
     discount: { type: PanelDiscountType; value: number; reason: string },
-  ) => void | Promise<void>
-  clearDiscount: (tableId: string) => void | Promise<void>
-  splitBillByPerson: (tableId: string, personCount: number) => void | Promise<void>
+  ) => Promise<boolean>
+  clearDiscount: (tableId: string) => Promise<boolean>
+  splitBillByPerson: (tableId: string, personCount: number) => Promise<boolean>
   splitBillByItems: (
     tableId: string,
     itemIds: string[],
     amounts: Record<string, number>,
-  ) => void | Promise<void>
-  clearSplitBill: (tableId: string) => void | Promise<void>
+  ) => Promise<boolean>
+  clearSplitBill: (tableId: string) => Promise<boolean>
   payPersonShare: (
     tableId: string,
     shareIndex: number,

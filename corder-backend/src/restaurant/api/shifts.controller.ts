@@ -13,7 +13,7 @@ import { CashShiftService, serializeCashShift } from '../application/cash-shift.
 import { OpenShiftDto } from './dto/open-shift.dto';
 import { CloseShiftDto } from './dto/close-shift.dto';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
-import { PanelRootGuard } from '../infrastructure/panel-root.guard';
+import { PanelRootGuard, RequirePermissions } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
 
@@ -23,6 +23,7 @@ export class ShiftsController {
   constructor(private readonly service: CashShiftService) {}
 
   @Get('current')
+  @RequirePermissions('cash.view', 'cash.view_history', 'billing.close_check')
   async getCurrent(@RestaurantId() restaurantId: string) {
     const shift = await this.service.getCurrent(restaurantId);
     if (!shift) return null;
@@ -30,12 +31,18 @@ export class ShiftsController {
   }
 
   @Get()
+  @RequirePermissions('cash.view', 'cash.view_history', 'billing.close_check')
   async list(@RestaurantId() restaurantId: string, @Query('limit') limit?: string) {
-    const shifts = await this.service.list(restaurantId, limit ? parseInt(limit, 10) : 50);
+    const parsedLimit = limit ? parseInt(limit, 10) : 50;
+    const safeLimit = Number.isFinite(parsedLimit)
+      ? Math.min(200, Math.max(1, parsedLimit))
+      : 50;
+    const shifts = await this.service.list(restaurantId, safeLimit);
     return shifts.map((s) => serializeCashShift(s));
   }
 
   @Post()
+  @RequirePermissions('cash.shift_open')
   async open(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { id: string; name: string },
@@ -50,6 +57,7 @@ export class ShiftsController {
   }
 
   @Put(':id/close')
+  @RequirePermissions('cash.shift_close')
   async close(
     @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,

@@ -1,6 +1,9 @@
 import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
-import { PanelRootGuard } from '../infrastructure/panel-root.guard';
+import {
+  PanelRootGuard,
+  RequirePermissions,
+} from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
 import { StockMovementsService } from '../application/stock-movements.service';
@@ -12,6 +15,7 @@ export class StockMovementsController {
   constructor(private readonly movements: StockMovementsService) {}
 
   @Get()
+  @RequirePermissions('inventory.view')
   list(
     @RestaurantId() restaurantId: string,
     @Query('limit') limit?: string,
@@ -21,6 +25,7 @@ export class StockMovementsController {
   }
 
   @Post()
+  @RequirePermissions('inventory.stock_movement')
   create(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { name: string },
@@ -28,7 +33,7 @@ export class StockMovementsController {
   ) {
     return this.movements.create(restaurantId, {
       ...body,
-      createdBy: body.createdBy ?? user.name,
+      createdBy: user.name,
     });
   }
 }

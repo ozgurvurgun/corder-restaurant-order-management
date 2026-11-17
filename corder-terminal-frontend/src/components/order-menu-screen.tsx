@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react"
 import { ChevronLeft, ShoppingCart, Search, X, Utensils, AlertTriangle } from "lucide-react"
 import { useApp } from "@/lib/store"
-import { formatCurrency } from "@/lib/format"
+import { formatCurrency, resolveImageUrl } from "@/lib/format"
 import { useToast } from "@/components/ios-toast"
 import type { TerminalCategory, TerminalProduct } from "@/lib/types"
 
@@ -66,8 +66,10 @@ function ProductCard({
   onAdd: () => void
   disabled?: boolean
 }) {
+  const [imgFailed, setImgFailed] = useState(false)
   const outOfStock = !product.isAvailable
   const actionDisabled = outOfStock || disabled
+  const resolvedImage = resolveImageUrl(product.imageUrl)
 
   return (
     <button
@@ -79,16 +81,24 @@ function ProductCard({
       }`}
     >
       <div className="aspect-square bg-muted relative overflow-hidden">
-        {product.imageUrl ? (
-          <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+        {resolvedImage && !imgFailed ? (
+          <img
+            src={resolvedImage}
+            alt={product.name}
+            loading="lazy"
+            decoding="async"
+            onError={() => setImgFailed(true)}
+            className="w-full h-full object-cover"
+          />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <Utensils className="h-8 w-8 text-muted-foreground/30" />
           </div>
         )}
         {outOfStock && (
-          <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
-            <AlertTriangle className="h-6 w-6 text-destructive" />
+          <div className="absolute inset-0 bg-background/60 flex flex-col items-center justify-center gap-0.5">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+            <span className="text-[10px] font-bold text-destructive uppercase">Tükendi</span>
           </div>
         )}
       </div>
@@ -167,6 +177,7 @@ export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreen
     selectCategory,
     addToCart,
     getCartItemCount,
+    hasPermission,
     isLoading,
     error,
   } = useApp()
@@ -174,6 +185,7 @@ export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreen
   const [searchQuery, setSearchQuery] = useState("")
   const [showSearch, setShowSearch] = useState(false)
 
+  const canCreateOrder = hasPermission("order.create")
   const rootCategories = useMemo(() => categories.filter((c) => !c.parentId), [categories])
 
   useEffect(() => {
@@ -190,8 +202,8 @@ export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreen
 
   const searchedProducts = useMemo(() => {
     if (!searchQuery.trim()) return []
-    const query = searchQuery.toLowerCase()
-    return products.filter((p) => p.name.toLowerCase().includes(query))
+    const query = searchQuery.trim().toLocaleLowerCase("tr-TR")
+    return products.filter((p) => p.name.toLocaleLowerCase("tr-TR").includes(query))
   }, [searchQuery, products])
 
   const table = tables.find((t) => t.id === tableId)
@@ -205,6 +217,10 @@ export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreen
   const headerTitle = table?.name ?? tableTitleByTableId[tableId] ?? "Menü"
 
   const handleAddProduct = (product: TerminalProduct) => {
+    if (!canCreateOrder) {
+      showToast("Sipariş oluşturma yetkiniz bulunmuyor.", "error")
+      return
+    }
     if (isBillRequested) {
       showToast("Masa hesap kesiminde. Modal kapanana kadar sipariş eklenemez.", "error")
       return
@@ -274,6 +290,7 @@ export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreen
                   setSearchQuery("")
                   setShowSearch(false)
                 }}
+                aria-label="Aramayı temizle"
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
               >
                 <X className="h-4 w-4" />
@@ -317,7 +334,7 @@ export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreen
                   key={product.id}
                   product={product}
                   onAdd={() => handleAddProduct(product)}
-                  disabled={isBillRequested}
+                  disabled={isBillRequested || !canCreateOrder}
                 />
               ))}
             </div>
@@ -328,7 +345,7 @@ export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreen
             allCategories={categories}
             allProducts={products}
             depth={0}
-            isBillRequested={isBillRequested}
+            isBillRequested={isBillRequested || !canCreateOrder}
             onAdd={handleAddProduct}
           />
         ) : (

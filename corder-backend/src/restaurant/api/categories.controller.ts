@@ -14,7 +14,10 @@ import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { ReorderCategoriesDto } from './dto/reorder-categories.dto';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
-import { PanelRootGuard } from '../infrastructure/panel-root.guard';
+import {
+  PanelRootGuard,
+  RequirePermissions,
+} from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 
 @Controller('restaurant/categories')
@@ -23,11 +26,13 @@ export class CategoriesController {
   constructor(private readonly service: CategoryService) {}
 
   @Get()
+  @RequirePermissions('catalog.view', 'order.view', 'order.create')
   findAll(@RestaurantId() restaurantId: string) {
     return this.service.findByRestaurant(restaurantId);
   }
 
   @Get(':id')
+  @RequirePermissions('catalog.view', 'order.view', 'order.create')
   findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
@@ -36,11 +41,13 @@ export class CategoriesController {
   }
 
   @Post()
+  @RequirePermissions('catalog.manage_categories')
   create(@RestaurantId() restaurantId: string, @Body() dto: CreateCategoryDto) {
     return this.service.create(restaurantId, dto);
   }
 
   @Put(':id')
+  @RequirePermissions('catalog.manage_categories')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
@@ -50,6 +57,7 @@ export class CategoriesController {
   }
 
   @Delete(':id')
+  @RequirePermissions('catalog.manage_categories')
   remove(
     @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
@@ -58,7 +66,11 @@ export class CategoriesController {
   }
 
   @Post('reorder')
-  reorder(@RestaurantId() restaurantId: string, @Body() body: ReorderCategoriesDto) {
+  @RequirePermissions('catalog.manage_categories')
+  reorder(
+    @RestaurantId() restaurantId: string,
+    @Body() body: ReorderCategoriesDto,
+  ) {
     return this.service.reorder(restaurantId, body);
   }
 }

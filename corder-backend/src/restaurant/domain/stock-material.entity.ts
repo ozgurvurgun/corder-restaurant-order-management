@@ -56,4 +56,28 @@ export class StockMaterialEntity {
     this.currentStock = newStock;
     return { previousStock, newStock };
   }
+
+  /**
+   * Updates unit cost using Weighted Moving Average Cost when positive stock is on hand,
+   * or falls back to Last Cost when previous stock or previous cost is <= 0.
+   */
+  applyCostUpdate(
+    addedQuantity: number,
+    incomingUnitCost?: number | null,
+    stockBeforeAddition?: number,
+  ): void {
+    const unitCost = Number(incomingUnitCost);
+    if (!Number.isFinite(unitCost) || unitCost <= 0 || addedQuantity <= 0) {
+      return;
+    }
+    const prevStock = Math.max(0, Number(stockBeforeAddition ?? this.currentStock ?? 0));
+    const prevCost = Number(this.costPerUnit ?? 0);
+    if (prevStock > 0 && prevCost > 0) {
+      const weightedAvg =
+        (prevStock * prevCost + addedQuantity * unitCost) / (prevStock + addedQuantity);
+      this.costPerUnit = Number(weightedAvg.toFixed(4));
+    } else {
+      this.costPerUnit = Number(unitCost.toFixed(4));
+    }
+  }
 }

@@ -1,5 +1,14 @@
+import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import type { Restaurant } from "@/lib/types"
+import {
+  formatIstanbulDate,
+  formatIstanbulDateTime,
+  formatMoney,
+  fromMinorUnits,
+  getIstanbulBillingPeriod,
+  toMinorUnits,
+} from "@/lib/money"
 import {
   CheckCircle2,
   Ban,
@@ -7,6 +16,8 @@ import {
   Search,
   ShieldAlert,
   Building2,
+  ReceiptText,
+  X,
 } from "lucide-react"
 
 export type BillingStatusFilter = "ALL" | "paid" | "pending" | "suspended"
@@ -26,7 +37,10 @@ interface RecordPaymentModalProps {
   busyRestId: string | null
   bulkBusy: boolean
   onSaveMonthlyFee: (restaurant: Restaurant) => void
-  onMarkPaid: (restaurant: Restaurant) => void
+  onMarkPaid: (
+    restaurant: Restaurant,
+    details?: { amount?: number; period?: string; note?: string }
+  ) => void
   onMarkPending: (restaurant: Restaurant) => void
   onSuspendUnpaid: (restaurant: Restaurant) => void
   onStartCycle: () => void
@@ -54,6 +68,31 @@ export function RecordPaymentModal({
   onStartCycle,
   onBulkSuspendUnpaid,
 }: RecordPaymentModalProps) {
+  const [detailRestaurantId, setDetailRestaurantId] = useState<string | null>(null)
+  const [payAmount, setPayAmount] = useState("")
+  const [payPeriod, setPayPeriod] = useState(getIstanbulBillingPeriod)
+  const [payNote, setPayNote] = useState("")
+
+  const detailRestaurant = detailRestaurantId
+    ? filteredRestaurants.find((r) => r.id === detailRestaurantId) ?? null
+    : null
+
+  useEffect(() => {
+    if (!detailRestaurantId) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDetailRestaurantId(null)
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [detailRestaurantId])
+
+  const openPaymentDialog = (r: Restaurant) => {
+    setDetailRestaurantId(r.id)
+    setPayAmount(feeDrafts[r.id] ?? String(r.monthlyFee ?? 0))
+    setPayPeriod(getIstanbulBillingPeriod())
+    setPayNote("")
+  }
+
   const filterTabs: { id: BillingStatusFilter; label: string }[] = [
     { id: "ALL", label: `Tüm Mekanlar (${restaurantsCount})` },
     { id: "paid", label: `Ödeme Alındı (${paidCount})` },
@@ -127,7 +166,9 @@ export function RecordPaymentModal({
           </thead>
           <tbody>
             {filteredRestaurants.map((r) => {
-              const isSusp = Boolean(r.isAccessSuspended || r.billingStatus === "suspended")
+              const isSusp = Boolean(
+                r.isAccessSuspended || r.billingStatus === "suspended"
+              )
               const isBusy = busyRestId === r.id
               return (
                 <tr
@@ -167,7 +208,7 @@ export function RecordPaymentModal({
                       <input
                         type="number"
                         min={0}
-                        step="50"
+                        step="0.01"
                         value={feeDrafts[r.id] ?? String(r.monthlyFee ?? 0)}
                         onChange={(e) => onFeeDraftChange(r.id, e.target.value)}
                         className="w-28 rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-2.5 py-1.5 text-xs font-semibold text-white outline-none focus:border-[#e63462]"
@@ -192,7 +233,9 @@ export function RecordPaymentModal({
                     ) : r.billingStatus === "pending" || r.billingStatus === "overdue" ? (
                       <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-300">
                         <Clock className="h-3.5 w-3.5" />
-                        Ödeme Bekleniyor (25-30 Tahsilat)
+                        {r.billingStatus === "overdue"
+                          ? "Ödeme Gecikti"
+                          : "Ödeme Bekleniyor (25-30)"}
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-400">
@@ -205,10 +248,12 @@ export function RecordPaymentModal({
                     {r.lastPaymentDate ? (
                       <div>
                         <p className="text-zinc-200 font-medium">
-                          {new Date(r.lastPaymentDate).toLocaleDateString("tr-TR")}
+                          {formatIstanbulDate(r.lastPaymentDate)}
                         </p>
                         {r.lastPaidPeriod && (
-                          <p className="text-[11px] text-zinc-500">Dönem: {r.lastPaidPeriod}</p>
+                          <p className="text-[11px] text-zinc-500">
+                            Dönem: {r.lastPaidPeriod}
+                          </p>
                         )}
                       </div>
                     ) : (
@@ -225,6 +270,16 @@ export function RecordPaymentModal({
                       >
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         {isSusp ? "Ödeme Alındı (Erişimi Aç)" : "Ödeme Alındı"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => openPaymentDialog(r)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-2.5 py-1.5 text-xs text-zinc-300 hover:bg-[#2a2a2a] hover:text-white disabled:opacity-50"
+                        title="Detaylı Tahsilat Kaydı & Geçmiş"
+                      >
+                        <ReceiptText className="h-3.5 w-3.5 text-emerald-400" />
+                        Geçmiş ({r.paymentHistory?.length ?? 0})
                       </button>
                       {!isSusp && r.billingStatus !== "pending" && (
                         <button
@@ -262,6 +317,142 @@ export function RecordPaymentModal({
           </tbody>
         </table>
       </div>
+
+      {detailRestaurant && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          onClick={() => setDetailRestaurantId(null)}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl border border-[#2a2a2a] bg-[#1a1a1a] p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[#2a2a2a] pb-4">
+              <div>
+                <h3 className="text-base font-semibold text-white">
+                  {detailRestaurant.name} — Tahsilat Kaydı &amp; Geçmiş
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  Aylık Ücret: {formatMoney(detailRestaurant.monthlyFee ?? 0)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetailRestaurantId(null)}
+                className="rounded-lg p-1.5 text-zinc-400 hover:bg-[#2a2a2a] hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                const amt = Math.max(0, fromMinorUnits(toMinorUnits(payAmount)))
+                onMarkPaid(detailRestaurant, {
+                  amount: amt,
+                  period: payPeriod.trim() || undefined,
+                  note: payNote.trim() || undefined,
+                })
+                setDetailRestaurantId(null)
+              }}
+              className="mt-4 space-y-3 border-b border-[#2a2a2a] pb-4"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                Yeni Tahsilat İşle
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs text-zinc-300">
+                    Tahsilat Tutarı (₺) *
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value)}
+                    className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm font-semibold text-white outline-none focus:border-emerald-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-zinc-300">
+                    Dönem (YYYY-AA) *
+                  </label>
+                  <input
+                    type="text"
+                    value={payPeriod}
+                    onChange={(e) => setPayPeriod(e.target.value)}
+                    placeholder="2026-11"
+                    className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 font-mono text-sm text-white outline-none focus:border-emerald-500"
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-zinc-300">
+                  Dekont / Açıklama Notu
+                </label>
+                <input
+                  type="text"
+                  value={payNote}
+                  onChange={(e) => setPayNote(e.target.value)}
+                  placeholder="Örn: Havale / EFT dekontu onaylandı"
+                  className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={busyRestId === detailRestaurant.id}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  Ödemeyi Kaydet &amp; Erişimi Aç
+                </button>
+              </div>
+            </form>
+
+            <div className="mt-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                Tahsilat Geçmişi ({detailRestaurant.paymentHistory?.length ?? 0})
+              </p>
+              {!detailRestaurant.paymentHistory ||
+              detailRestaurant.paymentHistory.length === 0 ? (
+                <p className="py-4 text-center text-xs text-zinc-500">
+                  Henüz kayıtlı tahsilat geçmişi bulunmuyor.
+                </p>
+              ) : (
+                <div className="max-h-56 overflow-y-auto divide-y divide-[#2a2a2a] rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] px-3">
+                  {detailRestaurant.paymentHistory.map((item) => (
+                    <div
+                      key={item.id}
+                      className="py-2.5 flex items-center justify-between gap-3 text-xs"
+                    >
+                      <div>
+                        <p className="font-medium text-white">
+                          Dönem: <span className="font-mono">{item.period}</span>
+                        </p>
+                        <p className="text-[11px] text-zinc-400">
+                          {formatIstanbulDateTime(item.paidAt)}
+                          {item.recordedBy ? ` • ${item.recordedBy}` : ""}
+                        </p>
+                        {item.note && (
+                          <p className="text-[11px] text-zinc-500 mt-0.5">{item.note}</p>
+                        )}
+                      </div>
+                      <span className="font-semibold text-emerald-400 shrink-0">
+                        {formatMoney(item.amount, true)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

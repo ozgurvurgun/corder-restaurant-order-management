@@ -1,4 +1,9 @@
+import { useEffect, useMemo, useState } from "react"
 import { useBossStore } from "@/lib/boss-store"
+import { bossApi } from "@/lib/api"
+import type { AuditCategory, AuditLogDto } from "@/lib/types"
+import { formatIstanbulDateTime, formatMoney } from "@/lib/format"
+import { AUDIT_CATEGORY_LABELS } from "@/lib/permission-labels"
 import {
   BarChart,
   Bar,
@@ -16,20 +21,71 @@ import {
   Building2,
 } from "lucide-react"
 
-function formatMoney(n: number): string {
-  return Number(n || 0).toLocaleString("tr-TR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
+const AUDIT_CATEGORIES: Array<AuditCategory | "ALL"> = [
+  "ALL",
+  "order",
+  "table",
+  "payment",
+  "cash",
+  "stock",
+  "product",
+  "staff",
+  "system",
+]
 
 export function AnalyticsAuditTab() {
-  const { overview } = useBossStore()
+  const {
+    overview,
+    selectedBranchId,
+    effectiveBranchId,
+    effectiveBranch,
+  } = useBossStore()
+
+  const [auditCategory, setAuditCategory] = useState<AuditCategory | "ALL">("ALL")
+  const [branchAudits, setBranchAudits] = useState<AuditLogDto[] | null>(null)
+  const [loadingAudits, setLoadingAudits] = useState(false)
+
+  useEffect(() => {
+    if (!effectiveBranchId || selectedBranchId === "ALL") {
+      setBranchAudits(null)
+      return
+    }
+    let cancelled = false
+    setLoadingAudits(true)
+    bossApi.auditLogs
+      .list(effectiveBranchId, {
+        category: auditCategory === "ALL" ? undefined : auditCategory,
+        limit: 60,
+      })
+      .then((res) => {
+        if (!cancelled) setBranchAudits(res)
+      })
+      .catch(() => {
+        if (!cancelled) setBranchAudits(null)
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingAudits(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [effectiveBranchId, selectedBranchId, auditCategory])
 
   const hourly = overview?.hourlySales ?? []
   const topProducts = overview?.topProducts ?? []
   const staffPerf = overview?.staffPerformance ?? []
-  const audits = overview?.recentAudits ?? []
+
+  const audits = useMemo(() => {
+    if (selectedBranchId !== "ALL" && branchAudits) {
+      return branchAudits.map((a) => ({
+        ...a,
+        branchName: a.branchName || effectiveBranch?.name || "",
+      }))
+    }
+    const base = overview?.recentAudits ?? []
+    if (auditCategory === "ALL") return base
+    return base.filter((a) => a.category === auditCategory)
+  }, [selectedBranchId, branchAudits, effectiveBranch?.name, overview?.recentAudits, auditCategory])
 
   return (
     <div className="space-y-4 pb-8">
@@ -42,7 +98,7 @@ export function AnalyticsAuditTab() {
               Saatlik Satış Yoğunluğu (Bugün)
             </h3>
             <p className="text-[11px] text-[#86868b]">
-              Saat dilimlerine göre kapanan adisyon ciro dağılımı
+              Saat dilimlerine göre kapanan adisyon ciro dağılımı (Türkiye Saati)
             </p>
           </div>
         </div>
@@ -137,7 +193,7 @@ export function AnalyticsAuditTab() {
                   className="flex items-center justify-between rounded-xl bg-[#f9f9fb] px-3 py-2"
                 >
                   <div>
-                    <p className="text-[13px] font-semibold text-[#1d1d1f] capitalize">
+                    <p className="text-[13px] font-semibold text-[#1d1d1f]">
                       {s.name}
                     </p>
                     <p className="text-[11px] text-[#86868b]">
@@ -156,21 +212,49 @@ export function AnalyticsAuditTab() {
 
       {/* Audit & Critical Operation Logs */}
       <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <ShieldAlert className="h-4 w-4 text-[#e63462]" />
-          <div>
-            <h3 className="text-[14px] font-bold text-[#1d1d1f]">
-              Denetim &amp; Kritik İşlem Kayıtları (Audit Log)
-            </h3>
-            <p className="text-[11px] text-[#86868b]">
-              Masa taşıma, ürün iptali, iskonto ve fiyat değişimi hareketleri
-            </p>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="h-4 w-4 text-[#e63462]" />
+            <div>
+              <h3 className="text-[14px] font-bold text-[#1d1d1f]">
+                Denetim &amp; Kritik İşlem Kayıtları (Audit Log)
+              </h3>
+              <p className="text-[11px] text-[#86868b]">
+                Masa taşıma, ürün iptali, iskonto ve fiyat değişimi hareketleri
+              </p>
+            </div>
           </div>
+          {loadingAudits && (
+            <span className="text-[11px] font-medium text-[#86868b]">
+              Yükleniyor…
+            </span>
+          )}
+        </div>
+
+        {/* Category Filter Pills */}
+        <div className="mb-3 flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+          {AUDIT_CATEGORIES.map((cat) => {
+            const active = auditCategory === cat
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setAuditCategory(cat)}
+                className={`flex-shrink-0 rounded-xl px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                  active
+                    ? "bg-[#e63462] text-white"
+                    : "bg-[#f5f5f7] text-[#86868b] hover:text-[#1d1d1f]"
+                }`}
+              >
+                {AUDIT_CATEGORY_LABELS[cat] ?? cat}
+              </button>
+            )
+          })}
         </div>
 
         {audits.length === 0 ? (
           <p className="py-6 text-center text-[12px] text-[#86868b]">
-            Henüz kayıtlı denetim hareketi bulunmuyor.
+            Bu kategoride kayıtlı denetim hareketi bulunmuyor.
           </p>
         ) : (
           <div className="divide-y divide-[#f0f0f0]">
@@ -184,6 +268,11 @@ export function AnalyticsAuditTab() {
                     <span className="rounded bg-[#f5f5f7] px-1.5 py-0.5 text-[10px] font-medium text-[#86868b]">
                       {a.userName}
                     </span>
+                    {a.category && (
+                      <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600">
+                        {AUDIT_CATEGORY_LABELS[a.category as AuditCategory] ?? a.category}
+                      </span>
+                    )}
                     {a.branchName && (
                       <span className="inline-flex items-center gap-0.5 rounded bg-[#fef3f5] px-1.5 py-0.5 text-[10px] font-medium text-[#e63462]">
                         <Building2 className="h-2.5 w-2.5" /> {a.branchName}
@@ -192,12 +281,9 @@ export function AnalyticsAuditTab() {
                   </div>
                   <p className="mt-0.5 text-[11px] text-[#86868b]">{a.details}</p>
                 </div>
-                <span className="flex items-center gap-1 flex-shrink-0 text-[10px] text-[#86868b]">
+                <span className="flex items-center gap-1 flex-shrink-0 text-[10px] text-[#86868b] tabular-nums">
                   <Clock className="h-3 w-3" />
-                  {new Date(a.createdAt).toLocaleTimeString("tr-TR", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  {formatIstanbulDateTime(a.createdAt)}
                 </span>
               </div>
             ))}
@@ -207,4 +293,3 @@ export function AnalyticsAuditTab() {
     </div>
   )
 }
-

@@ -52,8 +52,14 @@ export class OrderService {
     restaurantId: string,
     fromTableId: string,
     toTableId: string,
+    actorStaffId?: string | null,
   ): Promise<{ moved: number }> {
-    return this.transferOrderUseCase.moveTable(restaurantId, fromTableId, toTableId);
+    return this.transferOrderUseCase.moveTable(
+      restaurantId,
+      fromTableId,
+      toTableId,
+      actorStaffId,
+    );
   }
 
   moveItemsToTable(
@@ -76,12 +82,16 @@ export class OrderService {
     itemId: string,
     reason?: string,
     cancelledByName?: string,
+    actorStaffId?: string | null,
+    quantity?: number | null,
   ): Promise<{ ok: true }> {
     return this.cancelOrderItemUseCase.execute(
       restaurantId,
       itemId,
       reason,
       cancelledByName,
+      actorStaffId,
+      quantity,
     );
   }
 

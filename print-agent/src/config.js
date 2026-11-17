@@ -3,16 +3,33 @@ const os = require("os")
 const path = require("path")
 
 /**
- * Embedded Corder Backend URLs (immutable; not editable from UI).
- * Automatically uses local backend in development if reachable, otherwise production API.
+ * Embedded Corder Backend URLs.
+ * Automatically uses local backend in development if reachable, environment override if set,
+ * or saved/production API URL.
  */
 const PRODUCTION_SERVER_URL = "https://api.corders.uk"
 const LOCAL_DEV_SERVER_URL = "http://localhost:4000"
 
+function getEnvBackendUrl() {
+  const raw =
+    process.env.CORDER_BACKEND_URL ||
+    process.env.BACKEND_URL ||
+    process.env.BACKEND_HTTP_URL ||
+    process.env.BACKEND_WS_URL ||
+    ""
+  return String(raw).trim().replace(/\/$/, "")
+}
+
 let cachedBackendUrl = null
 let lastProbeAt = 0
 
-async function resolveEmbeddedBackendUrl(forceRefresh = false) {
+async function resolveEmbeddedBackendUrl(forceRefresh = false, savedBackendUrl = null) {
+  const envUrl = getEnvBackendUrl()
+  if (envUrl) {
+    cachedBackendUrl = envUrl
+    return envUrl
+  }
+
   const now = Date.now()
   if (!forceRefresh && cachedBackendUrl && now - lastProbeAt < 30000) {
     return cachedBackendUrl
@@ -30,10 +47,17 @@ async function resolveEmbeddedBackendUrl(forceRefresh = false) {
       return cachedBackendUrl
     }
   } catch {
-    // Local dev server not running; use production server
+    // Local dev server not running
   } finally {
     clearTimeout(timer)
   }
+
+  const cleanSaved = String(savedBackendUrl || "").trim().replace(/\/$/, "")
+  if (cleanSaved && cleanSaved !== LOCAL_DEV_SERVER_URL) {
+    cachedBackendUrl = cleanSaved
+    return cachedBackendUrl
+  }
+
   cachedBackendUrl = PRODUCTION_SERVER_URL
   return cachedBackendUrl
 }
@@ -59,11 +83,13 @@ function getAppDataDir() {
   }
 }
 
+const initialBackendUrl = getEnvBackendUrl() || PRODUCTION_SERVER_URL
+
 const config = {
   productionServerUrl: PRODUCTION_SERVER_URL,
   localDevServerUrl: LOCAL_DEV_SERVER_URL,
-  backendHttpUrl: PRODUCTION_SERVER_URL,
-  backendWsUrl: PRODUCTION_SERVER_URL,
+  backendHttpUrl: initialBackendUrl,
+  backendWsUrl: initialBackendUrl,
   backendSocketPath: "/ws",
   backendOrderEventName: "order:created",
   agentId: `${os.platform()}-${os.hostname().slice(0, 24)}`,
@@ -74,7 +100,8 @@ const config = {
   kitchenSyncIntervalMs: 2500,
   queueDrainIntervalMs: 500,
   ticketCharsPerLine: 42,
-  ticketFeedLinesBeforeCut: 6,
+  ticketFeedLinesBeforeCut: 3,
+  asciiFallback: true,
   printUsbDrainMs: process.platform === "win32" ? 400 : 100,
 }
 

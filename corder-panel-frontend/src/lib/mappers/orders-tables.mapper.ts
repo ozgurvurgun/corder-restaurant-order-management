@@ -3,9 +3,11 @@ import {
   type PanelOrder,
   type PanelSection,
   type PanelTable,
+  type PanelTableStatus,
   type PanelUser,
 } from "../panel-types"
 import type { OrderDto, RawTableDto } from "../api"
+import { computeDiscountMinorUnits, fromMinorUnits, toMinorUnits } from "../format"
 import { getStoredCustomSections } from "../store/panel-local-storage"
 
 export function mapOrderItem(i: OrderDto["items"][0]): PanelOrder["items"][0] {
@@ -13,8 +15,8 @@ export function mapOrderItem(i: OrderDto["items"][0]): PanelOrder["items"][0] {
     id: i.id,
     productId: i.productId,
     productName: i.productName,
-    price: i.price,
-    quantity: i.quantity,
+    price: Number(i.price),
+    quantity: Number(i.quantity),
     note: i.note,
     status: (i.status as PanelOrder["items"][0]["status"]) || "sent",
     createdAt: new Date(i.createdAt),
@@ -42,19 +44,27 @@ export function mapApiOrdersToPanel(orders: OrderDto[]): PanelOrder[] {
   return orders.map(mapOrder)
 }
 
-/** On API refresh, preserve fallback client discount / split-bill fields if server did not supply them. */
+/**
+ * Preserve live socket presence lock fields if the HTTP response did not include them,
+ * while strictly trusting server-authoritative `status`, `discount`, and `splitInfo`.
+ */
 export function mergeTablesPreserveClientFields(
   prev: PanelTable[],
   next: PanelTable[],
 ): PanelTable[] {
   return next.map((nt) => {
     const old = prev.find((p) => p.id === nt.id)
-    const occupied = nt.status === "occupied" || (nt.orderCount ?? 0) > 0
-    if (!old || !occupied) return nt
+    if (!old) return nt
     return {
       ...nt,
-      ...(nt.discount ? { discount: nt.discount } : old.discount ? { discount: old.discount } : {}),
-      ...(nt.splitInfo ? { splitInfo: nt.splitInfo } : old.splitInfo ? { splitInfo: old.splitInfo } : {}),
+      ...(nt.lockedByStaffId
+        ? {}
+        : old.lockedByStaffId
+          ? {
+              lockedByStaffId: old.lockedByStaffId,
+              lockedByStaffName: old.lockedByStaffName,
+            }
+          : {}),
     }
   })
 }
@@ -90,36 +100,40 @@ export function mapApiTablesToPanel(
   return apiTables.map((t) => {
     const tableOrders = activeOrders.filter((o) => o.tableId === t.id)
     const billableItems = tableOrders.flatMap((o) => o.items.filter(itemCountsTowardBill))
-    const rawTotal = billableItems.reduce((s, i) => s + i.price * i.quantity, 0)
+    const rawMinorUnits = billableItems.reduce(
+      (s, i) => s + toMinorUnits(i.price) * i.quantity,
+      0,
+    )
     const orderCount = tableOrders.length
     const lastOrder = [...tableOrders].sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     )[0]
-    const waiter = resolveStaffNameForTable(t.id, orders, staffUsers)
+    const waiter =
+      resolveStaffNameForTable(t.id, orders, staffUsers) ||
+      (orderCount > 0 ? t.sessionStaffName?.trim() || undefined : undefined)
 
     let discount: PanelTable["discount"] | undefined
-    let totalAmount = rawTotal
+    let totalMinorUnits = rawMinorUnits
 
     if (t.discount && orderCount > 0) {
-      const discountAmount =
-        t.discount.type === "percent"
-          ? Math.round(rawTotal * t.discount.value) / 100
-          : t.discount.type === "amount"
-            ? Math.min(t.discount.value, rawTotal)
-            : rawTotal
+      const discountMinorUnits = computeDiscountMinorUnits(rawMinorUnits, t.discount)
       discount = {
         type: t.discount.type,
         value: t.discount.value,
-        amount: discountAmount,
+        amount: fromMinorUnits(discountMinorUnits),
         reason: t.discount.reason,
       }
-      totalAmount = Math.max(0, rawTotal - discountAmount)
+      totalMinorUnits = Math.max(0, rawMinorUnits - discountMinorUnits)
     }
+
+    const totalAmount = fromMinorUnits(totalMinorUnits)
 
     let splitInfo: PanelTable["splitInfo"] | undefined
     if (t.splitInfo && orderCount > 0) {
       if (t.splitInfo.type === "person" && t.splitInfo.personCount) {
-        const perPersonAmount = Math.round((totalAmount / t.splitInfo.personCount) * 100) / 100
+        const perPersonAmount = fromMinorUnits(
+          Math.round(totalMinorUnits / t.splitInfo.personCount),
+        )
         splitInfo = {
           type: "person",
           personCount: t.splitInfo.personCount,
@@ -128,37 +142,46 @@ export function mapApiTablesToPanel(
         }
       } else if (t.splitInfo.type === "items" && t.splitInfo.amounts) {
         const validAmounts: Record<string, number> = {}
-        let selectedTotal = 0
+        let selectedMinorUnits = 0
         for (const [itemId, qty] of Object.entries(t.splitInfo.amounts)) {
           const item = billableItems.find((i) => i.id === itemId)
           if (item && qty > 0) {
             const validQty = Math.min(item.quantity, qty)
             validAmounts[itemId] = validQty
-            selectedTotal += item.price * validQty
+            selectedMinorUnits += toMinorUnits(item.price) * validQty
           }
         }
         const validItemIds = Object.keys(validAmounts)
-        if (validItemIds.length > 0 && selectedTotal > 0) {
+        if (validItemIds.length > 0 && selectedMinorUnits > 0) {
           splitInfo = {
             type: "items",
             itemIds: validItemIds,
             amounts: validAmounts,
-            selectedTotal: Math.round(selectedTotal * 100) / 100,
+            selectedTotal: fromMinorUnits(selectedMinorUnits),
           }
         }
       }
+    }
+
+    let status: PanelTableStatus = "empty"
+    if (orderCount > 0) {
+      if (t.status === "checkout") status = "checkout"
+      else if (t.status === "ordering") status = "ordering"
+      else status = "occupied"
     }
 
     return {
       id: t.id,
       name: t.name,
       section: t.section,
-      status: orderCount > 0 ? "occupied" : "empty",
+      status,
       totalAmount,
       orderCount,
       lastUpdated: lastOrder ? lastOrder.updatedAt : undefined,
       activeOrderId: lastOrder?.id,
       waiter,
+      lockedByStaffId: t.sessionStaffId ?? undefined,
+      lockedByStaffName: t.sessionStaffName?.trim() || undefined,
       ...(discount ? { discount } : {}),
       ...(splitInfo ? { splitInfo } : {}),
     }
@@ -167,9 +190,10 @@ export function mapApiTablesToPanel(
 
 export function deriveSectionsFromTables(
   apiTables: { id: string; name: string; section: string }[],
+  restaurantId?: string | null,
 ): PanelSection[] {
   const fromTables = apiTables.map((t) => t.section).filter(Boolean)
-  const stored = getStoredCustomSections()
+  const stored = getStoredCustomSections(restaurantId)
   const names = Array.from(new Set([...fromTables, ...stored]))
   return names.map((name, i) => ({ id: `section-${i}`, name }))
 }
@@ -183,6 +207,8 @@ export function mapApiStaffToPanelUser(s: {
   roleColor?: string
   phone?: string
   isActive: boolean
+  hasPin?: boolean
+  hasPassword?: boolean
   canAccessPanel?: boolean
   canAccessTerminal?: boolean
   permissions?: string[]
@@ -204,6 +230,8 @@ export function mapApiStaffToPanelUser(s: {
     role: s.role || "waiter",
     roleLabel: s.roleLabel,
     roleColor: s.roleColor,
+    hasPin: s.hasPin,
+    hasPassword: s.hasPassword,
     canAccessPanel: s.canAccessPanel,
     canAccessTerminal: s.canAccessTerminal,
     permissions: s.permissions,

@@ -2,7 +2,7 @@ node_modules
 .next
 .env
 .env.local
-.env.production
+# .env.production is committed (VITE_API_URL only; no secrets)
 .DS_Store
 
 .vite-cache

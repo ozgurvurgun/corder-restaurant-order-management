@@ -1,12 +1,13 @@
 import { useState } from "react"
-import { Menu, UtensilsCrossed, Wine, Hash, Wifi, WifiOff, LogOut } from "lucide-react"
+import { Menu, UtensilsCrossed, Wine, Hash, RefreshCw, LogOut } from "lucide-react"
 import { useApp } from "@/lib/store"
 import { formatCurrency } from "@/lib/format"
+import { useToast } from "@/components/ios-toast"
 import type { TerminalTable, TerminalUser } from "@/lib/types"
 
 const ALL_SECTIONS = "all"
 
-/** On the tables grid, show only the first word of the name (e.g. "Selma Elden" -> "Selma"). */
+/** On the tables grid, show only the first word of the name (e.g. "John Doe" -> "John"). */
 function waiterDisplayName(waiter: string | undefined): string {
   const trimmed = waiter?.trim()
   if (!trimmed) return ""
@@ -21,7 +22,8 @@ interface TablesScreenProps {
 type FilterMode = "all" | "open" | "number"
 
 export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
-  const { tables, currentUser, isOffline, toggleOffline } = useApp()
+  const { tables, currentUser, isLoading, refreshData } = useApp()
+  const { showToast } = useToast()
   const [activeSection, setActiveSection] = useState<string>(ALL_SECTIONS)
   const [filterMode, setFilterMode] = useState<FilterMode>("all")
   const [menuOpen, setMenuOpen] = useState(false)
@@ -41,9 +43,16 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
   const openTableCount = tables.filter((t) => t.status !== "empty").length
 
   const handleNumberSearch = () => {
-    if (!tableNumber) return
-    const found = tables.find((t) => t.name.toLowerCase().includes(tableNumber.toLowerCase()))
-    if (found) onTableSelect(found.id)
+    const q = tableNumber.trim().toLocaleLowerCase("tr-TR")
+    if (!q) return
+    const found =
+      tables.find((t) => t.name.toLocaleLowerCase("tr-TR") === q) ??
+      tables.find((t) => t.name.toLocaleLowerCase("tr-TR").includes(q))
+    if (found) {
+      onTableSelect(found.id)
+    } else {
+      showToast("Masa bulunamadı", "error")
+    }
     setTableNumber("")
   }
 
@@ -61,6 +70,7 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
           <h1 className="text-[17px] font-semibold tracking-tight">Corder</h1>
         </div>
         <button
+          type="button"
           onClick={() => setMenuOpen(!menuOpen)}
           className="p-2 -mr-2 active:opacity-60"
           aria-label="Menü"
@@ -89,6 +99,7 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
                     {currentUser?.name}
                   </p>
                   <p className="text-[12px] text-muted-foreground">
+                    {currentUser?.roleLabel ? `${currentUser.roleLabel} • ` : ""}
                     {"Açık: "}
                     {openTableCount}
                     {" / "}
@@ -98,23 +109,19 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => {
-                  toggleOffline()
+                  void refreshData()
                   setMenuOpen(false)
                 }}
                 className="flex items-center gap-3 py-3 active:bg-muted/50 -mx-1 px-1 rounded-lg"
               >
-                {isOffline ? (
-                  <WifiOff className="h-[20px] w-[20px] text-orange-500" />
-                ) : (
-                  <Wifi className="h-[20px] w-[20px] text-muted-foreground" />
-                )}
-                <span className="text-[15px] text-card-foreground">
-                  {isOffline ? "Çevrimdışı Mod (Aktif)" : "Çevrimdışı Mod"}
-                </span>
+                <RefreshCw className={`h-[20px] w-[20px] text-muted-foreground ${isLoading ? "animate-spin" : ""}`} />
+                <span className="text-[15px] text-card-foreground">Verileri Yenile</span>
               </button>
               <div className="border-t border-border mt-1 pt-1">
                 <button
+                  type="button"
                   onClick={() => {
                     onLogout()
                     setMenuOpen(false)
@@ -122,7 +129,7 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
                   className="flex items-center gap-3 py-3 active:bg-muted/50 -mx-1 px-1 rounded-lg w-full"
                 >
                   <LogOut className="h-[20px] w-[20px] text-destructive" />
-                  <span className="text-[15px] text-destructive">Çıkış Yap</span>
+                  <span className="text-[15px] text-destructive">Personel Değiştir / Çıkış</span>
                 </button>
               </div>
             </div>
@@ -132,12 +139,13 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
 
       {/* Fixed Segmented Control */}
       <div className="px-4 py-3 bg-background flex-shrink-0 border-b border-border">
-        <div className="bg-muted rounded-lg p-0.5 flex">
+        <div className="bg-muted rounded-lg p-0.5 flex overflow-x-auto">
           {sections.map((section) => (
             <button
+              type="button"
               key={section}
               onClick={() => setActiveSection(section)}
-              className={`flex-1 py-[7px] text-[13px] font-semibold rounded-md transition-all ${
+              className={`flex-1 min-w-[68px] py-[7px] px-2 text-[13px] font-semibold rounded-md transition-all truncate ${
                 activeSection === section
                   ? "bg-card text-[#e63462] shadow-sm"
                   : "text-muted-foreground"
@@ -162,6 +170,7 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
             autoFocus
           />
           <button
+            type="button"
             onClick={handleNumberSearch}
             className="bg-[#e63462] text-white px-5 py-2.5 rounded-xl text-[15px] font-semibold active:opacity-80"
           >
@@ -172,16 +181,22 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
 
       {/* Scrollable Tables Grid */}
       <div className="flex-1 overflow-auto px-4 py-3 ios-scroll">
-        <div className="grid grid-cols-3 gap-2.5">
-          {filteredTables.map((table) => (
-            <TableCard
-              key={table.id}
-              table={table}
-              currentUser={currentUser}
-              onClick={() => onTableSelect(table.id)}
-            />
-          ))}
-        </div>
+        {filteredTables.length === 0 ? (
+          <div className="flex items-center justify-center py-20 text-muted-foreground text-[15px]">
+            {filterMode === "open" ? "Açık masa bulunmuyor" : "Masa bulunamadı"}
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-2.5">
+            {filteredTables.map((table) => (
+              <TableCard
+                key={table.id}
+                table={table}
+                currentUser={currentUser}
+                onClick={() => onTableSelect(table.id)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Fixed Tab Bar */}
@@ -235,6 +250,7 @@ function TableCard({
 
   return (
     <button
+      type="button"
       onClick={onClick}
       className={`rounded-2xl p-3 flex flex-col items-center gap-0.5 min-h-[110px] transition-all active:scale-[0.96] ${
         lockedByOther
@@ -254,7 +270,7 @@ function TableCard({
       <span className="font-semibold text-[13px]">{table.name}</span>
       {lockedByOther ? (
         <>
-          <span className="text-[15px] font-semibold text-white mt-auto pt-1 capitalize">
+          <span className="text-[14px] font-semibold text-white mt-auto pt-1 capitalize truncate max-w-full">
             {waiterDisplayName(table.lockedByStaffName) || "Garson"}
           </span>
           {isOccupied ? (
@@ -270,8 +286,13 @@ function TableCard({
             {"₺"}
             {formatCurrency(table.currentTotal)}
           </span>
+          {isBillRequested && (
+            <span className="text-[10px] font-bold bg-white/20 px-1.5 py-0.5 rounded-full text-white mt-0.5">
+              Hesap Kesiliyor
+            </span>
+          )}
           <div className="flex items-center justify-between w-full text-[11px] text-white/60 mt-auto pt-1">
-            <span className="capitalize">{waiterDisplayName(table.activeWaiter)}</span>
+            <span className="capitalize truncate max-w-[55%]">{waiterDisplayName(table.activeWaiter)}</span>
             <span>
               {table.openedAt
                 ? new Date(table.openedAt).toLocaleTimeString("tr-TR", {
@@ -302,6 +323,7 @@ function TabBarButton({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={`flex-1 flex flex-col items-center gap-0.5 py-3 min-h-[54px] transition-colors ${
         active ? "text-[#e63462]" : "text-muted-foreground"

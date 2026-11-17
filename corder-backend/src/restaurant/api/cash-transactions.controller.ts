@@ -15,7 +15,7 @@ import { serializeCashShift } from '../application/cash-shift.service';
 import { PermissionKey } from '../domain/permissions.catalog';
 import { CreateCashTransactionDto } from './dto/create-cash-transaction.dto';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
-import { PanelRootGuard } from '../infrastructure/panel-root.guard';
+import { PanelRootGuard, RequirePermissions } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
 
@@ -25,6 +25,7 @@ export class CashTransactionsController {
   constructor(private readonly service: CashTransactionsService) {}
 
   @Post()
+  @RequirePermissions('cash.transaction_in', 'cash.transaction_out')
   async create(
     @RestaurantId() restaurantId: string,
     @RestaurantUser()
@@ -55,6 +56,7 @@ export class CashTransactionsController {
   }
 
   @Get()
+  @RequirePermissions('cash.view', 'cash.view_history')
   async list(
     @RestaurantId() restaurantId: string,
     @Query('shiftId') shiftId?: string,

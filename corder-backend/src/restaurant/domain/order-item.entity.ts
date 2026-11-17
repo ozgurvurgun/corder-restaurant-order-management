@@ -71,6 +71,32 @@ export class OrderItemEntity {
     this.cancelledAt = now;
   }
 
+  /**
+   * Resolve how many units to take from this line (cancel / move / pay).
+   * Returns the taken quantity; reduces `this.quantity` when partial.
+   */
+  takeQuantity(requestedQuantity?: number | null): { full: boolean; quantity: number } {
+    if (this.status === 'cancelled') {
+      throw new BadRequestException('Order item is cancelled');
+    }
+    if (this.status === 'ledger') {
+      throw new BadRequestException('Order item is already assigned to ledger');
+    }
+    const available = this.quantity;
+    const reqQ =
+      requestedQuantity != null && requestedQuantity !== undefined
+        ? Math.floor(Number(requestedQuantity))
+        : available;
+    if (!Number.isInteger(reqQ) || reqQ < 1 || reqQ > available) {
+      throw new BadRequestException('Invalid item quantity');
+    }
+    if (reqQ < available) {
+      this.quantity = available - reqQ;
+      return { full: false, quantity: reqQ };
+    }
+    return { full: true, quantity: reqQ };
+  }
+
   assignToLedger(requestedQuantity?: number): {
     fullAssignment: boolean;
     assignedQuantity: number;

@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 
 export interface DiscountSpecification {
-  type: 'percent' | 'amount';
+  type: 'percent' | 'amount' | 'complimentary';
   value: number;
 }
 
@@ -84,6 +84,9 @@ export class Money {
   computeDiscount(discount?: DiscountSpecification | null): Money {
     if (!discount || this._minorUnits <= 0) {
       return Money.zero();
+    }
+    if (discount.type === 'complimentary') {
+      return this;
     }
     const val = Number(discount.value);
     if (!Number.isFinite(val) || val <= 0) {

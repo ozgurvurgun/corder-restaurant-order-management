@@ -2,7 +2,6 @@ import {
   Injectable,
   ConflictException,
   NotFoundException,
-  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
@@ -14,13 +13,20 @@ import { CreateRestaurantDto } from '../api/dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from '../api/dto/update-restaurant.dto';
 
 export function getCurrentBillingPeriod(now = new Date()): string {
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Istanbul',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(now);
+  const y = parts.find((p) => p.type === 'year')?.value ?? String(now.getUTCFullYear());
+  const m =
+    parts.find((p) => p.type === 'month')?.value ??
+    String(now.getUTCMonth() + 1).padStart(2, '0');
   return `${y}-${m}`;
 }
 
 @Injectable()
-export class RestaurantService implements OnModuleInit {
+export class RestaurantService {
   constructor(
     @InjectRepository(RestaurantEntity)
     private readonly repo: Repository<RestaurantEntity>,
@@ -30,55 +36,15 @@ export class RestaurantService implements OnModuleInit {
     private readonly bossRestaurantRepo: Repository<BossRestaurantEntity>,
   ) {}
 
-  async onModuleInit() {
-    await this.repo.query(`
-      ALTER TABLE "restaurants"
-        ADD COLUMN IF NOT EXISTS "print_agent_username" character varying,
-        ADD COLUMN IF NOT EXISTS "print_agent_password_hash" character varying,
-        ADD COLUMN IF NOT EXISTS "brand_name" character varying(120),
-        ADD COLUMN IF NOT EXISTS "branch_type" character varying(32) NOT NULL DEFAULT 'independent',
-        ADD COLUMN IF NOT EXISTS "franchisee_company_name" character varying(160),
-        ADD COLUMN IF NOT EXISTS "royalty_rate" numeric(5,2) NOT NULL DEFAULT 0,
-        ADD COLUMN IF NOT EXISTS "monthly_fee" numeric(10,2) NOT NULL DEFAULT 0,
-        ADD COLUMN IF NOT EXISTS "billing_status" character varying(32) NOT NULL DEFAULT 'paid',
-        ADD COLUMN IF NOT EXISTS "is_access_suspended" boolean NOT NULL DEFAULT false,
-        ADD COLUMN IF NOT EXISTS "suspension_reason" character varying(160),
-        ADD COLUMN IF NOT EXISTS "suspended_at" TIMESTAMPTZ,
-        ADD COLUMN IF NOT EXISTS "last_payment_date" TIMESTAMPTZ,
-        ADD COLUMN IF NOT EXISTS "last_paid_period" character varying(16),
-        ADD COLUMN IF NOT EXISTS "billing_notes" text,
-        ADD COLUMN IF NOT EXISTS "payment_history" jsonb NOT NULL DEFAULT '[]'::jsonb;
-    `);
-    await this.repo.query(`
-      DROP INDEX IF EXISTS "IDX_restaurants_print_agent_token_hash";
-      ALTER TABLE "restaurants" DROP COLUMN IF EXISTS "print_agent_token_hash";
-      CREATE UNIQUE INDEX IF NOT EXISTS "IDX_restaurants_print_agent_username"
-        ON "restaurants" ("print_agent_username")
-        WHERE "print_agent_username" IS NOT NULL;
-      CREATE INDEX IF NOT EXISTS "IDX_restaurants_brand_name" ON "restaurants" ("brand_name");
-      CREATE INDEX IF NOT EXISTS "IDX_restaurants_billing_status" ON "restaurants" ("billing_status");
-    `);
-    await this.repo.query(`
-      ALTER TABLE "root_admins"
-        ADD COLUMN IF NOT EXISTS "boss_tier" character varying(32) NOT NULL DEFAULT 'franchise_owner',
-        ADD COLUMN IF NOT EXISTS "brand_name" character varying(120);
-      CREATE INDEX IF NOT EXISTS "IDX_root_admins_boss_tier" ON "root_admins" ("boss_tier");
-    `);
-    await this.repo.query(`
-      CREATE TABLE IF NOT EXISTS "platform_billing_configs" (
-        "id" uuid NOT NULL DEFAULT gen_random_uuid(),
-        "receiver_name" character varying(160) NOT NULL DEFAULT 'Corder Software and Technology Inc.',
-        "iban" character varying(64) NOT NULL DEFAULT 'TR33 0006 1005 1978 6457 8413 26',
-        "bank_name" character varying(120) NOT NULL DEFAULT 'Garanti BBVA',
-        "collection_start_day" integer NOT NULL DEFAULT 25,
-        "collection_end_day" integer NOT NULL DEFAULT 30,
-        "support_phone" character varying(64),
-        "support_email" character varying(120),
-        "payment_instructions" text,
-        "updated_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
-        CONSTRAINT "PK_platform_billing_configs" PRIMARY KEY ("id")
-      );
-    `);
+  private async assertUniqueTerminalEmail(
+    terminalEmail: string | null,
+    excludeRestaurantId?: string,
+  ): Promise<void> {
+    if (!terminalEmail) return;
+    const owner = await this.repo.findOne({ where: { terminalEmail } });
+    if (owner && owner.id !== excludeRestaurantId) {
+      throw new ConflictException('Terminal email already in use by another branch');
+    }
   }
 
   async enrichRestaurantsWithBosses(restaurants: RestaurantEntity[]) {
@@ -205,6 +171,8 @@ export class RestaurantService implements OnModuleInit {
     const existing = await this.repo.findOne({ where: { slug } });
     if (existing) throw new ConflictException('Slug already in use');
     const {
+      terminalEmail: rawTerminalEmail,
+      terminalPassword: rawTerminalPassword,
       printAgentUsername: rawUsername,
       printAgentPassword: rawPassword,
       monthlyFee,
@@ -217,6 +185,13 @@ export class RestaurantService implements OnModuleInit {
       billingNotes,
       ...restDto
     } = dto;
+    const terminalEmail = rawTerminalEmail?.trim().toLowerCase() || null;
+    await this.assertUniqueTerminalEmail(terminalEmail);
+    const terminalPasswordHash =
+      rawTerminalPassword && rawTerminalPassword.length > 0
+        ? await bcrypt.hash(rawTerminalPassword, 10)
+        : null;
+
     const printAgentUsername = rawUsername?.trim().toLowerCase() || null;
     if (printAgentUsername) {
       const owner = await this.repo.findOne({ where: { printAgentUsername } });
@@ -246,6 +221,8 @@ export class RestaurantService implements OnModuleInit {
       lastPaidPeriod: effectiveBillingStatus === 'paid' ? getCurrentBillingPeriod() : null,
       billingNotes: billingNotes?.trim() || null,
       paymentHistory: [],
+      terminalEmail,
+      terminalPasswordHash,
       printAgentUsername,
       printAgentPasswordHash,
     });
@@ -316,7 +293,11 @@ export class RestaurantService implements OnModuleInit {
     if (dto.facebook !== undefined) entity.facebook = dto.facebook ?? null;
     if (dto.website !== undefined) entity.website = dto.website ?? null;
     if (dto.workingHours !== undefined) entity.workingHours = dto.workingHours ?? null;
-    if (dto.terminalEmail !== undefined) entity.terminalEmail = dto.terminalEmail?.trim() || null;
+    if (dto.terminalEmail !== undefined) {
+      const nextTerminalEmail = dto.terminalEmail?.trim().toLowerCase() || null;
+      await this.assertUniqueTerminalEmail(nextTerminalEmail, entity.id);
+      entity.terminalEmail = nextTerminalEmail;
+    }
     if (dto.terminalPassword !== undefined && dto.terminalPassword.length > 0) {
       entity.terminalPasswordHash = await bcrypt.hash(dto.terminalPassword, 10);
     }

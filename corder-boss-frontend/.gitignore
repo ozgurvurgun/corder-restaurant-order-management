@@ -3,7 +3,7 @@ dist
 dist-ssr
 *.local
 .env
-.env.*
-!.env.production.example
+.env.local
+# .env.production is committed (VITE_API_URL only; no secrets)
 
 .vite-cache

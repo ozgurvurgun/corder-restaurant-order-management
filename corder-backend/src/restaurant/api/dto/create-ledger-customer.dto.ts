@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsString, Min, MinLength } from 'class-validator';
+import { IsIn, IsNumber, IsOptional, IsString, Min, MinLength } from 'class-validator';
 
 export class CreateLedgerCustomerDto {
   @IsString()
@@ -18,4 +18,8 @@ export class AddLedgerPaymentDto {
   @IsNumber()
   @Min(0.01)
   amount!: number;
+
+  @IsOptional()
+  @IsIn(['cash', 'credit-card', 'meal-card', 'multinet'])
+  paymentMethod?: 'cash' | 'credit-card' | 'meal-card' | 'multinet';
 }

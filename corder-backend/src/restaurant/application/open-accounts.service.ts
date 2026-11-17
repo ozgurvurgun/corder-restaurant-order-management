@@ -6,6 +6,8 @@ import { OpenAccountItemEntity } from '../domain/open-account-item.entity';
 import { OpenAccountPaymentEntity } from '../domain/open-account-payment.entity';
 import { CashShiftEntity } from '../domain/cash-shift.entity';
 import { CashTransactionEntity } from '../domain/cash-transaction.entity';
+import { BilledOrderLineForStock } from '../domain/services/recipe-stock.policy';
+import { StockMovementsService } from './stock-movements.service';
 import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
 import {
   CreateOpenAccountDto,
@@ -24,6 +26,7 @@ export class OpenAccountsService {
     @InjectRepository(OpenAccountPaymentEntity)
     private readonly paymentRepo: Repository<OpenAccountPaymentEntity>,
     private readonly dataSource: DataSource,
+    private readonly stockMovementsService: StockMovementsService,
   ) {}
 
   private serialize(
@@ -139,6 +142,16 @@ export class OpenAccountsService {
     }
 
     return this.dataSource.transaction(async (em) => {
+      const shift = await em.findOne(CashShiftEntity, {
+        where: { restaurantId, status: 'open' },
+        order: { openedAt: 'DESC' },
+      });
+      if (!shift) {
+        throw new BadRequestException(
+          'Cannot process transaction without an open cash shift. Please open a shift first.',
+        );
+      }
+
       const acc = em.create(OpenAccountEntity, {
         restaurantId,
         customerName: dto.customerName.trim(),
@@ -165,6 +178,23 @@ export class OpenAccountsService {
           }),
         );
         savedItems = await em.save(OpenAccountItemEntity, rows);
+
+        const stockLines: BilledOrderLineForStock[] = savedItems
+          .filter((i) => Boolean(i.productId))
+          .map((i) => ({
+            productId: i.productId!,
+            productName: i.productName,
+            quantity: i.quantity,
+          }));
+        if (stockLines.length > 0) {
+          await this.stockMovementsService.deductRecipeIngredients(
+            em,
+            restaurantId,
+            stockLines,
+            dto.createdBy,
+            'Open account',
+          );
+        }
       }
 
       return this.serialize(saved, savedItems, []);
@@ -187,6 +217,17 @@ export class OpenAccountsService {
     const actorName = receivedBy.trim() || 'Unknown';
 
     return this.dataSource.transaction(async (em) => {
+      const shift = await em.findOne(CashShiftEntity, {
+        where: { restaurantId, status: 'open' },
+        order: { openedAt: 'DESC' },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!shift) {
+        throw new BadRequestException(
+          'Cannot process transaction without an open cash shift. Please open a shift first.',
+        );
+      }
+
       const acc = await em.findOne(OpenAccountEntity, {
         where: { id, restaurantId },
         lock: { mode: 'pessimistic_write' },
@@ -201,30 +242,30 @@ export class OpenAccountsService {
         amount: normalizedAmount,
         receivedBy: actorName,
         receivedByUserId: receivedByUserId?.trim() || null,
-        note: null,
+        note: paymentMethod !== 'cash' ? `Method: ${paymentMethod}` : null,
       });
       await em.save(OpenAccountPaymentEntity, row);
 
       if (paymentMethod === 'cash') {
-        const shift = await em.findOne(CashShiftEntity, {
-          where: { restaurantId, status: 'open' },
-          order: { openedAt: 'DESC' },
-          lock: { mode: 'pessimistic_write' },
+        const cashTx = em.create(CashTransactionEntity, {
+          restaurantId,
+          shiftId: shift.id,
+          type: 'cash-in',
+          amount: normalizedAmount,
+          description: `Open account payment: ${acc.customerName}`,
+          reference: acc.id,
+          createdBy: actorName,
         });
-        if (shift) {
-          const cashTx = em.create(CashTransactionEntity, {
-            restaurantId,
-            shiftId: shift.id,
-            type: 'cash-in',
-            amount: normalizedAmount,
-            description: `Open account payment: ${acc.customerName}`,
-            reference: acc.id,
-            createdBy: actorName,
-          });
-          await em.save(CashTransactionEntity, cashTx);
-          shift.recordCashMovement('cash-in', payMinorUnits);
-          await em.save(CashShiftEntity, shift);
-        }
+        await em.save(CashTransactionEntity, cashTx);
+        shift.recordCashMovement('cash-in', payMinorUnits);
+        await em.save(CashShiftEntity, shift);
+      } else if (
+        paymentMethod === 'credit-card' ||
+        paymentMethod === 'meal-card' ||
+        paymentMethod === 'multinet'
+      ) {
+        shift.recordNonCashCollection(paymentMethod, payMinorUnits);
+        await em.save(CashShiftEntity, shift);
       }
 
       const [items, payments] = await Promise.all([

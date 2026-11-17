@@ -35,8 +35,8 @@ export const SPLIT_PAYMENT_METHODS = [
 export type CloseCheckSplitMethod = (typeof SPLIT_PAYMENT_METHODS)[number];
 
 export class CloseCheckDiscountDto {
-  @IsIn(['percent', 'amount'])
-  type!: 'percent' | 'amount';
+  @IsIn(['percent', 'amount', 'complimentary'])
+  type!: 'percent' | 'amount' | 'complimentary';
 
   @IsNumber()
   @Min(0)

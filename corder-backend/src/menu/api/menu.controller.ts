@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Header, Param, Query } from '@nestjs/common';
 import { MenuQueryService } from '../application/menu-query.service';
 
 @Controller('menu')
@@ -7,6 +7,7 @@ export class MenuController {
 
   /** Public menu by query string: GET /menu?restaurant=slug (never exposes terminal-only categories). */
   @Get()
+  @Header('Cache-Control', 'public, max-age=15, stale-while-revalidate=30')
   getByQuery(@Query('restaurant') restaurant: string) {
     if (!restaurant?.trim()) {
       return this.menuQuery.getBusinessBySlug(null);
@@ -15,6 +16,7 @@ export class MenuController {
   }
 
   @Get('business/:slug')
+  @Header('Cache-Control', 'public, max-age=15, stale-while-revalidate=30')
   getBySlug(@Param('slug') slug: string) {
     return this.menuQuery.getBusinessBySlug(slug);
   }

@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react"
 import { useAdminStore } from "@/lib/store"
 import type { Restaurant } from "@/lib/types"
+import {
+  formatMoney,
+  fromMinorUnits,
+  getIstanbulDayOfMonth,
+  sumMoneyMajor,
+  toMinorUnits,
+} from "@/lib/money"
 import { CreditCard, CalendarClock } from "lucide-react"
 import {
   BillingConfigModal,
   BillingKpiCards,
-  formatMoney,
 } from "@/components/billing/BillingConfigModal"
 import {
   RecordPaymentModal,
@@ -17,6 +23,7 @@ export function BillingPage() {
     restaurants,
     loadRestaurants,
     billingConfig,
+    billingConfigError,
     loadBillingConfig,
     updateBillingConfig,
     updateRestaurant,
@@ -32,7 +39,9 @@ export function BillingPage() {
   const [bulkBusy, setBulkBusy] = useState(false)
   const [statusFilter, setStatusFilter] = useState<BillingStatusFilter>("ALL")
   const [searchQuery, setSearchQuery] = useState("")
-  const [feedback, setFeedback] = useState<{ type: "ok" | "err"; text: string } | null>(null)
+  const [feedback, setFeedback] = useState<{ type: "ok" | "err"; text: string } | null>(
+    null
+  )
 
   useEffect(() => {
     void loadRestaurants()
@@ -56,26 +65,44 @@ export function BillingPage() {
 
   const handleSaveMonthlyFee = async (r: Restaurant) => {
     const raw = feeDrafts[r.id]
-    const parsed = Math.max(0, Number(raw) || 0)
+    const parsed = Math.max(0, fromMinorUnits(toMinorUnits(raw)))
     setBusyRestId(r.id)
     try {
       await updateRestaurant(r.id, { monthlyFee: parsed })
       showNotice(`${r.name} aylık ücreti ${formatMoney(parsed)} olarak kaydedildi.`)
     } catch (err) {
-      showNotice(err instanceof Error ? err.message : "Ücret güncellenemedi", "err")
+      showNotice(
+        err instanceof Error ? err.message : "Ücret güncellenemedi",
+        "err"
+      )
     } finally {
       setBusyRestId(null)
     }
   }
 
-  const handleMarkPaid = async (r: Restaurant) => {
+  const handleMarkPaid = async (
+    r: Restaurant,
+    details?: { amount?: number; period?: string; note?: string }
+  ) => {
     setBusyRestId(r.id)
     try {
-      const draftFee = feeDrafts[r.id] !== undefined ? Number(feeDrafts[r.id]) : r.monthlyFee
-      if (draftFee !== undefined && draftFee !== r.monthlyFee) {
-        await updateRestaurant(r.id, { monthlyFee: Math.max(0, draftFee || 0) })
+      const draftFee =
+        details?.amount !== undefined
+          ? fromMinorUnits(toMinorUnits(details.amount))
+          : feeDrafts[r.id] !== undefined
+            ? fromMinorUnits(toMinorUnits(feeDrafts[r.id]))
+            : (r.monthlyFee ?? 0)
+      if (
+        details?.amount === undefined &&
+        toMinorUnits(draftFee) !== toMinorUnits(r.monthlyFee ?? 0)
+      ) {
+        await updateRestaurant(r.id, { monthlyFee: Math.max(0, draftFee) })
       }
-      await markRestaurantPaid(r.id, { amount: draftFee ?? r.monthlyFee ?? 0 })
+      await markRestaurantPaid(r.id, {
+        amount: Math.max(0, draftFee),
+        period: details?.period,
+        note: details?.note,
+      })
       showNotice(
         `${r.name} için ödeme alındı olarak işaretlendi ve tüm sistem erişimleri otomatik açıldı.`
       )
@@ -91,9 +118,11 @@ export function BillingPage() {
     try {
       await updateRestaurantBilling(r.id, {
         billingStatus: "pending",
-        monthlyFee: Number(feeDrafts[r.id] ?? r.monthlyFee ?? 0),
+        monthlyFee: fromMinorUnits(toMinorUnits(feeDrafts[r.id] ?? r.monthlyFee ?? 0)),
       })
-      showNotice(`${r.name} ödeme durumu 'Ödeme Bekleniyor (25-30 Tahsilat)' olarak güncellendi.`)
+      showNotice(
+        `${r.name} ödeme durumu 'Ödeme Bekleniyor (25-30 Tahsilat)' olarak güncellendi.`
+      )
     } catch (err) {
       showNotice(err instanceof Error ? err.message : "İşlem başarısız", "err")
     } finally {
@@ -117,7 +146,10 @@ export function BillingPage() {
       )
       showNotice(`${r.name} işletmesinin tüm sistem erişimleri durduruldu.`)
     } catch (err) {
-      showNotice(err instanceof Error ? err.message : "Erişim durdurulamadı", "err")
+      showNotice(
+        err instanceof Error ? err.message : "Erişim durdurulamadı",
+        "err"
+      )
     } finally {
       setBusyRestId(null)
     }
@@ -155,7 +187,9 @@ export function BillingPage() {
     setBulkBusy(true)
     try {
       const res = await suspendAllUnpaidRestaurants()
-      showNotice(`Ödeme yapmayan ${res.suspendedCount} mekanın sistem erişimi durduruldu.`)
+      showNotice(
+        `Ödeme yapmayan ${res.suspendedCount} mekanın sistem erişimi durduruldu.`
+      )
     } catch (err) {
       showNotice(err instanceof Error ? err.message : "İşlem başarısız", "err")
     } finally {
@@ -163,13 +197,13 @@ export function BillingPage() {
     }
   }
 
-  const now = new Date()
-  const dayOfMonth = now.getDate()
+  const dayOfMonth = getIstanbulDayOfMonth()
   const isCollectionWindow =
     dayOfMonth >= (billingConfig?.collectionStartDay ?? 25) &&
     dayOfMonth <= (billingConfig?.collectionEndDay ?? 30)
 
-  const totalMrr = restaurants.reduce((acc, r) => acc + (r.monthlyFee ?? 0), 0)
+  const billableRestaurants = restaurants.filter((r) => r.status !== "inactive")
+  const totalMrr = sumMoneyMajor(billableRestaurants.map((r) => r.monthlyFee ?? 0))
   const paidRestaurants = restaurants.filter(
     (r) => !r.isAccessSuspended && r.billingStatus === "paid"
   )
@@ -182,12 +216,19 @@ export function BillingPage() {
     (r) => r.isAccessSuspended || r.billingStatus === "suspended"
   )
 
-  const collectedTotal = paidRestaurants.reduce((acc, r) => acc + (r.monthlyFee ?? 0), 0)
-  const pendingTotal = pendingRestaurants.reduce((acc, r) => acc + (r.monthlyFee ?? 0), 0)
+  const collectedTotal = sumMoneyMajor(
+    paidRestaurants.map((r) => r.monthlyFee ?? 0)
+  )
+  const pendingTotal = sumMoneyMajor(
+    pendingRestaurants.map((r) => r.monthlyFee ?? 0)
+  )
 
   const filteredRestaurants = restaurants.filter((r) => {
-    const isSusp = Boolean(r.isAccessSuspended || r.billingStatus === "suspended")
-    if (statusFilter === "paid" && (isSusp || r.billingStatus !== "paid")) return false
+    const isSusp = Boolean(
+      r.isAccessSuspended || r.billingStatus === "suspended"
+    )
+    if (statusFilter === "paid" && (isSusp || r.billingStatus !== "paid"))
+      return false
     if (
       statusFilter === "pending" &&
       (isSusp || (r.billingStatus !== "pending" && r.billingStatus !== "overdue"))
@@ -216,7 +257,8 @@ export function BillingPage() {
           <p className="mt-1 text-sm text-zinc-400">
             Her mekan için ayrı aylık ücret belirleyin, her ayın{" "}
             <strong className="text-white">
-              {billingConfig?.collectionStartDay ?? 25} – {billingConfig?.collectionEndDay ?? 30}
+              {billingConfig?.collectionStartDay ?? 25} –{" "}
+              {billingConfig?.collectionEndDay ?? 30}
             </strong>{" "}
             arası tahsilat durumlarını yönetin ve ödeme yapmayan mekanların erişimini tek tıkla durdurun veya ödeme alındığında otomatik açın.
           </p>
@@ -225,11 +267,21 @@ export function BillingPage() {
         <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-300">
           <CalendarClock className="h-4 w-4 text-amber-400 flex-shrink-0" />
           <span>
-            Tahsilat Günü: <strong>Her Ayın {billingConfig?.collectionStartDay ?? 25} - {billingConfig?.collectionEndDay ?? 30}&apos;u Arası</strong>
+            Tahsilat Günü:{" "}
+            <strong>
+              Her Ayın {billingConfig?.collectionStartDay ?? 25} -{" "}
+              {billingConfig?.collectionEndDay ?? 30}&apos;u Arası
+            </strong>
             {isCollectionWindow ? " • (Şu Anda Tahsilat Dönemindeyiz)" : ""}
           </span>
         </div>
       </div>
+
+      {billingConfigError && (
+        <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {billingConfigError}
+        </div>
+      )}
 
       {feedback && (
         <div
@@ -245,7 +297,7 @@ export function BillingPage() {
 
       <BillingKpiCards
         totalMrr={totalMrr}
-        restaurantsCount={restaurants.length}
+        restaurantsCount={billableRestaurants.length}
         collectedTotal={collectedTotal}
         paidCount={paidRestaurants.length}
         pendingTotal={pendingTotal}
@@ -276,7 +328,7 @@ export function BillingPage() {
         busyRestId={busyRestId}
         bulkBusy={bulkBusy}
         onSaveMonthlyFee={(r) => void handleSaveMonthlyFee(r)}
-        onMarkPaid={(r) => void handleMarkPaid(r)}
+        onMarkPaid={(r, details) => void handleMarkPaid(r, details)}
         onMarkPending={(r) => void handleMarkPending(r)}
         onSuspendUnpaid={(r) => void handleSuspendUnpaid(r)}
         onStartCycle={() => void handleStartCycle()}

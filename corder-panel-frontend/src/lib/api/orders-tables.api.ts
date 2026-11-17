@@ -65,7 +65,7 @@ export const ordersApi = {
     body: {
       fromTableId: string
       toTableId: string
-      itemIds: string[]
+      items: Array<{ itemId: string; quantity?: number }>
     },
   ) =>
     request<OrderDto>("/restaurant/orders/move-items", {
@@ -79,7 +79,7 @@ export const ordersApi = {
       token,
       body: JSON.stringify(body),
     }),
-  cancelItem: (token: string, body: { itemId: string; reason?: string }) =>
+  cancelItem: (token: string, body: { itemId: string; reason?: string; quantity?: number }) =>
     request<{ ok: true }>("/restaurant/orders/cancel-item", {
       method: "POST",
       token,

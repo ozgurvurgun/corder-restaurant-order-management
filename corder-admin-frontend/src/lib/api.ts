@@ -7,26 +7,100 @@ import type {
   RestaurantPaymentRecord,
 } from "./types"
 
-const BASE = (import.meta.env.VITE_API_URL as string) ?? "http://localhost:4000"
+const RAW_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:4000"
+const BASE = RAW_BASE.replace(/\/+$/, "")
 
 const PLATFORM_TOKEN_KEY = "corder-platform-token"
 const PLATFORM_ADMIN_KEY = "corder-platform-admin"
+export const PLATFORM_UNAUTHORIZED_EVENT = "corder:platform-unauthorized"
+
+export function isJwtExpired(token: string): boolean {
+  try {
+    const parts = token.split(".")
+    if (parts.length !== 3) return true
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/")
+    const padded = b64.padEnd(Math.ceil(b64.length / 4) * 4, "=")
+    const payload = JSON.parse(atob(padded)) as { exp?: number; type?: string }
+    if (payload.type && payload.type !== "platform") return true
+    if (typeof payload.exp === "number" && payload.exp * 1000 <= Date.now()) {
+      return true
+    }
+    return false
+  } catch {
+    return true
+  }
+}
 
 export function getPlatformToken(): string | null {
   if (typeof window === "undefined") return null
-  return localStorage.getItem(PLATFORM_TOKEN_KEY)
+  const token = localStorage.getItem(PLATFORM_TOKEN_KEY)
+  if (!token) return null
+  if (isJwtExpired(token)) {
+    clearPlatformAuth(true)
+    return null
+  }
+  return token
 }
 
-export function setPlatformAuth(accessToken: string, admin: { id: string; email: string; name: string }) {
+export function setPlatformAuth(
+  accessToken: string,
+  admin: { id: string; email: string; name: string }
+) {
   if (typeof window === "undefined") return
   localStorage.setItem(PLATFORM_TOKEN_KEY, accessToken)
   localStorage.setItem(PLATFORM_ADMIN_KEY, JSON.stringify(admin))
 }
 
-export function clearPlatformAuth() {
+export function clearPlatformAuth(notify = false) {
   if (typeof window === "undefined") return
   localStorage.removeItem(PLATFORM_TOKEN_KEY)
   localStorage.removeItem(PLATFORM_ADMIN_KEY)
+  if (notify) {
+    window.dispatchEvent(new CustomEvent(PLATFORM_UNAUTHORIZED_EVENT))
+  }
+}
+
+export function localizePlatformError(rawMessage: string): string {
+  const trimmed = (rawMessage || "").trim()
+  if (!trimmed) return "İşlem sırasında beklenmeyen bir hata oluştu"
+  const lower = trimmed.toLowerCase()
+  if (lower.includes("invalid email or password") || lower.includes("unauthorized")) {
+    return "Geçersiz e-posta veya parola"
+  }
+  if (lower.includes("too many") || lower.includes("rate limit")) {
+    return "Çok fazla giriş denemesi yapıldı. Lütfen biraz bekleyip tekrar deneyin."
+  }
+  if (lower.includes("slug already in use")) {
+    return "Bu slug (URL kısaltması) başka bir restoranda zaten kullanılıyor."
+  }
+  if (lower.includes("print agent username already in use")) {
+    return "Bu Print Agent kullanıcı adı başka bir restoranda zaten kullanılıyor."
+  }
+  if (
+    lower.includes("email address already exists") ||
+    lower.includes("email address is already in use")
+  ) {
+    return "Bu e-posta adresi başka bir Boss hesabında zaten kayıtlı."
+  }
+  if (lower.includes("restaurant not found")) {
+    return "Restoran bulunamadı."
+  }
+  if (lower.includes("boss account not found")) {
+    return "Boss hesabı bulunamadı."
+  }
+  if (lower.includes("one or more selected restaurants were not found")) {
+    return "Seçilen şubelerden biri veya birkaçı bulunamadı."
+  }
+  if (lower.includes("password must be at least 8 characters")) {
+    return "Parola en az 8 karakter olmalıdır."
+  }
+  if (lower.includes("terminal password must be at least 4 characters")) {
+    return "Terminal parolası en az 4 karakter olmalıdır."
+  }
+  if (lower.includes("print agent password must be at least 6 characters")) {
+    return "Print Agent parolası en az 6 karakter olmalıdır."
+  }
+  return trimmed
 }
 
 async function platformFetch<T>(
@@ -34,7 +108,10 @@ async function platformFetch<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const token = getPlatformToken()
-  if (!token) throw new Error("Unauthorized")
+  if (!token) {
+    clearPlatformAuth(true)
+    throw new Error("Oturum süresi doldu, lütfen tekrar giriş yapın")
+  }
   const res = await fetch(`${BASE}${path}`, {
     ...options,
     headers: {
@@ -44,8 +121,8 @@ async function platformFetch<T>(
     },
   })
   if (res.status === 401) {
-    clearPlatformAuth()
-    throw new Error("Oturum süresi doldu")
+    clearPlatformAuth(true)
+    throw new Error("Oturum süresi doldu, lütfen tekrar giriş yapın")
   }
   if (!res.ok) {
     const body = await res.text()
@@ -54,7 +131,7 @@ async function platformFetch<T>(
       const j = JSON.parse(body)
       if (j.message) msg = Array.isArray(j.message) ? j.message.join(", ") : j.message
     } catch {}
-    throw new Error(msg || `HTTP ${res.status}`)
+    throw new Error(localizePlatformError(msg || `HTTP ${res.status}`))
   }
   if (res.status === 204) return undefined as T
   return res.json()
@@ -89,6 +166,12 @@ export interface PlatformRestaurantDto {
   address?: string
   phone?: string
   email?: string
+  taxId?: string | null
+  whatsapp?: string | null
+  instagram?: string | null
+  facebook?: string | null
+  website?: string | null
+  workingHours?: string | null
   status: string
   brandName?: string | null
   branchType?: RestaurantBranchType
@@ -125,9 +208,12 @@ export const platform = {
           const j = JSON.parse(body)
           if (j.message) msg = Array.isArray(j.message) ? j.message.join(", ") : j.message
         } catch {}
-        throw new Error(msg)
+        throw new Error(localizePlatformError(msg))
       }
-      return res.json() as Promise<{ accessToken: string; admin: { id: string; email: string; name: string } }>
+      return res.json() as Promise<{
+        accessToken: string
+        admin: { id: string; email: string; name: string }
+      }>
     },
   },
   restaurants: {
@@ -165,6 +251,8 @@ export const platform = {
       billingStatus?: RestaurantBillingStatus
       isAccessSuspended?: boolean
       billingNotes?: string | null
+      terminalEmail?: string
+      terminalPassword?: string
       printAgentUsername?: string
       printAgentPassword?: string
     }) {
@@ -181,6 +269,12 @@ export const platform = {
         address?: string
         phone?: string
         email?: string
+        taxId?: string
+        whatsapp?: string
+        instagram?: string
+        facebook?: string
+        website?: string
+        workingHours?: string
         status?: "active" | "inactive"
         brandName?: string | null
         branchType?: RestaurantBranchType
@@ -247,7 +341,7 @@ export const platform = {
     async startCollectionCycle(period?: string) {
       return platformFetch<{ period: string; updatedCount: number }>(
         "/platform/billing/start-collection-cycle",
-        { method: "POST", body: JSON.stringify({ period }) }
+        { method: "POST", body: JSON.stringify({ ...(period ? { period } : {}) }) }
       )
     },
     async suspendAllUnpaid() {
@@ -303,7 +397,10 @@ export const platform = {
       )
     },
     async delete(restaurantId: string, id: string) {
-      return platformFetch<void>(`/platform/restaurants/${restaurantId}/root-admins/${id}`, { method: "DELETE" })
+      return platformFetch<void>(
+        `/platform/restaurants/${restaurantId}/root-admins/${id}`,
+        { method: "DELETE" }
+      )
     },
   },
   bosses: {
@@ -341,6 +438,18 @@ export const platform = {
         method: "PUT",
         body: JSON.stringify(body),
       })
+    },
+    async linkRestaurant(id: string, restaurantId: string) {
+      return platformFetch<BossDto>(
+        `/platform/bosses/${id}/restaurants/${restaurantId}`,
+        { method: "POST" }
+      )
+    },
+    async unlinkRestaurant(id: string, restaurantId: string) {
+      return platformFetch<void>(
+        `/platform/bosses/${id}/restaurants/${restaurantId}`,
+        { method: "DELETE" }
+      )
     },
     async delete(id: string) {
       return platformFetch<void>(`/platform/bosses/${id}`, { method: "DELETE" })

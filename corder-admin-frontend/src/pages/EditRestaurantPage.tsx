@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import { useParams, useNavigate, Link } from "react-router-dom"
 import { ArrowLeft, Trash2, Building2 } from "lucide-react"
 import { useAdminStore } from "@/lib/store"
+import { fromMinorUnits, toMinorUnits } from "@/lib/money"
 import type { RestaurantBillingStatus, RestaurantBranchType } from "@/lib/types"
 import { RootAdminsSection } from "@/components/RootAdminsSection"
 import {
@@ -40,6 +41,8 @@ export function EditRestaurantPage() {
   const [address, setAddress] = useState("")
   const [phone, setPhone] = useState("")
   const [email, setEmail] = useState("")
+  const [taxId, setTaxId] = useState("")
+  const [workingHours, setWorkingHours] = useState("")
   const [status, setStatus] = useState<"active" | "inactive">("active")
   const [brandName, setBrandName] = useState("")
   const [branchType, setBranchType] = useState<RestaurantBranchType>("independent")
@@ -69,6 +72,8 @@ export function EditRestaurantPage() {
       setAddress(restaurant.address ?? "")
       setPhone(restaurant.phone ?? "")
       setEmail(restaurant.email ?? "")
+      setTaxId(restaurant.taxId ?? "")
+      setWorkingHours(restaurant.workingHours ?? "")
       setStatus(restaurant.status)
       setBrandName(restaurant.brandName ?? "")
       setBranchType(restaurant.branchType ?? "independent")
@@ -76,7 +81,9 @@ export function EditRestaurantPage() {
       setRoyaltyRate(String(restaurant.royaltyRate ?? 0))
       setMonthlyFee(String(restaurant.monthlyFee ?? 0))
       setBillingStatus(
-        restaurant.isAccessSuspended ? "suspended" : (restaurant.billingStatus ?? "paid")
+        restaurant.isAccessSuspended
+          ? "suspended"
+          : (restaurant.billingStatus ?? "paid")
       )
       setBillingNotes(restaurant.billingNotes ?? "")
     }
@@ -92,7 +99,10 @@ export function EditRestaurantPage() {
         <p className={restaurantsError ? "text-red-400" : "text-zinc-400"}>
           {restaurantsError || "Restoran bulunamadı."}
         </p>
-        <Link to="/dashboard/restaurants" className="mt-4 inline-block text-blue-400 hover:underline">
+        <Link
+          to="/dashboard/restaurants"
+          className="mt-4 inline-block text-blue-400 hover:underline"
+        >
           Listeye dön
         </Link>
       </div>
@@ -103,7 +113,12 @@ export function EditRestaurantPage() {
     e.preventDefault()
     setError("")
     setSaveMsg("")
-    if (restaurants.filter((r) => r.id !== id).some((r) => r.slug === slug)) {
+    const cleanSlug = slug.trim().toLowerCase()
+    if (
+      restaurants
+        .filter((r) => r.id !== id)
+        .some((r) => r.slug === cleanSlug)
+    ) {
       setError("Bu slug başka bir restoranda kullanılıyor.")
       return
     }
@@ -111,16 +126,22 @@ export function EditRestaurantPage() {
     try {
       await updateRestaurant(id, {
         name: name.trim(),
-        slug: slug.trim(),
+        slug: cleanSlug,
         address: address.trim() || undefined,
         phone: phone.trim() || undefined,
         email: email.trim() || undefined,
+        taxId: taxId.trim() || undefined,
+        workingHours: workingHours.trim() || undefined,
         status,
         brandName: brandName.trim() || null,
         branchType,
-        franchiseeCompanyName: franchiseeCompanyName.trim() || null,
-        royaltyRate: Math.max(0, Math.min(100, Number(royaltyRate) || 0)),
-        monthlyFee: Math.max(0, Number(monthlyFee) || 0),
+        franchiseeCompanyName:
+          branchType === "franchise" ? franchiseeCompanyName.trim() || null : null,
+        royaltyRate:
+          branchType === "franchise"
+            ? Math.max(0, Math.min(100, Number(royaltyRate) || 0))
+            : 0,
+        monthlyFee: Math.max(0, fromMinorUnits(toMinorUnits(monthlyFee))),
         billingStatus,
         isAccessSuspended: billingStatus === "suspended",
         billingNotes: billingNotes.trim() || null,
@@ -139,12 +160,17 @@ export function EditRestaurantPage() {
     setError("")
     setSaveMsg("")
     try {
-      const feeNum = Math.max(0, Number(monthlyFee) || 0)
-      if (feeNum !== (restaurant.monthlyFee ?? 0)) {
+      const feeNum = Math.max(0, fromMinorUnits(toMinorUnits(monthlyFee)))
+      if (toMinorUnits(feeNum) !== toMinorUnits(restaurant.monthlyFee ?? 0)) {
         await updateRestaurant(id, { monthlyFee: feeNum })
       }
-      await markRestaurantPaid(id, { amount: feeNum, note: billingNotes.trim() || undefined })
-      setSaveMsg("Ödeme alındı bilgisi işlendi ve mekanın tüm sistem erişimleri otomatik açıldı.")
+      await markRestaurantPaid(id, {
+        amount: feeNum,
+        note: billingNotes.trim() || undefined,
+      })
+      setSaveMsg(
+        "Ödeme alındı bilgisi işlendi ve mekanın tüm sistem erişimleri otomatik açıldı."
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : "İşlem başarısız")
     } finally {
@@ -153,7 +179,11 @@ export function EditRestaurantPage() {
   }
 
   const handleQuickSuspend = async () => {
-    if (!confirm(`${restaurant.name} mekanının ödeme alınmadığı için tüm sistemlere erişimini durdurmak istediğinize emin misiniz?`)) {
+    if (
+      !confirm(
+        `${restaurant.name} mekanının ödeme alınmadığı için tüm sistemlere erişimini durdurmak istediğinize emin misiniz?`
+      )
+    ) {
       return
     }
     setBillingBusy(true)
@@ -162,7 +192,8 @@ export function EditRestaurantPage() {
     try {
       await suspendRestaurantUnpaid(
         id,
-        billingNotes.trim() || "25-30 tahsilat döneminde ödeme alınmadığı için erişim durduruldu."
+        billingNotes.trim() ||
+          "25-30 tahsilat döneminde ödeme alınmadığı için erişim durduruldu."
       )
       setSaveMsg("Mekanın tüm sistemlere erişimi ödeme alınmadığı için durduruldu.")
     } catch (err) {
@@ -173,7 +204,10 @@ export function EditRestaurantPage() {
   }
 
   const handleDeleteRestaurant = async () => {
-    if (deleting || !confirm("Bu restoranı ve ilişkili kayıtları silmek istediğinize emin misiniz?")) {
+    if (
+      deleting ||
+      !confirm("Bu restoranı ve ilişkili kayıtları silmek istediğinize emin misiniz?")
+    ) {
       return
     }
     setDeleting(true)
@@ -187,12 +221,18 @@ export function EditRestaurantPage() {
     }
   }
 
-  const isSuspended = Boolean(restaurant.isAccessSuspended || restaurant.billingStatus === "suspended")
-  const inputCls = "w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-4 py-2.5 text-white outline-none focus:border-blue-500"
+  const isSuspended = Boolean(
+    restaurant.isAccessSuspended || restaurant.billingStatus === "suspended"
+  )
+  const inputCls =
+    "w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-4 py-2.5 text-white outline-none focus:border-blue-500"
 
   return (
     <div>
-      <Link to="/dashboard/restaurants" className="mb-6 inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white">
+      <Link
+        to="/dashboard/restaurants"
+        className="mb-6 inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white"
+      >
         <ArrowLeft className="h-4 w-4" />
         Restoranlara dön
       </Link>
@@ -234,30 +274,92 @@ export function EditRestaurantPage() {
 
       <div className="mt-8 grid gap-8 lg:grid-cols-2">
         <div className="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6">
-          <h2 className="text-lg font-medium text-white">Mekan, Franchise &amp; Abonelik Bilgileri</h2>
+          <h2 className="text-lg font-medium text-white">
+            Mekan, Franchise &amp; Abonelik Bilgileri
+          </h2>
           <form onSubmit={handleSaveRestaurant} className="mt-4 space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1.5 block text-sm text-zinc-300">Restoran adı</label>
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputCls} required disabled={saveLoading} />
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className={inputCls}
+                  required
+                  disabled={saveLoading}
+                />
               </div>
               <div>
                 <label className="mb-1.5 block text-sm text-zinc-300">Slug</label>
-                <input type="text" value={slug} onChange={(e) => setSlug(e.target.value)} className={`${inputCls} font-mono text-sm`} required disabled={saveLoading} />
+                <input
+                  type="text"
+                  value={slug}
+                  onChange={(e) => setSlug(e.target.value)}
+                  className={`${inputCls} font-mono text-sm`}
+                  required
+                  disabled={saveLoading}
+                />
               </div>
             </div>
             <div>
               <label className="mb-1.5 block text-sm text-zinc-300">Adres</label>
-              <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} className={inputCls} disabled={saveLoading} />
+              <input
+                type="text"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className={inputCls}
+                disabled={saveLoading}
+              />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1.5 block text-sm text-zinc-300">Telefon</label>
-                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={inputCls} disabled={saveLoading} />
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className={inputCls}
+                  disabled={saveLoading}
+                />
               </div>
               <div>
                 <label className="mb-1.5 block text-sm text-zinc-300">E-posta</label>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} disabled={saveLoading} />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={inputCls}
+                  disabled={saveLoading}
+                />
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1.5 block text-sm text-zinc-300">
+                  Vergi No / VKN
+                </label>
+                <input
+                  type="text"
+                  value={taxId}
+                  onChange={(e) => setTaxId(e.target.value)}
+                  placeholder="Örn: 1234567890"
+                  className={inputCls}
+                  disabled={saveLoading}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm text-zinc-300">
+                  Çalışma Saatleri
+                </label>
+                <input
+                  type="text"
+                  value={workingHours}
+                  onChange={(e) => setWorkingHours(e.target.value)}
+                  placeholder="Örn: 10:00 - 23:00"
+                  className={inputCls}
+                  disabled={saveLoading}
+                />
               </div>
             </div>
 
@@ -276,6 +378,7 @@ export function EditRestaurantPage() {
               onBillingStatusChange={setBillingStatus}
               billingNotes={billingNotes}
               onBillingNotesChange={setBillingNotes}
+              paymentHistory={restaurant.paymentHistory}
               disabled={saveLoading}
             />
 

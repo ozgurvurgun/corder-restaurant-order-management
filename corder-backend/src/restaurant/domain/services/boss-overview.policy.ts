@@ -8,6 +8,31 @@ import { StockMaterialEntity } from '../stock-material.entity';
 import { RestaurantStaffEntity } from '../restaurant-staff.entity';
 import { LedgerEntryEntity } from '../ledger-entry.entity';
 import { AuditLogEntity } from '../audit-log.entity';
+import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
+
+/** Permanent UTC+3 offset for Europe/Istanbul (Turkey). */
+const ISTANBUL_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+export function computeIstanbulDateBoundaries(now: Date = new Date()): {
+  startOfToday: Date;
+  startOfWeek: Date;
+  startOfMonth: Date;
+} {
+  const istanbulShifted = new Date(now.getTime() + ISTANBUL_OFFSET_MS);
+  const year = istanbulShifted.getUTCFullYear();
+  const month = istanbulShifted.getUTCMonth();
+  const day = istanbulShifted.getUTCDate();
+
+  const startOfToday = new Date(Date.UTC(year, month, day) - ISTANBUL_OFFSET_MS);
+  const startOfWeek = new Date(startOfToday.getTime() - 6 * 24 * 60 * 60 * 1000);
+  const startOfMonth = new Date(Date.UTC(year, month, 1) - ISTANBUL_OFFSET_MS);
+  return { startOfToday, startOfWeek, startOfMonth };
+}
+
+export function getIstanbulHour(date: Date): number {
+  const istanbulShifted = new Date(date.getTime() + ISTANBUL_OFFSET_MS);
+  return istanbulShifted.getUTCHours();
+}
 
 export interface PaymentMethodBreakdownDto {
   cash: number;
@@ -78,7 +103,8 @@ export interface BranchPulseInput {
   openShifts: CashShiftEntity[];
   materials: StockMaterialEntity[];
   staffList: RestaurantStaffEntity[];
-  ledgerEntries: LedgerEntryEntity[];
+  ledgerEntries?: LedgerEntryEntity[];
+  openLedgerBalanceByBranchId?: Map<string, number>;
   startOfToday: Date;
   startOfWeek: Date;
   startOfMonth: Date;
@@ -107,19 +133,21 @@ export class BossOverviewPolicy {
     const bShift = input.openShifts.find((s) => s.restaurantId === branch.id) ?? null;
     const bMaterials = input.materials.filter((m) => m.restaurantId === branch.id);
     const bStaff = input.staffList.filter((s) => s.restaurantId === branch.id);
-    const bLedger = input.ledgerEntries.filter((l) => l.restaurantId === branch.id);
+    const bLedger = (input.ledgerEntries ?? []).filter((l) => l.restaurantId === branch.id);
+    const openLedgerBalance =
+      input.openLedgerBalanceByBranchId?.get(branch.id) ?? computeOpenLedgerBalance(bLedger);
 
     const activeStats = summarizeActiveOrders(bActiveOrders, itemsByOrderId, startOfToday);
-    const todayStats = summarizeCompletedToday(bCompletedToday);
+    const todayStats = summarizeCompletedToday(bCompletedToday, startOfToday);
     const monthRev = sumNetAmount(bCompletedMonth);
     const royaltyPct = Number(branch.royaltyRate || 0);
     const estimatedTodayRoyalty =
       branch.branchType === 'franchise' && royaltyPct > 0
-        ? Math.round(todayStats.todayRevenue * (royaltyPct / 100) * 100) / 100
+        ? fromMinorUnits(Math.round((toMinorUnits(todayStats.todayRevenue) * royaltyPct) / 100))
         : 0;
     const estimatedMonthRoyalty =
       branch.branchType === 'franchise' && royaltyPct > 0
-        ? Math.round(monthRev * (royaltyPct / 100) * 100) / 100
+        ? fromMinorUnits(Math.round((toMinorUnits(monthRev) * royaltyPct) / 100))
         : 0;
 
     return {
@@ -144,7 +172,9 @@ export class BossOverviewPolicy {
       todayOrderCount: bCompletedToday.length,
       todayDiscountTotal: todayStats.todayDiscountTotal,
       todayCancelCount: activeStats.cancelCount + todayStats.cancelCount,
-      todayCancelAmount: activeStats.cancelAmount + todayStats.cancelAmount,
+      todayCancelAmount: fromMinorUnits(
+        toMinorUnits(activeStats.cancelAmount) + toMinorUnits(todayStats.cancelAmount),
+      ),
       occupiedTableCount: activeStats.occupiedTableIds.size,
       totalTableCount: bTables.length,
       openChecksTotal: activeStats.openChecksTotal,
@@ -153,7 +183,7 @@ export class BossOverviewPolicy {
       staffCount: bStaff.length,
       panelStaffCount: bStaff.filter((s) => s.canAccessPanel || Boolean(s.email)).length,
       terminalStaffCount: bStaff.filter((s) => s.canAccessTerminal !== false).length,
-      openLedgerBalance: computeOpenLedgerBalance(bLedger),
+      openLedgerBalance,
       paymentBreakdown: todayStats.paymentBreakdown,
       activeShift: bShift
         ? {
@@ -170,83 +200,117 @@ export class BossOverviewPolicy {
   }
 
   static computeConsolidatedMetrics(branchPulses: BranchLivePulseDto[]): ConsolidatedOverviewMetricsDto {
-    return branchPulses.reduce((acc, b) => {
-      acc.todayRevenue += b.todayRevenue;
-      acc.weekRevenue += b.weekRevenue;
-      acc.monthRevenue += b.monthRevenue;
+    let todayRevenueMinor = 0, weekRevenueMinor = 0, monthRevenueMinor = 0;
+    let todayDiscountMinor = 0, todayCancelMinor = 0, openChecksMinor = 0, openLedgerMinor = 0;
+    let todayRoyaltyMinor = 0, monthRoyaltyMinor = 0;
+    let cashMinor = 0, cardMinor = 0, mealCardMinor = 0, multinetMinor = 0, ledgerMinor = 0;
+
+    const acc = BossOverviewPolicy.emptyConsolidated();
+    for (const b of branchPulses) {
+      todayRevenueMinor += toMinorUnits(b.todayRevenue);
+      weekRevenueMinor += toMinorUnits(b.weekRevenue);
+      monthRevenueMinor += toMinorUnits(b.monthRevenue);
       acc.todayOrderCount += b.todayOrderCount;
-      acc.todayDiscountTotal += b.todayDiscountTotal;
+      todayDiscountMinor += toMinorUnits(b.todayDiscountTotal);
       acc.todayCancelCount += b.todayCancelCount;
-      acc.todayCancelAmount += b.todayCancelAmount;
+      todayCancelMinor += toMinorUnits(b.todayCancelAmount);
       acc.occupiedTableCount += b.occupiedTableCount;
       acc.totalTableCount += b.totalTableCount;
-      acc.openChecksTotal += b.openChecksTotal;
+      openChecksMinor += toMinorUnits(b.openChecksTotal);
       acc.openOrderCount += b.openOrderCount;
       acc.criticalStockCount += b.criticalStockCount;
       acc.staffCount += b.staffCount;
-      acc.openLedgerBalance += b.openLedgerBalance;
+      openLedgerMinor += toMinorUnits(b.openLedgerBalance);
       acc.totalBranchesCount = (acc.totalBranchesCount ?? 0) + 1;
-      if (b.branchType === 'franchise') {
-        acc.franchiseBranchCount = (acc.franchiseBranchCount ?? 0) + 1;
-      } else {
-        acc.companyOwnedCount = (acc.companyOwnedCount ?? 0) + 1;
-      }
-      acc.todayEstimatedRoyalty = (acc.todayEstimatedRoyalty ?? 0) + (b.estimatedTodayRoyalty ?? 0);
-      acc.monthEstimatedRoyalty = (acc.monthEstimatedRoyalty ?? 0) + (b.estimatedMonthRoyalty ?? 0);
-      acc.paymentBreakdown.cash += b.paymentBreakdown.cash;
-      acc.paymentBreakdown.creditCard += b.paymentBreakdown.creditCard;
-      acc.paymentBreakdown.mealCard += b.paymentBreakdown.mealCard;
-      acc.paymentBreakdown.multinet += b.paymentBreakdown.multinet;
-      acc.paymentBreakdown.ledger += b.paymentBreakdown.ledger;
-      return acc;
-    }, BossOverviewPolicy.emptyConsolidated());
+      if (b.branchType === 'franchise') acc.franchiseBranchCount = (acc.franchiseBranchCount ?? 0) + 1;
+      else acc.companyOwnedCount = (acc.companyOwnedCount ?? 0) + 1;
+      todayRoyaltyMinor += toMinorUnits(b.estimatedTodayRoyalty ?? 0);
+      monthRoyaltyMinor += toMinorUnits(b.estimatedMonthRoyalty ?? 0);
+      cashMinor += toMinorUnits(b.paymentBreakdown.cash);
+      cardMinor += toMinorUnits(b.paymentBreakdown.creditCard);
+      mealCardMinor += toMinorUnits(b.paymentBreakdown.mealCard);
+      multinetMinor += toMinorUnits(b.paymentBreakdown.multinet);
+      ledgerMinor += toMinorUnits(b.paymentBreakdown.ledger);
+    }
+
+    acc.todayRevenue = fromMinorUnits(todayRevenueMinor);
+    acc.weekRevenue = fromMinorUnits(weekRevenueMinor);
+    acc.monthRevenue = fromMinorUnits(monthRevenueMinor);
+    acc.todayDiscountTotal = fromMinorUnits(todayDiscountMinor);
+    acc.todayCancelAmount = fromMinorUnits(todayCancelMinor);
+    acc.openChecksTotal = fromMinorUnits(openChecksMinor);
+    acc.openLedgerBalance = fromMinorUnits(openLedgerMinor);
+    acc.todayEstimatedRoyalty = fromMinorUnits(todayRoyaltyMinor);
+    acc.monthEstimatedRoyalty = fromMinorUnits(monthRoyaltyMinor);
+    acc.paymentBreakdown = {
+      cash: fromMinorUnits(cashMinor),
+      creditCard: fromMinorUnits(cardMinor),
+      mealCard: fromMinorUnits(mealCardMinor),
+      multinet: fromMinorUnits(multinetMinor),
+      ledger: fromMinorUnits(ledgerMinor),
+    };
+    return acc;
   }
 
   static buildHourlySales(completedMonth: CompletedOrderEntity[], startOfToday: Date) {
-    const hourlyMap = new Map<number, { hour: string; revenue: number; orders: number }>();
+    const hourlyMap = new Map<number, { hour: string; revenueMinor: number; orders: number }>();
     for (let h = 8; h <= 23; h++) {
-      hourlyMap.set(h, { hour: `${String(h).padStart(2, '0')}:00`, revenue: 0, orders: 0 });
+      hourlyMap.set(h, { hour: `${String(h).padStart(2, '0')}:00`, revenueMinor: 0, orders: 0 });
     }
     for (const c of completedMonth) {
       if (c.closedAt < startOfToday) continue;
-      const h = new Date(c.closedAt).getHours();
-      const bucket = hourlyMap.get(h) ?? { hour: `${String(h).padStart(2, '0')}:00`, revenue: 0, orders: 0 };
-      bucket.revenue += Number(c.netAmount || 0);
+      const h = getIstanbulHour(new Date(c.closedAt));
+      const bucket = hourlyMap.get(h) ?? { hour: `${String(h).padStart(2, '0')}:00`, revenueMinor: 0, orders: 0 };
+      bucket.revenueMinor += toMinorUnits(c.netAmount || 0);
       bucket.orders += 1;
       hourlyMap.set(h, bucket);
     }
-    return Array.from(hourlyMap.values());
+    return Array.from(hourlyMap.entries())
+      .sort(([hA], [hB]) => hA - hB)
+      .map(([, b]) => ({ hour: b.hour, revenue: fromMinorUnits(b.revenueMinor), orders: b.orders }));
   }
 
   static buildTopProductsAndStaffPerformance(completedMonth: CompletedOrderEntity[]) {
-    const productStats = new Map<string, { name: string; quantity: number; revenue: number }>();
-    const staffStats = new Map<string, { name: string; ordersCount: number; revenue: number; discountGiven: number }>();
+    const productStats = new Map<string, { name: string; quantity: number; revenueMinor: number }>();
+    const staffStats = new Map<string, { name: string; ordersCount: number; revenueMinor: number; discountMinor: number }>();
 
     for (const c of completedMonth) {
       const waiterName = (c.waiter || c.closedBy || 'Staff').trim();
-      const st = staffStats.get(waiterName) ?? { name: waiterName, ordersCount: 0, revenue: 0, discountGiven: 0 };
+      const st = staffStats.get(waiterName) ?? { name: waiterName, ordersCount: 0, revenueMinor: 0, discountMinor: 0 };
       st.ordersCount += 1;
-      st.revenue += Number(c.netAmount || 0);
-      st.discountGiven += Number(c.discountAmount || 0);
+      st.revenueMinor += toMinorUnits(c.netAmount || 0);
+      st.discountMinor += toMinorUnits(c.discountAmount || 0);
       staffStats.set(waiterName, st);
 
       for (const so of Array.isArray(c.ordersSnapshot) ? c.ordersSnapshot : []) {
         const sItems = (so as { items?: Array<{ productName?: string; price?: number; quantity?: number; status?: string }> }).items ?? [];
         for (const item of sItems) {
-          if (item.status === 'cancelled') continue;
+          if (item.status === 'cancelled' || item.status === 'ledger') continue;
           const pName = (item.productName || 'Product').trim();
-          const qty = Number(item.quantity || 1);
-          const cur = productStats.get(pName) ?? { name: pName, quantity: 0, revenue: 0 };
+          const qty = Math.max(0, Math.floor(Number(item.quantity || 1)));
+          if (qty <= 0) continue;
+          const cur = productStats.get(pName) ?? { name: pName, quantity: 0, revenueMinor: 0 };
           cur.quantity += qty;
-          cur.revenue += Number(item.price || 0) * qty;
+          cur.revenueMinor += toMinorUnits(item.price || 0) * qty;
           productStats.set(pName, cur);
         }
       }
     }
 
     return {
-      topProducts: Array.from(productStats.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 10),
-      staffPerformance: Array.from(staffStats.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 12),
+      topProducts: Array.from(productStats.values())
+        .sort((a, b) => b.revenueMinor - a.revenueMinor)
+        .slice(0, 10)
+        .map((p) => ({ name: p.name, quantity: p.quantity, revenue: fromMinorUnits(p.revenueMinor) })),
+      staffPerformance: Array.from(staffStats.values())
+        .sort((a, b) => b.revenueMinor - a.revenueMinor)
+        .slice(0, 12)
+        .map((s) => ({
+          name: s.name,
+          ordersCount: s.ordersCount,
+          revenue: fromMinorUnits(s.revenueMinor),
+          discountGiven: fromMinorUnits(s.discountMinor),
+        })),
     };
   }
 
@@ -285,78 +349,134 @@ function filterCompletedSince(list: CompletedOrderEntity[], restaurantId: string
 }
 
 function sumNetAmount(orders: CompletedOrderEntity[]): number {
-  return orders.reduce((s, c) => s + Number(c.netAmount || 0), 0);
+  const minor = orders.reduce((s, c) => s + toMinorUnits(c.netAmount || 0), 0);
+  return fromMinorUnits(minor);
 }
 
 function computeOpenLedgerBalance(entries: LedgerEntryEntity[]): number {
-  return Math.max(
+  const minor = entries.reduce(
+    (sum, e) =>
+      sum + (e.entryType === 'debt' ? toMinorUnits(e.amount || 0) : -toMinorUnits(e.amount || 0)),
     0,
-    entries.reduce((sum, e) => sum + (e.entryType === 'debt' ? Number(e.amount || 0) : -Number(e.amount || 0)), 0),
   );
+  return fromMinorUnits(Math.max(0, minor));
 }
 
 function summarizeActiveOrders(activeOrders: OrderEntity[], itemsByOrderId: Map<string, OrderItemEntity[]>, startOfToday: Date) {
-  let openChecksTotal = 0;
+  let openChecksMinor = 0;
   let cancelCount = 0;
-  let cancelAmount = 0;
+  let cancelMinor = 0;
   const occupiedTableIds = new Set<string>();
 
   for (const ord of activeOrders) {
     for (const item of itemsByOrderId.get(ord.id) ?? []) {
-      const lineTotal = Number(item.price) * item.quantity;
+      const lineMinor = toMinorUnits(item.price) * item.quantity;
       if (item.status === 'cancelled') {
         if (!item.cancelledAt || item.cancelledAt >= startOfToday) {
           cancelCount += item.quantity;
-          cancelAmount += lineTotal;
+          cancelMinor += lineMinor;
         }
       } else if (item.status !== 'ledger') {
-        openChecksTotal += lineTotal;
+        openChecksMinor += lineMinor;
         occupiedTableIds.add(ord.tableId);
       }
     }
   }
-  return { openChecksTotal, cancelCount, cancelAmount, occupiedTableIds };
+  return {
+    openChecksTotal: fromMinorUnits(openChecksMinor),
+    cancelCount,
+    cancelAmount: fromMinorUnits(cancelMinor),
+    occupiedTableIds,
+  };
 }
 
-function summarizeCompletedToday(completedToday: CompletedOrderEntity[]) {
-  const paymentBreakdown: PaymentMethodBreakdownDto = { cash: 0, creditCard: 0, mealCard: 0, multinet: 0, ledger: 0 };
-  let todayRevenue = 0;
-  let todayDiscountTotal = 0;
+function summarizeCompletedToday(completedToday: CompletedOrderEntity[], startOfToday: Date) {
+  const breakdownMinor = {
+    cash: 0,
+    creditCard: 0,
+    mealCard: 0,
+    multinet: 0,
+    ledger: 0,
+  };
+  let todayRevenueMinor = 0;
+  let todayDiscountMinor = 0;
   let cancelCount = 0;
-  let cancelAmount = 0;
+  let cancelMinor = 0;
+  const seenCancelledItemIds = new Set<string>();
 
   for (const co of completedToday) {
-    todayRevenue += Number(co.netAmount || 0);
-    todayDiscountTotal += Number(co.discountAmount || 0);
-    accumulatePaymentBreakdown(paymentBreakdown, co);
+    todayRevenueMinor += toMinorUnits(co.netAmount || 0);
+    todayDiscountMinor += toMinorUnits(co.discountAmount || 0);
+    accumulatePaymentBreakdownMinor(breakdownMinor, co);
     for (const so of Array.isArray(co.ordersSnapshot) ? co.ordersSnapshot : []) {
-      const sItems = (so as { items?: Array<{ status?: string; price?: number; quantity?: number }> }).items ?? [];
+      const sItems = (
+        so as {
+          items?: Array<{
+            id?: string;
+            status?: string;
+            price?: number;
+            quantity?: number;
+            cancelledAt?: string;
+          }>;
+        }
+      ).items ?? [];
       for (const si of sItems) {
         if (si.status === 'cancelled') {
-          cancelCount += Number(si.quantity || 1);
-          cancelAmount += Number(si.price || 0) * Number(si.quantity || 1);
+          if (si.id && seenCancelledItemIds.has(si.id)) continue;
+          if (si.cancelledAt) {
+            const cancelledDate = new Date(si.cancelledAt);
+            if (!Number.isNaN(cancelledDate.getTime()) && cancelledDate < startOfToday) {
+              continue;
+            }
+          }
+          if (si.id) seenCancelledItemIds.add(si.id);
+          const qty = Math.max(0, Math.floor(Number(si.quantity || 1)));
+          cancelCount += qty;
+          cancelMinor += toMinorUnits(si.price || 0) * qty;
         }
       }
     }
   }
-  return { paymentBreakdown, todayRevenue, todayDiscountTotal, cancelCount, cancelAmount };
+  return {
+    paymentBreakdown: {
+      cash: fromMinorUnits(breakdownMinor.cash),
+      creditCard: fromMinorUnits(breakdownMinor.creditCard),
+      mealCard: fromMinorUnits(breakdownMinor.mealCard),
+      multinet: fromMinorUnits(breakdownMinor.multinet),
+      ledger: fromMinorUnits(breakdownMinor.ledger),
+    },
+    todayRevenue: fromMinorUnits(todayRevenueMinor),
+    todayDiscountTotal: fromMinorUnits(todayDiscountMinor),
+    cancelCount,
+    cancelAmount: fromMinorUnits(cancelMinor),
+  };
 }
 
-function accumulatePaymentBreakdown(target: PaymentMethodBreakdownDto, order: CompletedOrderEntity): void {
-  const net = Number(order.netAmount || 0);
+function accumulatePaymentBreakdownMinor(
+  target: {
+    cash: number;
+    creditCard: number;
+    mealCard: number;
+    multinet: number;
+    ledger: number;
+  },
+  order: CompletedOrderEntity,
+): void {
+  const netMinor = toMinorUnits(order.netAmount || 0);
   if (order.paymentMethod === 'split' && Array.isArray(order.paymentSplit)) {
-    for (const part of order.paymentSplit) {
-      const amt = Number(part.amount || 0);
-      if (part.method === 'cash') target.cash += amt;
-      else if (part.method === 'credit-card') target.creditCard += amt;
-      else if (part.method === 'meal-card') target.mealCard += amt;
-      else if (part.method === 'multinet') target.multinet += amt;
+    for (const part of order.paymentSplit as Array<{ method?: string; amount?: number }>) {
+      const amtMinor = toMinorUnits(part.amount || 0);
+      if (part.method === 'cash') target.cash += amtMinor;
+      else if (part.method === 'credit-card') target.creditCard += amtMinor;
+      else if (part.method === 'meal-card') target.mealCard += amtMinor;
+      else if (part.method === 'multinet') target.multinet += amtMinor;
+      else if (part.method === 'ledger') target.ledger += amtMinor;
     }
     return;
   }
-  if (order.paymentMethod === 'cash') target.cash += net;
-  else if (order.paymentMethod === 'credit-card') target.creditCard += net;
-  else if (order.paymentMethod === 'meal-card') target.mealCard += net;
-  else if (order.paymentMethod === 'multinet') target.multinet += net;
-  else if (order.paymentMethod === 'ledger') target.ledger += net;
+  if (order.paymentMethod === 'cash') target.cash += netMinor;
+  else if (order.paymentMethod === 'credit-card') target.creditCard += netMinor;
+  else if (order.paymentMethod === 'meal-card') target.mealCard += netMinor;
+  else if (order.paymentMethod === 'multinet') target.multinet += netMinor;
+  else if (order.paymentMethod === 'ledger') target.ledger += netMinor;
 }

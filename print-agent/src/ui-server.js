@@ -2,7 +2,15 @@ const http = require("http")
 const fs = require("fs")
 const path = require("path")
 const crypto = require("crypto")
-const { loadSettings, saveSettings, getPublicSettings, buildRuntimeConfig } = require("./settings-store")
+const {
+  loadSettings,
+  saveSettings,
+  getPublicSettings,
+  buildRuntimeConfig,
+  mapBackendPrinters,
+  mergePrintersWithBackend,
+  seedDepartmentCategoryRoutes,
+} = require("./settings-store")
 const { discoverSystemPrinters, testTcpPrinterConnection } = require("./printer-discovery")
 const { loginPrintAgent, fetchAgentContext } = require("./http-sync")
 const { applyAutoStartSetting } = require("./autostart")
@@ -72,16 +80,33 @@ function parseCookies(cookieHeader) {
   return out
 }
 
+function isLoopbackHost(req) {
+  const host = String(req.headers.host || "").toLowerCase().trim()
+  return (
+    host === "127.0.0.1" ||
+    host === "localhost" ||
+    host.startsWith("127.0.0.1:") ||
+    host.startsWith("localhost:")
+  )
+}
+
+function safeTokenEqual(candidate, expected) {
+  if (!candidate || !expected) return false
+  const a = Buffer.from(String(candidate), "utf8")
+  const b = Buffer.from(String(expected), "utf8")
+  if (a.length !== b.length) return false
+  return crypto.timingSafeEqual(a, b)
+}
+
 function isAllowedLoopbackRequest(req, sessionToken) {
-  const host = String(req.headers.host || "").toLowerCase()
-  if (!host.startsWith("127.0.0.1:") && !host.startsWith("localhost:")) {
+  if (!isLoopbackHost(req)) {
     return false
   }
   const headerToken = String(req.headers["x-corder-session"] || "").trim()
-  if (headerToken && headerToken === sessionToken) return true
+  if (safeTokenEqual(headerToken, sessionToken)) return true
 
   const cookies = parseCookies(req.headers.cookie)
-  if (cookies.corder_pa_session !== sessionToken) return false
+  if (!safeTokenEqual(cookies.corder_pa_session, sessionToken)) return false
 
   if (req.method !== "GET" && req.method !== "HEAD") {
     const origin = String(req.headers.origin || "").toLowerCase()
@@ -92,7 +117,15 @@ function isAllowedLoopbackRequest(req, sessionToken) {
   return true
 }
 
-function serveStaticFile(res, urlPath, sessionToken) {
+function serveStaticFile(req, res, urlPath, sessionToken) {
+  if (!isLoopbackHost(req)) {
+    sendJson(res, 403, { ok: false, error: "Forbidden host" })
+    return
+  }
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    sendJson(res, 405, { ok: false, error: "Method not allowed" })
+    return
+  }
   const relPath = urlPath === "/" ? "index.html" : urlPath.replace(/^\/+/, "")
   const safePath = path.normalize(relPath).replace(/^(\.\.(\/|\\|$))+/, "")
   const fullPath = path.join(PUBLIC_DIR, safePath)
@@ -109,22 +142,11 @@ function serveStaticFile(res, urlPath, sessionToken) {
     headers["Set-Cookie"] = `corder_pa_session=${sessionToken}; Path=/; HttpOnly; SameSite=Strict`
   }
   res.writeHead(200, headers)
+  if (req.method === "HEAD") {
+    res.end()
+    return
+  }
   fs.createReadStream(fullPath).pipe(res)
-}
-
-function mapBackendPrinters(backendPrinters = []) {
-  return backendPrinters
-    .filter((p) => p && p.name)
-    .map((p, idx) => ({
-      id: p.id || `p-cloud-${idx + 1}`,
-      name: String(p.name).trim(),
-      mode: p.connection === "ethernet" || p.ipAddress ? "network" : "system",
-      systemPrinterName: p.connection === "ethernet" ? "" : String(p.name).trim(),
-      host: String(p.ipAddress || "127.0.0.1").trim(),
-      port: Number(p.port) || 9100,
-      paperWidth: Number(p.paperWidth) === 58 ? 58 : 80,
-      feedLinesBeforeCut: 6,
-    }))
 }
 
 function createUiServer({ store, agent }) {
@@ -137,6 +159,26 @@ function createUiServer({ store, agent }) {
     const runtimeConfig = buildRuntimeConfig(saved)
     agent.reloadConfig(runtimeConfig)
     return { settings: saved, publicSettings: getPublicSettings(saved), runtimeConfig }
+  }
+
+  const syncContextFromBackend = async () => {
+    const current = loadSettings()
+    const runtimeConfig = buildRuntimeConfig(current)
+    const ctx = await fetchAgentContext(runtimeConfig)
+    const nextCategories = ctx.categories || []
+    const nextPrinters = mergePrintersWithBackend(current.printers, ctx.printers)
+    const nextRoutes = seedDepartmentCategoryRoutes(
+      current.categoryRoutes,
+      nextCategories,
+      nextPrinters,
+    )
+    return applyAndReload({
+      restaurantId: ctx.restaurant?.id || current.restaurantId,
+      restaurantName: ctx.restaurant?.name || current.restaurantName,
+      categories: nextCategories,
+      printers: nextPrinters,
+      categoryRoutes: nextRoutes,
+    })
   }
 
   const handleApi = async (req, res, pathname) => {
@@ -172,9 +214,17 @@ function createUiServer({ store, agent }) {
     if (req.method === "POST" && pathname === "/api/login") {
       const body = await readJsonBody(req)
       const current = loadSettings()
-      const loginResult = await loginPrintAgent(body.username, body.password)
-      const nextPrinters =
-        current.printers.length > 0 ? current.printers : mapBackendPrinters(loginResult.printers)
+      const loginResult = await loginPrintAgent(body.username, body.password, current.backendUrl)
+      const isSameRestaurant =
+        !current.restaurantId || current.restaurantId === loginResult.restaurant?.id
+      const basePrinters = isSameRestaurant ? current.printers : []
+      const nextPrinters = mergePrintersWithBackend(basePrinters, loginResult.printers)
+      const nextCategories = loginResult.categories || []
+      const nextRoutes = seedDepartmentCategoryRoutes(
+        isSameRestaurant ? current.categoryRoutes : {},
+        nextCategories,
+        nextPrinters,
+      )
       const { publicSettings } = applyAndReload({
         backendUrl: loginResult.backendUrl,
         authToken: loginResult.accessToken,
@@ -182,8 +232,9 @@ function createUiServer({ store, agent }) {
         username: String(body.username || "").trim().toLowerCase(),
         restaurantId: loginResult.restaurant?.id || "",
         restaurantName: loginResult.restaurant?.name || "",
-        categories: loginResult.categories || [],
+        categories: nextCategories,
         printers: nextPrinters,
+        categoryRoutes: nextRoutes,
         printFooterLine: current.printFooterLine || loginResult.restaurant?.name || "",
       })
       info("Corder Print Agent logged in", {
@@ -208,17 +259,11 @@ function createUiServer({ store, agent }) {
     }
 
     if (req.method === "POST" && pathname === "/api/sync-context") {
-      const current = loadSettings()
-      const runtimeConfig = buildRuntimeConfig(current)
-      const ctx = await fetchAgentContext(runtimeConfig)
-      const nextPrinters = current.printers.length > 0 ? current.printers : mapBackendPrinters(ctx.printers)
-      const { publicSettings } = applyAndReload({
-        restaurantId: ctx.restaurant?.id || current.restaurantId,
-        restaurantName: ctx.restaurant?.name || current.restaurantName,
-        categories: ctx.categories || [],
-        printers: nextPrinters,
+      const { publicSettings } = await syncContextFromBackend()
+      info("Branch categories and printers synchronized", {
+        categories: publicSettings.categories.length,
+        printers: publicSettings.printers.length,
       })
-      info("Branch categories synchronized", { categories: publicSettings.categories.length })
       sendJson(res, 200, { ok: true, settings: publicSettings })
       return
     }
@@ -231,12 +276,15 @@ function createUiServer({ store, agent }) {
       const entry = {
         id: incomingId,
         name: String(body.name || body.systemPrinterName || body.host || "Printer").trim(),
+        type: String(body.type || "thermal").trim(),
         mode: body.mode === "network" ? "network" : "system",
-        systemPrinterName: String(body.systemPrinterName || "").trim(),
+        systemPrinterName: body.mode === "network" ? "" : String(body.systemPrinterName || "").trim(),
         host: String(body.host || "127.0.0.1").trim(),
         port: Number(body.port) || 9100,
+        department: body.department ? String(body.department).trim() : null,
         paperWidth: Number(body.paperWidth) === 58 ? 58 : 80,
         feedLinesBeforeCut: Number(body.feedLinesBeforeCut ?? 6),
+        autoCut: body.autoCut !== false,
       }
       const idx = printers.findIndex((p) => p.id === incomingId)
       if (idx >= 0) printers[idx] = entry
@@ -312,8 +360,20 @@ function createUiServer({ store, agent }) {
         sendJson(res, 400, { ok: false, error: "Test için yazıcı seçilmedi" })
         return
       }
-      await printBytes(runtimeConfig, buildTestTicket(target), { printer: target })
-      info("Diagnostic test ticket printed", { printer: target.name, mode: target.mode })
+      const asciiFallback =
+        runtimeConfig.asciiFallback === true ||
+        (runtimeConfig.asciiFallback !== false && target.mode !== "network")
+      const ticket = buildTestTicket(target, {
+        asciiFallback,
+        feedLinesBeforeCut: Number(target.feedLinesBeforeCut ?? runtimeConfig.ticketFeedLinesBeforeCut ?? 3),
+        charsPerLine: target.paperWidth === 58 ? 32 : 42,
+      })
+      await printBytes(runtimeConfig, ticket, { printer: target })
+      info("Diagnostic test ticket printed", {
+        printer: target.name,
+        mode: target.mode,
+        asciiFallback,
+      })
       sendJson(res, 200, { ok: true })
       return
     }
@@ -344,7 +404,7 @@ function createUiServer({ store, agent }) {
     try {
       const parsed = new URL(req.url || "/", "http://127.0.0.1")
       if (parsed.pathname.startsWith("/api/")) await handleApi(req, res, parsed.pathname)
-      else serveStaticFile(res, parsed.pathname, sessionToken)
+      else serveStaticFile(req, res, parsed.pathname, sessionToken)
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
       warn("UI API request failed", { url: req.url, error: message })
@@ -355,6 +415,7 @@ function createUiServer({ store, agent }) {
   return {
     server,
     sessionToken,
+    syncContextFromBackend,
     setElectronPrinterProvider(fn, electronApp = null) {
       electronPrinterProvider = fn
       if (electronApp) electronAppRef = electronApp
@@ -383,4 +444,8 @@ function createUiServer({ store, agent }) {
   }
 }
 
-module.exports = { createUiServer }
+module.exports = {
+  createUiServer,
+  mapBackendPrinters,
+  mergePrintersWithBackend,
+}

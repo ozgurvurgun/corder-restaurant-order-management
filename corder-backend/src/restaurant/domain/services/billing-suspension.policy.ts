@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { BossTier, RootAdminEntity } from '../../../platform/domain/root-admin.entity';
 import { RestaurantEntity } from '../../../platform/domain/restaurant.entity';
 import { RestaurantStaffEntity } from '../restaurant-staff.entity';
@@ -6,6 +7,11 @@ import {
   PERMISSION_KEYS,
   PermissionKey,
 } from '../permissions.catalog';
+
+export function computeSecretFingerprint(hash?: string | null): string {
+  if (!hash) return '';
+  return createHash('sha256').update(hash).digest('hex').slice(0, 16);
+}
 
 export interface RestaurantLoginDto {
   email: string;

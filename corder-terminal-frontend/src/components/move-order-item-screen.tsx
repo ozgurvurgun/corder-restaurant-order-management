@@ -1,10 +1,10 @@
 import { useState } from "react"
-import { ChevronLeft, UtensilsCrossed, Wine, Hash, Merge } from "lucide-react"
+import { ChevronLeft, UtensilsCrossed, Wine, Hash, Merge, Lock, Minus, Plus } from "lucide-react"
 import { useApp } from "@/lib/store"
 import { useToast } from "@/components/ios-toast"
 import { ConfirmDialog } from "./confirm-dialog"
 import { formatCurrency } from "@/lib/format"
-import type { TerminalTable } from "@/lib/types"
+import type { TerminalTable, TerminalUser } from "@/lib/types"
 
 const ALL_SECTIONS = "all"
 
@@ -12,6 +12,7 @@ interface MoveOrderItemScreenProps {
   fromTableId: string
   itemId: string
   productName: string
+  maxQuantity: number
   onBack: () => void
 }
 
@@ -21,10 +22,13 @@ export function MoveOrderItemScreen({
   fromTableId,
   itemId,
   productName,
+  maxQuantity,
   onBack,
 }: MoveOrderItemScreenProps) {
   const { showToast } = useToast()
-  const { tables, moveOrderItemsToTable, hasPermission } = useApp()
+  const { tables, currentUser, moveOrderItemsToTable, hasPermission } = useApp()
+  const safeMax = Math.max(1, Math.floor(maxQuantity) || 1)
+  const [moveQuantity, setMoveQuantity] = useState(safeMax)
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null)
   const [showConfirm, setShowConfirm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -34,9 +38,9 @@ export function MoveOrderItemScreen({
 
   const fromTable = tables.find((t) => t.id === fromTableId)
   const selectedTarget = tables.find((t) => t.id === selectedTargetId)
-  const isTargetOccupied = selectedTarget?.status === "occupied"
   const sectionNames = Array.from(new Set(tables.map((t) => t.section).filter(Boolean)))
   const sections = [ALL_SECTIONS, ...sectionNames]
+  const qty = Math.min(Math.max(1, moveQuantity), safeMax)
 
   const filteredTables = tables
     .filter((t) => t.id !== fromTableId)
@@ -45,9 +49,23 @@ export function MoveOrderItemScreen({
       if (filterMode === "open" && t.status === "empty") return false
       return true
     })
+    .sort((a, b) => a.name.localeCompare(b.name, "tr", { numeric: true, sensitivity: "base" }))
 
   const handleSelectTarget = (toTableId: string) => {
     if (isSubmitting) return
+    const target = tables.find((t) => t.id === toTableId)
+    if (!target) return
+    if (target.status === "bill-requested") {
+      showToast("Hedef masa şu an hesap kesiminde olduğu için ürün taşınamaz.", "error")
+      return
+    }
+    if (target.lockedByStaffId && (!currentUser || target.lockedByStaffId !== currentUser.id)) {
+      showToast(
+        `Hedef masa şu an ${target.lockedByStaffName || "başka bir garson"} tarafından kullanılıyor.`,
+        "error"
+      )
+      return
+    }
     setSelectedTargetId(toTableId)
     setShowConfirm(true)
   }
@@ -60,12 +78,19 @@ export function MoveOrderItemScreen({
     }
     setIsSubmitting(true)
     try {
-      const ok = await moveOrderItemsToTable(fromTableId, selectedTargetId, [itemId])
+      const ok = await moveOrderItemsToTable(fromTableId, selectedTargetId, [
+        { itemId, quantity: qty },
+      ])
       if (!ok) {
-        showToast("Ürün taşınamadı", "error")
+        showToast("Ürün taşınamadı (açık kasa vardiyası veya masa durumunu kontrol edin)", "error")
         return
       }
-      showToast(`${productName} -> ${selectedTarget?.name} (yeni adisyon)`, "success")
+      showToast(
+        qty < safeMax
+          ? `${productName} — ${qty} adet -> ${selectedTarget?.name} taşındı`
+          : `${productName} -> ${selectedTarget?.name} taşındı`,
+        "success"
+      )
       setShowConfirm(false)
       onBack()
     } finally {
@@ -74,10 +99,11 @@ export function MoveOrderItemScreen({
   }
 
   const handleNumberSearch = () => {
-    if (!tableNumber) return
-    const found = tables.find(
-      (t) => t.id !== fromTableId && t.name.toLowerCase().includes(tableNumber.toLowerCase())
-    )
+    const q = tableNumber.trim().toLocaleLowerCase("tr-TR")
+    if (!q) return
+    const found =
+      tables.find((t) => t.id !== fromTableId && t.name.toLocaleLowerCase("tr-TR") === q) ??
+      tables.find((t) => t.id !== fromTableId && t.name.toLocaleLowerCase("tr-TR").includes(q))
     if (found) handleSelectTarget(found.id)
     else showToast("Masa bulunamadı", "error")
     setTableNumber("")
@@ -90,6 +116,7 @@ export function MoveOrderItemScreen({
         style={{ minHeight: 44 }}
       >
         <button
+          type="button"
           onClick={onBack}
           className="flex items-center gap-0.5 pl-2 pr-3 py-2.5 active:opacity-60 z-10"
           aria-label="Geri"
@@ -103,17 +130,50 @@ export function MoveOrderItemScreen({
       </header>
 
       <p className="px-4 py-2 text-[13px] text-muted-foreground border-b border-border">
-        <span className="font-medium text-foreground">{productName}</span> — {fromTable?.name} hedef masada{" "}
-        <span className="font-medium text-foreground">yeni adisyon</span> olur
+        <span className="font-medium text-foreground">{productName}</span> — {fromTable?.name} masasından seçeceğiniz masaya{" "}
+        <span className="font-medium text-foreground">yeni adisyon</span> olarak aktarılır.
       </p>
+
+      {safeMax > 1 && (
+        <div className="px-4 py-3 bg-background flex-shrink-0 border-b border-border">
+          <p className="text-[12px] font-semibold uppercase text-muted-foreground mb-2">
+            Taşınacak Adet
+          </p>
+          <div className="flex items-center justify-between rounded-xl border border-border px-3 py-2">
+            <button
+              type="button"
+              disabled={isSubmitting || qty <= 1}
+              onClick={() => setMoveQuantity((q) => Math.max(1, q - 1))}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-muted disabled:opacity-40"
+              aria-label="Azalt"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+            <div className="text-center">
+              <p className="text-[22px] font-bold tabular-nums text-foreground">{qty}</p>
+              <p className="text-[11px] text-muted-foreground">/ {safeMax} adet</p>
+            </div>
+            <button
+              type="button"
+              disabled={isSubmitting || qty >= safeMax}
+              onClick={() => setMoveQuantity((q) => Math.min(safeMax, q + 1))}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-muted disabled:opacity-40"
+              aria-label="Artır"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="px-4 py-3 bg-background flex-shrink-0 border-b border-border">
         <div className="bg-muted rounded-lg p-0.5 flex overflow-x-auto">
           {sections.map((section) => (
             <button
+              type="button"
               key={section}
               onClick={() => setActiveSection(section)}
-              className={`flex-shrink-0 px-3 py-[7px] text-[13px] font-semibold rounded-md ${
+              className={`flex-1 min-w-[68px] px-3 py-[7px] text-[13px] font-semibold rounded-md truncate ${
                 activeSection === section
                   ? "bg-card text-[#e63462] shadow-sm"
                   : "text-muted-foreground"
@@ -129,13 +189,15 @@ export function MoveOrderItemScreen({
         <div className="px-4 py-3 flex gap-2 flex-shrink-0 border-b border-border bg-background">
           <input
             type="text"
-            placeholder="Masa adı..."
+            placeholder="Masa adı veya numarası..."
             value={tableNumber}
             onChange={(e) => setTableNumber(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleNumberSearch()}
             className="flex-1 bg-card border border-border rounded-xl px-4 py-2.5 text-[15px]"
+            autoFocus
           />
           <button
+            type="button"
             onClick={handleNumberSearch}
             className="bg-[#e63462] text-white px-5 py-2.5 rounded-xl text-[15px] font-semibold"
           >
@@ -155,6 +217,7 @@ export function MoveOrderItemScreen({
               <ItemMoveTableCard
                 key={table.id}
                 table={table}
+                currentUser={currentUser}
                 onClick={() => handleSelectTarget(table.id)}
               />
             ))}
@@ -193,11 +256,11 @@ export function MoveOrderItemScreen({
 
       <ConfirmDialog
         open={showConfirm}
-        title="Yeni adisyon olarak taşı"
+        title="Ürünü Taşı"
         message={
-          isTargetOccupied
-            ? `${productName} ürünü ${fromTable?.name} masasından ${selectedTarget?.name} masasına yeni adisyon olarak taşınacak.`
-            : `${productName} ürünü ${fromTable?.name} -> ${selectedTarget?.name} (yeni adisyon).`
+          safeMax > 1
+            ? `${productName} ürününden ${qty}/${safeMax} adet ${fromTable?.name} masasından ${selectedTarget?.name} masasına yeni adisyon olarak taşınacak. Onaylıyor musunuz?`
+            : `${productName} ürünü ${fromTable?.name} masasından ${selectedTarget?.name} masasına yeni adisyon olarak taşınacak. Onaylıyor musunuz?`
         }
         confirmText="Taşı"
         cancelText="Vazgeç"
@@ -213,18 +276,47 @@ export function MoveOrderItemScreen({
   )
 }
 
-function ItemMoveTableCard({ table, onClick }: { table: TerminalTable; onClick: () => void }) {
+function ItemMoveTableCard({
+  table,
+  currentUser,
+  onClick,
+}: {
+  table: TerminalTable
+  currentUser: TerminalUser | null
+  onClick: () => void
+}) {
   const isOccupied = table.status !== "empty"
+  const isBillRequested = table.status === "bill-requested"
+  const lockedByOther = Boolean(
+    table.lockedByStaffId && currentUser && table.lockedByStaffId !== currentUser.id
+  )
+
   return (
     <button
+      type="button"
       onClick={onClick}
       className={`rounded-2xl p-3 flex flex-col items-center gap-0.5 min-h-[110px] transition-all active:scale-[0.96] ${
-        isOccupied ? "bg-[#e63462] text-white shadow-md" : "bg-card text-card-foreground shadow-sm"
+        lockedByOther
+          ? "bg-[#2563eb] text-white opacity-75"
+          : isBillRequested
+            ? "bg-[#0a84ff] text-white opacity-75"
+            : isOccupied
+              ? "bg-[#e63462] text-white shadow-md"
+              : "bg-card text-card-foreground shadow-sm"
       }`}
     >
-      <div className={`w-10 h-1 rounded-full mb-1.5 ${isOccupied ? "bg-white/30" : "bg-muted"}`} />
+      <div className={`w-10 h-1 rounded-full mb-1.5 ${isOccupied || lockedByOther ? "bg-white/30" : "bg-muted"}`} />
       <span className="font-semibold text-[13px]">{table.name}</span>
-      {isOccupied ? (
+      {lockedByOther ? (
+        <>
+          <Lock className="h-3.5 w-3.5 text-white/80 mt-1" />
+          <span className="text-[11px] font-medium text-white/90 mt-auto truncate max-w-full">
+            {table.lockedByStaffName || "Kilitli"}
+          </span>
+        </>
+      ) : isBillRequested ? (
+        <span className="text-[11px] font-semibold text-white/90 mt-auto">Hesap Kesiliyor</span>
+      ) : isOccupied ? (
         <>
           <Merge className="h-3.5 w-3.5 text-white/60 mt-0.5" />
           <span className="text-[11px] font-medium text-white/80 mt-0.5">
@@ -252,6 +344,7 @@ function TabBarButton({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={`flex-1 flex flex-col items-center gap-0.5 py-3 min-h-[54px] ${
         active ? "text-[#e63462]" : "text-muted-foreground"

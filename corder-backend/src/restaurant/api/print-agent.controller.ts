@@ -15,6 +15,7 @@ import { CategoryService } from '../application/category.service';
 import { PrintersService } from '../application/printers.service';
 import { RestaurantSettingsService } from '../application/restaurant-settings.service';
 import { RestaurantAuthService } from '../application/restaurant-auth.service';
+import { OrdersGateway } from './orders.gateway';
 import { PrintAgentGuard, type PrintAgentRequest } from '../infrastructure/print-agent.guard';
 import { PrintAgentLoginDto, PrintAgentRefreshDto } from './dto/print-agent-login.dto';
 import {
@@ -31,15 +32,18 @@ export class PrintAgentController {
     private readonly categoryService: CategoryService,
     private readonly printersService: PrintersService,
     private readonly settingsService: RestaurantSettingsService,
+    private readonly ordersGateway: OrdersGateway,
   ) {}
 
   @Post('login')
   async login(@Req() req: Request, @Body() dto: PrintAgentLoginDto) {
-    this.rateLimiter.consumeLoginAttempt('print-agent', extractClientIp(req), dto.username);
+    const clientIp = extractClientIp(req);
+    this.rateLimiter.consumeLoginAttempt('print-agent', clientIp, dto.username);
     const { accessToken, refreshToken, restaurant } = await this.authService.loginPrintAgent(
       dto.username,
       dto.password,
     );
+    this.rateLimiter.resetLoginAttempts('print-agent', clientIp, dto.username);
     const context = await this.buildContext(restaurant.id);
     return {
       accessToken,
@@ -49,8 +53,12 @@ export class PrintAgentController {
   }
 
   @Post('refresh')
-  async refresh(@Body() dto: PrintAgentRefreshDto) {
-    return this.authService.refreshPrintAgentSession(dto.refreshToken);
+  async refresh(@Req() req: Request, @Body() dto: PrintAgentRefreshDto) {
+    const clientIp = extractClientIp(req);
+    this.rateLimiter.consumeLoginAttempt('print-agent', clientIp, 'refresh-token');
+    const refreshed = await this.authService.refreshPrintAgentSession(dto.refreshToken);
+    this.rateLimiter.resetLoginAttempts('print-agent', clientIp, 'refresh-token');
+    return refreshed;
   }
 
   @Get('context')
@@ -67,11 +75,13 @@ export class PrintAgentController {
 
   @Patch('orders/:orderId/kitchen-printed')
   @UseGuards(PrintAgentGuard)
-  kitchenPrinted(
+  async kitchenPrinted(
     @Param('orderId', new ParseUUIDPipe()) orderId: string,
     @Req() req: PrintAgentRequest,
   ) {
-    return this.orders.markKitchenTicketPrinted(req.printAgentRestaurantId, orderId);
+    const res = await this.orders.markKitchenTicketPrinted(req.printAgentRestaurantId, orderId);
+    this.ordersGateway.emitOrdersUpdated(req.printAgentRestaurantId);
+    return res;
   }
 
   @Get('pending-print-jobs')
@@ -122,3 +132,4 @@ export class PrintAgentController {
     };
   }
 }
+

@@ -8,7 +8,10 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
-import { PanelRootGuard } from '../infrastructure/panel-root.guard';
+import {
+  PanelRootGuard,
+  RequirePermissions,
+} from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
 import { InventoryCountsService } from '../application/inventory-counts.service';
@@ -20,11 +23,13 @@ export class InventoryCountsController {
   constructor(private readonly inventoryCounts: InventoryCountsService) {}
 
   @Get()
+  @RequirePermissions('inventory.view', 'inventory.count_adjust')
   list(@RestaurantId() restaurantId: string) {
     return this.inventoryCounts.list(restaurantId);
   }
 
   @Post()
+  @RequirePermissions('inventory.count_adjust')
   start(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { name: string },
@@ -33,6 +38,7 @@ export class InventoryCountsController {
   }
 
   @Post(':id/items')
+  @RequirePermissions('inventory.count_adjust')
   updateItem(
     @RestaurantId() restaurantId: string,
     @Param('id', ParseUUIDPipe) id: string,
@@ -47,6 +53,7 @@ export class InventoryCountsController {
   }
 
   @Post(':id/complete')
+  @RequirePermissions('inventory.count_adjust')
   complete(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { name: string },

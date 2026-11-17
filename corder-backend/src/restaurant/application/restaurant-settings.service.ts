@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -94,8 +94,14 @@ export class RestaurantSettingsService {
         'Monthly subscription payments are collected between the 25th and 30th of each month. Please include your business name in the wire transfer note.',
     };
 
-    const now = new Date();
-    const periodLabel = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/Istanbul',
+      month: '2-digit',
+      year: 'numeric',
+    }).formatToParts(new Date());
+    const month = parts.find((p) => p.type === 'month')?.value ?? '01';
+    const year = parts.find((p) => p.type === 'year')?.value ?? '2026';
+    const periodLabel = `${month}/${year}`;
     const suggestedTransferNote = `${r.name} - ${periodLabel} Monthly Subscription Fee`;
 
     return {
@@ -134,15 +140,21 @@ export class RestaurantSettingsService {
     if (!r) {
       throw new NotFoundException('Restaurant not found');
     }
-    if (dto.name !== undefined) r.name = dto.name;
-    if (dto.address !== undefined) r.address = (dto.address ?? null) as string;
-    if (dto.phone !== undefined) r.phone = (dto.phone ?? null) as string;
-    if (dto.taxId !== undefined) r.taxId = dto.taxId ?? null;
-    if (dto.whatsapp !== undefined) r.whatsapp = dto.whatsapp ?? null;
-    if (dto.instagram !== undefined) r.instagram = dto.instagram ?? null;
-    if (dto.facebook !== undefined) r.facebook = dto.facebook ?? null;
-    if (dto.website !== undefined) r.website = dto.website ?? null;
-    if (dto.workingHours !== undefined) r.workingHours = dto.workingHours ?? null;
+    if (dto.name !== undefined) {
+      const name = dto.name.trim();
+      if (!name) throw new BadRequestException('Restaurant name cannot be empty');
+      r.name = name;
+    }
+    if (dto.address !== undefined) r.address = (dto.address?.trim() || null) as string;
+    if (dto.phone !== undefined) r.phone = (dto.phone?.trim() || null) as string;
+    if (dto.taxId !== undefined) r.taxId = dto.taxId?.trim() || null;
+    if (dto.whatsapp !== undefined) r.whatsapp = dto.whatsapp?.trim() || null;
+    if (dto.instagram !== undefined) r.instagram = dto.instagram?.trim() || null;
+    if (dto.facebook !== undefined) r.facebook = dto.facebook?.trim() || null;
+    if (dto.website !== undefined) r.website = dto.website?.trim() || null;
+    if (dto.workingHours !== undefined) {
+      r.workingHours = dto.workingHours?.trim() || null;
+    }
     await this.repo.save(r);
     return this.get(restaurantId);
   }

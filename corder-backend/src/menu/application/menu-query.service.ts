@@ -5,6 +5,7 @@ import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 import { CategoryEntity } from '../../restaurant/domain/category.entity';
 import { ProductEntity } from '../../restaurant/domain/product.entity';
 import { CampaignEntity } from '../../restaurant/domain/campaign.entity';
+import { isRestaurantPaymentSuspended } from '../../restaurant/domain/services/billing-suspension.policy';
 
 export interface MenuProductRow {
   id: string;
@@ -50,6 +51,28 @@ export interface MenuBusinessDto {
   }[];
 }
 
+/**
+ * Checks whether a campaign's `validUntil` timestamp has not yet expired.
+ * If `validUntil` was stored as a date-only midnight UTC timestamp (`00:00:00.000Z`),
+ * it is treated as valid through the end of that calendar day in Europe/Istanbul (`23:59:59.999+03:00`).
+ */
+function isCampaignValidNow(validUntil: Date | null | undefined, now: Date): boolean {
+  if (!validUntil) return true;
+  const ts = validUntil.getTime();
+  if (Number.isNaN(ts)) return false;
+  if (
+    validUntil.getUTCHours() === 0 &&
+    validUntil.getUTCMinutes() === 0 &&
+    validUntil.getUTCSeconds() === 0 &&
+    validUntil.getUTCMilliseconds() === 0
+  ) {
+    // 00:00:00.000Z for YYYY-MM-DD -> end of day in Europe/Istanbul (UTC+3) is +20h 59m 59.999s
+    const endOfDayIstanbulMs = ts + (21 * 3600 * 1000 - 1);
+    return endOfDayIstanbulMs >= now.getTime();
+  }
+  return ts >= now.getTime();
+}
+
 @Injectable()
 export class MenuQueryService {
   constructor(
@@ -64,15 +87,30 @@ export class MenuQueryService {
   ) {}
 
   async getBusinessBySlug(slug: string | null): Promise<MenuBusinessDto> {
-    if (!slug?.trim()) throw new NotFoundException('restaurant query is required');
-    const restaurant = await this.restaurantRepo.findOne({ where: { slug: slug.trim(), status: 'active' } });
-    if (!restaurant) throw new NotFoundException('Business not found');
+    const normalizedSlug = slug?.trim();
+    if (!normalizedSlug) {
+      throw new NotFoundException('restaurant query is required');
+    }
+    const restaurant =
+      (await this.restaurantRepo.findOne({
+        where: { slug: normalizedSlug, status: 'active' },
+      })) ??
+      (await this.restaurantRepo.findOne({
+        where: { slug: normalizedSlug.toLowerCase(), status: 'active' },
+      }));
+    if (!restaurant || isRestaurantPaymentSuspended(restaurant)) {
+      throw new NotFoundException('Business not found');
+    }
     return this.buildMenuDto(restaurant, false);
   }
 
   async getTerminalMenuByRestaurantId(restaurantId: string): Promise<MenuBusinessDto> {
-    const restaurant = await this.restaurantRepo.findOne({ where: { id: restaurantId, status: 'active' } });
-    if (!restaurant) throw new NotFoundException('Business not found');
+    const restaurant = await this.restaurantRepo.findOne({
+      where: { id: restaurantId, status: 'active' },
+    });
+    if (!restaurant || isRestaurantPaymentSuspended(restaurant)) {
+      throw new NotFoundException('Business not found');
+    }
     return this.buildMenuDto(restaurant, true);
   }
 
@@ -85,33 +123,35 @@ export class MenuQueryService {
       order: { order: 'ASC', name: 'ASC' },
     });
 
-    /** Categories explicitly enabled for menu/terminal */
-    const baseVisible = new Set(
-      allCats
-        .filter((c) => (forTerminal ? c.showInTerminal : c.showInMenu))
-        .map((c) => c.id),
-    );
+    const catById = new Map(allCats.map((c) => [c.id, c]));
+    const isFlagEnabled = (c: CategoryEntity) =>
+      forTerminal ? Boolean(c.showInTerminal) : Boolean(c.showInMenu);
+
     /**
-     * Also include all descendants of those categories so subcategories stay in sync
-     * with the parent (a product under a subcategory was invisible if only the
-     * parent had showInMenu and the child did not).
+     * A category is visible if and only if its own flag (`showInMenu` / `showInTerminal`)
+     * is enabled AND all of its existing ancestor categories also have the flag enabled.
      */
-    const visible = new Set(baseVisible);
-    const addDescendants = (parentId: string) => {
-      for (const c of allCats) {
-        if (c.parentId === parentId && !visible.has(c.id)) {
-          visible.add(c.id);
-          addDescendants(c.id);
-        }
+    const isCategoryVisible = (c: CategoryEntity): boolean => {
+      let cur: CategoryEntity | undefined = c;
+      const visited = new Set<string>();
+      while (cur) {
+        if (visited.has(cur.id)) return false;
+        visited.add(cur.id);
+        if (!isFlagEnabled(cur)) return false;
+        cur = cur.parentId ? catById.get(cur.parentId) : undefined;
       }
+      return true;
     };
-    for (const id of baseVisible) addDescendants(id);
+
+    const visible = new Set(
+      allCats.filter(isCategoryVisible).map((c) => c.id),
+    );
 
     const roots = allCats
       .filter((c) => {
         if (!visible.has(c.id)) return false;
-        if (!c.parentId) return true;
-        return !visible.has(c.parentId);
+        if (!c.parentId || !catById.has(c.parentId)) return true;
+        return false;
       })
       .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
 
@@ -119,7 +159,9 @@ export class MenuQueryService {
     const walkCollect = (c: CategoryEntity) => {
       if (!visible.has(c.id)) return;
       idsForProducts.add(c.id);
-      const children = allCats.filter((x) => x.parentId === c.id && visible.has(x.id));
+      const children = allCats.filter(
+        (x) => x.parentId === c.id && visible.has(x.id),
+      );
       children.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
       for (const ch of children) walkCollect(ch);
     };
@@ -146,7 +188,9 @@ export class MenuQueryService {
         .filter((ch) => ch.parentId === c.id && visible.has(ch.id))
         .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
         .map(buildNode);
-      const catProducts = products.filter((p) => p.categoryId === c.id).map(mapProduct);
+      const catProducts = products
+        .filter((p) => p.categoryId === c.id)
+        .map(mapProduct);
       return {
         id: c.id,
         name: c.name,
@@ -158,10 +202,14 @@ export class MenuQueryService {
 
     const categories = roots.map(buildNode);
 
-    const campaigns = await this.campaignRepo.find({
+    const rawCampaigns = await this.campaignRepo.find({
       where: { restaurantId: restaurant.id, isActive: true },
       order: { order: 'ASC' },
     });
+    const now = new Date();
+    const activeCampaigns = rawCampaigns.filter((c) =>
+      isCampaignValidNow(c.validUntil, now),
+    );
 
     return {
       id: restaurant.id,
@@ -176,14 +224,16 @@ export class MenuQueryService {
       facebook: restaurant.facebook ?? undefined,
       website: restaurant.website ?? undefined,
       categories,
-      campaigns: campaigns.map((c) => ({
+      campaigns: activeCampaigns.map((c) => ({
         id: c.id,
         title: c.title,
         description: c.description ?? undefined,
         imageUrl: c.imageUrl,
         discountPercent: c.discountPercent ?? undefined,
-        originalPrice: c.originalPrice != null ? Number(c.originalPrice) : undefined,
-        discountedPrice: c.discountedPrice != null ? Number(c.discountedPrice) : undefined,
+        originalPrice:
+          c.originalPrice != null ? Number(c.originalPrice) : undefined,
+        discountedPrice:
+          c.discountedPrice != null ? Number(c.discountedPrice) : undefined,
         validUntil: c.validUntil?.toISOString(),
         isActive: c.isActive,
       })),

@@ -1,4 +1,6 @@
 import type {
+  AuditCategory,
+  AuditLogDto,
   BossOverviewResponse,
   BranchSummary,
   CatalogCategoryDto,
@@ -10,26 +12,75 @@ import type {
   StaffMemberDto,
   SubBossItemDto,
 } from "./types"
+import { localizeApiError } from "./format"
 
-const BASE = (import.meta.env.VITE_API_URL as string) ?? "http://localhost:4000"
+const rawEnvUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim()
+const BASE =
+  rawEnvUrl !== undefined ? rawEnvUrl.replace(/\/+$/, "") : "http://localhost:4000"
 
 const BOSS_TOKEN_KEY = "corder-boss-token"
 const BOSS_USER_KEY = "corder-boss-user"
 const BOSS_BRANCHES_KEY = "corder-boss-branches"
 const BOSS_ACTIVE_BRANCH_KEY = "corder-boss-active-branch"
 
+export const BOSS_UNAUTHORIZED_EVENT = "corder:boss-unauthorized"
+
+export interface StoredBossUser {
+  id: string
+  name: string
+  email: string
+  phone?: string | null
+  roleLabel: string
+  bossTier?: string
+  brandName?: string | null
+}
+
 export function getApiBase(): string {
   return BASE
 }
 
+export function isJwtExpired(token: string): boolean {
+  try {
+    const parts = token.split(".")
+    if (parts.length !== 3 || !parts[1]) return true
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/")
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=")
+    const payload = JSON.parse(atob(padded)) as { exp?: number; role?: string }
+    if (typeof payload.exp === "number" && payload.exp * 1000 <= Date.now()) {
+      return true
+    }
+    return false
+  } catch {
+    return true
+  }
+}
+
+export function notifyUnauthorized() {
+  clearBossSession()
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(BOSS_UNAUTHORIZED_EVENT))
+  }
+}
+
 export function getBossToken(): string | null {
   if (typeof window === "undefined") return null
-  return localStorage.getItem(BOSS_TOKEN_KEY)
+  const token = localStorage.getItem(BOSS_TOKEN_KEY)
+  if (!token) return null
+  if (isJwtExpired(token)) {
+    notifyUnauthorized()
+    return null
+  }
+  return token
+}
+
+export function setBossToken(accessToken: string) {
+  if (typeof window === "undefined") return
+  localStorage.setItem(BOSS_TOKEN_KEY, accessToken)
 }
 
 export function setBossSession(data: {
   accessToken: string
-  user: { id: string; name: string; email: string; phone?: string | null; roleLabel: string }
+  user: StoredBossUser
   restaurants: BranchSummary[]
   activeBranchId: string
 }) {
@@ -40,18 +91,12 @@ export function setBossSession(data: {
   localStorage.setItem(BOSS_ACTIVE_BRANCH_KEY, data.activeBranchId)
 }
 
-export function getStoredBossUser(): {
-  id: string
-  name: string
-  email: string
-  phone?: string | null
-  roleLabel: string
-} | null {
+export function getStoredBossUser(): StoredBossUser | null {
   if (typeof window === "undefined") return null
   const raw = localStorage.getItem(BOSS_USER_KEY)
   if (!raw) return null
   try {
-    return JSON.parse(raw)
+    return JSON.parse(raw) as StoredBossUser
   } catch {
     return null
   }
@@ -62,10 +107,15 @@ export function getStoredBranches(): BranchSummary[] {
   const raw = localStorage.getItem(BOSS_BRANCHES_KEY)
   if (!raw) return []
   try {
-    return JSON.parse(raw)
+    return JSON.parse(raw) as BranchSummary[]
   } catch {
     return []
   }
+}
+
+export function setStoredBranches(branches: BranchSummary[]) {
+  if (typeof window === "undefined") return
+  localStorage.setItem(BOSS_BRANCHES_KEY, JSON.stringify(branches))
 }
 
 export function getStoredActiveBranchId(): string | null {
@@ -86,13 +136,29 @@ export function clearBossSession() {
   localStorage.removeItem(BOSS_ACTIVE_BRANCH_KEY)
 }
 
+function extractErrorMessage(text: string, fallback: string): string {
+  let msg = text
+  try {
+    const json = JSON.parse(text) as { message?: string | string[] }
+    if (json.message) {
+      msg = Array.isArray(json.message) ? json.message.join(", ") : json.message
+    }
+  } catch {
+    // plain text body
+  }
+  return localizeApiError(msg || fallback)
+}
+
 async function bossFetch<T>(
   path: string,
   options: RequestInit = {},
   branchIdOverride?: string | null
 ): Promise<T> {
   const token = getBossToken()
-  if (!token) throw new Error("Oturum bulunamadı")
+  if (!token) {
+    notifyUnauthorized()
+    throw new Error("Oturum bulunamadı, lütfen tekrar giriş yapın.")
+  }
   const branchId = branchIdOverride ?? getStoredActiveBranchId()
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -109,22 +175,15 @@ async function bossFetch<T>(
     },
   })
   if (res.status === 401) {
-    clearBossSession()
-    throw new Error("Oturum süresi doldu, lütfen tekrar giriş yapın")
+    notifyUnauthorized()
+    throw new Error("Oturum süresi doldu, lütfen tekrar giriş yapın.")
   }
   if (!res.ok) {
     const text = await res.text()
-    let msg = text
-    try {
-      const json = JSON.parse(text)
-      if (json.message) {
-        msg = Array.isArray(json.message) ? json.message.join(", ") : json.message
-      }
-    } catch {}
-    throw new Error(msg || `HTTP ${res.status}`)
+    throw new Error(extractErrorMessage(text, `HTTP ${res.status}`))
   }
   if (res.status === 204) return undefined as T
-  return res.json()
+  return res.json() as Promise<T>
 }
 
 export const bossApi = {
@@ -137,12 +196,7 @@ export const bossApi = {
       })
       if (!res.ok) {
         const text = await res.text()
-        let msg = "E-posta veya parola hatalı"
-        try {
-          const json = JSON.parse(text)
-          if (json.message) msg = Array.isArray(json.message) ? json.message.join(", ") : json.message
-        } catch {}
-        throw new Error(msg)
+        throw new Error(extractErrorMessage(text, "E-posta veya parola hatalı."))
       }
       return res.json() as Promise<{
         accessToken: string
@@ -157,6 +211,8 @@ export const bossApi = {
           staffRole: string
           roleLabel: string
           isBoss: boolean
+          bossTier?: string
+          brandName?: string | null
         }
       }>
     },
@@ -173,8 +229,24 @@ export const bossApi = {
           staffRole: string
           roleLabel: string
           isBoss: boolean
+          bossTier?: string
+          brandName?: string | null
         }
       }>("/restaurant/auth/me")
+    },
+    async switchBranch(restaurantId: string) {
+      return bossFetch<{
+        accessToken: string
+        restaurant: BranchSummary
+        restaurants: BranchSummary[]
+      }>(
+        "/restaurant/auth/switch-branch",
+        {
+          method: "POST",
+          body: JSON.stringify({ restaurantId }),
+        },
+        restaurantId
+      )
     },
   },
   overview: {
@@ -214,7 +286,7 @@ export const bossApi = {
     },
     async unlinkSubBoss(subBossId: string, branchId: string) {
       return bossFetch<SubBossItemDto[]>(
-        `/restaurant/boss/sub-bosses/${subBossId}/branch/${branchId}`,
+        `/restaurant/boss/sub-bosses/${encodeURIComponent(subBossId)}/branch/${encodeURIComponent(branchId)}`,
         { method: "DELETE" }
       )
     },
@@ -244,20 +316,9 @@ export const bossApi = {
         maxDiscountAmount?: number | null
       }
     ) {
-      const payload = {
-        ...(body.key !== undefined ? { key: body.key } : {}),
-        name: body.name,
-        ...(body.description !== undefined ? { description: body.description } : {}),
-        ...(body.color !== undefined ? { color: body.color } : {}),
-        ...(body.canAccessPanel !== undefined ? { canAccessPanel: body.canAccessPanel } : {}),
-        ...(body.canAccessTerminal !== undefined ? { canAccessTerminal: body.canAccessTerminal } : {}),
-        permissions: body.permissions,
-        ...(body.maxDiscountPercent !== undefined ? { maxDiscountPercent: body.maxDiscountPercent } : {}),
-        ...(body.maxDiscountAmount !== undefined ? { maxDiscountAmount: body.maxDiscountAmount } : {}),
-      }
       return bossFetch<RoleDefinition>(
         "/restaurant/roles",
-        { method: "POST", body: JSON.stringify(payload) },
+        { method: "POST", body: JSON.stringify(body) },
         branchId
       )
     },
@@ -275,19 +336,9 @@ export const bossApi = {
         maxDiscountAmount?: number | null
       }
     ) {
-      const payload = {
-        ...(body.name !== undefined ? { name: body.name } : {}),
-        ...(body.description !== undefined ? { description: body.description } : {}),
-        ...(body.color !== undefined ? { color: body.color } : {}),
-        ...(body.canAccessPanel !== undefined ? { canAccessPanel: body.canAccessPanel } : {}),
-        ...(body.canAccessTerminal !== undefined ? { canAccessTerminal: body.canAccessTerminal } : {}),
-        ...(body.permissions !== undefined ? { permissions: body.permissions } : {}),
-        ...(body.maxDiscountPercent !== undefined ? { maxDiscountPercent: body.maxDiscountPercent } : {}),
-        ...(body.maxDiscountAmount !== undefined ? { maxDiscountAmount: body.maxDiscountAmount } : {}),
-      }
       return bossFetch<RoleDefinition>(
         `/restaurant/roles/${encodeURIComponent(idOrKey)}`,
-        { method: "PUT", body: JSON.stringify(payload) },
+        { method: "PUT", body: JSON.stringify(body) },
         branchId
       )
     },
@@ -321,33 +372,16 @@ export const bossApi = {
         pin?: string
         canAccessPanel?: boolean
         canAccessTerminal?: boolean
+        permissionsOverride?: string[] | null
         grantedPermissions?: string[]
         revokedPermissions?: string[]
         maxDiscountPercentOverride?: number | null
         maxDiscountAmountOverride?: number | null
       }
     ) {
-      const payload = {
-        name: body.name,
-        role: body.role,
-        ...(body.phone !== undefined ? { phone: body.phone } : {}),
-        ...(body.email !== undefined ? { email: body.email } : {}),
-        ...(body.password !== undefined ? { password: body.password } : {}),
-        ...(body.pin !== undefined ? { pin: body.pin } : {}),
-        ...(body.canAccessPanel !== undefined ? { canAccessPanel: body.canAccessPanel } : {}),
-        ...(body.canAccessTerminal !== undefined ? { canAccessTerminal: body.canAccessTerminal } : {}),
-        ...(body.grantedPermissions !== undefined ? { grantedPermissions: body.grantedPermissions } : {}),
-        ...(body.revokedPermissions !== undefined ? { revokedPermissions: body.revokedPermissions } : {}),
-        ...(body.maxDiscountPercentOverride !== undefined
-          ? { maxDiscountPercentOverride: body.maxDiscountPercentOverride }
-          : {}),
-        ...(body.maxDiscountAmountOverride !== undefined
-          ? { maxDiscountAmountOverride: body.maxDiscountAmountOverride }
-          : {}),
-      }
       return bossFetch<StaffMemberDto>(
         "/restaurant/staff",
-        { method: "POST", body: JSON.stringify(payload) },
+        { method: "POST", body: JSON.stringify(body) },
         branchId
       )
     },
@@ -364,41 +398,46 @@ export const bossApi = {
         isActive?: boolean
         canAccessPanel?: boolean
         canAccessTerminal?: boolean
+        permissionsOverride?: string[] | null
         grantedPermissions?: string[]
         revokedPermissions?: string[]
         maxDiscountPercentOverride?: number | null
         maxDiscountAmountOverride?: number | null
       }
     ) {
-      const payload = {
-        ...(body.name !== undefined ? { name: body.name } : {}),
-        ...(body.role !== undefined ? { role: body.role } : {}),
-        ...(body.phone !== undefined ? { phone: body.phone } : {}),
-        ...(body.email !== undefined ? { email: body.email } : {}),
-        ...(body.password !== undefined ? { password: body.password } : {}),
-        ...(body.pin !== undefined ? { pin: body.pin } : {}),
-        ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
-        ...(body.canAccessPanel !== undefined ? { canAccessPanel: body.canAccessPanel } : {}),
-        ...(body.canAccessTerminal !== undefined ? { canAccessTerminal: body.canAccessTerminal } : {}),
-        ...(body.grantedPermissions !== undefined ? { grantedPermissions: body.grantedPermissions } : {}),
-        ...(body.revokedPermissions !== undefined ? { revokedPermissions: body.revokedPermissions } : {}),
-        ...(body.maxDiscountPercentOverride !== undefined
-          ? { maxDiscountPercentOverride: body.maxDiscountPercentOverride }
-          : {}),
-        ...(body.maxDiscountAmountOverride !== undefined
-          ? { maxDiscountAmountOverride: body.maxDiscountAmountOverride }
-          : {}),
-      }
       return bossFetch<StaffMemberDto>(
-        `/restaurant/staff/${id}`,
-        { method: "PUT", body: JSON.stringify(payload) },
+        `/restaurant/staff/${encodeURIComponent(id)}`,
+        { method: "PUT", body: JSON.stringify(body) },
         branchId
       )
     },
     async remove(branchId: string, id: string) {
       return bossFetch<void>(
-        `/restaurant/staff/${id}`,
+        `/restaurant/staff/${encodeURIComponent(id)}`,
         { method: "DELETE" },
+        branchId
+      )
+    },
+  },
+  auditLogs: {
+    async list(
+      branchId: string,
+      params?: {
+        category?: AuditCategory
+        limit?: number
+        from?: string
+        to?: string
+      }
+    ) {
+      const qs = new URLSearchParams()
+      if (params?.category) qs.set("category", params.category)
+      if (params?.limit) qs.set("limit", String(params.limit))
+      if (params?.from) qs.set("from", params.from)
+      if (params?.to) qs.set("to", params.to)
+      const query = qs.toString()
+      return bossFetch<AuditLogDto[]>(
+        `/restaurant/audit-logs${query ? `?${query}` : ""}`,
+        {},
         branchId
       )
     },
@@ -421,17 +460,11 @@ export const bossApi = {
       productId: string,
       body: { price?: number; inStock?: boolean; name?: string }
     ) {
-      const payload = {
-        ...(body.price !== undefined ? { price: body.price } : {}),
-        ...(body.inStock !== undefined ? { inStock: body.inStock } : {}),
-        ...(body.name !== undefined ? { name: body.name } : {}),
-      }
       return bossFetch<CatalogProductDto>(
-        `/restaurant/products/${productId}`,
-        { method: "PUT", body: JSON.stringify(payload) },
+        `/restaurant/products/${encodeURIComponent(productId)}`,
+        { method: "PUT", body: JSON.stringify(body) },
         branchId
       )
     },
   },
 }
-

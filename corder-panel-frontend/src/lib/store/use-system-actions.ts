@@ -23,6 +23,8 @@ function mapStaffDtoToPanelUser(dto: {
   role: string
   roleLabel?: string
   roleColor?: string
+  hasPin?: boolean
+  hasPassword?: boolean
   canAccessPanel?: boolean
   canAccessTerminal?: boolean
   permissions?: string[]
@@ -42,6 +44,8 @@ function mapStaffDtoToPanelUser(dto: {
     role: dto.role,
     roleLabel: dto.roleLabel,
     roleColor: dto.roleColor,
+    hasPin: dto.hasPin,
+    hasPassword: dto.hasPassword,
     canAccessPanel: dto.canAccessPanel,
     canAccessTerminal: dto.canAccessTerminal,
     permissions: dto.permissions,
@@ -66,27 +70,29 @@ export function useSystemActions(params: {
   setBranches: StateSetter<Branch[]>
   setPrinters: StateSetter<PrinterConfig[]>
   setPrinterDepartments: StateSetter<PrinterDepartment[]>
+  switchBusiness?: (branchId: string) => Promise<void>
 }) {
   const {
-    token, currentUser, printers,
-    setUsers, setSettings, setNotifications, setAuditLogs,
-    setBranches, setPrinters, setPrinterDepartments,
+    token,
+    currentUser,
+    printers,
+    setUsers,
+    setSettings,
+    setNotifications,
+    setAuditLogs,
+    setBranches,
+    setPrinters,
+    setPrinterDepartments,
+    switchBusiness,
   } = params
 
   const addAuditLog = useCallback(
     (log: Omit<AuditLog, "id" | "createdAt">) => {
-      setAuditLogs((prev) =>
-        [{ ...log, id: genId("al"), createdAt: new Date() }, ...prev].slice(0, 1000),
-      )
+      setAuditLogs((prev) => [{ ...log, id: genId("al"), createdAt: new Date() }, ...prev].slice(0, 1000))
       if (!token) return
       api.technical
-        .createAuditLog(token, {
-          action: log.action,
-          category: log.category,
-          details: log.details,
-          metadata: log.metadata,
-        })
-        .catch(() => { })
+        .createAuditLog(token, { action: log.action, category: log.category, details: log.details, metadata: log.metadata })
+        .catch(() => {})
     },
     [token, setAuditLogs],
   )
@@ -125,12 +131,8 @@ export function useSystemActions(params: {
           canAccessTerminal: u.canAccessTerminal,
           ...(u.grantedPermissions !== undefined ? { grantedPermissions: u.grantedPermissions } : {}),
           ...(u.revokedPermissions !== undefined ? { revokedPermissions: u.revokedPermissions } : {}),
-          ...(u.maxDiscountPercentOverride !== undefined
-            ? { maxDiscountPercentOverride: u.maxDiscountPercentOverride }
-            : {}),
-          ...(u.maxDiscountAmountOverride !== undefined
-            ? { maxDiscountAmountOverride: u.maxDiscountAmountOverride }
-            : {}),
+          ...(u.maxDiscountPercentOverride !== undefined ? { maxDiscountPercentOverride: u.maxDiscountPercentOverride } : {}),
+          ...(u.maxDiscountAmountOverride !== undefined ? { maxDiscountAmountOverride: u.maxDiscountAmountOverride } : {}),
         })
         .then((created) => {
           setUsers((prev) => [...prev, mapStaffDtoToPanelUser(created)])
@@ -150,21 +152,7 @@ export function useSystemActions(params: {
   const updateUser = useCallback(
     (id: string, data: Partial<PanelUser>) => {
       if (!token) return
-      const payload: {
-        name?: string
-        pin?: string
-        role?: string
-        phone?: string
-        email?: string | null
-        password?: string
-        isActive?: boolean
-        canAccessPanel?: boolean
-        canAccessTerminal?: boolean
-        grantedPermissions?: string[]
-        revokedPermissions?: string[]
-        maxDiscountPercentOverride?: number | null
-        maxDiscountAmountOverride?: number | null
-      } = {}
+      const payload: Record<string, unknown> = {}
       if (data.name != null) payload.name = data.name.trim()
       if (data.pin != null && data.pin.trim() !== "") payload.pin = data.pin.trim()
       if (data.role != null && data.role !== "root") payload.role = data.role
@@ -174,21 +162,22 @@ export function useSystemActions(params: {
       if (data.active !== undefined) payload.isActive = data.active
       if (data.canAccessPanel !== undefined) payload.canAccessPanel = data.canAccessPanel
       if (data.canAccessTerminal !== undefined) payload.canAccessTerminal = data.canAccessTerminal
-      if (data.grantedPermissions !== undefined) payload.grantedPermissions = data.grantedPermissions
-      if (data.revokedPermissions !== undefined) payload.revokedPermissions = data.revokedPermissions
-      if (data.maxDiscountPercentOverride !== undefined) {
-        payload.maxDiscountPercentOverride = data.maxDiscountPercentOverride
+      if (data.grantedPermissions !== undefined) {
+        payload.grantedPermissions = data.grantedPermissions
+        payload.permissionsOverride = null
       }
-      if (data.maxDiscountAmountOverride !== undefined) {
-        payload.maxDiscountAmountOverride = data.maxDiscountAmountOverride
+      if (data.revokedPermissions !== undefined) {
+        payload.revokedPermissions = data.revokedPermissions
+        payload.permissionsOverride = null
       }
+      if (data.maxDiscountPercentOverride !== undefined) payload.maxDiscountPercentOverride = data.maxDiscountPercentOverride
+      if (data.maxDiscountAmountOverride !== undefined) payload.maxDiscountAmountOverride = data.maxDiscountAmountOverride
+
       api.staff
         .update(token, id, payload)
         .then((updated) => {
           setUsers((prev) =>
-            prev.map((u) =>
-              u.id === id ? { ...u, ...mapStaffDtoToPanelUser(updated), createdAt: u.createdAt } : u,
-            ),
+            prev.map((u) => (u.id === id ? { ...u, ...mapStaffDtoToPanelUser(updated), createdAt: u.createdAt } : u)),
           )
           logActivity({
             action: "staff_updated",
@@ -210,12 +199,7 @@ export function useSystemActions(params: {
         .delete(token, id)
         .then(() => {
           setUsers((prev) => prev.filter((u) => u.id !== id))
-          logActivity({
-            action: "staff_deleted",
-            category: "user",
-            details: `Kullanıcı silindi: ${id}`,
-            metadata: { userId: id },
-          })
+          logActivity({ action: "staff_deleted", category: "user", details: `Kullanıcı silindi: ${id}`, metadata: { userId: id } })
           showPanelToast("Kullanıcı silindi", "info")
         })
         .catch((err) => showPanelToast(err instanceof Error ? err.message : "Kullanıcı silinemedi", "error"))
@@ -227,8 +211,7 @@ export function useSystemActions(params: {
     (s: Partial<RestaurantSettings>) => {
       setSettings((prev) => ({ ...prev, ...s }))
       const appearanceFields = ["fontSize", "tableCardSize", "showProductImages", "quickActionsEnabled", "sidebarCollapsed"] as const
-      const hasAppearanceField = appearanceFields.some((k) => s[k] !== undefined)
-      if (hasAppearanceField) {
+      if (appearanceFields.some((k) => s[k] !== undefined)) {
         saveAppearanceSettings(s)
         if (s.fontSize !== undefined || s.tableCardSize !== undefined || s.showProductImages !== undefined || s.quickActionsEnabled !== undefined) {
           showPanelToast("Görünüm ayarları kaydedildi", "success")
@@ -236,27 +219,21 @@ export function useSystemActions(params: {
       }
       if (!token) return
       const serverFields = ["name", "address", "phone", "taxId", "whatsapp", "instagram", "facebook", "website", "workingHours"] as const
-      const hasServerField = serverFields.some((k) => s[k] !== undefined)
-      if (!hasServerField) return
+      if (!serverFields.some((k) => s[k] !== undefined)) return
       api.restaurant
         .updateSettings(token, {
           ...(s.name?.trim() ? { name: s.name.trim() } : {}),
-          address: s.address,
-          phone: s.phone,
-          taxId: s.taxId,
-          whatsapp: s.whatsapp,
-          instagram: s.instagram,
-          facebook: s.facebook,
-          website: s.website,
-          workingHours: s.workingHours,
+          address: s.address ?? null,
+          phone: s.phone ?? null,
+          taxId: s.taxId ?? null,
+          whatsapp: s.whatsapp ?? null,
+          instagram: s.instagram ?? null,
+          facebook: s.facebook ?? null,
+          website: s.website ?? null,
+          workingHours: s.workingHours ?? null,
         })
         .then(() => {
-          logActivity({
-            action: "settings_updated",
-            category: "settings",
-            details: "Restoran ayarları güncellendi",
-            metadata: { fields: Object.keys(s) },
-          })
+          logActivity({ action: "settings_updated", category: "settings", details: "Restoran ayarları güncellendi", metadata: { fields: Object.keys(s) } })
           showPanelToast("Ayarlar kaydedildi", "success")
         })
         .catch((err) => showPanelToast(err instanceof Error ? err.message : "Ayarlar güncellenemedi", "error"))
@@ -273,17 +250,14 @@ export function useSystemActions(params: {
     },
     [setNotifications],
   )
-  const markAllNotificationsRead = useCallback(
-    () => {
-      setNotifications((prev) => {
-        const readSet = getReadNotifIds()
-        prev.forEach((n) => readSet.add(n.id))
-        saveReadNotifIds(readSet)
-        return prev.map((n) => ({ ...n, read: true }))
-      })
-    },
-    [setNotifications],
-  )
+  const markAllNotificationsRead = useCallback(() => {
+    setNotifications((prev) => {
+      const readSet = getReadNotifIds()
+      prev.forEach((n) => readSet.add(n.id))
+      saveReadNotifIds(readSet)
+      return prev.map((n) => ({ ...n, read: true }))
+    })
+  }, [setNotifications])
   const addNotification = useCallback(
     (n: Omit<PanelNotification, "id" | "createdAt" | "read">) =>
       setNotifications((prev) => [{ ...n, id: genId("n"), createdAt: new Date(), read: false }, ...prev]),
@@ -294,23 +268,17 @@ export function useSystemActions(params: {
   const switchBranch = useCallback(
     (id: string) => {
       setBranches((prev) => prev.map((b) => ({ ...b, isCurrent: b.id === id })))
+      if (switchBusiness) void switchBusiness(id)
       logActivity({ action: "branch_switched", category: "settings", details: `Şube değiştirildi: ${id}`, metadata: { branchId: id } })
     },
-    [setBranches, logActivity],
+    [setBranches, switchBusiness, logActivity],
   )
-  const addBranch = useCallback(
-    (b: Omit<Branch, "id">) => {
-      setBranches((prev) => [...prev, { ...b, id: genId("br") }])
-      logActivity({ action: "branch_created", category: "settings", details: `Şube eklendi: ${b.name}` })
-    },
-    [setBranches, logActivity],
-  )
+  const addBranch = useCallback((_b: Omit<Branch, "id">) => {
+    showPanelToast("Yeni şube açılışı yalnızca Platform Yönetimi üzerinden yapılır.", "info")
+  }, [])
   const updateBranch = useCallback(
-    (id: string, data: Partial<Branch>) => {
-      setBranches((prev) => prev.map((b) => (b.id === id ? { ...b, ...data } : b)))
-      logActivity({ action: "branch_updated", category: "settings", details: `Şube güncellendi: ${id}`, metadata: { branchId: id, fields: Object.keys(data) } })
-    },
-    [setBranches, logActivity],
+    (id: string, data: Partial<Branch>) => setBranches((prev) => prev.map((b) => (b.id === id ? { ...b, ...data } : b))),
+    [setBranches],
   )
 
   const addPrinter = useCallback(
@@ -318,21 +286,37 @@ export function useSystemActions(params: {
       if (!token) return
       api.technical
         .createPrinter(token, {
-          name: p.name, type: p.type, connection: p.connection,
-          ipAddress: p.ipAddress, port: p.port, department: p.department,
-          paperWidth: p.paperWidth, autoCut: p.autoCut,
+          name: p.name.trim(),
+          type: p.type,
+          connection: p.connection,
+          ipAddress: p.ipAddress?.trim() || undefined,
+          port: p.port,
+          department: p.department?.trim() || undefined,
+          paperWidth: p.paperWidth,
+          autoCut: p.autoCut,
         })
         .then((created) => {
           setPrinters((prev) => [
             ...prev,
             {
-              id: created.id, name: created.name, type: created.type, connection: created.connection,
-              ipAddress: created.ipAddress ?? undefined, port: created.port ?? undefined,
-              department: created.department ?? undefined, status: created.status,
-              paperWidth: created.paperWidth === 58 ? 58 : 80, autoCut: created.autoCut,
+              id: created.id,
+              name: created.name,
+              type: created.type,
+              connection: created.connection,
+              ipAddress: created.ipAddress ?? undefined,
+              port: created.port ?? undefined,
+              department: created.department ?? undefined,
+              status: created.status,
+              paperWidth: created.paperWidth === 58 ? 58 : 80,
+              autoCut: created.autoCut,
             },
           ])
-          logActivity({ action: "printer_created", category: "settings", details: `Yazıcı eklendi: ${created.name}`, metadata: { printerId: created.id, type: created.type, connection: created.connection } })
+          logActivity({
+            action: "printer_created",
+            category: "settings",
+            details: `Yazıcı eklendi: ${created.name}`,
+            metadata: { printerId: created.id, type: created.type, connection: created.connection },
+          })
           showPanelToast(`Yazıcı eklendi: ${created.name}`, "success")
         })
         .catch((err) => showPanelToast(err instanceof Error ? err.message : "Yazıcı eklenemedi", "error"))
@@ -345,14 +329,36 @@ export function useSystemActions(params: {
       if (!token) return
       api.technical
         .updatePrinter(token, id, {
-          name: data.name, type: data.type, connection: data.connection,
-          ipAddress: data.ipAddress ?? null, port: data.port ?? null,
-          department: data.department ?? null, status: data.status,
-          paperWidth: data.paperWidth, autoCut: data.autoCut,
+          name: data.name,
+          type: data.type,
+          connection: data.connection,
+          ipAddress: data.ipAddress !== undefined ? (data.ipAddress || null) : undefined,
+          port: data.port !== undefined ? (data.port ?? null) : undefined,
+          department: data.department !== undefined ? (data.department || null) : undefined,
+          status: data.status,
+          paperWidth: data.paperWidth,
+          autoCut: data.autoCut,
         })
-        .then(() => {
-          setPrinters((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p)))
-          logActivity({ action: "printer_updated", category: "settings", details: `Yazıcı güncellendi: ${id}`, metadata: { printerId: id, fields: Object.keys(data) } })
+        .then((updated) => {
+          setPrinters((prev) =>
+            prev.map((p) =>
+              p.id === id
+                ? {
+                    id: updated.id,
+                    name: updated.name,
+                    type: updated.type,
+                    connection: updated.connection,
+                    ipAddress: updated.ipAddress ?? undefined,
+                    port: updated.port ?? undefined,
+                    department: updated.department ?? undefined,
+                    status: updated.status,
+                    paperWidth: updated.paperWidth === 58 ? 58 : 80,
+                    autoCut: updated.autoCut,
+                  }
+                : p,
+            ),
+          )
+          logActivity({ action: "printer_updated", category: "settings", details: `Yazıcı güncellendi: ${updated.name}`, metadata: { printerId: id } })
           showPanelToast("Yazıcı güncellendi", "success")
         })
         .catch((err) => showPanelToast(err instanceof Error ? err.message : "Yazıcı güncellenemedi", "error"))
@@ -379,8 +385,6 @@ export function useSystemActions(params: {
     (id: string) => {
       const pr = printers.find((p) => p.id === id)
       if (!pr || !token) return
-      setPrinters((prev) => prev.map((p) => (p.id === id ? { ...p, status: "online" } : p)))
-      void api.technical.updatePrinter(token, id, { status: "online" }).catch(() => { })
       void api.orders
         .printReceipt(token, {
           tableName: "YAZICI TEST",
@@ -388,9 +392,13 @@ export function useSystemActions(params: {
           items: [{ productName: `${pr.name} Test Baskısı`, quantity: 1, price: 0 }],
           total: 0,
         })
-        .catch(() => { })
-      logActivity({ action: "printer_tested", category: "settings", details: `Yazıcı test edildi: ${pr.name}`, metadata: { printerId: id } })
-      showPanelToast(`${pr.name} test bağlantısı başarılı`, "success")
+        .then(() => {
+          setPrinters((prev) => prev.map((p) => (p.id === id ? { ...p, status: "online" } : p)))
+          void api.technical.updatePrinter(token, id, { status: "online" }).catch(() => {})
+          logActivity({ action: "printer_tested", category: "settings", details: `Yazıcı test edildi: ${pr.name}`, metadata: { printerId: id } })
+          showPanelToast(`${pr.name} test baskısı kuyruğa gönderildi`, "success")
+        })
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Test baskısı gönderilemedi", "error"))
     },
     [printers, token, currentUser?.name, setPrinters, logActivity],
   )
@@ -410,9 +418,25 @@ export function useSystemActions(params: {
   )
 
   return {
-    addAuditLog, logActivity, addUser, updateUser, deleteUser, updateSettings,
-    markNotificationRead, markAllNotificationsRead, addNotification, clearAllNotifications,
-    switchBranch, addBranch, updateBranch, addPrinter, updatePrinter, deletePrinter,
-    testPrinter, addPrinterDepartment, updatePrinterDepartment, deletePrinterDepartment,
+    addAuditLog,
+    logActivity,
+    addUser,
+    updateUser,
+    deleteUser,
+    updateSettings,
+    markNotificationRead,
+    markAllNotificationsRead,
+    addNotification,
+    clearAllNotifications,
+    switchBranch,
+    addBranch,
+    updateBranch,
+    addPrinter,
+    updatePrinter,
+    deletePrinter,
+    testPrinter,
+    addPrinterDepartment,
+    updatePrinterDepartment,
+    deletePrinterDepartment,
   }
 }

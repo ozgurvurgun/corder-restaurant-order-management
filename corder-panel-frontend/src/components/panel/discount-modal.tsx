@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react"
-import { X, Percent, DollarSign, Gift, ShieldAlert } from "lucide-react"
+import { X, Percent, DollarSign, Gift, ShieldAlert, Loader2 } from "lucide-react"
 import { usePanelStore } from "@/lib/panel-store"
 import { usePanelAuth } from "@/lib/panel-auth"
 import type { PanelDiscountType } from "@/lib/panel-types"
+import { computeDiscountMinorUnits, formatCurrency, fromMinorUnits, toMinorUnits } from "@/lib/format"
 import { usePanelToast } from "./panel-toast"
 
 interface DiscountModalProps {
@@ -21,10 +22,6 @@ const REASONS = [
   { id: "loyalty", label: "Sadık Müşteri" },
   { id: "other", label: "Diğer" },
 ]
-
-function formatCurrency(n: number) {
-  return n.toLocaleString("tr-TR", { minimumFractionDigits: 2 })
-}
 
 export default function DiscountModal({
   tableId,
@@ -75,14 +72,13 @@ export default function DiscountModal({
       (discountType === "amount" && maxAmt != null && value > maxAmt) ||
       (discountType === "complimentary" && !canComplimentary))
 
-  const calculatedDiscount =
-    discountType === "percent"
-      ? (total * Math.min(100, Math.max(0, value))) / 100
-      : discountType === "complimentary"
-        ? total
-        : Math.max(0, value)
-
-  const finalTotal = Math.max(0, total - calculatedDiscount)
+  const rawMinorUnits = toMinorUnits(total)
+  const discountMinorUnits = computeDiscountMinorUnits(rawMinorUnits, {
+    type: discountType,
+    value: discountType === "complimentary" ? 100 : value,
+  })
+  const calculatedDiscount = fromMinorUnits(discountMinorUnits)
+  const finalTotal = fromMinorUnits(Math.max(0, rawMinorUnits - discountMinorUnits))
 
   const reasonText =
     selectedReason === "other"
@@ -95,7 +91,7 @@ export default function DiscountModal({
     (discountType !== "complimentary" && (!Number.isFinite(value) || value <= 0)) ||
     (discountType === "percent" && value > 100)
 
-  const handleApply = () => {
+  const handleApply = async () => {
     if (isSubmitting || submittingRef.current) return
     if (isExceedingLimit) {
       showToast("Girilen indirim yetki limitinizi aşıyor!", "error")
@@ -113,24 +109,30 @@ export default function DiscountModal({
     setIsSubmitting(true)
     const discountValue = discountType === "complimentary" ? 100 : value
 
-    applyDiscount(tableId, {
-      type: discountType,
-      value: discountValue,
-      reason: reasonText,
-    })
+    try {
+      const ok = await applyDiscount(tableId, {
+        type: discountType,
+        value: discountValue,
+        reason: reasonText,
+      })
+      if (!ok) return
 
-    const discountText =
-      discountType === "percent"
-        ? `%${value}`
-        : discountType === "complimentary"
-          ? "Tam İkram"
-          : `${formatCurrency(value)} TL`
+      const discountText =
+        discountType === "percent"
+          ? `%${value}`
+          : discountType === "complimentary"
+            ? "Tam İkram"
+            : `${formatCurrency(value)} TL`
 
-    showToast(
-      `${table?.name}: ${discountText} indirim uygulandı. Yeni toplam: ${formatCurrency(finalTotal)} TL`,
-      "success",
-    )
-    onClose()
+      showToast(
+        `${table?.name}: ${discountText} indirim uygulandı. Yeni toplam: ${formatCurrency(finalTotal)} TL`,
+        "success",
+      )
+      onClose()
+    } finally {
+      submittingRef.current = false
+      setIsSubmitting(false)
+    }
   }
 
   const handlePresetClick = (preset: number) => {
@@ -166,8 +168,9 @@ export default function DiscountModal({
           </div>
           <button
             type="button"
+            disabled={isSubmitting}
             onClick={onClose}
-            className="p-1.5 hover:bg-[#f5f5f7] rounded-lg transition-colors"
+            className="p-1.5 hover:bg-[#f5f5f7] rounded-lg transition-colors disabled:opacity-50"
           >
             <X className="h-5 w-5 text-[#86868b]" />
           </button>
@@ -183,7 +186,7 @@ export default function DiscountModal({
               <button
                 key={type}
                 type="button"
-                disabled={!allowed}
+                disabled={!allowed || isSubmitting}
                 onClick={() => {
                   setDiscountType(type)
                   setValue(0)
@@ -218,7 +221,7 @@ export default function DiscountModal({
                     <button
                       key={preset}
                       type="button"
-                      disabled={disabledPreset}
+                      disabled={disabledPreset || isSubmitting}
                       onClick={() => handlePresetClick(preset)}
                       className={`py-2.5 rounded-lg text-[15px] font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
                         value === preset && !customValue
@@ -235,6 +238,7 @@ export default function DiscountModal({
                 type="number"
                 min={0}
                 max={discountType === "percent" ? 100 : undefined}
+                disabled={isSubmitting}
                 value={customValue}
                 onChange={handleCustomChange}
                 placeholder="Özel tutar girin..."
@@ -244,7 +248,7 @@ export default function DiscountModal({
                 <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-[12px] font-medium text-red-600">
                   <ShieldAlert className="h-4 w-4 flex-shrink-0" />
                   <span>
-                    Bu indirim oranı/tutarı Boss tarafından tanımlanan yetki limitinizi aşıyor.
+                    Bu indirim oranı/tutarı tanımlanan yetki limitinizi aşıyor.
                   </span>
                 </div>
               )}
@@ -260,6 +264,7 @@ export default function DiscountModal({
                 <button
                   key={reason.id}
                   type="button"
+                  disabled={isSubmitting}
                   onClick={() => setSelectedReason(reason.id)}
                   className={`py-2.5 px-3 rounded-lg text-[14px] font-medium transition-all text-left ${
                     selectedReason === reason.id
@@ -274,6 +279,7 @@ export default function DiscountModal({
             {selectedReason === "other" && (
               <input
                 type="text"
+                disabled={isSubmitting}
                 value={customReason}
                 onChange={(e) => setCustomReason(e.target.value)}
                 placeholder="Neden yazın..."
@@ -301,18 +307,19 @@ export default function DiscountModal({
         <div className="flex gap-3 px-5 py-4 border-t border-[#e5e5ea]">
           <button
             type="button"
+            disabled={isSubmitting}
             onClick={onClose}
-            className="flex-1 py-3 rounded-xl text-[15px] font-semibold bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e5e5ea] transition-colors"
+            className="flex-1 py-3 rounded-xl text-[15px] font-semibold bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e5e5ea] transition-colors disabled:opacity-50"
           >
             İptal
           </button>
           <button
             type="button"
-            onClick={handleApply}
+            onClick={() => void handleApply()}
             disabled={isSubmitting || isInvalidInput}
-            className="flex-1 py-3 rounded-xl text-[15px] font-semibold bg-[#e63462] text-white hover:bg-[#d42d58] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 py-3 rounded-xl text-[15px] font-semibold bg-[#e63462] text-white hover:bg-[#d42d58] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            İndirimi Uygula
+            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "İndirimi Uygula"}
           </button>
         </div>
       </div>

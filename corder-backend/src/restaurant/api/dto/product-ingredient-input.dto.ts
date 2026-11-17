@@ -1,5 +1,4 @@
-import { Type } from 'class-transformer';
-import { IsNumber, IsUUID, Min } from 'class-validator';
+import { IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min } from 'class-validator';
 
 export class ProductIngredientInputDto {
   @IsUUID()
@@ -8,4 +7,9 @@ export class ProductIngredientInputDto {
   @IsNumber()
   @Min(0.000001)
   quantity: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  unit?: string;
 }

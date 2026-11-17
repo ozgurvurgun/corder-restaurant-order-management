@@ -5,7 +5,7 @@ export class BillingAndInventorySchema1760000001000 implements MigrationInterfac
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
-      CREATE TABLE "cash_shifts" (
+      CREATE TABLE IF NOT EXISTS "cash_shifts" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "restaurant_id" uuid NOT NULL,
         "opened_by" character varying(255) NOT NULL,
@@ -28,12 +28,12 @@ export class BillingAndInventorySchema1760000001000 implements MigrationInterfac
         CONSTRAINT "FK_cash_shifts_restaurant" FOREIGN KEY ("restaurant_id") REFERENCES "restaurants"("id") ON DELETE CASCADE
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_cash_shifts_restaurant_id" ON "cash_shifts" ("restaurant_id")`);
-    await queryRunner.query(`CREATE INDEX "IDX_cash_shifts_restaurant_status" ON "cash_shifts" ("restaurant_id", "status")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_cash_shifts_restaurant_id" ON "cash_shifts" ("restaurant_id")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_cash_shifts_restaurant_status" ON "cash_shifts" ("restaurant_id", "status")`);
     await queryRunner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "IDX_cash_shifts_one_open_per_restaurant" ON "cash_shifts" ("restaurant_id") WHERE "status" = 'open'`);
 
     await queryRunner.query(`
-      CREATE TABLE "cash_transactions" (
+      CREATE TABLE IF NOT EXISTS "cash_transactions" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "restaurant_id" uuid NOT NULL,
         "shift_id" uuid NOT NULL,
@@ -48,11 +48,11 @@ export class BillingAndInventorySchema1760000001000 implements MigrationInterfac
         CONSTRAINT "FK_cash_transactions_shift" FOREIGN KEY ("shift_id") REFERENCES "cash_shifts"("id") ON DELETE CASCADE
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_cash_transactions_restaurant_id" ON "cash_transactions" ("restaurant_id")`);
-    await queryRunner.query(`CREATE INDEX "IDX_cash_transactions_restaurant_shift" ON "cash_transactions" ("restaurant_id", "shift_id")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_cash_transactions_restaurant_id" ON "cash_transactions" ("restaurant_id")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_cash_transactions_restaurant_shift" ON "cash_transactions" ("restaurant_id", "shift_id")`);
 
     await queryRunner.query(`
-      CREATE TABLE "completed_orders" (
+      CREATE TABLE IF NOT EXISTS "completed_orders" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "restaurant_id" uuid NOT NULL,
         "table_name" character varying(255) NOT NULL,
@@ -75,11 +75,11 @@ export class BillingAndInventorySchema1760000001000 implements MigrationInterfac
         CONSTRAINT "FK_completed_orders_restaurant" FOREIGN KEY ("restaurant_id") REFERENCES "restaurants"("id") ON DELETE CASCADE
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_completed_orders_restaurant_closed" ON "completed_orders" ("restaurant_id", "closed_at")`);
-    await queryRunner.query(`CREATE INDEX "IDX_completed_orders_restaurant_waiter" ON "completed_orders" ("restaurant_id", "waiter")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_completed_orders_restaurant_closed" ON "completed_orders" ("restaurant_id", "closed_at")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_completed_orders_restaurant_waiter" ON "completed_orders" ("restaurant_id", "waiter")`);
 
     await queryRunner.query(`
-      CREATE TABLE "open_accounts" (
+      CREATE TABLE IF NOT EXISTS "open_accounts" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "restaurant_id" uuid NOT NULL,
         "customer_name" character varying(255) NOT NULL,
@@ -95,11 +95,11 @@ export class BillingAndInventorySchema1760000001000 implements MigrationInterfac
         CONSTRAINT "FK_open_accounts_restaurant" FOREIGN KEY ("restaurant_id") REFERENCES "restaurants"("id") ON DELETE CASCADE
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_open_accounts_restaurant_id" ON "open_accounts" ("restaurant_id")`);
-    await queryRunner.query(`CREATE INDEX "IDX_open_accounts_restaurant_status" ON "open_accounts" ("restaurant_id", "status")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_open_accounts_restaurant_id" ON "open_accounts" ("restaurant_id")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_open_accounts_restaurant_status" ON "open_accounts" ("restaurant_id", "status")`);
 
     await queryRunner.query(`
-      CREATE TABLE "open_account_items" (
+      CREATE TABLE IF NOT EXISTS "open_account_items" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "open_account_id" uuid NOT NULL,
         "product_id" character varying(36),
@@ -113,10 +113,10 @@ export class BillingAndInventorySchema1760000001000 implements MigrationInterfac
         CONSTRAINT "FK_open_account_items_account" FOREIGN KEY ("open_account_id") REFERENCES "open_accounts"("id") ON DELETE CASCADE
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_open_account_items_account_id" ON "open_account_items" ("open_account_id")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_open_account_items_account_id" ON "open_account_items" ("open_account_id")`);
 
     await queryRunner.query(`
-      CREATE TABLE "open_account_payments" (
+      CREATE TABLE IF NOT EXISTS "open_account_payments" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "open_account_id" uuid NOT NULL,
         "amount" numeric(12,2) NOT NULL,
@@ -128,10 +128,10 @@ export class BillingAndInventorySchema1760000001000 implements MigrationInterfac
         CONSTRAINT "FK_open_account_payments_account" FOREIGN KEY ("open_account_id") REFERENCES "open_accounts"("id") ON DELETE CASCADE
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_open_account_payments_account_id" ON "open_account_payments" ("open_account_id")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_open_account_payments_account_id" ON "open_account_payments" ("open_account_id")`);
 
     await queryRunner.query(`
-      CREATE TABLE "ledger_customers" (
+      CREATE TABLE IF NOT EXISTS "ledger_customers" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "restaurant_id" uuid NOT NULL,
         "name" character varying(255) NOT NULL,
@@ -142,10 +142,10 @@ export class BillingAndInventorySchema1760000001000 implements MigrationInterfac
         CONSTRAINT "FK_ledger_customers_restaurant" FOREIGN KEY ("restaurant_id") REFERENCES "restaurants"("id") ON DELETE CASCADE
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_ledger_customers_restaurant_id" ON "ledger_customers" ("restaurant_id")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_ledger_customers_restaurant_id" ON "ledger_customers" ("restaurant_id")`);
 
     await queryRunner.query(`
-      CREATE TABLE "ledger_entries" (
+      CREATE TABLE IF NOT EXISTS "ledger_entries" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "restaurant_id" uuid NOT NULL,
         "customer_id" uuid NOT NULL,
@@ -164,12 +164,12 @@ export class BillingAndInventorySchema1760000001000 implements MigrationInterfac
         CONSTRAINT "FK_ledger_entries_customer" FOREIGN KEY ("customer_id") REFERENCES "ledger_customers"("id") ON DELETE CASCADE
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_ledger_entries_restaurant_id" ON "ledger_entries" ("restaurant_id")`);
-    await queryRunner.query(`CREATE INDEX "IDX_ledger_entries_customer_id" ON "ledger_entries" ("customer_id")`);
-    await queryRunner.query(`CREATE INDEX "IDX_ledger_entries_restaurant_customer_created" ON "ledger_entries" ("restaurant_id", "customer_id", "created_at")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_ledger_entries_restaurant_id" ON "ledger_entries" ("restaurant_id")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_ledger_entries_customer_id" ON "ledger_entries" ("customer_id")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_ledger_entries_restaurant_customer_created" ON "ledger_entries" ("restaurant_id", "customer_id", "created_at")`);
 
     await queryRunner.query(`
-      CREATE TABLE "suppliers" (
+      CREATE TABLE IF NOT EXISTS "suppliers" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "restaurant_id" uuid NOT NULL,
         "name" character varying NOT NULL,
@@ -184,10 +184,10 @@ export class BillingAndInventorySchema1760000001000 implements MigrationInterfac
         CONSTRAINT "FK_suppliers_restaurant" FOREIGN KEY ("restaurant_id") REFERENCES "restaurants"("id") ON DELETE CASCADE
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_suppliers_restaurant_name" ON "suppliers" ("restaurant_id", "name")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_suppliers_restaurant_name" ON "suppliers" ("restaurant_id", "name")`);
 
     await queryRunner.query(`
-      CREATE TABLE "stock_materials" (
+      CREATE TABLE IF NOT EXISTS "stock_materials" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "restaurant_id" uuid NOT NULL,
         "name" character varying NOT NULL,
@@ -203,10 +203,10 @@ export class BillingAndInventorySchema1760000001000 implements MigrationInterfac
         CONSTRAINT "FK_stock_materials_restaurant" FOREIGN KEY ("restaurant_id") REFERENCES "restaurants"("id") ON DELETE CASCADE
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_stock_materials_restaurant_name" ON "stock_materials" ("restaurant_id", "name")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_stock_materials_restaurant_name" ON "stock_materials" ("restaurant_id", "name")`);
 
     await queryRunner.query(`
-      CREATE TABLE "stock_movements" (
+      CREATE TABLE IF NOT EXISTS "stock_movements" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "restaurant_id" uuid NOT NULL,
         "material_id" uuid NOT NULL,
@@ -227,11 +227,11 @@ export class BillingAndInventorySchema1760000001000 implements MigrationInterfac
         CONSTRAINT "FK_stock_movements_supplier" FOREIGN KEY ("supplier_id") REFERENCES "suppliers"("id") ON DELETE SET NULL
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_stock_movements_restaurant_material" ON "stock_movements" ("restaurant_id", "material_id")`);
-    await queryRunner.query(`CREATE INDEX "IDX_stock_movements_restaurant_material_created" ON "stock_movements" ("restaurant_id", "material_id", "created_at")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_stock_movements_restaurant_material" ON "stock_movements" ("restaurant_id", "material_id")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_stock_movements_restaurant_material_created" ON "stock_movements" ("restaurant_id", "material_id", "created_at")`);
 
     await queryRunner.query(`
-      CREATE TABLE "purchase_orders" (
+      CREATE TABLE IF NOT EXISTS "purchase_orders" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "restaurant_id" uuid NOT NULL,
         "supplier_id" uuid NOT NULL,
@@ -248,10 +248,10 @@ export class BillingAndInventorySchema1760000001000 implements MigrationInterfac
         CONSTRAINT "FK_purchase_orders_supplier" FOREIGN KEY ("supplier_id") REFERENCES "suppliers"("id") ON DELETE CASCADE
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_purchase_orders_restaurant_status_created" ON "purchase_orders" ("restaurant_id", "status", "created_at")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_purchase_orders_restaurant_status_created" ON "purchase_orders" ("restaurant_id", "status", "created_at")`);
 
     await queryRunner.query(`
-      CREATE TABLE "inventory_counts" (
+      CREATE TABLE IF NOT EXISTS "inventory_counts" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "restaurant_id" uuid NOT NULL,
         "date" TIMESTAMPTZ NOT NULL,
@@ -264,10 +264,10 @@ export class BillingAndInventorySchema1760000001000 implements MigrationInterfac
         CONSTRAINT "FK_inventory_counts_restaurant" FOREIGN KEY ("restaurant_id") REFERENCES "restaurants"("id") ON DELETE CASCADE
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_inventory_counts_restaurant_created" ON "inventory_counts" ("restaurant_id", "created_at")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_inventory_counts_restaurant_created" ON "inventory_counts" ("restaurant_id", "created_at")`);
 
     await queryRunner.query(`
-      CREATE TABLE "restaurant_printer_configs" (
+      CREATE TABLE IF NOT EXISTS "restaurant_printer_configs" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "restaurant_id" uuid NOT NULL,
         "name" character varying(100) NOT NULL,
@@ -285,10 +285,10 @@ export class BillingAndInventorySchema1760000001000 implements MigrationInterfac
         CONSTRAINT "FK_restaurant_printer_configs_restaurant" FOREIGN KEY ("restaurant_id") REFERENCES "restaurants"("id") ON DELETE CASCADE
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_restaurant_printer_configs_restaurant_id" ON "restaurant_printer_configs" ("restaurant_id")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_restaurant_printer_configs_restaurant_id" ON "restaurant_printer_configs" ("restaurant_id")`);
 
     await queryRunner.query(`
-      CREATE TABLE "restaurant_audit_logs" (
+      CREATE TABLE IF NOT EXISTS "restaurant_audit_logs" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "restaurant_id" uuid NOT NULL,
         "user_id" character varying(64) NOT NULL,
@@ -302,7 +302,7 @@ export class BillingAndInventorySchema1760000001000 implements MigrationInterfac
         CONSTRAINT "FK_restaurant_audit_logs_restaurant" FOREIGN KEY ("restaurant_id") REFERENCES "restaurants"("id") ON DELETE CASCADE
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_restaurant_audit_logs_restaurant_created" ON "restaurant_audit_logs" ("restaurant_id", "created_at")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_restaurant_audit_logs_restaurant_created" ON "restaurant_audit_logs" ("restaurant_id", "created_at")`);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

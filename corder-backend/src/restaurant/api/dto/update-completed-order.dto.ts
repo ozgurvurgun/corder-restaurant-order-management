@@ -97,8 +97,8 @@ export class CompletedPaymentSplitDto {
 }
 
 export class CompletedPaymentDiscountDto {
-  @IsEnum(['percent', 'amount'])
-  type!: 'percent' | 'amount';
+  @IsIn(['percent', 'amount', 'complimentary'])
+  type!: 'percent' | 'amount' | 'complimentary';
 
   @IsNumber()
   @Min(0)

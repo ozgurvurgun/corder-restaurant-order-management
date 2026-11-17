@@ -10,7 +10,10 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
-import { PanelRootGuard } from '../infrastructure/panel-root.guard';
+import {
+  PanelRootGuard,
+  RequirePermissions,
+} from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { SuppliersService } from '../application/suppliers.service';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
@@ -22,16 +25,19 @@ export class SuppliersController {
   constructor(private readonly suppliers: SuppliersService) {}
 
   @Get()
+  @RequirePermissions('inventory.view', 'inventory.manage_suppliers')
   list(@RestaurantId() restaurantId: string) {
     return this.suppliers.list(restaurantId);
   }
 
   @Post()
+  @RequirePermissions('inventory.manage_suppliers')
   create(@RestaurantId() restaurantId: string, @Body() body: CreateSupplierDto) {
     return this.suppliers.create(restaurantId, body);
   }
 
   @Patch(':id')
+  @RequirePermissions('inventory.manage_suppliers')
   update(
     @RestaurantId() restaurantId: string,
     @Param('id', ParseUUIDPipe) id: string,
@@ -41,6 +47,7 @@ export class SuppliersController {
   }
 
   @Delete(':id')
+  @RequirePermissions('inventory.manage_suppliers')
   remove(
     @RestaurantId() restaurantId: string,
     @Param('id', ParseUUIDPipe) id: string,

@@ -1,6 +1,8 @@
 import { useEffect } from "react"
 import { AlertTriangle, X } from "lucide-react"
-import type { PanelProduct } from "@/lib/panel-types"
+import type { PanelCategory, PanelProduct } from "@/lib/panel-types"
+import { orderedCategoryList } from "@/lib/panel-api-sync"
+import { categoryDepth } from "./category-modals"
 import ImageUpload from "../image-upload"
 
 export function AddProductInlineForm(props: {
@@ -96,27 +98,41 @@ export function AddProductInlineForm(props: {
 }
 
 export function EditProductModal(props: {
+  categories: PanelCategory[]
   editName: string
   setEditName: (v: string) => void
+  editCategoryId: string
+  setEditCategoryId: (v: string) => void
   editPrice: string
   setEditPrice: (v: string) => void
+  editCostPrice: string
+  setEditCostPrice: (v: string) => void
   editDesc: string
   setEditDesc: (v: string) => void
   editImage: string
   setEditImage: (v: string) => void
+  canEditDetails?: boolean
+  canChangePrice?: boolean
   onUpload?: (file: File) => Promise<string>
   onClose: () => void
   onSave: () => void
 }) {
   const {
+    categories,
     editName,
     setEditName,
+    editCategoryId,
+    setEditCategoryId,
     editPrice,
     setEditPrice,
+    editCostPrice,
+    setEditCostPrice,
     editDesc,
     setEditDesc,
     editImage,
     setEditImage,
+    canEditDetails = true,
+    canChangePrice = true,
     onUpload,
     onClose,
     onSave,
@@ -132,7 +148,7 @@ export function EditProductModal(props: {
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-[420px] max-h-[90vh] overflow-auto">
+      <div className="bg-white rounded-2xl shadow-2xl w-[440px] max-h-[90vh] overflow-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#e8e8ed]">
           <h3 className="text-[15px] font-semibold text-[#1d1d1f]">
             Ürün Düzenle
@@ -146,51 +162,96 @@ export function EditProductModal(props: {
           </button>
         </div>
         <div className="p-5 space-y-4">
-          <div>
-            <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
-              Ürün Adı
-            </label>
-            <input
-              type="text"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              className="w-full h-[40px] px-3 text-[14px] bg-[#f5f5f7] rounded-xl border border-transparent focus:border-[#e63462]/50 focus:outline-none"
-            />
+          {canEditDetails && (
+            <>
+              <div>
+                <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
+                  Ürün Adı
+                </label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full h-[40px] px-3 text-[14px] bg-[#f5f5f7] rounded-xl border border-transparent focus:border-[#e63462]/50 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
+                  Kategori
+                </label>
+                <select
+                  value={editCategoryId}
+                  onChange={(e) => setEditCategoryId(e.target.value)}
+                  className="w-full h-[40px] px-3 text-[13px] bg-[#f5f5f7] rounded-xl border border-transparent focus:border-[#e63462]/50 focus:outline-none"
+                >
+                  {orderedCategoryList(categories).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {"\u00A0".repeat(categoryDepth(categories, c.id) * 2)}
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+          <div className={canEditDetails ? "grid grid-cols-2 gap-3" : ""}>
+            {canChangePrice && (
+              <div>
+                <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
+                  Satış Fiyatı (TL)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={editPrice}
+                  onChange={(e) => setEditPrice(e.target.value)}
+                  className="w-full h-[40px] px-3 text-[14px] bg-[#f5f5f7] rounded-xl border border-transparent focus:border-[#e63462]/50 focus:outline-none"
+                />
+              </div>
+            )}
+            {canEditDetails && (
+              <div>
+                <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
+                  Maliyet Fiyatı (TL, opsiyonel)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={editCostPrice}
+                  onChange={(e) => setEditCostPrice(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full h-[40px] px-3 text-[14px] bg-[#f5f5f7] rounded-xl border border-transparent focus:border-[#e63462]/50 focus:outline-none"
+                />
+              </div>
+            )}
           </div>
-          <div>
-            <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
-              Fiyat (TL)
-            </label>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              value={editPrice}
-              onChange={(e) => setEditPrice(e.target.value)}
-              className="w-full h-[40px] px-3 text-[14px] bg-[#f5f5f7] rounded-xl border border-transparent focus:border-[#e63462]/50 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
-              Açıklama (opsiyonel)
-            </label>
-            <textarea
-              value={editDesc}
-              onChange={(e) => setEditDesc(e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 text-[14px] bg-[#f5f5f7] rounded-xl border border-transparent focus:border-[#e63462]/50 focus:outline-none resize-none"
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
-              Fotoğraf
-            </label>
-            <ImageUpload
-              value={editImage}
-              onChange={setEditImage}
-              onUpload={onUpload}
-            />
-          </div>
+          {canEditDetails && (
+            <>
+              <div>
+                <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
+                  Açıklama (opsiyonel)
+                </label>
+                <textarea
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 text-[14px] bg-[#f5f5f7] rounded-xl border border-transparent focus:border-[#e63462]/50 focus:outline-none resize-none"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
+                  Fotoğraf
+                </label>
+                <ImageUpload
+                  value={editImage}
+                  onChange={setEditImage}
+                  onUpload={onUpload}
+                />
+              </div>
+            </>
+          )}
         </div>
         <div className="px-5 py-4 border-t border-[#e8e8ed] flex justify-end gap-2">
           <button

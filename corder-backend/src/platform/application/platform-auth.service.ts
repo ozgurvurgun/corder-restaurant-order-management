@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { PlatformAdminEntity } from '../domain/platform-admin.entity';
+import { computeSecretFingerprint } from '../../restaurant/domain/services/billing-suspension.policy';
 
 export interface PlatformLoginDto {
   email: string;
@@ -14,6 +15,7 @@ export interface PlatformTokenPayload {
   sub: string;
   email: string;
   type: 'platform';
+  pwdFp?: string;
 }
 
 @Injectable()
@@ -25,7 +27,9 @@ export class PlatformAuthService {
   ) {}
 
   async validateAdmin(email: string, password: string): Promise<PlatformAdminEntity | null> {
-    const admin = await this.repo.findOne({ where: { email: email.toLowerCase() } });
+    const normalizedEmail = (email ?? '').trim().toLowerCase();
+    if (!normalizedEmail) return null;
+    const admin = await this.repo.findOne({ where: { email: normalizedEmail } });
     if (!admin) return null;
     const ok = await bcrypt.compare(password, admin.passwordHash);
     return ok ? admin : null;
@@ -38,6 +42,7 @@ export class PlatformAuthService {
       sub: admin.id,
       email: admin.email,
       type: 'platform',
+      pwdFp: computeSecretFingerprint(admin.passwordHash),
     };
     const accessToken = this.jwt.sign(payload);
     return {

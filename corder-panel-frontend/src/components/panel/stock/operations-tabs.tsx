@@ -1,9 +1,7 @@
 import { ArrowDown, ArrowUp, ClipboardList, Plus, Trash2 } from "lucide-react"
 import type { InventoryCount, StockMaterial, StockMovement, Supplier } from "@/lib/panel-types"
 import { AddMovementForm, AddSupplierForm } from "./stock-modals"
-
-function formatCurrency(n: number) { return n.toLocaleString("tr-TR", { minimumFractionDigits: 2 }) }
-function formatDate(d: Date) { return new Date(d).toLocaleDateString("tr-TR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) }
+import { formatCurrency, formatIstanbulDateTime } from "@/lib/format"
 
 export function MovementsTab(props: {
   stockMaterials: StockMaterial[]
@@ -20,27 +18,35 @@ export function MovementsTab(props: {
   setMvCost: (v: string) => void
   mvReason: string
   setMvReason: (v: string) => void
+  canAddMovement?: boolean
   handleAddMovement: () => void
 }) {
-  const {
-    stockMaterials, stockMovements, showAddMovement, setShowAddMovement,
-    mvMatId, setMvMatId, mvType, setMvType, mvQty, setMvQty, mvCost, setMvCost,
-    mvReason, setMvReason, handleAddMovement,
-  } = props
+  const { stockMaterials, stockMovements, showAddMovement, setShowAddMovement, mvMatId, setMvMatId, mvType, setMvType, mvQty, setMvQty, mvCost, setMvCost, mvReason, setMvReason, canAddMovement = true, handleAddMovement } = props
 
   return (
     <>
-      <div className="flex justify-end">
-        <button onClick={() => setShowAddMovement(true)} className="h-[30px] px-3 flex items-center gap-1.5 bg-[#e63462] text-white rounded-lg text-[12px] font-medium hover:bg-[#d42d56]">
-          <Plus className="w-3.5 h-3.5" /> Hareket Ekle
-        </button>
-      </div>
-      {showAddMovement && (
+      {canAddMovement && (
+        <div className="flex justify-end">
+          <button onClick={() => setShowAddMovement(true)} className="h-[30px] px-3 flex items-center gap-1.5 bg-[#e63462] text-white rounded-lg text-[12px] font-medium hover:bg-[#d42d56]">
+            <Plus className="w-3.5 h-3.5" /> Hareket Ekle
+          </button>
+        </div>
+      )}
+      {showAddMovement && canAddMovement && (
         <AddMovementForm
-          stockMaterials={stockMaterials} mvMatId={mvMatId} setMvMatId={setMvMatId}
-          mvType={mvType} setMvType={setMvType} mvQty={mvQty} setMvQty={setMvQty}
-          mvCost={mvCost} setMvCost={setMvCost} mvReason={mvReason} setMvReason={setMvReason}
-          onClose={() => setShowAddMovement(false)} onSubmit={handleAddMovement}
+          stockMaterials={stockMaterials}
+          mvMatId={mvMatId}
+          setMvMatId={setMvMatId}
+          mvType={mvType}
+          setMvType={setMvType}
+          mvQty={mvQty}
+          setMvQty={setMvQty}
+          mvCost={mvCost}
+          setMvCost={setMvCost}
+          mvReason={mvReason}
+          setMvReason={setMvReason}
+          onClose={() => setShowAddMovement(false)}
+          onSubmit={handleAddMovement}
         />
       )}
       <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
@@ -59,19 +65,45 @@ export function MovementsTab(props: {
           <tbody>
             {stockMovements.map((mv, idx) => (
               <tr key={mv.id} className={`border-b border-[#f0f0f0] ${idx % 2 === 1 ? "bg-[#fafafa]" : ""}`}>
-                <td className="px-4 py-2 text-[12px] text-[#86868b]">{formatDate(mv.createdAt)}</td>
-                <td className="px-4 py-2 text-[12px] font-medium text-[#1d1d1f]">{mv.materialName}</td>
+                <td className="px-4 py-2 text-[12px] text-[#86868b]">
+                  {formatIstanbulDateTime(mv.createdAt)}
+                </td>
+                <td className="px-4 py-2 text-[12px] font-medium text-[#1d1d1f]">
+                  {mv.materialName}
+                </td>
                 <td className="px-4 py-2 text-center">
-                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded inline-flex items-center gap-1 ${mv.type === "in" ? "bg-green-50 text-green-600" : mv.type === "out" ? "bg-blue-50 text-blue-600" : mv.type === "waste" ? "bg-red-50 text-red-500" : "bg-amber-50 text-amber-600"}`}>
-                    {mv.type === "in" ? <><ArrowDown className="w-2.5 h-2.5" /> Giriş</> : mv.type === "out" ? <><ArrowUp className="w-2.5 h-2.5" /> Çıkış</> : mv.type === "waste" ? "Fire" : "Sayım"}
+                  <span
+                    className={`text-[10px] font-medium px-2 py-0.5 rounded inline-flex items-center gap-1 ${mv.type === "in" ? "bg-green-50 text-green-600" : mv.type === "out" ? "bg-blue-50 text-blue-600" : mv.type === "waste" ? "bg-red-50 text-red-500" : "bg-amber-50 text-amber-600"}`}
+                  >
+                    {mv.type === "in" ? (
+                      <>
+                        <ArrowDown className="w-2.5 h-2.5" /> Giriş
+                      </>
+                    ) : mv.type === "out" ? (
+                      <>
+                        <ArrowUp className="w-2.5 h-2.5" /> Çıkış
+                      </>
+                    ) : mv.type === "waste" ? (
+                      "Fire"
+                    ) : (
+                      "Sayım"
+                    )}
                   </span>
                 </td>
                 <td className={`px-4 py-2 text-[12px] text-right font-semibold ${mv.type === "in" || (mv.type === "count-adjustment" && mv.quantity > 0) ? "text-green-600" : "text-red-500"}`}>
-                  {mv.type === "count-adjustment" ? `${mv.quantity > 0 ? "+" : ""}${mv.quantity}` : `${mv.type === "in" ? "+" : "-"}${mv.quantity}`}
+                  {mv.type === "count-adjustment"
+                    ? `${mv.quantity > 0 ? "+" : ""}${mv.quantity}`
+                    : `${mv.type === "in" ? "+" : "-"}${mv.quantity}`}
                 </td>
-                <td className="px-4 py-2 text-[12px] text-right text-[#86868b]">{mv.previousStock} {"→"} {mv.newStock}</td>
-                <td className="px-4 py-2 text-[12px] text-[#86868b]">{mv.reason || "-"}</td>
-                <td className="px-4 py-2 text-[12px] text-[#86868b]">{mv.createdBy}</td>
+                <td className="px-4 py-2 text-[12px] text-right text-[#86868b]">
+                  {mv.previousStock} {"→"} {mv.newStock}
+                </td>
+                <td className="px-4 py-2 text-[12px] text-[#86868b]">
+                  {mv.reason || "-"}
+                </td>
+                <td className="px-4 py-2 text-[12px] text-[#86868b]">
+                  {mv.createdBy}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -92,28 +124,33 @@ export function SuppliersTab(props: {
   supPhone: string
   setSupPhone: (v: string) => void
   savingSupplier: boolean
+  canManageSuppliers?: boolean
   handleAddSupplier: () => void
   updateSupplier: (id: string, data: Partial<Supplier>) => void
   deleteSupplier: (id: string) => void
 }) {
-  const {
-    suppliers, showAddSupplier, setShowAddSupplier, supName, setSupName,
-    supContact, setSupContact, supPhone, setSupPhone, savingSupplier,
-    handleAddSupplier, updateSupplier, deleteSupplier,
-  } = props
+  const { suppliers, showAddSupplier, setShowAddSupplier, supName, setSupName, supContact, setSupContact, supPhone, setSupPhone, savingSupplier, canManageSuppliers = true, handleAddSupplier, updateSupplier, deleteSupplier } = props
 
   return (
     <>
-      <div className="flex justify-end">
-        <button onClick={() => setShowAddSupplier(true)} className="h-[30px] px-3 flex items-center gap-1.5 bg-[#e63462] text-white rounded-lg text-[12px] font-medium hover:bg-[#d42d56]">
-          <Plus className="w-3.5 h-3.5" /> Tedarikçi Ekle
-        </button>
-      </div>
-      {showAddSupplier && (
+      {canManageSuppliers && (
+        <div className="flex justify-end">
+          <button onClick={() => setShowAddSupplier(true)} className="h-[30px] px-3 flex items-center gap-1.5 bg-[#e63462] text-white rounded-lg text-[12px] font-medium hover:bg-[#d42d56]">
+            <Plus className="w-3.5 h-3.5" /> Tedarikçi Ekle
+          </button>
+        </div>
+      )}
+      {showAddSupplier && canManageSuppliers && (
         <AddSupplierForm
-          supName={supName} setSupName={setSupName} supContact={supContact} setSupContact={setSupContact}
-          supPhone={supPhone} setSupPhone={setSupPhone} savingSupplier={savingSupplier}
-          onClose={() => setShowAddSupplier(false)} onSubmit={handleAddSupplier}
+          supName={supName}
+          setSupName={setSupName}
+          supContact={supContact}
+          setSupContact={setSupContact}
+          supPhone={supPhone}
+          setSupPhone={setSupPhone}
+          savingSupplier={savingSupplier}
+          onClose={() => setShowAddSupplier(false)}
+          onSubmit={handleAddSupplier}
         />
       )}
       <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
@@ -124,28 +161,50 @@ export function SuppliersTab(props: {
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Yetkili</th>
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Telefon</th>
               <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Durum</th>
-              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide w-[80px]">İşlem</th>
+              {canManageSuppliers && (
+                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide w-[80px]">İşlem</th>
+              )}
             </tr>
           </thead>
           <tbody>
             {suppliers.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-[13px] text-[#86868b]">Henüz tedarikçi yok. Yukarıdan &quot;Tedarikçi Ekle&quot; ile kayıt açın.</td></tr>
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-[13px] text-[#86868b]">
+                  Henüz tedarikçi yok. Yukarıdan &quot;Tedarikçi Ekle&quot; ile
+                  kayıt açın.
+                </td>
+              </tr>
             ) : (
               suppliers.map((sup, idx) => (
                 <tr key={sup.id} className={`border-b border-[#f0f0f0] ${idx % 2 === 1 ? "bg-[#fafafa]" : ""}`}>
-                  <td className="px-4 py-2.5 text-[13px] font-medium text-[#1d1d1f]">{sup.name}</td>
-                  <td className="px-4 py-2.5 text-[12px] text-[#86868b]">{sup.contactPerson || "-"}</td>
-                  <td className="px-4 py-2.5 text-[12px] text-[#86868b]">{sup.phone || "-"}</td>
+                  <td className="px-4 py-2.5 text-[13px] font-medium text-[#1d1d1f]">
+                    {sup.name}
+                  </td>
+                  <td className="px-4 py-2.5 text-[12px] text-[#86868b]">
+                    {sup.contactPerson || "-"}
+                  </td>
+                  <td className="px-4 py-2.5 text-[12px] text-[#86868b]">
+                    {sup.phone || "-"}
+                  </td>
                   <td className="px-4 py-2.5 text-center">
-                    <button type="button" onClick={() => updateSupplier(sup.id, { active: !sup.active })} className={`text-[10px] font-medium px-2.5 py-0.5 rounded-full ${sup.active ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"}`}>
+                    <button
+                      type="button"
+                      disabled={!canManageSuppliers}
+                      onClick={() =>
+                        updateSupplier(sup.id, { active: !sup.active })
+                      }
+                      className={`text-[10px] font-medium px-2.5 py-0.5 rounded-full ${sup.active ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"}`}
+                    >
                       {sup.active ? "Aktif" : "Pasif"}
                     </button>
                   </td>
-                  <td className="px-4 py-2.5 text-right">
-                    <button type="button" onClick={() => deleteSupplier(sup.id)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-50">
-                      <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                    </button>
-                  </td>
+                  {canManageSuppliers && (
+                    <td className="px-4 py-2.5 text-right">
+                      <button type="button" onClick={() => deleteSupplier(sup.id)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-50">
+                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))
             )}
@@ -158,32 +217,45 @@ export function SuppliersTab(props: {
 
 export function InventoryCountsTab(props: {
   inventoryCounts: InventoryCount[]
+  canCountInventory?: boolean
   startInventoryCount: () => void
-  updateInventoryItem: (countId: string, materialId: string, actual: number) => void
+  updateInventoryItem: (
+    countId: string,
+    materialId: string,
+    actual: number,
+  ) => void
   completeInventoryCount: (countId: string) => void
 }) {
-  const { inventoryCounts, startInventoryCount, updateInventoryItem, completeInventoryCount } = props
+  const { inventoryCounts, canCountInventory = true, startInventoryCount, updateInventoryItem, completeInventoryCount } = props
 
   return (
     <>
-      <div className="flex justify-end">
-        <button onClick={startInventoryCount} className="h-[30px] px-3 flex items-center gap-1.5 bg-[#e63462] text-white rounded-lg text-[12px] font-medium hover:bg-[#d42d56]">
-          <ClipboardList className="w-3.5 h-3.5" /> Yeni Sayım Başlat
-        </button>
-      </div>
+      {canCountInventory && (
+        <div className="flex justify-end">
+          <button onClick={startInventoryCount} className="h-[30px] px-3 flex items-center gap-1.5 bg-[#e63462] text-white rounded-lg text-[12px] font-medium hover:bg-[#d42d56]">
+            <ClipboardList className="w-3.5 h-3.5" /> Yeni Sayım Başlat
+          </button>
+        </div>
+      )}
       {inventoryCounts.map((ic) => (
         <div key={ic.id} className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-[#f0f0f0] bg-[#f9f9f9]">
             <div>
-              <h4 className="text-[13px] font-semibold text-[#1d1d1f]">Sayım - {formatDate(ic.date)}</h4>
-              <p className="text-[11px] text-[#86868b]">Sayan: {ic.countedBy}</p>
+              <h4 className="text-[13px] font-semibold text-[#1d1d1f]">
+                Sayım - {formatIstanbulDateTime(ic.date)}
+              </h4>
+              <p className="text-[11px] text-[#86868b]">
+                Sayan: {ic.countedBy}
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <span className={`text-[10px] font-medium px-2.5 py-1 rounded-full ${ic.status === "completed" ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-600"}`}>
                 {ic.status === "completed" ? "Tamamlandı" : "Devam Ediyor"}
               </span>
-              {ic.status === "in-progress" && (
-                <button onClick={() => completeInventoryCount(ic.id)} className="h-[26px] px-3 bg-[#34c759] text-white rounded-lg text-[11px] font-medium hover:bg-[#2db84e]">Tamamla</button>
+              {ic.status === "in-progress" && canCountInventory && (
+                <button onClick={() => completeInventoryCount(ic.id)} className="h-[26px] px-3 bg-[#34c759] text-white rounded-lg text-[11px] font-medium hover:bg-[#2db84e]">
+                  Tamamla
+                </button>
               )}
             </div>
           </div>
@@ -199,17 +271,36 @@ export function InventoryCountsTab(props: {
             <tbody>
               {ic.items.map((item) => (
                 <tr key={item.materialId} className="border-b border-[#f0f0f0]">
-                  <td className="px-4 py-2 text-[12px] font-medium text-[#1d1d1f]">{item.materialName}</td>
-                  <td className="px-4 py-2 text-[12px] text-right text-[#86868b]">{item.expectedStock}</td>
+                  <td className="px-4 py-2 text-[12px] font-medium text-[#1d1d1f]">
+                    {item.materialName}
+                  </td>
+                  <td className="px-4 py-2 text-[12px] text-right text-[#86868b]">
+                    {item.expectedStock}
+                  </td>
                   <td className="px-4 py-2 text-right">
-                    {ic.status === "in-progress" ? (
-                      <input type="number" min={0} defaultValue={item.actualStock} onBlur={(e) => updateInventoryItem(ic.id, item.materialId, Math.max(0, parseFloat(e.target.value) || 0))} className="w-[80px] h-[26px] px-2 text-[12px] text-right bg-[#f5f5f7] rounded border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
+                    {ic.status === "in-progress" && canCountInventory ? (
+                      <input
+                        type="number"
+                        min={0}
+                        defaultValue={item.actualStock}
+                        onBlur={(e) =>
+                          updateInventoryItem(
+                            ic.id,
+                            item.materialId,
+                            Math.max(0, parseFloat(e.target.value) || 0),
+                          )
+                        }
+                        className="w-[80px] h-[26px] px-2 text-[12px] text-right bg-[#f5f5f7] rounded border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
+                      />
                     ) : (
-                      <span className="text-[12px] text-[#1d1d1f]">{item.actualStock}</span>
+                      <span className="text-[12px] text-[#1d1d1f]">
+                        {item.actualStock}
+                      </span>
                     )}
                   </td>
                   <td className={`px-4 py-2 text-[12px] text-right font-semibold ${item.difference === 0 ? "text-[#86868b]" : item.difference > 0 ? "text-green-600" : "text-red-500"}`}>
-                    {item.difference > 0 ? "+" : ""}{item.difference}
+                    {item.difference > 0 ? "+" : ""}
+                    {item.difference}
                   </td>
                 </tr>
               ))}
@@ -222,14 +313,26 @@ export function InventoryCountsTab(props: {
 }
 
 export function CostAnalysisTab(props: {
-  costAnalysis: { id: string; name: string; sellPrice: number; costPrice: number; margin: number; marginPercent: number; source: "manual" | "recipe" }[]
+  costAnalysis: {
+    id: string
+    name: string
+    sellPrice: number
+    costPrice: number
+    margin: number
+    marginPercent: number
+    source: "manual" | "recipe"
+  }[]
 }) {
   const { costAnalysis } = props
 
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[12px] text-[#86868b] px-1">
-        Maliyet: önce manuel <span className="font-medium text-[#1d1d1f]">maliyet fiyatı</span> (varsa), yoksa <span className="font-medium text-[#1d1d1f]">Ürün Eşleştir</span> reçetesi ile malzeme birim maliyetlerinin toplamı.
+        Maliyet: önce manuel{" "}
+        <span className="font-medium text-[#1d1d1f]">maliyet fiyatı</span>{" "}
+        (varsa), yoksa{" "}
+        <span className="font-medium text-[#1d1d1f]">Ürün Eşleştir</span>{" "}
+        reçetesi ile malzeme birim maliyetlerinin toplamı.
       </p>
       <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
         <h3 className="text-[13px] font-semibold text-[#1d1d1f] px-4 pt-4 pb-2">Ürün Maliyet Analizi</h3>
@@ -246,21 +349,41 @@ export function CostAnalysisTab(props: {
           </thead>
           <tbody>
             {costAnalysis.length === 0 ? (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-[13px] text-[#86868b]">Hesaplanabilir ürün yok. Ürünlere reçete tanımlayın (Ürün Eşleştir) ve malzemelerde birim maliyet girin.</td></tr>
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-[13px] text-[#86868b]">
+                  Hesaplanabilir ürün yok. Ürünlere reçete tanımlayın (Ürün
+                  Eşleştir) ve malzemelerde birim maliyet girin.
+                </td>
+              </tr>
             ) : (
               costAnalysis.map((item, idx) => (
                 <tr key={item.id} className={`border-b border-[#f0f0f0] ${idx % 2 === 1 ? "bg-[#fafafa]" : ""}`}>
-                  <td className="px-4 py-2.5 text-[13px] font-medium text-[#1d1d1f]">{item.name}</td>
-                  <td className="px-4 py-2.5 text-[11px] text-[#86868b]">{item.source === "manual" ? "Manuel" : "Reçete"}</td>
-                  <td className="px-4 py-2.5 text-[12px] text-right text-[#1d1d1f]">{"\u20BA"}{formatCurrency(item.sellPrice)}</td>
-                  <td className="px-4 py-2.5 text-[12px] text-right text-red-500">{"\u20BA"}{formatCurrency(item.costPrice)}</td>
-                  <td className="px-4 py-2.5 text-[12px] text-right font-semibold text-green-600">{"\u20BA"}{formatCurrency(item.margin)}</td>
+                  <td className="px-4 py-2.5 text-[13px] font-medium text-[#1d1d1f]">
+                    {item.name}
+                  </td>
+                  <td className="px-4 py-2.5 text-[11px] text-[#86868b]">
+                    {item.source === "manual" ? "Manuel" : "Reçete"}
+                  </td>
+                  <td className="px-4 py-2.5 text-[12px] text-right text-[#1d1d1f]">
+                    {"\u20BA"}
+                    {formatCurrency(item.sellPrice)}
+                  </td>
+                  <td className="px-4 py-2.5 text-[12px] text-right text-red-500">
+                    {"\u20BA"}
+                    {formatCurrency(item.costPrice)}
+                  </td>
+                  <td className="px-4 py-2.5 text-[12px] text-right font-semibold text-green-600">
+                    {"\u20BA"}
+                    {formatCurrency(item.margin)}
+                  </td>
                   <td className="px-4 py-2.5 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <div className="w-16 h-1.5 bg-[#f0f0f0] rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, item.marginPercent))}%`, backgroundColor: item.marginPercent > 60 ? "#34c759" : item.marginPercent > 40 ? "#ff9500" : "#ff3b30" }} />
+                        <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, item.marginPercent))}%`, backgroundColor: item.marginPercent > 60 ? "#34c759" : item.marginPercent > 40 ? "#ff9500" : "#ff3b30", }} />
                       </div>
-                      <span className={`text-[12px] font-semibold ${item.marginPercent > 60 ? "text-green-600" : item.marginPercent > 40 ? "text-amber-600" : "text-red-500"}`}>%{item.marginPercent}</span>
+                      <span className={`text-[12px] font-semibold ${item.marginPercent > 60 ? "text-green-600" : item.marginPercent > 40 ? "text-amber-600" : "text-red-500"}`}>
+                        %{item.marginPercent}
+                      </span>
                     </div>
                   </td>
                 </tr>

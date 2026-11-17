@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { useAdminStore } from "@/lib/store"
+import { formatIstanbulDate } from "@/lib/money"
 import type { BossTier, RootAdmin } from "@/lib/types"
 import { BossFormModal } from "@/components/BossFormModal"
 import {
@@ -12,6 +13,7 @@ import {
   Trash2,
   ExternalLink,
   Layers,
+  RefreshCw,
 } from "lucide-react"
 
 function getTierBadge(tier?: BossTier) {
@@ -37,6 +39,7 @@ export function BossesPage() {
   const {
     allBosses,
     bossesLoading,
+    bossesError,
     loadAllBosses,
     restaurants,
     loadRestaurants,
@@ -47,6 +50,7 @@ export function BossesPage() {
 
   const [showModal, setShowModal] = useState(false)
   const [editingBoss, setEditingBoss] = useState<RootAdmin | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   useEffect(() => {
     void loadAllBosses()
@@ -63,6 +67,17 @@ export function BossesPage() {
     setShowModal(true)
   }
 
+  const handleToggleActive = async (boss: RootAdmin) => {
+    setActionError(null)
+    try {
+      await updateBoss(boss.id, { isActive: boss.isActive === false })
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : "Durum güncellenemedi"
+      )
+    }
+  }
+
   const handleDelete = async (boss: RootAdmin) => {
     if (
       !confirm(
@@ -71,10 +86,11 @@ export function BossesPage() {
     ) {
       return
     }
+    setActionError(null)
     try {
       await deleteBoss(boss.id)
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Silinemedi")
+      setActionError(err instanceof Error ? err.message : "Silinemedi")
     }
   }
 
@@ -99,6 +115,22 @@ export function BossesPage() {
         </button>
       </div>
 
+      {(bossesError || actionError) && (
+        <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          <span>{bossesError || actionError}</span>
+          {bossesError && (
+            <button
+              type="button"
+              onClick={() => void loadAllBosses()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-medium text-red-200 hover:bg-red-500/20"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Yenile
+            </button>
+          )}
+        </div>
+      )}
+
       {bossesLoading && allBosses.length === 0 ? (
         <p className="mt-8 text-zinc-400">Yükleniyor…</p>
       ) : allBosses.length === 0 ? (
@@ -120,6 +152,7 @@ export function BossesPage() {
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {allBosses.map((boss) => {
             const tierBadge = getTierBadge(boss.bossTier)
+            const isActive = boss.isActive !== false
             return (
               <div
                 key={boss.id}
@@ -132,7 +165,21 @@ export function BossesPage() {
                         {boss.name.charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <h3 className="font-semibold text-white">{boss.name}</h3>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold text-white">{boss.name}</h3>
+                          <button
+                            type="button"
+                            onClick={() => void handleToggleActive(boss)}
+                            className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${
+                              isActive
+                                ? "bg-emerald-500/15 text-emerald-300"
+                                : "bg-red-500/20 text-red-300"
+                            }`}
+                            title="Durumu değiştirmek için tıklayın"
+                          >
+                            {isActive ? "Aktif" : "Pasif"}
+                          </button>
+                        </div>
                         <span
                           className={`mt-1 inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-semibold ${tierBadge.cls}`}
                         >
@@ -172,7 +219,9 @@ export function BossesPage() {
                     {boss.brandName && (
                       <div className="flex items-center gap-2 text-purple-300">
                         <Layers className="h-3.5 w-3.5 text-purple-400" />
-                        <span>Ana Marka Ağı: <strong>{boss.brandName}</strong></span>
+                        <span>
+                          Ana Marka Ağı: <strong>{boss.brandName}</strong>
+                        </span>
                       </div>
                     )}
                   </div>
@@ -200,7 +249,7 @@ export function BossesPage() {
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-[#2a2a2a]/60 flex items-center justify-between text-xs text-zinc-500">
-                  <span>Kayıt: {new Date(boss.createdAt).toLocaleDateString("tr-TR")}</span>
+                  <span>Kayıt: {formatIstanbulDate(boss.createdAt)}</span>
                   <button
                     onClick={() => openEdit(boss)}
                     className="text-[#e63462] hover:underline inline-flex items-center gap-1 font-medium"

@@ -1,14 +1,22 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { CompletedOrderEntity } from '../domain/completed-order.entity';
 import { CashShiftEntity } from '../domain/cash-shift.entity';
 import { CashTransactionEntity } from '../domain/cash-transaction.entity';
-import { CheckSettlementPolicy } from '../domain/services/check-settlement.policy';
-import { OrderStatusPolicy } from '../domain/services/order-status.policy';
-import { UpdateCompletedOrderDto } from '../api/dto/update-completed-order.dto';
+import { AuditLogEntity } from '../domain/audit-log.entity';
 import {
-  computeDiscountMinorUnits,
+  CheckSettlementPolicy,
+  SettlementActorPolicy,
+} from '../domain/services/check-settlement.policy';
+import { OrderStatusPolicy } from '../domain/services/order-status.policy';
+import { BilledOrderLineForStock } from '../domain/services/recipe-stock.policy';
+import { CloseCheckSplitDto } from '../api/dto/close-check.dto';
+import { UpdateCompletedOrderDto } from '../api/dto/update-completed-order.dto';
+import { OrdersGateway } from '../api/orders.gateway';
+import { LedgerService } from './ledger.service';
+import { StockMovementsService } from './stock-movements.service';
+import {
   fromMinorUnits,
   toMinorUnits,
 } from '../../common/money/minor-units';
@@ -31,6 +39,9 @@ export class CompletedOrdersService {
     @InjectRepository(CompletedOrderEntity)
     private readonly repo: Repository<CompletedOrderEntity>,
     private readonly dataSource: DataSource,
+    private readonly ledgerService: LedgerService,
+    private readonly stockMovementsService: StockMovementsService,
+    private readonly ordersGateway: OrdersGateway,
   ) {}
 
   async list(restaurantId: string, filters: ListFilters): Promise<CompletedOrderEntity[]> {
@@ -39,10 +50,10 @@ export class CompletedOrdersService {
       .where('c.restaurant_id = :restaurantId', { restaurantId })
       .orderBy('c.closed_at', 'DESC');
 
-    if (filters.from) {
+    if (filters.from && !Number.isNaN(filters.from.getTime())) {
       qb.andWhere('c.closed_at >= :from', { from: filters.from.toISOString() });
     }
-    if (filters.to) {
+    if (filters.to && !Number.isNaN(filters.to.getTime())) {
       qb.andWhere('c.closed_at <= :to', { to: filters.to.toISOString() });
     }
     if (filters.waiter) {
@@ -51,11 +62,11 @@ export class CompletedOrdersService {
     if (filters.tableName) {
       qb.andWhere('c.table_name = :tableName', { tableName: filters.tableName });
     }
-    if (filters.limit != null) {
-      qb.take(filters.limit);
+    if (filters.limit != null && Number.isFinite(filters.limit) && filters.limit > 0) {
+      qb.take(Math.min(1000, Math.floor(filters.limit)));
     }
-    if (filters.offset != null) {
-      qb.skip(filters.offset);
+    if (filters.offset != null && Number.isFinite(filters.offset) && filters.offset >= 0) {
+      qb.skip(Math.floor(filters.offset));
     }
     return qb.getMany();
   }
@@ -68,10 +79,38 @@ export class CompletedOrdersService {
       for (const item of order.items || []) {
         if (!OrderStatusPolicy.isItemOnActiveBill(item.status)) continue;
         const qty = Math.max(0, Math.floor(Number(item.quantity) || 0));
-        sumMinorUnits += toMinorUnits(item.price) * qty;
+        const unitMinor = toMinorUnits(item.price);
+        if (unitMinor < 0) {
+          throw new BadRequestException('Invalid item price in completed order');
+        }
+        sumMinorUnits += unitMinor * qty;
       }
     }
     return sumMinorUnits;
+  }
+
+  private extractStockLinesFromOrders(
+    ordersSnapshot: unknown,
+  ): BilledOrderLineForStock[] {
+    if (!Array.isArray(ordersSnapshot)) return [];
+    const out: BilledOrderLineForStock[] = [];
+    for (const ord of ordersSnapshot) {
+      const items = (ord as { items?: Array<{ productId?: string; productName?: string; quantity?: number; status?: string }> })?.items ?? [];
+      for (const item of items) {
+        if (!item?.productId || !OrderStatusPolicy.isItemOnActiveBill(String(item.status ?? 'served'))) {
+          continue;
+        }
+        const qty = Math.max(0, Math.floor(Number(item.quantity) || 0));
+        if (qty > 0) {
+          out.push({
+            productId: String(item.productId),
+            productName: String(item.productName ?? 'Product'),
+            quantity: qty,
+          });
+        }
+      }
+    }
+    return out;
   }
 
   async updateFromPanel(
@@ -79,8 +118,9 @@ export class CompletedOrdersService {
     id: string,
     dto: UpdateCompletedOrderDto,
     actorName = 'Manager',
+    actor?: { id?: string } & SettlementActorPolicy,
   ): Promise<CompletedOrderEntity> {
-    return this.update(restaurantId, id, dto, actorName);
+    return this.update(restaurantId, id, dto, actorName, actor);
   }
 
   async update(
@@ -88,8 +128,9 @@ export class CompletedOrdersService {
     id: string,
     dto: UpdateCompletedOrderDto,
     actorName: string,
+    actor?: { id?: string } & SettlementActorPolicy,
   ): Promise<CompletedOrderEntity> {
-    return this.dataSource.transaction(async (em) => {
+    const saved = await this.dataSource.transaction(async (em) => {
       const row = await em.findOne(CompletedOrderEntity, {
         where: { id, restaurantId },
         lock: { mode: 'pessimistic_write' },
@@ -98,7 +139,9 @@ export class CompletedOrdersService {
         throw new NotFoundException('Completed order not found');
       }
 
+      const prevMethod = row.paymentMethod;
       const prevNetMinor = toMinorUnits(row.netAmount);
+      const prevDiscountMinor = toMinorUnits(row.discountAmount);
       const prevSplits = Array.isArray(row.paymentSplit)
         ? (row.paymentSplit as Array<{ method: string; amount: number }>)
         : null;
@@ -107,33 +150,97 @@ export class CompletedOrdersService {
         prevNetMinor,
         prevSplits,
       );
+      const prevPaymentSnap = (row.paymentSnapshot ?? {}) as {
+        ledgerCustomerId?: string;
+        ledgerCustomerName?: string;
+      };
+      const prevStockLines = this.extractStockLinesFromOrders(row.ordersSnapshot);
+      const nextStockLines = this.extractStockLinesFromOrders(dto.orders);
 
       const rawTotalMinor = this.sumActiveOrderLinesMinorUnits(dto.orders);
-      const discountMinor = computeDiscountMinorUnits(
-        rawTotalMinor,
-        dto.payment.discount ?? null,
-      );
-      const newNetMinor = Math.max(0, rawTotalMinor - discountMinor);
-      const tipMinor =
-        dto.payment.tip != null ? Math.max(0, toMinorUnits(dto.payment.tip)) : 0;
+      const effectiveLedgerCustomerId =
+        dto.payment.ledgerCustomerId ?? prevPaymentSnap.ledgerCustomerId ?? null;
 
-      const totalAmount = fromMinorUnits(rawTotalMinor);
-      const discountAmount = fromMinorUnits(discountMinor);
-      const netAmount = fromMinorUnits(newNetMinor);
+      const settlement = CheckSettlementPolicy.computeSettlement({
+        rawTotalMinorUnits: rawTotalMinor,
+        method: dto.payment.method,
+        discount: dto.payment.discount ?? null,
+        splitDetails: (dto.payment.splitDetails as CloseCheckSplitDto[] | undefined) ?? null,
+        ledgerCustomerId: effectiveLedgerCustomerId,
+        tip: dto.payment.tip ?? null,
+      });
+
+      const discountChanged =
+        settlement.discountMinorUnits > prevDiscountMinor ||
+        JSON.stringify(dto.payment.discount ?? null) !== JSON.stringify(row.paymentDiscount ?? null);
+      if (discountChanged && settlement.discountMinorUnits > 0) {
+        CheckSettlementPolicy.assertDiscountAllowedForActor(
+          settlement.rawTotalMinorUnits,
+          settlement.discountMinorUnits,
+          dto.payment.discount ?? null,
+          actor,
+        );
+      }
+
+      if (
+        settlement.ledgerMinorUnits > prevBreakdown.ledgerMinorUnits &&
+        actor &&
+        !actor.isBoss &&
+        !(actor.permissions ?? []).includes('ledger.assign_order')
+      ) {
+        throw new ForbiddenException(
+          'You do not have permission to assign checks to a customer ledger (ledger.assign_order)',
+        );
+      }
+
+      const safeActorName = (actorName || '').trim() || 'Manager';
+      const ledgerCustomer = await this.ledgerService.reconcileCompletedOrderDebtInTransaction(
+        em,
+        {
+          restaurantId,
+          completedOrderId: row.id,
+          tableId: dto.payment.tableId || null,
+          tableName: row.tableName,
+          nextCustomerId: effectiveLedgerCustomerId,
+          nextLedgerMinorUnits: settlement.ledgerMinorUnits,
+          snapshot: dto.orders,
+          recordedBy: safeActorName,
+        },
+      );
+
+      await this.stockMovementsService.reconcileRecipeIngredientsDelta(
+        em,
+        restaurantId,
+        prevStockLines,
+        nextStockLines,
+        safeActorName,
+      );
+
+      const totalAmount = fromMinorUnits(settlement.rawTotalMinorUnits);
+      const discountAmount = fromMinorUnits(settlement.discountMinorUnits);
+      const netAmount = fromMinorUnits(settlement.netMinorUnits);
 
       row.ordersSnapshot = dto.orders as unknown[];
       row.paymentSnapshot = {
         ...dto.payment,
         amount: netAmount,
-        tip: fromMinorUnits(tipMinor),
+        tip: fromMinorUnits(settlement.tipMinorUnits),
+        ...(settlement.normalizedSplits ? { splitDetails: settlement.normalizedSplits } : {}),
+        ...(settlement.discountSnapshot ? { discount: settlement.discountSnapshot } : {}),
+        ...(ledgerCustomer
+          ? {
+              ledgerCustomerId: ledgerCustomer.id,
+              ledgerCustomerName: ledgerCustomer.name,
+            }
+          : {}),
       } as unknown;
       row.totalAmount = totalAmount;
       row.discountAmount = discountAmount;
       row.netAmount = netAmount;
       row.paymentMethod = dto.payment.method;
-      row.paymentTip = fromMinorUnits(tipMinor);
-      row.paymentSplit = dto.payment.splitDetails ?? null;
-      row.paymentDiscount = dto.payment.discount ?? null;
+      row.paymentTip = fromMinorUnits(settlement.tipMinorUnits);
+      row.paymentSplit = settlement.normalizedSplits ?? null;
+      row.paymentDiscount = settlement.discountSnapshot ?? null;
 
       const savedRow = await em.save(CompletedOrderEntity, row);
 
@@ -141,24 +248,45 @@ export class CompletedOrdersService {
         em,
         restaurantId,
         row,
-        dto,
+        settlement,
         prevNetMinor,
-        newNetMinor,
         prevBreakdown,
-        actorName,
+        safeActorName,
+      );
+
+      await em.save(
+        AuditLogEntity,
+        em.create(AuditLogEntity, {
+          restaurantId,
+          userId: actor?.id?.trim() || restaurantId,
+          userName: safeActorName,
+          action: 'completed_order_updated',
+          category: 'payment',
+          details: `${row.tableName} completed check updated (${prevMethod} ${fromMinorUnits(prevNetMinor)} TL -> ${dto.payment.method} ${netAmount} TL)`,
+          metadata: {
+            completedOrderId: row.id,
+            tableName: row.tableName,
+            previousMethod: prevMethod,
+            nextMethod: dto.payment.method,
+            previousNetAmount: fromMinorUnits(prevNetMinor),
+            nextNetAmount: netAmount,
+          },
+        }),
       );
 
       return savedRow;
     });
+
+    this.ordersGateway.emitOrdersUpdated(restaurantId);
+    return saved;
   }
 
   private async reconcileActiveShiftIfNeeded(
     em: EntityManager,
     restaurantId: string,
     row: CompletedOrderEntity,
-    dto: UpdateCompletedOrderDto,
+    settlement: ReturnType<typeof CheckSettlementPolicy.computeSettlement>,
     prevNetMinor: number,
-    newNetMinor: number,
     prevBreakdown: ReturnType<typeof CheckSettlementPolicy.computeMethodBreakdownMinorUnits>,
     actorName: string,
   ): Promise<void> {
@@ -171,49 +299,53 @@ export class CompletedOrdersService {
       return;
     }
 
-    const nextBreakdown = CheckSettlementPolicy.computeMethodBreakdownMinorUnits(
-      dto.payment.method,
-      newNetMinor,
-      dto.payment.splitDetails ?? null,
-    );
-
     openShift.adjustSettlementDiff({
-      netDiffMinorUnits: newNetMinor - prevNetMinor,
-      cashDiffMinorUnits: nextBreakdown.cashMinorUnits - prevBreakdown.cashMinorUnits,
-      cardDiffMinorUnits: nextBreakdown.cardMinorUnits - prevBreakdown.cardMinorUnits,
+      netDiffMinorUnits: settlement.netMinorUnits - prevNetMinor,
+      cashDiffMinorUnits: settlement.cashMinorUnits - prevBreakdown.cashMinorUnits,
+      cardDiffMinorUnits: settlement.cardMinorUnits - prevBreakdown.cardMinorUnits,
       mealCardDiffMinorUnits:
-        nextBreakdown.mealCardMinorUnits - prevBreakdown.mealCardMinorUnits,
+        settlement.mealCardMinorUnits - prevBreakdown.mealCardMinorUnits,
       multinetDiffMinorUnits:
-        nextBreakdown.multinetMinorUnits - prevBreakdown.multinetMinorUnits,
+        settlement.multinetMinorUnits - prevBreakdown.multinetMinorUnits,
     });
 
-    const cashDeltaMinor = nextBreakdown.cashMinorUnits - prevBreakdown.cashMinorUnits;
+    const cashDeltaMinor = settlement.cashMinorUnits - prevBreakdown.cashMinorUnits;
     const createdBy = actorName.trim() || 'Manager';
-    if (cashDeltaMinor > 0) {
-      const tx = em.create(CashTransactionEntity, {
-        restaurantId,
-        shiftId: openShift.id,
-        type: 'sale',
-        amount: fromMinorUnits(cashDeltaMinor),
-        description: `${row.tableName} — completed check adjustment`,
-        reference: row.id,
-        createdBy,
+    if (cashDeltaMinor !== 0) {
+      const existingSaleTx = await em.findOne(CashTransactionEntity, {
+        where: {
+          restaurantId,
+          shiftId: openShift.id,
+          type: 'sale',
+          reference: row.id,
+        },
+        order: { createdAt: 'DESC' },
       });
-      await em.save(CashTransactionEntity, tx);
-      openShift.recordCashMovement('sale', cashDeltaMinor);
-    } else if (cashDeltaMinor < 0) {
-      const refundMinor = Math.abs(cashDeltaMinor);
-      const tx = em.create(CashTransactionEntity, {
-        restaurantId,
-        shiftId: openShift.id,
-        type: 'refund',
-        amount: fromMinorUnits(refundMinor),
-        description: `${row.tableName} — completed check adjustment (refund)`,
-        reference: row.id,
-        createdBy,
-      });
-      await em.save(CashTransactionEntity, tx);
-      openShift.recordCashMovement('refund', refundMinor);
+
+      if (existingSaleTx) {
+        if (settlement.cashMinorUnits <= 0) {
+          await em.remove(CashTransactionEntity, existingSaleTx);
+        } else {
+          existingSaleTx.amount = fromMinorUnits(settlement.cashMinorUnits);
+          existingSaleTx.description =
+            row.paymentMethod === 'split'
+              ? `${row.tableName} - Check (split cash)`
+              : `${row.tableName} - Check`;
+          existingSaleTx.createdBy = createdBy;
+          await em.save(CashTransactionEntity, existingSaleTx);
+        }
+      } else if (settlement.cashMinorUnits > 0 && cashDeltaMinor > 0) {
+        const tx = em.create(CashTransactionEntity, {
+          restaurantId,
+          shiftId: openShift.id,
+          type: 'sale',
+          amount: fromMinorUnits(cashDeltaMinor),
+          description: `${row.tableName} — completed check adjustment`,
+          reference: row.id,
+          createdBy,
+        });
+        await em.save(CashTransactionEntity, tx);
+      }
     }
 
     await em.save(CashShiftEntity, openShift);

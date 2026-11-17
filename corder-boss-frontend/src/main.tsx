@@ -5,9 +5,29 @@ import "./index.css"
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {
-      // Service worker registration is optional in dev mode
-    })
+    if (import.meta.env.PROD) {
+      navigator.serviceWorker
+        .register("/sw.js")
+        .then((registration) => {
+          document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible") {
+              void registration.update().catch(() => {})
+            }
+          })
+        })
+        .catch(() => {
+          // Service worker registration failed
+        })
+    } else {
+      navigator.serviceWorker
+        .getRegistrations()
+        .then((regs) => {
+          for (const reg of regs) {
+            void reg.unregister()
+          }
+        })
+        .catch(() => {})
+    }
   })
 }
 
@@ -16,4 +36,3 @@ createRoot(document.getElementById("root")!).render(
     <App />
   </StrictMode>
 )
-

@@ -24,7 +24,9 @@ import { RestaurantRoleEntity } from '../domain/restaurant-role.entity';
 import {
   BossOverviewPolicy,
   BranchLivePulseDto,
+  computeIstanbulDateBoundaries,
 } from '../domain/services/boss-overview.policy';
+import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
 import { RestaurantAuthService } from './restaurant-auth.service';
 import { RolesService } from './roles.service';
 
@@ -81,10 +83,8 @@ export class BossOverviewService {
       };
     }
 
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfWeek = new Date(startOfToday.getTime() - 6 * 24 * 60 * 60 * 1000);
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const { startOfToday, startOfWeek, startOfMonth } =
+      computeIstanbulDateBoundaries(new Date());
     const branchIds = targetBranches.map((b) => b.id);
     const data = await this.loadBranchesRawData(branchIds, startOfMonth);
 
@@ -206,6 +206,22 @@ export class BossOverviewService {
       if (subBoss.id === actorBossId) {
         throw new ConflictException('You cannot assign your own account as a subordinate branch manager');
       }
+      if (subBoss.bossTier === 'brand_owner') {
+        throw new ForbiddenException('Brand Owner (HQ) account cannot be modified or reassigned');
+      }
+      if (subBoss.restaurantId && !ownedIds.has(subBoss.restaurantId)) {
+        throw new ConflictException(
+          'An account with this email already exists in another organization',
+        );
+      }
+      const existingSubLinks = await this.bossRestaurantRepo.find({
+        where: { bossId: subBoss.id },
+      });
+      if (existingSubLinks.some((l) => !ownedIds.has(l.restaurantId))) {
+        throw new ConflictException(
+          'This boss account is linked to branches outside your authority',
+        );
+      }
       if (dto.name?.trim()) subBoss.name = dto.name.trim();
       if (dto.phone !== undefined) subBoss.phone = dto.phone?.trim() || null;
       if (dto.password && dto.password.length >= 8) {
@@ -316,7 +332,7 @@ export class BossOverviewService {
       openShifts,
       materials,
       staffList,
-      ledgerEntries,
+      ledgerAggRows,
       recentAudits,
     ] = await Promise.all([
       this.tableRepo.find({ where: { restaurantId: In(branchIds) } }),
@@ -331,13 +347,28 @@ export class BossOverviewService {
       }),
       this.stockRepo.find({ where: { restaurantId: In(branchIds) } }),
       this.staffRepo.find({ where: { restaurantId: In(branchIds), isActive: true } }),
-      this.ledgerEntryRepo.find({ where: { restaurantId: In(branchIds) } }),
+      this.ledgerEntryRepo
+        .createQueryBuilder('e')
+        .select('e.restaurant_id', 'restaurantId')
+        .addSelect(
+          `SUM(CASE WHEN e.entry_type = 'debt' THEN e.amount::numeric ELSE -e.amount::numeric END)`,
+          'netBalance',
+        )
+        .where('e.restaurant_id IN (:...branchIds)', { branchIds })
+        .groupBy('e.restaurant_id')
+        .getRawMany<{ restaurantId: string; netBalance: string | null }>(),
       this.auditRepo.find({
         where: { restaurantId: In(branchIds) },
         order: { createdAt: 'DESC' },
         take: 40,
       }),
     ]);
+
+    const openLedgerBalanceByBranchId = new Map<string, number>();
+    for (const row of ledgerAggRows) {
+      const minor = Math.max(0, toMinorUnits(Number(row.netBalance || 0)));
+      openLedgerBalanceByBranchId.set(row.restaurantId, fromMinorUnits(minor));
+    }
 
     const activeOrderIds = activeOrders.map((o) => o.id);
     const activeOrderItems = activeOrderIds.length
@@ -359,7 +390,7 @@ export class BossOverviewService {
       openShifts,
       materials,
       staffList,
-      ledgerEntries,
+      openLedgerBalanceByBranchId,
       recentAudits,
     };
   }

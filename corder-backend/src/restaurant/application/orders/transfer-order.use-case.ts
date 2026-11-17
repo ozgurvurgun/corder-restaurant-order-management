@@ -13,7 +13,7 @@ import { OrderQueryService } from './order-query.service';
 export interface MoveItemsToTableInput {
   fromTableId: string;
   toTableId: string;
-  itemIds: string[];
+  items: Array<{ itemId: string; quantity?: number }>;
   userId?: string | null;
   actorDisplayName?: string | null;
 }
@@ -56,8 +56,10 @@ export class TransferOrderUseCase {
     restaurantId: string,
     fromTableId: string,
     toTableId: string,
+    actorStaffId?: string | null,
   ): Promise<{ moved: number }> {
     if (fromTableId === toTableId) return { moved: 0 };
+    await this.cashShiftService.requireCurrent(restaurantId);
 
     const moved = await this.dataSource.transaction(async (em) => {
       const { fromTable, toTable } = await this.lockTablesInDeterministicOrder(
@@ -69,7 +71,8 @@ export class TransferOrderUseCase {
       if (fromTable.status === 'checkout' || toTable.status === 'checkout') {
         throw new BadRequestException('Cannot transfer a table that is in checkout');
       }
-      this.tableService.assertTableFreeForMergeOrMove(toTable);
+      this.tableService.assertStaffMayUseTable(fromTable, actorStaffId);
+      this.tableService.assertTableFreeForMergeOrMove(toTable, actorStaffId);
 
       const activeOrders = await em.find(OrderEntity, {
         where: { restaurantId, tableId: fromTableId, status: 'active' },
@@ -79,6 +82,11 @@ export class TransferOrderUseCase {
       if (activeOrders.length === 0) {
         return 0;
       }
+
+      const existingTargetOrders = await em.count(OrderEntity, {
+        where: { restaurantId, tableId: toTableId, status: 'active' },
+      });
+      const isMergeIntoOccupied = existingTargetOrders > 0;
 
       const now = new Date();
       await em.update(
@@ -92,7 +100,12 @@ export class TransferOrderUseCase {
         toTable.discount = fromTable.discount;
         toTableChanged = true;
       }
-      if (fromTable.splitInfo && !toTable.splitInfo) {
+      if (isMergeIntoOccupied) {
+        if (toTable.splitInfo && !toTable.splitInfo.paidShares?.length) {
+          toTable.splitInfo = null;
+          toTableChanged = true;
+        }
+      } else if (fromTable.splitInfo && !toTable.splitInfo) {
         toTable.splitInfo = fromTable.splitInfo;
         toTableChanged = true;
       }
@@ -121,14 +134,15 @@ export class TransferOrderUseCase {
     restaurantId: string,
     dto: MoveItemsToTableInput,
   ): Promise<Record<string, unknown>> {
-    const { fromTableId, toTableId, itemIds } = dto;
-    const uniqueIds = [...new Set(itemIds)].sort();
+    const { fromTableId, toTableId } = dto;
+    const selection = this.normalizeMoveSelection(dto.items);
+    const uniqueIds = selection.map((s) => s.itemId).sort();
     if (fromTableId === toTableId) {
       throw new BadRequestException('Cannot move items to the same table');
     }
     await this.cashShiftService.requireCurrent(restaurantId);
 
-    const newOrderId = await this.dataSource.transaction(async (em) => {
+    const { newOrderId, fromTableEmptied } = await this.dataSource.transaction(async (em) => {
       const { fromTable, toTable } = await this.lockTablesInDeterministicOrder(
         em,
         restaurantId,
@@ -141,25 +155,33 @@ export class TransferOrderUseCase {
       this.tableService.assertStaffMayUseTable(fromTable, dto.userId ?? null);
       this.tableService.assertStaffMayUseTable(toTable, dto.userId ?? null);
 
+      const sourceOrders = await em.find(OrderEntity, {
+        where: { restaurantId, tableId: fromTableId, status: 'active' },
+        order: { id: 'ASC' },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (sourceOrders.length === 0) {
+        throw new BadRequestException('No active orders found on source table');
+      }
+      const sourceOrderById = new Map(sourceOrders.map((o) => [o.id, o]));
+      const sourceOrderIds = sourceOrders.map((o) => o.id);
+
       const items = await em.find(OrderItemEntity, {
-        where: { id: In(uniqueIds) },
+        where: { id: In(uniqueIds), orderId: In(sourceOrderIds) },
         order: { id: 'ASC' },
         lock: { mode: 'pessimistic_write' },
       });
       if (items.length !== uniqueIds.length) {
-        throw new BadRequestException('One or more order items were not found');
+        throw new BadRequestException('One or more order items were not found on this table');
       }
+      const itemById = new Map(items.map((i) => [i.id, i]));
+      const qtyByItemId = new Map(selection.map((s) => [s.itemId, s.quantity]));
 
       const affectedOrderIds = [...new Set(items.map((i) => i.orderId))].sort();
-      const orders = await em.find(OrderEntity, {
-        where: { id: In(affectedOrderIds) },
-        order: { id: 'ASC' },
-        lock: { mode: 'pessimistic_write' },
-      });
-      const orderById = new Map(orders.map((o) => [o.id, o]));
+      const orders = affectedOrderIds.map((oid) => sourceOrderById.get(oid)!);
 
       for (const item of items) {
-        item.order = orderById.get(item.orderId)!;
+        item.order = sourceOrderById.get(item.orderId)!;
         OrderStatusPolicy.assertItemTransferable(item, restaurantId, fromTableId);
       }
 
@@ -176,16 +198,69 @@ export class TransferOrderUseCase {
             )?.name?.trim() || null
           : null);
 
+      const now = new Date();
+      const movedSnapshots: Array<{
+        productId: string;
+        productName: string;
+        price: number;
+        quantity: number;
+        note?: string;
+      }> = [];
+
       for (const id of uniqueIds) {
-        await em.delete(OrderItemEntity, { id });
+        const src = itemById.get(id)!;
+        const taken = src.takeQuantity(qtyByItemId.get(id));
+        movedSnapshots.push({
+          productId: src.productId,
+          productName: src.productName,
+          price: Number(src.price),
+          quantity: taken.quantity,
+          note: src.note ?? undefined,
+        });
+        if (taken.full) {
+          await em.delete(OrderItemEntity, { id });
+        } else {
+          await em.save(OrderItemEntity, src);
+        }
       }
       for (const oid of affectedOrderIds) {
-        const remaining = await em.count(OrderItemEntity, { where: { orderId: oid } });
-        if (remaining === 0) {
-          await em.delete(OrderEntity, { id: oid });
+        const remainingItems = await em.find(OrderItemEntity, { where: { orderId: oid } });
+        if (remainingItems.length === 0) {
+          await em.delete(OrderEntity, { id: oid, restaurantId });
+        } else {
+          const nextStatus = OrderStatusPolicy.resolveOrderStatus(remainingItems);
+          await em.update(
+            OrderEntity,
+            { id: oid, restaurantId },
+            { status: nextStatus, updatedAt: now },
+          );
         }
       }
 
+      const remainingSourceOrders = await em.find(OrderEntity, {
+        where: { restaurantId, tableId: fromTableId, status: 'active' },
+      });
+      let isFromTableEmpty = false;
+      if (remainingSourceOrders.length === 0) {
+        fromTable.markEmpty();
+        await em.save(TableEntity, fromTable);
+        isFromTableEmpty = true;
+      } else if (fromTable.splitInfo && !fromTable.splitInfo.paidShares?.length) {
+        fromTable.splitInfo = null;
+        await em.save(TableEntity, fromTable);
+      }
+
+      if (toTable.status === 'empty' || (toTable.splitInfo && !toTable.splitInfo.paidShares?.length)) {
+        if (toTable.status === 'empty') {
+          toTable.status = 'occupied';
+        }
+        if (toTable.splitInfo && !toTable.splitInfo.paidShares?.length) {
+          toTable.splitInfo = null;
+        }
+        await em.save(TableEntity, toTable);
+      }
+
+      const allSourcesPrinted = orders.every((o) => o.kitchenTicketPrintedAt != null);
       const order = em.create(OrderEntity, {
         restaurantId,
         tableId: toTableId,
@@ -193,26 +268,52 @@ export class TransferOrderUseCase {
         userDisplayName: moverName,
         status: 'active',
         mergedFrom: fromTableLabel,
-        kitchenTicketPrintedAt: new Date(),
+        kitchenTicketPrintedAt: allSourcesPrinted ? now : null,
       });
       const savedOrder = await em.save(OrderEntity, order);
-      const newRows = items.map((src) =>
+      const newRows = movedSnapshots.map((src) =>
         em.create(OrderItemEntity, {
           orderId: savedOrder.id,
           productId: src.productId,
           productName: src.productName,
           price: src.price,
           quantity: src.quantity,
-          note: src.note ?? undefined,
+          note: src.note,
           status: 'sent',
         }),
       );
       await em.save(OrderItemEntity, newRows);
-      return savedOrder.id;
+      return { newOrderId: savedOrder.id, fromTableEmptied: isFromTableEmpty };
     });
 
+    if (fromTableEmptied) {
+      void this.ordersGateway.emitTableSessionPresence(restaurantId).catch(() => undefined);
+    }
     const serialized = await this.orderQuery.serializeOrderEntityById(newOrderId, restaurantId);
     this.ordersGateway.emitOrdersUpdated(restaurantId);
     return serialized;
+  }
+
+  private normalizeMoveSelection(
+    items: Array<{ itemId: string; quantity?: number }>,
+  ): Array<{ itemId: string; quantity?: number }> {
+    const seen = new Set<string>();
+    const out: Array<{ itemId: string; quantity?: number }> = [];
+    for (const line of items ?? []) {
+      const id = (line.itemId ?? '').trim();
+      if (!id) continue;
+      if (seen.has(id)) {
+        throw new BadRequestException('Duplicate order item in move selection');
+      }
+      seen.add(id);
+      out.push({
+        itemId: id,
+        ...(line.quantity != null ? { quantity: line.quantity } : {}),
+      });
+    }
+    if (out.length === 0) {
+      throw new BadRequestException('No order items selected to move');
+    }
+    return out;
   }
 }

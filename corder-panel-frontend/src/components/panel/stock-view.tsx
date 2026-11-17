@@ -26,6 +26,7 @@ export default function StockView() {
     stockMovements,
     inventoryCounts,
     addMaterial,
+    updateMaterial,
     deleteMaterial,
     addStockMovement,
     setProductIngredients,
@@ -39,8 +40,20 @@ export default function StockView() {
     products,
     categories,
     addNotification,
+    hasPermission,
   } = usePanelStore()
   const { showToast } = usePanelToast()
+
+  const isBoss = currentUser?.role === "root"
+  const canManageMaterials =
+    isBoss || hasPermission("inventory.manage_materials")
+  const canAddMovement = isBoss || hasPermission("inventory.stock_movement")
+  const canManageSuppliers =
+    isBoss || hasPermission("inventory.manage_suppliers")
+  const canCountInventory = isBoss || hasPermission("inventory.count_adjust")
+  const canManageProducts =
+    isBoss ||
+    hasPermission("catalog.manage_products", "inventory.manage_materials")
 
   const [activeTab, setActiveTab] = useState<
     "materials" | "movements" | "suppliers" | "inventory" | "cost" | "link"
@@ -57,7 +70,7 @@ export default function StockView() {
   const [matMin, setMatMin] = useState("")
   const [matCost, setMatCost] = useState("")
   const [matCategory, setMatCategory] = useState("")
-  const [matSupplier] = useState("")
+  const [matSupplier, setMatSupplier] = useState("")
 
   const [mvMatId, setMvMatId] = useState("")
   const [mvType, setMvType] = useState<"in" | "out" | "waste">("in")
@@ -77,10 +90,11 @@ export default function StockView() {
 
   const filteredMaterials = useMemo(() => {
     if (!search.trim()) return stockMaterials
+    const q = search.trim().toLocaleLowerCase("tr-TR")
     return stockMaterials.filter(
       (m) =>
-        m.name.toLowerCase().includes(search.toLowerCase()) ||
-        m.category.toLowerCase().includes(search.toLowerCase()),
+        m.name.toLocaleLowerCase("tr-TR").includes(q) ||
+        m.category.toLocaleLowerCase("tr-TR").includes(q),
     )
   }, [stockMaterials, search])
 
@@ -152,6 +166,7 @@ export default function StockView() {
     setMatMin("")
     setMatCost("")
     setMatCategory("")
+    setMatSupplier("")
     setShowAddMaterial(false)
   }
 
@@ -163,7 +178,8 @@ export default function StockView() {
     }
     const material = stockMaterials.find((m) => m.id === mvMatId)
     const unitCostVal = parseFloat(mvCost)
-    const unitCost = Number.isFinite(unitCostVal) && unitCostVal >= 0 ? unitCostVal : undefined
+    const unitCost =
+      Number.isFinite(unitCostVal) && unitCostVal >= 0 ? unitCostVal : undefined
     void addStockMovement({
       materialId: mvMatId,
       materialName: material?.name || "",
@@ -255,6 +271,7 @@ export default function StockView() {
             <MaterialsTab
               stockMaterials={stockMaterials}
               filteredMaterials={filteredMaterials}
+              suppliers={suppliers}
               search={search}
               setSearch={setSearch}
               showAddMaterial={showAddMaterial}
@@ -271,7 +288,11 @@ export default function StockView() {
               setMatStock={setMatStock}
               matMin={matMin}
               setMatMin={setMatMin}
+              matSupplier={matSupplier}
+              setMatSupplier={setMatSupplier}
+              canManageMaterials={canManageMaterials}
               handleAddMaterial={handleAddMaterial}
+              updateMaterial={updateMaterial}
               deleteMaterial={deleteMaterial}
             />
           )}
@@ -292,6 +313,7 @@ export default function StockView() {
               setMvCost={setMvCost}
               mvReason={mvReason}
               setMvReason={setMvReason}
+              canAddMovement={canAddMovement}
               handleAddMovement={handleAddMovement}
             />
           )}
@@ -308,6 +330,7 @@ export default function StockView() {
               supPhone={supPhone}
               setSupPhone={setSupPhone}
               savingSupplier={savingSupplier}
+              canManageSuppliers={canManageSuppliers}
               handleAddSupplier={() => void handleAddSupplier()}
               updateSupplier={updateSupplier}
               deleteSupplier={deleteSupplier}
@@ -317,6 +340,7 @@ export default function StockView() {
           {activeTab === "inventory" && (
             <InventoryCountsTab
               inventoryCounts={inventoryCounts}
+              canCountInventory={canCountInventory}
               startInventoryCount={startInventoryCount}
               updateInventoryItem={updateInventoryItem}
               completeInventoryCount={completeInventoryCount}
@@ -332,6 +356,7 @@ export default function StockView() {
               products={products}
               categories={categories}
               stockMaterials={stockMaterials}
+              canManageProducts={canManageProducts}
               setProductIngredients={setProductIngredients}
             />
           )}

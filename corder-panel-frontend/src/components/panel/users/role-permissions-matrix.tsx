@@ -29,6 +29,7 @@ export function RolePermissionsMatrix({
   const [roleSaving, setRoleSaving] = useState(false)
   const [newRoleName, setNewRoleName] = useState("")
   const [showNewRoleInput, setShowNewRoleInput] = useState(false)
+  const [confirmAction, setConfirmAction] = useState<"reset" | "delete" | null>(null)
 
   const selectedRoleObj = useMemo(
     () => roles.find((r) => r.key === selectedRoleKey) ?? roles[0] ?? null,
@@ -74,9 +75,8 @@ export function RolePermissionsMatrix({
 
   const handleResetRole = async () => {
     if (!token || !selectedRoleObj) return
-    const msg = `${getRoleDisplayName(selectedRoleObj.key, selectedRoleObj.name)} rolünü varsayılan ayarlara sıfırlamak istiyor musunuz?`
-    if (!confirm(msg)) return
     setRoleSaving(true)
+    setConfirmAction(null)
     try {
       await api.roles.reset(token, selectedRoleObj.key)
       await onReloadRoles()
@@ -114,8 +114,8 @@ export function RolePermissionsMatrix({
 
   const handleDeleteCustomRole = async () => {
     if (!token || !selectedRoleObj || selectedRoleObj.isSystem) return
-    if (!confirm(`${selectedRoleObj.name} özel rolünü silmek istediğinize emin misiniz?`)) return
     setRoleSaving(true)
+    setConfirmAction(null)
     try {
       await api.roles.delete(token, selectedRoleObj.key)
       await onReloadRoles()
@@ -248,11 +248,36 @@ export function RolePermissionsMatrix({
             </div>
 
             <div className="flex items-center gap-2">
-              {selectedRoleObj.isSystem ? (
+              {confirmAction ? (
+                <div className="flex items-center gap-1.5 bg-red-50 px-2.5 py-1 rounded-lg border border-red-200">
+                  <span className="text-[11px] font-medium text-red-700">
+                    {confirmAction === "reset" ? "Sıfırlansın mı?" : "Silinsin mi?"}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={roleSaving}
+                    onClick={() =>
+                      void (confirmAction === "reset"
+                        ? handleResetRole()
+                        : handleDeleteCustomRole())
+                    }
+                    className="h-6 px-2 rounded bg-red-600 text-white text-[11px] font-semibold"
+                  >
+                    Evet
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmAction(null)}
+                    className="h-6 px-2 rounded text-[11px] text-[#86868b]"
+                  >
+                    Vazgeç
+                  </button>
+                </div>
+              ) : selectedRoleObj.isSystem ? (
                 <button
                   type="button"
                   disabled={roleSaving}
-                  onClick={() => void handleResetRole()}
+                  onClick={() => setConfirmAction("reset")}
                   className="h-8 px-3 rounded-lg border border-[#d1d1d6] text-[12px] font-medium text-[#86868b] hover:text-[#1d1d1f] flex items-center gap-1"
                 >
                   <RotateCcw className="w-3.5 h-3.5" /> Varsayılana Sıfırla
@@ -261,7 +286,7 @@ export function RolePermissionsMatrix({
                 <button
                   type="button"
                   disabled={roleSaving}
-                  onClick={() => void handleDeleteCustomRole()}
+                  onClick={() => setConfirmAction("delete")}
                   className="h-8 px-3 rounded-lg border border-red-300 text-[12px] font-medium text-red-600 hover:bg-red-50 flex items-center gap-1"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> Özel Rolü Sil

@@ -7,7 +7,7 @@ export class CoreAndCatalogSchema1760000000000 implements MigrationInterface {
     await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`);
 
     await queryRunner.query(`
-      CREATE TABLE "platform_admins" (
+      CREATE TABLE IF NOT EXISTS "platform_admins" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "email" character varying NOT NULL,
         "password_hash" character varying NOT NULL,
@@ -19,7 +19,7 @@ export class CoreAndCatalogSchema1760000000000 implements MigrationInterface {
     `);
 
     await queryRunner.query(`
-      CREATE TABLE "restaurants" (
+      CREATE TABLE IF NOT EXISTS "restaurants" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "name" character varying NOT NULL,
         "slug" character varying NOT NULL,
@@ -44,14 +44,14 @@ export class CoreAndCatalogSchema1760000000000 implements MigrationInterface {
       )
     `);
     await queryRunner.query(
-      `CREATE INDEX "IDX_restaurants_terminal_email" ON "restaurants" ("terminal_email")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_restaurants_terminal_email" ON "restaurants" ("terminal_email")`,
     );
     await queryRunner.query(
-      `CREATE UNIQUE INDEX "IDX_restaurants_print_agent_username" ON "restaurants" ("print_agent_username")`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_restaurants_print_agent_username" ON "restaurants" ("print_agent_username")`,
     );
 
     await queryRunner.query(`
-      CREATE TABLE "root_admins" (
+      CREATE TABLE IF NOT EXISTS "root_admins" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "restaurant_id" uuid,
         "email" character varying NOT NULL,
@@ -66,11 +66,11 @@ export class CoreAndCatalogSchema1760000000000 implements MigrationInterface {
       )
     `);
     await queryRunner.query(
-      `CREATE INDEX "IDX_root_admins_restaurant_id" ON "root_admins" ("restaurant_id")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_root_admins_restaurant_id" ON "root_admins" ("restaurant_id")`,
     );
 
     await queryRunner.query(`
-      CREATE TABLE "boss_restaurants" (
+      CREATE TABLE IF NOT EXISTS "boss_restaurants" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "boss_id" uuid NOT NULL,
         "restaurant_id" uuid NOT NULL,
@@ -82,14 +82,14 @@ export class CoreAndCatalogSchema1760000000000 implements MigrationInterface {
       )
     `);
     await queryRunner.query(
-      `CREATE UNIQUE INDEX "IDX_boss_restaurants_boss_restaurant" ON "boss_restaurants" ("boss_id", "restaurant_id")`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_boss_restaurants_boss_restaurant" ON "boss_restaurants" ("boss_id", "restaurant_id")`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_boss_restaurants_restaurant_id" ON "boss_restaurants" ("restaurant_id")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_boss_restaurants_restaurant_id" ON "boss_restaurants" ("restaurant_id")`,
     );
 
     await queryRunner.query(`
-      CREATE TABLE "restaurant_roles" (
+      CREATE TABLE IF NOT EXISTS "restaurant_roles" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "restaurant_id" uuid NOT NULL,
         "key" character varying(64) NOT NULL,
@@ -109,14 +109,14 @@ export class CoreAndCatalogSchema1760000000000 implements MigrationInterface {
       )
     `);
     await queryRunner.query(
-      `CREATE UNIQUE INDEX "IDX_restaurant_roles_restaurant_key" ON "restaurant_roles" ("restaurant_id", "key")`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_restaurant_roles_restaurant_key" ON "restaurant_roles" ("restaurant_id", "key")`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_restaurant_roles_restaurant_id" ON "restaurant_roles" ("restaurant_id")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_restaurant_roles_restaurant_id" ON "restaurant_roles" ("restaurant_id")`,
     );
 
     await queryRunner.query(`
-      CREATE TABLE "restaurant_staff" (
+      CREATE TABLE IF NOT EXISTS "restaurant_staff" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "restaurant_id" uuid NOT NULL,
         "email" character varying,
@@ -139,17 +139,17 @@ export class CoreAndCatalogSchema1760000000000 implements MigrationInterface {
       )
     `);
     await queryRunner.query(
-      `CREATE INDEX "IDX_restaurant_staff_restaurant_id" ON "restaurant_staff" ("restaurant_id")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_restaurant_staff_restaurant_id" ON "restaurant_staff" ("restaurant_id")`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_restaurant_staff_restaurant_active" ON "restaurant_staff" ("restaurant_id", "is_active")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_restaurant_staff_restaurant_active" ON "restaurant_staff" ("restaurant_id", "is_active")`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_restaurant_staff_email" ON "restaurant_staff" ("email")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_restaurant_staff_email" ON "restaurant_staff" ("email")`,
     );
 
     await queryRunner.query(`
-      CREATE TABLE "tables" (
+      CREATE TABLE IF NOT EXISTS "tables" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "restaurant_id" uuid NOT NULL,
         "name" character varying NOT NULL,
@@ -166,11 +166,11 @@ export class CoreAndCatalogSchema1760000000000 implements MigrationInterface {
       )
     `);
     await queryRunner.query(
-      `CREATE INDEX "IDX_tables_restaurant_id" ON "tables" ("restaurant_id")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_tables_restaurant_id" ON "tables" ("restaurant_id")`,
     );
 
     await queryRunner.query(`
-      CREATE TABLE "categories" (
+      CREATE TABLE IF NOT EXISTS "categories" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "restaurant_id" uuid NOT NULL,
         "parent_id" uuid,
@@ -188,14 +188,14 @@ export class CoreAndCatalogSchema1760000000000 implements MigrationInterface {
       )
     `);
     await queryRunner.query(
-      `CREATE INDEX "IDX_categories_restaurant_id" ON "categories" ("restaurant_id")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_categories_restaurant_id" ON "categories" ("restaurant_id")`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_categories_parent_id" ON "categories" ("parent_id")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_categories_parent_id" ON "categories" ("parent_id")`,
     );
 
     await queryRunner.query(`
-      CREATE TABLE "products" (
+      CREATE TABLE IF NOT EXISTS "products" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "category_id" uuid NOT NULL,
         "name" character varying NOT NULL,
@@ -212,11 +212,11 @@ export class CoreAndCatalogSchema1760000000000 implements MigrationInterface {
       )
     `);
     await queryRunner.query(
-      `CREATE INDEX "IDX_products_category_id" ON "products" ("category_id")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_products_category_id" ON "products" ("category_id")`,
     );
 
     await queryRunner.query(`
-      CREATE TABLE "orders" (
+      CREATE TABLE IF NOT EXISTS "orders" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "restaurant_id" uuid NOT NULL,
         "table_id" uuid NOT NULL,
@@ -233,17 +233,17 @@ export class CoreAndCatalogSchema1760000000000 implements MigrationInterface {
       )
     `);
     await queryRunner.query(
-      `CREATE INDEX "IDX_orders_restaurant_status" ON "orders" ("restaurant_id", "status")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_orders_restaurant_status" ON "orders" ("restaurant_id", "status")`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_orders_restaurant_table_status" ON "orders" ("restaurant_id", "table_id", "status")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_orders_restaurant_table_status" ON "orders" ("restaurant_id", "table_id", "status")`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_orders_restaurant_created" ON "orders" ("restaurant_id", "created_at")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_orders_restaurant_created" ON "orders" ("restaurant_id", "created_at")`,
     );
 
     await queryRunner.query(`
-      CREATE TABLE "order_items" (
+      CREATE TABLE IF NOT EXISTS "order_items" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "order_id" uuid NOT NULL,
         "product_id" character varying NOT NULL,
@@ -261,14 +261,14 @@ export class CoreAndCatalogSchema1760000000000 implements MigrationInterface {
       )
     `);
     await queryRunner.query(
-      `CREATE INDEX "IDX_order_items_order_id" ON "order_items" ("order_id")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_order_items_order_id" ON "order_items" ("order_id")`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_order_items_order_status" ON "order_items" ("order_id", "status")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_order_items_order_status" ON "order_items" ("order_id", "status")`,
     );
 
     await queryRunner.query(`
-      CREATE TABLE "print_jobs" (
+      CREATE TABLE IF NOT EXISTS "print_jobs" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "restaurant_id" uuid NOT NULL,
         "print_type" character varying(32) NOT NULL,
@@ -280,11 +280,11 @@ export class CoreAndCatalogSchema1760000000000 implements MigrationInterface {
       )
     `);
     await queryRunner.query(
-      `CREATE INDEX "IDX_print_jobs_pending" ON "print_jobs" ("restaurant_id", "printed_at", "created_at")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_print_jobs_pending" ON "print_jobs" ("restaurant_id", "printed_at", "created_at")`,
     );
 
     await queryRunner.query(`
-      CREATE TABLE "campaigns" (
+      CREATE TABLE IF NOT EXISTS "campaigns" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "restaurant_id" uuid NOT NULL,
         "title" character varying NOT NULL,
@@ -302,7 +302,7 @@ export class CoreAndCatalogSchema1760000000000 implements MigrationInterface {
       )
     `);
     await queryRunner.query(
-      `CREATE INDEX "IDX_campaigns_restaurant_id" ON "campaigns" ("restaurant_id")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_campaigns_restaurant_id" ON "campaigns" ("restaurant_id")`,
     );
   }
 

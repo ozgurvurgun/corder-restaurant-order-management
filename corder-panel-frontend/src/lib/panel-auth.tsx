@@ -74,6 +74,14 @@ export function PanelAuthProvider({ children }: { children: ReactNode }) {
   const [sessionUser, setSessionUserState] = useState<PanelSessionUser | null>(null)
   const [mounted, setMounted] = useState(false)
 
+  const logout = useCallback(() => {
+    setCurrentBusiness(null)
+    setBusinesses([])
+    setTokenState(null)
+    setSessionUserState(null)
+    clearToken()
+  }, [])
+
   useEffect(() => {
     setMounted(true)
     const t = getToken()
@@ -89,16 +97,26 @@ export function PanelAuthProvider({ children }: { children: ReactNode }) {
       void api.restaurant
         .me(t)
         .then((meRes) => {
+          if (meRes.user.role !== "root" && meRes.user.role !== "staff") {
+            logout()
+            return
+          }
           setSessionUser(meRes.user)
           setSessionUserState(meRes.user)
+          if (meRes.restaurant) {
+            setRestaurant(meRes.restaurant)
+            setCurrentBusiness(toBusiness(meRes.restaurant))
+          }
           if (meRes.restaurants?.length) {
             setStoredBranches(meRes.restaurants)
             setBusinesses(meRes.restaurants.map(toBusiness))
           }
         })
-        .catch(() => {})
+        .catch(() => {
+          // 401 is handled by authExpiredHandler -> logout()
+        })
     }
-  }, [])
+  }, [logout])
 
   const login = useCallback(async (email: string, password: string) => {
     try {
@@ -143,7 +161,6 @@ export function PanelAuthProvider({ children }: { children: ReactNode }) {
         setCurrentBusiness(toBusiness(res.restaurant))
         setBusinesses(res.restaurants.map(toBusiness))
       } catch {
-        // Fallback header-based switch
         const target = businesses.find((b) => b.id === branchId)
         if (target) {
           setRestaurant(target)
@@ -153,14 +170,6 @@ export function PanelAuthProvider({ children }: { children: ReactNode }) {
     },
     [token, businesses]
   )
-
-  const logout = useCallback(() => {
-    setCurrentBusiness(null)
-    setBusinesses([])
-    setTokenState(null)
-    setSessionUserState(null)
-    clearToken()
-  }, [])
 
   useEffect(() => {
     setAuthExpiredHandler(() => {

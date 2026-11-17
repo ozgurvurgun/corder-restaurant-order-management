@@ -1,14 +1,27 @@
-import { ArrayMinSize, IsArray, IsUUID } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ArrayMinSize, IsArray, IsInt, IsOptional, IsUUID, Min, ValidateNested } from 'class-validator';
+
+export class MoveOrderItemLineDto {
+  @IsUUID()
+  itemId!: string;
+
+  /** Units to move. Omits = full line quantity. */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  quantity?: number;
+}
 
 export class MoveOrderItemsDto {
   @IsUUID()
-  fromTableId: string;
+  fromTableId!: string;
 
   @IsUUID()
-  toTableId: string;
+  toTableId!: string;
 
   @IsArray()
   @ArrayMinSize(1)
-  @IsUUID(undefined, { each: true })
-  itemIds: string[];
+  @ValidateNested({ each: true })
+  @Type(() => MoveOrderItemLineDto)
+  items!: MoveOrderItemLineDto[];
 }

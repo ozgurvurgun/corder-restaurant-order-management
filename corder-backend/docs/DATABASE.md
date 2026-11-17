@@ -1,36 +1,53 @@
-# Database - Long-term use (5-10 years)
+# Database Architecture & Operations (`corder-backend`)
 
-This document summarizes the design decisions and recommendations for running the CORDER database reliably over a long period.
+This document summarizes the schema design, migration strategy, indexing, and operational practices for the CORDER PostgreSQL database.
 
-## Strengths
+## Schema & Migration Strategy
 
-- **PostgreSQL**: Scalable, ACID-compliant, safe for years of production use.
-- **Restaurant isolation**: All business data is scoped by `restaurant_id`; multi-tenant setup is sound.
-- **Relations**: Foreign keys and `ON DELETE CASCADE` keep referential integrity.
-- **Indexes**: Composite indexes for common queries:
-  - `orders(restaurant_id, status)`, `orders(restaurant_id, created_at)`
-  - `order_items(order_id)`
-  - `categories(restaurant_id, slug)` (unique)
-  - `cash_shifts(restaurant_id, status)`
-  - `restaurant_staff(restaurant_id, pin)`
-  - `restaurant_id` indexes on other tables
-- **Data types**: UUID primary keys, `decimal` prices, and `timestamptz` timestamps are appropriate choices.
+- **Production (`NODE_ENV=production`)**:
+  - `synchronize` is strictly disabled (`false`) even if `DB_SYNCHRONIZE=true` is set in the environment.
+  - Migrations under `src/migrations/*.ts` run automatically on application startup (`migrationsRun: true`, `migrationsTransactionMode: 'each'`) unless `SKIP_MIGRATIONS_ON_START=true` is set.
+  - Manual migration execution:
+    ```bash
+    pnpm run build
+    pnpm run migration:run
+    # Rollback last migration:
+    pnpm run migration:revert
+    ```
+- **Development (`NODE_ENV=development`)**:
+  - When `DB_SYNCHRONIZE=true`, TypeORM synchronizes entity metadata directly and skips `migrationsRun` to avoid DDL collisions.
+  - When `DB_SYNCHRONIZE=false` (recommended default), startup runs migrations identically to production.
 
-## Recommendations (over the years)
+## Migration History
 
-1. **Backups**
-   - Daily automated backup (pg_dump or server-side snapshot).
-   - Keep at least one backup in a separate location.
+1. `1760000000000-CoreAndCatalogSchema.ts`: Core platform (`platform_admins`, `restaurants`, `root_admins`, `boss_restaurants`), RBAC (`restaurant_roles`, `restaurant_staff`), POS (`tables`, `categories`, `products`, `orders`, `order_items`), printing (`print_jobs`), and marketing (`campaigns`).
+2. `1760000001000-BillingAndInventorySchema.ts`: Cash register (`cash_shifts`, `cash_transactions`, `completed_orders`), tabs & credit (`open_accounts`, `open_account_items`, `open_account_payments`, `ledger_customers`, `ledger_entries`), inventory (`suppliers`, `stock_materials`, `stock_movements`, `purchase_orders`, `inventory_counts`), printer configs (`restaurant_printer_configs`), and audit logs (`restaurant_audit_logs`).
+3. `1760000002000-FranchiseHierarchyAndBillingSchema.ts`: Franchise hierarchy and subscription billing columns on `restaurants` and `root_admins`, plus `platform_billing_configs`.
+4. `1760000003000-ProductionSchemaAlignmentAndHardening.ts`:
+   - Replaces the overly restrictive `(restaurant_id, slug)` category unique constraint with parent-scoped partial unique indexes (`UQ_categories_restaurant_root_slug` where `parent_id IS NULL` and `UQ_categories_restaurant_parent_slug` where `parent_id IS NOT NULL`).
+   - Aligns all timestamp columns to `TIMESTAMPTZ`.
+   - Adds `ON DELETE SET NULL` foreign keys on `restaurants.root_admin_id`, `tables.session_staff_id`, `stock_materials.supplier_id`, `ledger_entries.table_id`, and `ledger_entries.completed_order_id`.
+   - Adds partial unique index `UQ_restaurants_terminal_email` and composite tenant indexes for hot POS and reporting queries.
 
-2. **Monitoring**
-   - Periodically check disk usage and growing tables (especially `orders`, `order_items`).
-   - Use `log_min_duration_statement` or APM for slow queries.
+## Key Constraints & Indexes
 
-3. **Archiving (optional, if growth is large)**
-   - You can move old closed orders (e.g. older than 2-3 years) to an archive table or cold storage; day-to-day queries stay lighter.
+- **Tenant Isolation**: Every business table includes `restaurant_id` (or belongs to a parent row with `restaurant_id`) with `ON DELETE CASCADE` referential integrity.
+- **Single Open Shift Guarantee**: Partial unique index `IDX_cash_shifts_one_open_per_restaurant ON cash_shifts(restaurant_id) WHERE status = 'open'` prevents race conditions from opening multiple concurrent cash shifts in the same branch.
+- **Hot Tenant Indexes**:
+  - `orders(restaurant_id, status)`, `orders(restaurant_id, table_id, status)`, `orders(restaurant_id, created_at)`
+  - `order_items(order_id)`, `order_items(order_id, status)`
+  - `tables(restaurant_id, section, name)`, `tables(restaurant_id, status)`
+  - `categories(restaurant_id, slug) WHERE parent_id IS NULL`, `categories(restaurant_id, parent_id, slug) WHERE parent_id IS NOT NULL`
+  - `completed_orders(restaurant_id, closed_at)`, `completed_orders(restaurant_id, waiter)`
+  - `cash_shifts(restaurant_id, status)`, `cash_shifts(restaurant_id, opened_at)`
+  - `ledger_entries(restaurant_id, customer_id, created_at)`, `ledger_entries(restaurant_id, completed_order_id)`
+  - `stock_movements(restaurant_id, material_id, created_at)`
+  - `print_jobs(restaurant_id, printed_at, created_at)`
 
-4. **Production**
-   - Use `synchronize: false` (already the case); apply schema changes via migrations.
-   - Keep connection pool and connection limits reasonable.
+## Backups & Scaling Notes
 
-With this design and these practices, the database can stay low-maintenance and reliable for 5-10 years.
+1. **Automated Pre-Deploy Backups**: `deploy/remote-deploy.sh` automatically runs `pg_dump` before applying new containers/migrations and retains the 10 most recent compressed dumps in `corder-backend/backups/`.
+2. **Connection Pooling**: Configurable via `DB_POOL_MAX` (default `20`), with 5s connection timeout and 30s idle timeout.
+3. **Horizontal Scaling (Socket.IO & Rate Limiting)**:
+   - By default, `corder-backend` runs as a single API container instance behind nginx.
+   - `OrdersGateway` (Socket.IO `/ws` rooms) and `LoginRateLimiterService` store state in process memory. If scaling the `api` service beyond 1 replica, attach `@socket.io/redis-adapter` and a shared Redis store for rate limiting.

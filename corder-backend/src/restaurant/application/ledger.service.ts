@@ -172,6 +172,7 @@ export class LedgerService {
     amount: number,
     receivedBy: string,
     receivedByUserId?: string | null,
+    paymentMethod = 'cash',
   ) {
     const payMinorUnits = toMinorUnits(amount);
     if (payMinorUnits <= 0) {
@@ -181,28 +182,37 @@ export class LedgerService {
     const actorName = (receivedBy ?? '').trim() || 'System';
 
     await this.dataSource.transaction(async (em) => {
+      const shift = await em.findOne(CashShiftEntity, {
+        where: { restaurantId, status: 'open' },
+        order: { openedAt: 'DESC' },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!shift) {
+        throw new BadRequestException(
+          'Cannot process transaction without an open cash shift. Please open a shift first.',
+        );
+      }
+
       const customer = await this.assertCustomer(restaurantId, customerId, em, true);
       const row = em.create(LedgerEntryEntity, {
         restaurantId,
         customerId: customer.id,
         entryType: 'payment',
         amount: normalizedAmount,
-        description: 'Payment received',
+        description:
+          paymentMethod && paymentMethod !== 'cash'
+            ? `Payment received (${paymentMethod})`
+            : 'Payment received',
         tableId: null,
         tableName: null,
         completedOrderId: null,
-        snapshot: null,
+        snapshot: { paymentMethod },
         receivedBy: actorName,
         receivedByUserId: receivedByUserId?.trim() || null,
       });
       await em.save(LedgerEntryEntity, row);
 
-      const shift = await em.findOne(CashShiftEntity, {
-        where: { restaurantId, status: 'open' },
-        order: { openedAt: 'DESC' },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (shift) {
+      if (paymentMethod === 'cash') {
         const cashTx = em.create(CashTransactionEntity, {
           restaurantId,
           shiftId: shift.id,
@@ -214,6 +224,13 @@ export class LedgerService {
         });
         await em.save(CashTransactionEntity, cashTx);
         shift.recordCashMovement('cash-in', payMinorUnits);
+        await em.save(CashShiftEntity, shift);
+      } else if (
+        paymentMethod === 'credit-card' ||
+        paymentMethod === 'meal-card' ||
+        paymentMethod === 'multinet'
+      ) {
+        shift.recordNonCashCollection(paymentMethod, payMinorUnits);
         await em.save(CashShiftEntity, shift);
       }
     });
@@ -230,6 +247,7 @@ export class LedgerService {
     amount: number,
     receivedBy: string,
     receivedByUserId?: string | null,
+    paymentMethod = 'cash',
   ) {
     return this.recordPayment(
       restaurantId,
@@ -237,6 +255,7 @@ export class LedgerService {
       amount,
       receivedBy,
       receivedByUserId,
+      paymentMethod,
     );
   }
 
@@ -357,6 +376,72 @@ export class LedgerService {
       receivedByUserId: null,
     });
     await em.save(LedgerEntryEntity, row);
+  }
+
+  async reconcileCompletedOrderDebtInTransaction(
+    em: EntityManager,
+    params: {
+      restaurantId: string;
+      completedOrderId: string;
+      tableId?: string | null;
+      tableName?: string | null;
+      nextCustomerId?: string | null;
+      nextLedgerMinorUnits: number;
+      snapshot: unknown;
+      recordedBy?: string | null;
+    },
+  ): Promise<LedgerCustomerEntity | null> {
+    const existingEntries = await em.find(LedgerEntryEntity, {
+      where: {
+        restaurantId: params.restaurantId,
+        completedOrderId: params.completedOrderId,
+        entryType: 'debt',
+      },
+      order: { createdAt: 'ASC' },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (params.nextLedgerMinorUnits <= 0 || !params.nextCustomerId) {
+      if (existingEntries.length > 0) {
+        await em.remove(LedgerEntryEntity, existingEntries);
+      }
+      return null;
+    }
+
+    const nextCustomer = await this.assertCustomer(
+      params.restaurantId,
+      params.nextCustomerId,
+      em,
+      true,
+    );
+    const normalizedAmount = fromMinorUnits(params.nextLedgerMinorUnits);
+
+    if (existingEntries.length > 0) {
+      const primary = existingEntries[0];
+      primary.customerId = nextCustomer.id;
+      primary.amount = normalizedAmount;
+      primary.tableId = params.tableId?.trim() || primary.tableId;
+      primary.tableName = params.tableName?.trim() || primary.tableName;
+      primary.snapshot = params.snapshot ?? primary.snapshot;
+      primary.receivedBy = (params.recordedBy ?? '').trim() || primary.receivedBy;
+      await em.save(LedgerEntryEntity, primary);
+      if (existingEntries.length > 1) {
+        await em.remove(LedgerEntryEntity, existingEntries.slice(1));
+      }
+    } else {
+      await this.recordDebtInTransaction(em, {
+        restaurantId: params.restaurantId,
+        customerId: nextCustomer.id,
+        amount: normalizedAmount,
+        description: `${params.tableName || 'Table'} table check`,
+        tableId: params.tableId ?? null,
+        tableName: params.tableName ?? null,
+        completedOrderId: params.completedOrderId,
+        snapshot: params.snapshot,
+        recordedBy: params.recordedBy,
+      });
+    }
+    return nextCustomer;
   }
 
   async findStandaloneDebtEntryForOrderItem(

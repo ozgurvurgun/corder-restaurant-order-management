@@ -1,6 +1,7 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { useAdminStore } from "@/lib/store"
+import { formatMoney } from "@/lib/money"
 import {
   Plus,
   Pencil,
@@ -9,15 +10,9 @@ import {
   Clock,
   Building2,
   CreditCard,
+  Search,
+  RefreshCw,
 } from "lucide-react"
-
-function formatMoney(amount: number): string {
-  return new Intl.NumberFormat("tr-TR", {
-    style: "currency",
-    currency: "TRY",
-    maximumFractionDigits: 0,
-  }).format(amount || 0)
-}
 
 export function RestaurantsPage() {
   const {
@@ -29,9 +24,53 @@ export function RestaurantsPage() {
     suspendRestaurantUnpaid,
   } = useAdminStore()
 
+  const [searchQuery, setSearchQuery] = useState("")
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [notice, setNotice] = useState<{ type: "ok" | "err"; text: string } | null>(
+    null
+  )
+
   useEffect(() => {
     void loadRestaurants()
   }, [loadRestaurants])
+
+  const showNotice = (text: string, type: "ok" | "err" = "ok") => {
+    setNotice({ type, text })
+    window.setTimeout(() => {
+      setNotice((cur) => (cur?.text === text ? null : cur))
+    }, 4000)
+  }
+
+  const handleQuickMarkPaid = async (id: string, name: string) => {
+    setBusyId(id)
+    try {
+      await markRestaurantPaid(id)
+      showNotice(`${name} için ödeme alındı işaretlendi ve erişim açıldı.`)
+    } catch (err) {
+      showNotice(err instanceof Error ? err.message : "İşlem başarısız", "err")
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const handleQuickSuspend = async (id: string, name: string) => {
+    if (
+      !confirm(
+        `${name} mekanının ödeme alınmadığı için erişimini durdurmak istiyor musunuz?`
+      )
+    ) {
+      return
+    }
+    setBusyId(id)
+    try {
+      await suspendRestaurantUnpaid(id)
+      showNotice(`${name} mekanının sistem erişimi durduruldu.`)
+    } catch (err) {
+      showNotice(err instanceof Error ? err.message : "Erişim durdurulamadı", "err")
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   if (restaurantsLoading && restaurants.length === 0) {
     return (
@@ -47,9 +86,30 @@ export function RestaurantsPage() {
       <div>
         <h1 className="text-2xl font-semibold text-white">Restoranlar &amp; Şubeler</h1>
         <p className="mt-4 text-red-400">{restaurantsError}</p>
+        <button
+          type="button"
+          onClick={() => void loadRestaurants()}
+          className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-4 py-2 text-sm text-zinc-200 hover:bg-[#2a2a2a]"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Tekrar Dene
+        </button>
       </div>
     )
   }
+
+  const filtered = restaurants.filter((r) => {
+    if (!searchQuery.trim()) return true
+    const q = searchQuery.toLowerCase().trim()
+    return (
+      r.name.toLowerCase().includes(q) ||
+      r.slug.toLowerCase().includes(q) ||
+      (r.brandName ?? "").toLowerCase().includes(q) ||
+      (r.bosses ?? []).some(
+        (b) => b.name.toLowerCase().includes(q) || b.email.toLowerCase().includes(q)
+      )
+    )
+  })
 
   return (
     <div>
@@ -62,7 +122,17 @@ export function RestaurantsPage() {
             Şube/franchise yapılarını, üst marka ve şube Boss atamalarını, aylık abonelik ücretlerini ve erişim durumlarını yönetin.
           </p>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="relative">
+            <Search className="h-4 w-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Restoran, marka veya Boss ara..."
+              className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] pl-9 pr-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+            />
+          </div>
           <Link
             to="/dashboard/billing"
             className="flex items-center gap-2 rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-4 py-2.5 text-sm font-medium text-zinc-200 hover:bg-[#2a2a2a]"
@@ -79,6 +149,18 @@ export function RestaurantsPage() {
           </Link>
         </div>
       </div>
+
+      {notice && (
+        <div
+          className={`mt-4 rounded-xl border px-4 py-3 text-sm font-medium ${
+            notice.type === "err"
+              ? "border-red-500/40 bg-red-500/10 text-red-300"
+              : "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+          }`}
+        >
+          {notice.text}
+        </div>
+      )}
 
       <div className="mt-6 rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] overflow-hidden">
         {restaurants.length === 0 ? (
@@ -105,10 +187,11 @@ export function RestaurantsPage() {
                 </tr>
               </thead>
               <tbody>
-                {restaurants.map((r) => {
+                {filtered.map((r) => {
                   const isSusp = Boolean(
                     r.isAccessSuspended || r.billingStatus === "suspended"
                   )
+                  const isBusy = busyId === r.id
                   return (
                     <tr
                       key={r.id}
@@ -122,6 +205,11 @@ export function RestaurantsPage() {
                           className="font-medium text-white hover:underline block"
                         >
                           {r.name}
+                          {r.status === "inactive" && (
+                            <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-normal text-zinc-400">
+                              Pasif
+                            </span>
+                          )}
                         </Link>
                         <span className="text-xs font-mono text-zinc-500">{r.slug}</span>
                       </td>
@@ -151,10 +239,18 @@ export function RestaurantsPage() {
                                 className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium ${
                                   b.bossTier === "brand_owner"
                                     ? "bg-purple-500/20 text-purple-300"
-                                    : "bg-zinc-800 text-zinc-200"
+                                    : b.bossTier === "regional_manager"
+                                      ? "bg-blue-500/20 text-blue-300"
+                                      : "bg-zinc-800 text-zinc-200"
                                 }`}
                               >
-                                {b.name} ({b.bossTier === "brand_owner" ? "Marka HQ" : "Şube Boss"})
+                                {b.name} (
+                                {b.bossTier === "brand_owner"
+                                  ? "Marka HQ"
+                                  : b.bossTier === "regional_manager"
+                                    ? "Bölge Yön."
+                                    : "Şube Boss"}
+                                )
                               </span>
                             ))}
                           </div>
@@ -174,7 +270,8 @@ export function RestaurantsPage() {
                             <Ban className="h-3 w-3" />
                             Erişim Durduruldu
                           </span>
-                        ) : r.billingStatus === "pending" || r.billingStatus === "overdue" ? (
+                        ) : r.billingStatus === "pending" ||
+                          r.billingStatus === "overdue" ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-semibold text-amber-300">
                             <Clock className="h-3 w-3" />
                             Ödeme Bekliyor
@@ -191,8 +288,9 @@ export function RestaurantsPage() {
                           {isSusp ? (
                             <button
                               type="button"
-                              onClick={() => void markRestaurantPaid(r.id)}
-                              className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"
+                              disabled={isBusy}
+                              onClick={() => void handleQuickMarkPaid(r.id, r.name)}
+                              className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
                               title="Ödeme Alındı İşaretle ve Erişimi Aç"
                             >
                               Ödeme Alındı (Aç)
@@ -200,16 +298,9 @@ export function RestaurantsPage() {
                           ) : (
                             <button
                               type="button"
-                              onClick={() => {
-                                if (
-                                  confirm(
-                                    `${r.name} mekanının ödeme alınmadığı için erişimini durdurmak istiyor musunuz?`
-                                  )
-                                ) {
-                                  void suspendRestaurantUnpaid(r.id)
-                                }
-                              }}
-                              className="rounded-lg border border-red-500/40 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/20"
+                              disabled={isBusy}
+                              onClick={() => void handleQuickSuspend(r.id, r.name)}
+                              className="rounded-lg border border-red-500/40 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/20 disabled:opacity-50"
                               title="Ödeme Alınmadı — Erişimi Durdur"
                             >
                               Erişimi Durdur
@@ -227,6 +318,13 @@ export function RestaurantsPage() {
                     </tr>
                   )
                 })}
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-zinc-500">
+                      Arama kriterlerine uygun restoran bulunamadı.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

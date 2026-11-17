@@ -159,13 +159,13 @@ export default function PanelSidebar({
           id: "billing" as PanelViewId,
           label: locale === "tr" ? "Abonelik & Ödeme" : "Subscription & Payment",
           icon: CreditCard,
-          visible: true,
+          visible: isBoss || hasPermission("system.manage_settings", "reports.view_financial"),
         },
         {
           id: "settings" as PanelViewId,
           label: t("settings"),
           icon: Settings,
-          visible: hasPermission("system.manage_settings"),
+          visible: hasPermission("system.manage_settings", "system.manage_tables"),
         },
       ],
     },
@@ -271,7 +271,7 @@ export default function PanelSidebar({
             </span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[12px] font-semibold text-[#1d1d1f] dark:text-white leading-tight capitalize truncate">
+            <p className="text-[12px] font-semibold text-[#1d1d1f] dark:text-white leading-tight truncate">
               {sessionUser?.name || currentUser?.name || "Kullanıcı"}
             </p>
             <p className="text-[10px] text-[#86868b] leading-tight truncate">

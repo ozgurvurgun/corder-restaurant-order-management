@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -20,6 +21,17 @@ import { RolesService } from './roles.service';
 import { StaffSessionService } from './staff-session.service';
 import { CreateStaffDto } from '../api/dto/create-staff.dto';
 import { UpdateStaffDto } from '../api/dto/update-staff.dto';
+
+const DUMMY_PIN_HASH = bcrypt.hashSync('00000000', 10);
+
+export interface StaffMutationActor {
+  id?: string;
+  sub?: string;
+  role?: string;
+  isBoss?: boolean;
+  permissions?: PermissionKey[];
+  limits?: EffectivePolicyLimits;
+}
 
 export interface StaffPublicDto {
   id: string;
@@ -43,6 +55,15 @@ export interface StaffPublicDto {
   maxDiscountPercentOverride: number | null;
   maxDiscountAmountOverride: number | null;
   createdAt: string;
+}
+
+export interface TerminalStaffMemberDto {
+  id: string;
+  name: string;
+  role: string;
+  roleLabel: string;
+  roleColor: string;
+  hasPin: boolean;
 }
 
 @Injectable()
@@ -126,7 +147,60 @@ export class StaffService {
     }
   }
 
-  async create(restaurantId: string, dto: CreateStaffDto): Promise<StaffPublicDto> {
+  private assertActorCanGrantPolicies(
+    actor: StaffMutationActor | undefined,
+    params: {
+      permissionsOverride?: string[] | null;
+      grantedPermissions?: string[];
+      maxDiscountPercentOverride?: number | null;
+      maxDiscountAmountOverride?: number | null;
+    },
+  ): void {
+    if (!actor || actor.isBoss || actor.role === 'root') {
+      return;
+    }
+    const actorPerms = new Set<PermissionKey>(actor.permissions ?? []);
+    if (actorPerms.has('roles.manage')) {
+      return;
+    }
+    const requestedPerms = [
+      ...sanitizePermissionKeys(params.permissionsOverride),
+      ...sanitizePermissionKeys(params.grantedPermissions),
+    ];
+    for (const perm of requestedPerms) {
+      if (!actorPerms.has(perm)) {
+        throw new ForbiddenException(
+          `You cannot grant a permission that your own account does not possess (${perm})`,
+        );
+      }
+    }
+    const maxPct = actor.limits?.maxDiscountPercent ?? 0;
+    if (
+      params.maxDiscountPercentOverride != null &&
+      Number(params.maxDiscountPercentOverride) > maxPct
+    ) {
+      throw new ForbiddenException(
+        `You cannot set a discount percentage limit higher than your own (${maxPct}%)`,
+      );
+    }
+    const maxAmt = actor.limits?.maxDiscountAmount;
+    if (
+      maxAmt != null &&
+      params.maxDiscountAmountOverride != null &&
+      Number(params.maxDiscountAmountOverride) > maxAmt
+    ) {
+      throw new ForbiddenException(
+        `You cannot set a discount amount limit higher than your own (${maxAmt})`,
+      );
+    }
+  }
+
+  async create(
+    restaurantId: string,
+    dto: CreateStaffDto,
+    actor?: StaffMutationActor,
+  ): Promise<StaffPublicDto> {
+    this.assertActorCanGrantPolicies(actor, dto);
     await this.rolesService.ensureDefaultRoles(restaurantId);
     const roleKey = normalizeRoleKey(dto.role);
     const roleEntity = await this.rolesService
@@ -147,7 +221,7 @@ export class StaffService {
       const pin = dto.pin.trim();
       await this.assertUniquePinInRestaurant(restaurantId, pin);
       pinHash = await bcrypt.hash(pin, 10);
-    } else if (canAccessTerminal && !canAccessPanel) {
+    } else if (canAccessTerminal) {
       throw new BadRequestException('A 4-8 digit PIN is required for terminal users');
     }
 
@@ -200,9 +274,33 @@ export class StaffService {
     restaurantId: string,
     id: string,
     dto: UpdateStaffDto,
+    actor?: StaffMutationActor,
   ): Promise<StaffPublicDto> {
     const staff = await this.staffRepo.findOne({ where: { id, restaurantId } });
     if (!staff) throw new NotFoundException('Staff not found');
+
+    const actorId = actor?.sub ?? actor?.id;
+    const isSelf = Boolean(actorId && actorId === id && !actor?.isBoss && actor?.role !== 'root');
+    if (isSelf) {
+      if (dto.isActive === false || dto.canAccessPanel === false) {
+        throw new ForbiddenException(
+          'You cannot deactivate or revoke Merchant Panel access on your own account',
+        );
+      }
+      if (
+        (dto.role !== undefined && normalizeRoleKey(dto.role) !== normalizeRoleKey(staff.role)) ||
+        dto.permissionsOverride !== undefined ||
+        dto.grantedPermissions !== undefined ||
+        dto.revokedPermissions !== undefined ||
+        dto.maxDiscountPercentOverride !== undefined ||
+        dto.maxDiscountAmountOverride !== undefined
+      ) {
+        throw new ForbiddenException(
+          'You cannot modify your own role, permissions, or discount limits',
+        );
+      }
+    }
+    this.assertActorCanGrantPolicies(actor, dto);
 
     if (dto.name != null && dto.name.trim()) {
       staff.name = dto.name.trim();
@@ -268,18 +366,58 @@ export class StaffService {
           : null;
     }
 
+    if (staff.canAccessPanel && (!staff.email || !staff.passwordHash)) {
+      throw new BadRequestException(
+        'Email and password are required for users with Merchant Panel access',
+      );
+    }
+    if (dto.canAccessTerminal === true && !staff.pinHash) {
+      throw new BadRequestException('A 4-8 digit PIN is required for terminal users');
+    }
+
     const saved = await this.staffRepo.save(staff);
     return this.toPublicDto(saved);
   }
 
-  async delete(restaurantId: string, id: string): Promise<void> {
+  async delete(
+    restaurantId: string,
+    id: string,
+    actor?: StaffMutationActor,
+  ): Promise<void> {
+    const actorId = actor?.sub ?? actor?.id;
+    if (actorId && actorId === id && !actor?.isBoss && actor?.role !== 'root') {
+      throw new ForbiddenException('You cannot delete your own staff account');
+    }
     const result = await this.staffRepo.delete({ id, restaurantId });
     if (result.affected === 0) throw new NotFoundException('Staff not found');
+  }
+
+  async listTerminalUsers(restaurantId: string): Promise<TerminalStaffMemberDto[]> {
+    const roles = await this.rolesService.ensureDefaultRoles(restaurantId);
+    const list = await this.staffRepo.find({
+      where: { restaurantId, isActive: true },
+      order: { createdAt: 'ASC' },
+    });
+    const result: TerminalStaffMemberDto[] = [];
+    for (const member of list) {
+      const resolved = await this.rolesService.resolveForStaff(member, roles);
+      if (!resolved.canAccessTerminal) continue;
+      result.push({
+        id: member.id,
+        name: member.name,
+        role: resolved.roleKey,
+        roleLabel: resolved.roleLabel,
+        roleColor: resolved.roleColor,
+        hasPin: Boolean(member.pinHash),
+      });
+    }
+    return result;
   }
 
   async verifyPin(
     restaurantId: string,
     pin: string,
+    staffId?: string,
   ): Promise<{
     staffId: string;
     name: string;
@@ -290,11 +428,18 @@ export class StaffService {
     staffToken: string;
   }> {
     const trimmed = pin.trim();
-    const activeStaff = await this.staffRepo.find({
-      where: { restaurantId, isActive: true },
-    });
+    const activeStaff = staffId
+      ? await this.staffRepo.find({
+          where: { id: staffId, restaurantId, isActive: true },
+        })
+      : await this.staffRepo.find({
+          where: { restaurantId, isActive: true },
+        });
+    let comparedAny = false;
     for (const member of activeStaff) {
-      if (member.pinHash && (await bcrypt.compare(trimmed, member.pinHash))) {
+      if (!member.pinHash) continue;
+      comparedAny = true;
+      if (await bcrypt.compare(trimmed, member.pinHash)) {
         const resolved = await this.rolesService.resolveForStaff(member);
         if (!resolved.canAccessTerminal) {
           throw new UnauthorizedException(
@@ -306,6 +451,7 @@ export class StaffService {
           restaurantId,
           name: member.name,
           role: resolved.roleKey,
+          pinHash: member.pinHash,
         });
         return {
           staffId: member.id,
@@ -317,6 +463,9 @@ export class StaffService {
           staffToken,
         };
       }
+    }
+    if (!comparedAny) {
+      await bcrypt.compare(trimmed, DUMMY_PIN_HASH);
     }
     throw new UnauthorizedException('Invalid PIN code');
   }

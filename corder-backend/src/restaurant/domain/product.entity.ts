@@ -43,9 +43,9 @@ export class ProductEntity {
   @Column({ default: 0 })
   order: number;
 
-  /** Per-product material usage (stock deduction); { materialId, quantity }[] */
+  /** Per-product material usage (stock deduction); { materialId, quantity, unit? }[] */
   @Column({ type: 'jsonb', nullable: true })
-  ingredients: { materialId: string; quantity: number }[] | null;
+  ingredients: { materialId: string; quantity: number; unit?: string }[] | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

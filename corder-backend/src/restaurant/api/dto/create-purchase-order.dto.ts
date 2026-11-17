@@ -51,3 +51,46 @@ export class CreatePurchaseOrderDto {
   @IsIn(['draft', 'ordered'])
   status?: 'draft' | 'ordered';
 }
+
+export class ReceivePurchaseOrderItemDto {
+  @IsUUID()
+  materialId!: string;
+
+  @IsNumber()
+  @Min(0)
+  quantity!: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  unitCost?: number;
+}
+
+export class ReceivePurchaseOrderDto {
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ReceivePurchaseOrderItemDto)
+  items?: ReceivePurchaseOrderItemDto[];
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+export class UpdatePurchaseOrderDto {
+  @IsOptional()
+  @IsIn(['draft', 'ordered', 'cancelled'])
+  status?: 'draft' | 'ordered' | 'cancelled';
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => PurchaseOrderItemInputDto)
+  items?: PurchaseOrderItemInputDto[];
+}

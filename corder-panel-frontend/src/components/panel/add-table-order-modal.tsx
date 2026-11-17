@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { usePanelStore } from "@/lib/panel-store"
-import { formatCurrency } from "@/lib/format"
+import { usePanelAuth } from "@/lib/panel-auth"
+import { formatCurrency, fromMinorUnits, resolveAssetUrl, toMinorUnits } from "@/lib/format"
 import type { PanelCategory, PanelProduct } from "@/lib/panel-types"
 import { Loader2, Minus, Plus, Search, ShoppingBag, Trash2, X } from "lucide-react"
 
@@ -8,7 +9,9 @@ function descendantCategoryIds(rootId: string, cats: PanelCategory[]): Set<strin
   const out = new Set<string>()
   const walk = (id: string) => {
     out.add(id)
-    for (const c of cats) { if (c.parentId === id) walk(c.id) }
+    for (const c of cats) {
+      if (c.parentId === id) walk(c.id)
+    }
   }
   walk(rootId)
   return out
@@ -16,13 +19,16 @@ function descendantCategoryIds(rootId: string, cats: PanelCategory[]): Set<strin
 
 function ProductCard({
   product,
+  showImage,
   disabled,
   onAddProduct,
 }: {
   product: PanelProduct
+  showImage: boolean
   disabled?: boolean
   onAddProduct: (product: PanelProduct) => void
 }) {
+  const imgSrc = resolveAssetUrl(product.image)
   return (
     <button
       type="button"
@@ -30,23 +36,30 @@ function ProductCard({
       onClick={() => onAddProduct(product)}
       className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden hover:border-[#e63462]/50 hover:shadow-md transition-all text-left disabled:opacity-60 disabled:pointer-events-none"
     >
-      <div className="aspect-square bg-[#f5f5f7] relative overflow-hidden">
-        {product.image ? (
-          <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <ShoppingBag className="w-8 h-8 text-[#d1d1d6]" />
-          </div>
-        )}
-        {!product.inStock && (
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-            <span className="text-white text-[10px] font-medium">Stokta Yok</span>
-          </div>
-        )}
-      </div>
+      {showImage && (
+        <div className="aspect-square bg-[#f5f5f7] relative overflow-hidden">
+          {imgSrc ? (
+            <img src={imgSrc} alt={product.name} loading="lazy" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <ShoppingBag className="w-8 h-8 text-[#d1d1d6]" />
+            </div>
+          )}
+          {!product.inStock && (
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+              <span className="text-white text-[10px] font-medium">Stokta Yok</span>
+            </div>
+          )}
+        </div>
+      )}
       <div className="p-2.5">
-        <p className="text-[11px] font-medium text-[#1d1d1f] line-clamp-2 min-h-[28px]">{product.name}</p>
-        <p className="text-[13px] font-bold text-[#e63462]">{"₺"}{formatCurrency(product.price)}</p>
+        <p className="text-[11px] font-medium text-[#1d1d1f] line-clamp-2 min-h-[28px]">
+          {product.name}
+        </p>
+        <p className="text-[13px] font-bold text-[#e63462]">
+          {"₺"}
+          {formatCurrency(product.price)}
+        </p>
       </div>
     </button>
   )
@@ -57,25 +70,34 @@ function ProductSubtree(props: {
   categories: PanelCategory[]
   products: PanelProduct[]
   depth: number
+  showImage: boolean
   disabled?: boolean
   onAddProduct: (product: PanelProduct) => void
 }) {
-  const { nodeId, categories, products, depth, disabled, onAddProduct } = props
+  const { nodeId, categories, products, depth, showImage, disabled, onAddProduct } = props
   const node = categories.find((c) => c.id === nodeId)
   const nodeProducts = products.filter((p) => p.categoryId === nodeId)
-  const childCats = categories.filter((c) => c.parentId === nodeId && c.showInTerminal !== false).sort((a, b) => a.order - b.order)
+  const childCats = categories
+    .filter((c) => c.parentId === nodeId && c.showInTerminal !== false)
+    .sort((a, b) => a.order - b.order)
   if (nodeProducts.length === 0 && childCats.length === 0) return null
 
   return (
     <div className={depth > 0 ? "mt-4" : ""}>
-      {depth > 0 && <h4 className="text-[12px] font-semibold text-[#86868b] mb-2 px-1">{node?.name ?? ""}</h4>}
+      {depth > 0 && (
+        <h4 className="text-[12px] font-semibold text-[#86868b] mb-2 px-1">
+          {node?.name ?? ""}
+        </h4>
+      )}
       {nodeProducts.length > 0 && (
         <div className="grid grid-cols-3 md:grid-cols-4 gap-2.5 mb-2">
-          {nodeProducts.map((product) => <ProductCard key={product.id} product={product} disabled={disabled} onAddProduct={onAddProduct} />)}
+          {nodeProducts.map((product) => (
+            <ProductCard key={product.id} product={product} showImage={showImage} disabled={disabled} onAddProduct={onAddProduct} />
+          ))}
         </div>
       )}
       {childCats.map((ch) => (
-        <ProductSubtree key={ch.id} nodeId={ch.id} categories={categories} products={products} depth={depth + 1} disabled={disabled} onAddProduct={onAddProduct} />
+        <ProductSubtree key={ch.id} nodeId={ch.id} categories={categories} products={products} depth={depth + 1} showImage={showImage} disabled={disabled} onAddProduct={onAddProduct} />
       ))}
     </div>
   )
@@ -97,8 +119,17 @@ interface Props {
   onSuccess: () => void
 }
 
-export default function AddTableOrderModal({ tableId, tableName, onClose, onSuccess }: Props) {
-  const { products, categories, createTableOrder, currentShift } = usePanelStore()
+export default function AddTableOrderModal({
+  tableId,
+  tableName,
+  onClose,
+  onSuccess,
+}: Props) {
+  const { products, categories, createTableOrder, currentShift, settings } = usePanelStore()
+  const { hasPermission } = usePanelAuth()
+  const canAddNote = hasPermission("order.add_note")
+  const showImages = settings.showProductImages !== false
+
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
   const [cart, setCart] = useState<CartLine[]>([])
@@ -119,51 +150,83 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
   }, [isSubmitting, editingNote, onClose])
 
   const terminalProducts = useMemo(
-    () => products.filter((p) => { const cat = categories.find((c) => c.id === p.categoryId); return cat && cat.showInTerminal !== false && p.inStock }),
+    () =>
+      products.filter((p) => {
+        const cat = categories.find((c) => c.id === p.categoryId)
+        return cat && cat.showInTerminal !== false && p.inStock
+      }),
     [products, categories],
   )
 
   const rootCategories = useMemo(
-    () => categories.filter((c) => c.showInTerminal !== false && !c.parentId).sort((a, b) => a.order - b.order),
+    () =>
+      categories
+        .filter((c) => c.showInTerminal !== false && !c.parentId)
+        .sort((a, b) => a.order - b.order),
     [categories],
   )
 
   const filteredProducts = useMemo(() => {
     let filtered = terminalProducts
-    if (searchQuery.trim()) filtered = filtered.filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    else if (selectedCategoryId) {
+    if (searchQuery.trim()) {
+      filtered = filtered.filter((p) =>
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
+    } else if (selectedCategoryId) {
       const ids = descendantCategoryIds(selectedCategoryId, categories)
       filtered = filtered.filter((p) => ids.has(p.categoryId))
     }
     return filtered
   }, [terminalProducts, categories, searchQuery, selectedCategoryId])
 
-  const cartTotal = cart.reduce((sum, i) => sum + i.price * i.quantity, 0)
+  const cartTotal = fromMinorUnits(
+    cart.reduce((sum, i) => sum + toMinorUnits(i.price) * i.quantity, 0),
+  )
   const cartCount = cart.reduce((sum, i) => sum + i.quantity, 0)
 
   const addToCart = (product: PanelProduct) => {
     if (!product.inStock || isSubmitting || submittingRef.current) return
     setCart((prev) => {
       const existing = prev.find((i) => i.productId === product.id)
-      if (existing) return prev.map((i) => (i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i))
-      return [...prev, { productId: product.id, productName: product.name, price: product.price, quantity: 1, image: product.image }]
+      if (existing) {
+        return prev.map((i) =>
+          i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i,
+        )
+      }
+      return [
+        ...prev,
+        {
+          productId: product.id,
+          productName: product.name,
+          price: product.price,
+          quantity: 1,
+          image: product.image,
+        },
+      ]
     })
   }
 
   const updateQty = (productId: string, delta: number) => {
     if (isSubmitting || submittingRef.current) return
-    setCart((prev) =>
-      prev.map((i) => {
-        if (i.productId !== productId) return i
-        const qty = i.quantity + delta
-        return qty <= 0 ? null : { ...i, quantity: qty }
-      }).filter(Boolean) as CartLine[],
+    setCart(
+      (prev) =>
+        prev
+          .map((i) => {
+            if (i.productId !== productId) return i
+            const qty = i.quantity + delta
+            return qty <= 0 ? null : { ...i, quantity: qty }
+          })
+          .filter(Boolean) as CartLine[],
     )
   }
 
   const saveNote = (productId: string) => {
     const note = noteValue.trim()
-    setCart((prev) => prev.map((item) => (item.productId === productId ? { ...item, note: note || undefined } : item)))
+    setCart((prev) =>
+      prev.map((item) =>
+        item.productId === productId ? { ...item, note: note || undefined } : item,
+      ),
+    )
     setEditingNote(null)
     setNoteValue("")
   }
@@ -173,10 +236,19 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
     submittingRef.current = true
     setIsSubmitting(true)
     setError(null)
+    const pendingNoteProductId = editingNote
+    const pendingNoteText = noteValue.trim()
     try {
       const result = await createTableOrder(
         tableId,
-        cart.map((i) => ({ productId: i.productId, quantity: i.quantity, note: i.note })),
+        cart.map((i) => ({
+          productId: i.productId,
+          quantity: i.quantity,
+          note:
+            i.productId === pendingNoteProductId
+              ? pendingNoteText || undefined
+              : i.note,
+        })),
       )
       if (!result.ok) {
         setError(result.error ?? "Sipariş gönderilemedi")
@@ -197,20 +269,13 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
             <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Sipariş Gir</h3>
             <p className="text-[11px] text-[#86868b]">{tableName}</p>
           </div>
-          <button
-            type="button"
-            disabled={isSubmitting}
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed] disabled:opacity-50"
-          >
+          <button type="button" disabled={isSubmitting} onClick={onClose} className="w-8 h-8 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed] disabled:opacity-50">
             <X className="w-4 h-4 text-[#86868b]" />
           </button>
         </div>
 
         {!currentShift && (
-          <div className="px-4 py-2.5 bg-[#fff4e5] text-[12px] text-[#b54708] border-b border-[#f5d0a9]">
-            Sipariş gönderebilmek için önce kasayı açmanız gerekir.
-          </div>
+          <div className="px-4 py-2.5 bg-[#fff4e5] text-[12px] text-[#b54708] border-b border-[#f5d0a9]">Sipariş gönderebilmek için önce kasayı açmanız gerekir.</div>
         )}
 
         <div className="flex-1 min-h-0 flex">
@@ -221,7 +286,10 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
                 type="text"
                 placeholder="Ürün ara..."
                 value={searchQuery}
-                onChange={(e) => { setSearchQuery(e.target.value); if (e.target.value) setSelectedCategoryId(null) }}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value)
+                  if (e.target.value) setSelectedCategoryId(null)
+                }}
                 className="w-full h-[42px] pl-10 pr-3 text-[13px] bg-white rounded-xl border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
               />
             </div>
@@ -229,9 +297,14 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
             <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1 flex-shrink-0">
               <button
                 type="button"
-                onClick={() => { setSelectedCategoryId(null); setSearchQuery("") }}
+                onClick={() => {
+                  setSelectedCategoryId(null)
+                  setSearchQuery("")
+                }}
                 className={`px-3 py-1.5 rounded-lg text-[12px] font-medium whitespace-nowrap ${
-                  !selectedCategoryId && !searchQuery ? "bg-[#e63462] text-white" : "bg-white text-[#1d1d1f] border border-[#d1d1d6]/60"
+                  !selectedCategoryId && !searchQuery
+                    ? "bg-[#e63462] text-white"
+                    : "bg-white text-[#1d1d1f] border border-[#d1d1d6]/60"
                 }`}
               >
                 Tümü
@@ -240,9 +313,14 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
                 <button
                   key={cat.id}
                   type="button"
-                  onClick={() => { setSelectedCategoryId(cat.id); setSearchQuery("") }}
+                  onClick={() => {
+                    setSelectedCategoryId(cat.id)
+                    setSearchQuery("")
+                  }}
                   className={`px-3 py-1.5 rounded-lg text-[12px] font-medium whitespace-nowrap ${
-                    selectedCategoryId === cat.id ? "bg-[#e63462] text-white" : "bg-white text-[#1d1d1f] border border-[#d1d1d6]/60"
+                    selectedCategoryId === cat.id
+                      ? "bg-[#e63462] text-white"
+                      : "bg-white text-[#1d1d1f] border border-[#d1d1d6]/60"
                   }`}
                 >
                   {cat.name}
@@ -259,25 +337,20 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
               ) : searchQuery.trim() || !selectedCategoryId ? (
                 <div className="grid grid-cols-3 md:grid-cols-4 gap-2.5">
                   {filteredProducts.map((product) => (
-                    <ProductCard key={product.id} product={product} disabled={isSubmitting} onAddProduct={addToCart} />
+                    <ProductCard key={product.id} product={product} showImage={showImages} disabled={isSubmitting} onAddProduct={addToCart} />
                   ))}
                 </div>
               ) : (
-                <ProductSubtree
-                  nodeId={selectedCategoryId}
-                  categories={categories}
-                  products={filteredProducts}
-                  depth={0}
-                  disabled={isSubmitting}
-                  onAddProduct={addToCart}
-                />
+                <ProductSubtree nodeId={selectedCategoryId} categories={categories} products={filteredProducts} depth={0} showImage={showImages} disabled={isSubmitting} onAddProduct={addToCart} />
               )}
             </div>
           </div>
 
           <div className="w-[300px] flex-shrink-0 bg-white border-l border-[#d1d1d6]/60 flex flex-col">
             <div className="px-4 py-3 border-b border-[#d1d1d6]/40">
-              <p className="text-[13px] font-semibold text-[#1d1d1f]">Sepet ({cartCount})</p>
+              <p className="text-[13px] font-semibold text-[#1d1d1f]">
+                Sepet ({cartCount})
+              </p>
             </div>
             <div className="flex-1 overflow-auto p-3 space-y-2">
               {cart.length === 0 ? (
@@ -287,39 +360,59 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
                   <div key={item.productId} className="rounded-xl bg-[#f5f5f7] p-2.5">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-[12px] font-medium text-[#1d1d1f] truncate">{item.productName}</p>
-                        <p className="text-[11px] text-[#86868b]">{"₺"}{formatCurrency(item.price)}</p>
-                        {item.note && <p className="mt-1 text-[11px] text-[#e63462] break-words">{item.note}</p>}
+                        <p className="text-[12px] font-medium text-[#1d1d1f] truncate">
+                          {item.productName}
+                        </p>
+                        <p className="text-[11px] text-[#86868b]">
+                          {"₺"}
+                          {formatCurrency(item.price)}
+                        </p>
+                        {item.note && (
+                          <p className="mt-1 text-[11px] text-[#e63462] break-words">
+                            {item.note}
+                          </p>
+                        )}
                       </div>
-                      <button
-                        type="button"
-                        disabled={isSubmitting}
-                        onClick={() => setCart((prev) => prev.filter((i) => i.productId !== item.productId))}
-                        className="text-[#86868b] hover:text-[#ff3b30] disabled:opacity-50"
-                      >
+                      <button type="button" disabled={isSubmitting} onClick={() => setCart((prev) => prev.filter((i) => i.productId !== item.productId), ) } className="text-[#86868b] hover:text-[#ff3b30] disabled:opacity-50">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                     <div className="mt-2 flex items-center justify-between">
-                      <button
-                        type="button"
-                        disabled={isSubmitting}
-                        onClick={() => {
-                          if (editingNote === item.productId) { setEditingNote(null); setNoteValue("") }
-                          else { setEditingNote(item.productId); setNoteValue(item.note ?? "") }
-                        }}
-                        className="text-[11px] font-medium text-[#007aff] hover:opacity-70"
-                      >
-                        {item.note ? "Notu Düzenle" : "Not Ekle"}
-                      </button>
+                      {canAddNote ? (
+                        <button
+                          type="button"
+                          disabled={isSubmitting}
+                          onClick={() => {
+                            if (editingNote === item.productId) {
+                              setEditingNote(null)
+                              setNoteValue("")
+                            } else {
+                              setEditingNote(item.productId)
+                              setNoteValue(item.note ?? "")
+                            }
+                          }}
+                          className="text-[11px] font-medium text-[#007aff] hover:opacity-70"
+                        >
+                          {item.note ? "Notu Düzenle" : "Not Ekle"}
+                        </button>
+                      ) : (
+                        <span />
+                      )}
                       <div className="flex items-center gap-1.5">
-                        <button type="button" disabled={isSubmitting} onClick={() => updateQty(item.productId, -1)} className="w-6 h-6 rounded-md bg-white border border-[#d1d1d6]/60 flex items-center justify-center"><Minus className="w-3 h-3" /></button>
-                        <span className="text-[12px] font-semibold w-5 text-center">{item.quantity}</span>
-                        <button type="button" disabled={isSubmitting} onClick={() => updateQty(item.productId, 1)} className="w-6 h-6 rounded-md bg-white border border-[#d1d1d6]/60 flex items-center justify-center"><Plus className="w-3 h-3" /></button>
+                        <button type="button" disabled={isSubmitting} onClick={() => updateQty(item.productId, -1)} className="w-6 h-6 rounded-md bg-white border border-[#d1d1d6]/60 flex items-center justify-center">
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="text-[12px] font-semibold w-5 text-center">
+                          {item.quantity}
+                        </span>
+                        <button type="button" disabled={isSubmitting} onClick={() => updateQty(item.productId, 1)} className="w-6 h-6 rounded-md bg-white border border-[#d1d1d6]/60 flex items-center justify-center">
+                          <Plus className="w-3 h-3" />
+                        </button>
                       </div>
                     </div>
                     <div className="mt-1 text-right text-[12px] font-bold text-[#1d1d1f]">
-                      {"₺"}{formatCurrency(item.price * item.quantity)}
+                      {"₺"}
+                      {formatCurrency(fromMinorUnits(toMinorUnits(item.price) * item.quantity))}
                     </div>
                     {editingNote === item.productId && (
                       <div className="mt-2 flex items-center gap-2">
@@ -331,11 +424,17 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
                           autoFocus
                           onKeyDown={(e) => {
                             if (e.key === "Enter") saveNote(item.productId)
-                            if (e.key === "Escape") { setEditingNote(null); setNoteValue("") }
+                            if (e.key === "Escape") {
+                              setEditingNote(null)
+                              setNoteValue("")
+                            }
                           }}
+                          onBlur={() => saveNote(item.productId)}
                           className="min-w-0 flex-1 h-8 rounded-lg bg-white border border-[#d1d1d6]/60 px-2.5 text-[11px] focus:outline-none focus:border-[#e63462]/50"
                         />
-                        <button type="button" onClick={() => saveNote(item.productId)} className="text-[11px] font-semibold text-[#007aff]">Tamam</button>
+                        <button type="button" onClick={() => saveNote(item.productId)} className="text-[11px] font-semibold text-[#007aff]">
+                          Tamam
+                        </button>
                       </div>
                     )}
                   </div>
@@ -346,7 +445,10 @@ export default function AddTableOrderModal({ tableId, tableName, onClose, onSucc
               {error && <p className="text-[11px] text-[#ff3b30]">{error}</p>}
               <div className="flex items-center justify-between text-[13px]">
                 <span className="text-[#86868b]">Toplam</span>
-                <span className="font-bold text-[#e63462]">{"₺"}{formatCurrency(cartTotal)}</span>
+                <span className="font-bold text-[#e63462]">
+                  {"₺"}
+                  {formatCurrency(cartTotal)}
+                </span>
               </div>
               <button
                 type="button"

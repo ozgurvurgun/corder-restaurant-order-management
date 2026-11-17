@@ -13,9 +13,12 @@ import { PERMISSION_KEYS } from '../domain/permissions.catalog';
 import { RolesService } from '../application/roles.service';
 import {
   buildPaymentSuspendedErrorMessage,
+  computeSecretFingerprint,
   isRestaurantPaymentSuspended,
+  RestaurantAuthService,
   RestaurantTokenPayload,
 } from '../application/restaurant-auth.service';
+import { getBossRoleLabel } from '../domain/services/billing-suspension.policy';
 import { requireConfigSecret } from '../../common/security/env.validation';
 
 @Injectable()
@@ -31,6 +34,7 @@ export class RestaurantJwtStrategy extends PassportStrategy(Strategy, 'restauran
     @InjectRepository(RestaurantStaffEntity)
     private readonly staffRepo: Repository<RestaurantStaffEntity>,
     private readonly rolesService: RolesService,
+    private readonly authService: RestaurantAuthService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -49,45 +53,110 @@ export class RestaurantJwtStrategy extends PassportStrategy(Strategy, 'restauran
       throw new UnauthorizedException();
     }
 
-    let targetRestaurantId = payload.restaurantId;
+    const reqPath = (req.originalUrl || req.url || '').toLowerCase();
+    const isBossMultiBranchRoute =
+      reqPath.includes('/restaurant/auth/me') ||
+      reqPath.includes('/restaurant/auth/switch-branch') ||
+      reqPath.includes('/restaurant/boss');
+    const isBillingInspectionRoute =
+      req.method === 'GET' && reqPath.includes('/restaurant/settings/billing');
+    const isOpeningNewShift =
+      req.method === 'POST' && /\/restaurant\/shifts(?:\?|$)/.test(reqPath);
 
-    // Allow Boss ('root') to switch active branch via x-restaurant-id header
     if (payload.role === 'root') {
+      const admin = await this.rootAdminRepo.findOne({ where: { id: payload.sub } });
+      if (!admin || admin.isActive === false || !admin.passwordHash) {
+        throw new UnauthorizedException('Boss account is inactive or not found');
+      }
+      if (
+        payload.pwdFp &&
+        payload.pwdFp !== computeSecretFingerprint(admin.passwordHash)
+      ) {
+        throw new UnauthorizedException('Boss password has been changed; please sign in again');
+      }
+
+      const owned = await this.authService.getBossOwnedRestaurants(
+        admin.id,
+        admin.restaurantId,
+        admin,
+      );
+      if (owned.length === 0) {
+        throw new UnauthorizedException('No restaurant branch assigned to this Boss account');
+      }
+
       const headerRestId = req.headers['x-restaurant-id'];
-      const requestedId = Array.isArray(headerRestId)
+      const explicitHeaderId = Array.isArray(headerRestId)
         ? headerRestId[0]?.trim()
         : headerRestId?.trim();
-      if (requestedId && requestedId !== payload.restaurantId) {
-        const admin = await this.rootAdminRepo.findOne({ where: { id: payload.sub } });
-        if (!admin || admin.isActive === false) {
-          throw new UnauthorizedException('Boss account is inactive');
-        }
-        const link = await this.bossRestaurantRepo.findOne({
-          where: { bossId: payload.sub, restaurantId: requestedId },
-        });
-        if (link || admin.restaurantId === requestedId) {
-          targetRestaurantId = requestedId;
-        } else if (admin.bossTier === 'brand_owner' && admin.brandName) {
-          const targetRest = await this.restaurantRepo.findOne({
-            where: { id: requestedId },
-            select: { id: true, brandName: true },
-          });
-          if (
-            targetRest?.brandName &&
-            targetRest.brandName.trim().toLowerCase() === admin.brandName.trim().toLowerCase()
-          ) {
-            targetRestaurantId = requestedId;
-          } else {
-            throw new UnauthorizedException('You do not have access to this branch');
-          }
-        } else {
-          throw new UnauthorizedException('You do not have access to this branch');
+      const switchBodyId =
+        reqPath.includes('/restaurant/auth/switch-branch') &&
+        typeof (req.body as { restaurantId?: unknown } | undefined)?.restaurantId === 'string'
+          ? ((req.body as { restaurantId: string }).restaurantId || '').trim()
+          : '';
+
+      const requestedId = explicitHeaderId || switchBodyId;
+      let targetRestaurant = owned.find(
+        (r) => r.id === (requestedId || payload.restaurantId),
+      );
+
+      if (requestedId && !targetRestaurant) {
+        throw new UnauthorizedException('You do not have access to this branch');
+      }
+
+      const activeBranches = owned.filter(
+        (r) => r.status === 'active' && !isRestaurantPaymentSuspended(r),
+      );
+
+      if (
+        !explicitHeaderId &&
+        isBossMultiBranchRoute &&
+        (!targetRestaurant ||
+          targetRestaurant.status !== 'active' ||
+          isRestaurantPaymentSuspended(targetRestaurant)) &&
+        activeBranches.length > 0
+      ) {
+        targetRestaurant = activeBranches[0];
+      }
+
+      if (!targetRestaurant) {
+        throw new UnauthorizedException('You do not have access to this branch');
+      }
+
+      if (!isBillingInspectionRoute && isRestaurantPaymentSuspended(targetRestaurant)) {
+        const hasOpenShift =
+          !isOpeningNewShift && (await this.authService.hasOpenCashShift(targetRestaurant.id));
+        if (!hasOpenShift) {
+          const cfg = await this.authService.loadBillingConfig();
+          throw new UnauthorizedException(
+            buildPaymentSuspendedErrorMessage(targetRestaurant.name, cfg),
+          );
         }
       }
+      if (targetRestaurant.status !== 'active') {
+        throw new UnauthorizedException('Restaurant is not active');
+      }
+
+      const tier = admin.bossTier || 'franchise_owner';
+      return {
+        id: admin.id,
+        sub: admin.id,
+        restaurantId: targetRestaurant.id,
+        slug: targetRestaurant.slug,
+        email: admin.email,
+        name: admin.name || payload.name || admin.email,
+        role: 'root' as const,
+        staffRole: 'boss',
+        roleLabel: getBossRoleLabel(tier),
+        isBoss: true,
+        bossTier: tier,
+        brandName: admin.brandName ?? null,
+        permissions: [...PERMISSION_KEYS],
+        limits: { maxDiscountPercent: 100, maxDiscountAmount: null },
+      };
     }
 
     const restaurant = await this.restaurantRepo.findOne({
-      where: { id: targetRestaurantId },
+      where: { id: payload.restaurantId },
       select: {
         id: true,
         name: true,
@@ -95,51 +164,49 @@ export class RestaurantJwtStrategy extends PassportStrategy(Strategy, 'restauran
         slug: true,
         isAccessSuspended: true,
         billingStatus: true,
+        terminalEmail: true,
+        terminalPasswordHash: true,
       },
     });
     if (!restaurant) {
       throw new UnauthorizedException('Restaurant not found');
     }
-    if (isRestaurantPaymentSuspended(restaurant)) {
-      throw new UnauthorizedException(
-        buildPaymentSuspendedErrorMessage(restaurant.name),
-      );
+    if (!isBillingInspectionRoute && isRestaurantPaymentSuspended(restaurant)) {
+      const hasOpenShift =
+        !isOpeningNewShift && (await this.authService.hasOpenCashShift(restaurant.id));
+      if (!hasOpenShift) {
+        const cfg = await this.authService.loadBillingConfig();
+        throw new UnauthorizedException(
+          buildPaymentSuspendedErrorMessage(restaurant.name, cfg),
+        );
+      }
     }
     if (restaurant.status !== 'active') {
       throw new UnauthorizedException('Restaurant is not active');
-    }
-
-    if (payload.role === 'root') {
-      return {
-        restaurantId: restaurant.id,
-        slug: restaurant.slug,
-        sub: payload.sub,
-        email: payload.email,
-        name: payload.name ?? payload.email,
-        role: 'root' as const,
-        staffRole: 'boss',
-        roleLabel: 'Owner (Boss)',
-        isBoss: true,
-        permissions: [...PERMISSION_KEYS],
-        limits: { maxDiscountPercent: 100, maxDiscountAmount: null },
-      };
     }
 
     if (payload.role === 'staff') {
       const staff = await this.staffRepo.findOne({
         where: { id: payload.sub, restaurantId: restaurant.id, isActive: true },
       });
-      if (!staff) {
+      if (!staff || !staff.passwordHash) {
         throw new UnauthorizedException('Staff account is inactive or not found');
+      }
+      if (
+        payload.pwdFp &&
+        payload.pwdFp !== computeSecretFingerprint(staff.passwordHash)
+      ) {
+        throw new UnauthorizedException('Staff password has been changed; please sign in again');
       }
       const resolved = await this.rolesService.resolveForStaff(staff);
       if (!resolved.canAccessPanel) {
         throw new UnauthorizedException('Merchant panel access has been revoked');
       }
       return {
+        id: staff.id,
+        sub: staff.id,
         restaurantId: restaurant.id,
         slug: restaurant.slug,
-        sub: staff.id,
         email: staff.email ?? payload.email,
         name: staff.name,
         role: 'staff' as const,
@@ -151,12 +218,27 @@ export class RestaurantJwtStrategy extends PassportStrategy(Strategy, 'restauran
       };
     }
 
+    if (
+      !restaurant.terminalEmail ||
+      !restaurant.terminalPasswordHash ||
+      restaurant.terminalEmail.toLowerCase().trim() !== (payload.email || '').toLowerCase().trim()
+    ) {
+      throw new UnauthorizedException('Terminal credentials are inactive or have been changed');
+    }
+    if (
+      payload.pwdFp &&
+      payload.pwdFp !== computeSecretFingerprint(restaurant.terminalPasswordHash)
+    ) {
+      throw new UnauthorizedException('Terminal password has been changed; please sign in again');
+    }
+
     return {
+      id: restaurant.id,
+      sub: payload.sub,
       restaurantId: restaurant.id,
       slug: restaurant.slug,
-      sub: payload.sub,
-      email: payload.email,
-      name: payload.name ?? payload.email,
+      email: restaurant.terminalEmail,
+      name: payload.name ?? 'Terminal',
       role: 'terminal' as const,
       staffRole: 'terminal',
       roleLabel: 'POS Terminal',

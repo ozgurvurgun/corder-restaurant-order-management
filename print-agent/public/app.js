@@ -79,6 +79,10 @@ function renderAuthGateAndHeader() {
   }
 }
 
+function printerLabel(p) {
+  return String(p?.name || p?.systemPrinterName || p?.host || "Yazıcı").trim()
+}
+
 function renderPrinters() {
   const printers = state.settings.printers || []
   $("printerCountBadge").textContent = `${printers.length} Yazıcı`
@@ -90,18 +94,22 @@ function renderPrinters() {
   container.innerHTML = printers
     .map((p) => {
       const isNet = p.mode === "network"
-      const targetText = isNet ? `${escapeHtml(p.host)}:${escapeHtml(p.port)}` : escapeHtml(p.systemPrinterName || p.name)
+      const label = printerLabel(p)
+      const hardware = isNet
+        ? `${p.host || "?"}:${p.port || 9100}`
+        : p.systemPrinterName || p.name || "-"
       const nextW = Number(p.paperWidth) === 58 ? 80 : 58
       return `<div class="printer-item">
         <div class="printer-meta">
           <div class="printer-title">
-            <span>${escapeHtml(p.name)}</span>
+            <span>${escapeHtml(label)}</span>
             <span class="tag ${isNet ? "tag-net" : "tag-usb"}">${isNet ? "Ağ (IP:Port)" : "USB / Sistem"}</span>
             <span class="tag">${p.paperWidth || 80}mm</span>
           </div>
-          <div class="printer-sub">Hedef: <strong>${targetText}</strong></div>
+          <div class="printer-sub">Takma ad selectlerde görünür · Cihaz: <strong>${escapeHtml(hardware)}</strong></div>
         </div>
         <div class="btn-group">
+          <button class="btn btn-secondary btn-sm" data-action="rename-printer" data-id="${escapeHtml(p.id)}">Takma Ad</button>
           <button class="btn btn-secondary btn-sm" data-action="toggle-width" data-id="${escapeHtml(p.id)}" data-width="${nextW}">${nextW}mm Yap</button>
           <button class="btn btn-primary btn-sm" data-action="test-print" data-id="${escapeHtml(p.id)}">Test Fişi Yazdır</button>
           <button class="btn btn-danger btn-sm" data-action="delete-printer" data-id="${escapeHtml(p.id)}">Sil</button>
@@ -136,9 +144,12 @@ function renderRoutingDropdowns() {
   const printers = state.settings.printers || []
   const receiptSelect = $("selectReceiptPrinter")
   const kitchenSelect = $("selectDefaultKitchenPrinter")
+  const printerOptions = printers
+    .map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(printerLabel(p))}</option>`)
+    .join("")
   const optionsHtml = printers.length
-    ? printers.map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`).join("")
-    : `<option value="">-- Önce Yazıcı Ekleyin --</option>`
+    ? `${printerOptions}<option value="none">-- Bu Bilgisayarda Yazdırma (Kapalı) --</option>`
+    : `<option value="">-- Önce Yazıcı Ekleyin --</option><option value="none">-- Bu Bilgisayarda Yazdırma (Kapalı) --</option>`
   receiptSelect.innerHTML = optionsHtml
   kitchenSelect.innerHTML = optionsHtml
   if (state.settings.receiptPrinterId) receiptSelect.value = state.settings.receiptPrinterId
@@ -171,7 +182,8 @@ function renderRoutingDropdowns() {
       const selectedId = routes[cat.id] || ""
       const opts = [
         `<option value="">Varsayılan Mutfak Yazıcısı</option>`,
-        ...printers.map((p) => `<option value="${escapeHtml(p.id)}" ${p.id === selectedId ? "selected" : ""}>${escapeHtml(p.name)}</option>`),
+        ...printers.map((p) => `<option value="${escapeHtml(p.id)}" ${p.id === selectedId ? "selected" : ""}>${escapeHtml(printerLabel(p))}</option>`),
+        `<option value="none" ${selectedId === "none" ? "selected" : ""}>-- Bu Bilgisayarda Yazdırma --</option>`,
       ].join("")
       return `<div class="category-row ${cat.isSub ? "sub-category" : ""}">
         <span class="category-name">${cat.isSub ? "↳ " : ""}${escapeHtml(cat.name)}</span>
@@ -309,13 +321,32 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!btn) return
     const action = btn.dataset.action
     const id = btn.dataset.id
-    if (action === "toggle-width") {
+    if (action === "rename-printer") {
+      const p = (state.settings.printers || []).find((item) => item.id === id)
+      if (!p) return
+      const current = printerLabel(p)
+      const next = window.prompt("Takma ad (select listelerinde bu isim görünür)", current)
+      if (next == null) return
+      const name = String(next).trim()
+      if (!name) {
+        showToast("Takma ad boş olamaz", true)
+        return
+      }
+      if (name === current) return
+      try {
+        await apiCall("/api/printers", { method: "POST", body: JSON.stringify({ ...p, name }) })
+        showToast(`Takma ad güncellendi: ${name}`)
+        await loadState(true)
+      } catch (err) {
+        showToast(err.message, true)
+      }
+    } else if (action === "toggle-width") {
       const paperWidth = Number(btn.dataset.width) || 80
       const p = (state.settings.printers || []).find((item) => item.id === id)
       if (!p) return
       try {
         await apiCall("/api/printers", { method: "POST", body: JSON.stringify({ ...p, paperWidth }) })
-        showToast(`${p.name} kağıt genişliği ${paperWidth}mm yapıldı`)
+        showToast(`${printerLabel(p)} kağıt genişliği ${paperWidth}mm yapıldı`)
         await loadState(true)
       } catch (err) {
         showToast(err.message, true)
@@ -344,12 +375,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const btn = e.target.closest('button[data-action="use-system-printer"]')
     if (!btn) return
     const sysName = btn.dataset.name
+    const nickRaw = window.prompt(
+      "Takma ad (ör. Mutfak, Kasa — selectlerde bu görünür)",
+      sysName,
+    )
+    if (nickRaw == null) return
+    const name = String(nickRaw).trim() || sysName
     try {
       await apiCall("/api/printers", {
         method: "POST",
-        body: JSON.stringify({ name: sysName, mode: "system", systemPrinterName: sysName, paperWidth: 80 }),
+        body: JSON.stringify({ name, mode: "system", systemPrinterName: sysName, paperWidth: 80 }),
       })
-      showToast(`"${sysName}" yazıcısı eklendi`)
+      showToast(`"${name}" eklendi (${sysName})`)
       await loadState(true)
     } catch (err) {
       showToast(err.message, true)

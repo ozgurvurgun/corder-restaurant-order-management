@@ -33,6 +33,12 @@ export interface Restaurant {
   address?: string
   phone?: string
   email?: string
+  taxId?: string | null
+  whatsapp?: string | null
+  instagram?: string | null
+  facebook?: string | null
+  website?: string | null
+  workingHours?: string | null
   logo?: string
   status: "active" | "inactive"
   brandName?: string | null

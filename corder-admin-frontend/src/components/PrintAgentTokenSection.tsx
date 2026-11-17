@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react"
-import { Monitor, Printer, Copy, RefreshCw } from "lucide-react"
+import { Monitor, Printer, Copy, Check, RefreshCw } from "lucide-react"
 import { platform } from "@/lib/api"
 
 interface PanelCategoryItem {
@@ -35,7 +35,9 @@ export function PrintAgentTokenSection({
   const [terminalSuccess, setTerminalSuccess] = useState("")
   const [terminalSaveLoading, setTerminalSaveLoading] = useState(false)
 
-  const [printAgentUsername, setPrintAgentUsername] = useState(initialPrintAgentUsername ?? "")
+  const [printAgentUsername, setPrintAgentUsername] = useState(
+    initialPrintAgentUsername ?? ""
+  )
   const [printAgentPassword, setPrintAgentPassword] = useState("")
   const [printAgentError, setPrintAgentError] = useState("")
   const [printAgentSuccess, setPrintAgentSuccess] = useState("")
@@ -50,14 +52,25 @@ export function PrintAgentTokenSection({
     e.preventDefault()
     setTerminalError("")
     setTerminalSuccess("")
-    if (!terminalEmail.trim()) {
-      setTerminalError("Terminal e-posta gerekli.")
+    const cleanEmail = terminalEmail.trim().toLowerCase()
+    if (!cleanEmail) {
+      setTerminalError("Terminal e-posta adresi gerekli.")
+      return
+    }
+    if (!initialTerminalEmail && terminalPassword.length < 4) {
+      setTerminalError(
+        "Yeni terminal hesabı için en az 4 karakterli bir parola belirleyin."
+      )
+      return
+    }
+    if (terminalPassword.length > 0 && terminalPassword.length < 4) {
+      setTerminalError("Terminal parolası en az 4 karakter olmalıdır.")
       return
     }
     setTerminalSaveLoading(true)
     try {
       await onSaveTerminalConfig({
-        terminalEmail: terminalEmail.trim(),
+        terminalEmail: cleanEmail,
         ...(terminalPassword ? { terminalPassword } : {}),
       })
       setTerminalPassword("")
@@ -79,7 +92,13 @@ export function PrintAgentTokenSection({
       return
     }
     if (!initialPrintAgentUsername && printAgentPassword.length < 6) {
-      setPrintAgentError("Yeni Print Agent kullanıcısı için en az 6 karakterli parola belirleyin.")
+      setPrintAgentError(
+        "Yeni Print Agent kullanıcısı için en az 6 karakterli parola belirleyin."
+      )
+      return
+    }
+    if (printAgentPassword.length > 0 && printAgentPassword.length < 6) {
+      setPrintAgentError("Print Agent parolası en az 6 karakter olmalıdır.")
       return
     }
     setPrintAgentSaveLoading(true)
@@ -116,6 +135,7 @@ export function PrintAgentTokenSection({
               onChange={(e) => setPrintAgentUsername(e.target.value)}
               placeholder="Örn: merkez-yazici"
               minLength={3}
+              autoComplete="off"
               className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-4 py-2.5 font-mono text-sm text-white outline-none focus:border-blue-500"
               disabled={printAgentSaveLoading}
               required
@@ -123,7 +143,10 @@ export function PrintAgentTokenSection({
           </div>
           <div>
             <label className="mb-1.5 block text-sm text-zinc-300">
-              Parola {initialPrintAgentUsername ? "(değiştirmek için doldurun; boş bırakılırsa mevcut parola korunur)" : "(en az 6 karakter) *"}
+              Parola{" "}
+              {initialPrintAgentUsername
+                ? "(değiştirmek için doldurun; boş bırakılırsa mevcut parola korunur)"
+                : "(en az 6 karakter) *"}
             </label>
             <input
               type="password"
@@ -131,20 +154,25 @@ export function PrintAgentTokenSection({
               onChange={(e) => setPrintAgentPassword(e.target.value)}
               placeholder="••••••••"
               minLength={6}
+              autoComplete="new-password"
               className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-4 py-2.5 text-white outline-none focus:border-blue-500"
               disabled={printAgentSaveLoading}
               required={!initialPrintAgentUsername}
             />
           </div>
           {printAgentError && <p className="text-sm text-red-400">{printAgentError}</p>}
-          {printAgentSuccess && <p className="text-sm text-emerald-400">{printAgentSuccess}</p>}
+          {printAgentSuccess && (
+            <p className="text-sm text-emerald-400">{printAgentSuccess}</p>
+          )}
           <button
             type="submit"
             disabled={printAgentSaveLoading}
             className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
           >
             <Printer className="h-4 w-4" />
-            {printAgentSaveLoading ? "Kaydediliyor…" : "Print Agent kullanıcısını kaydet"}
+            {printAgentSaveLoading
+              ? "Kaydediliyor…"
+              : "Print Agent kullanıcısını kaydet"}
           </button>
         </form>
       </div>
@@ -163,13 +191,18 @@ export function PrintAgentTokenSection({
               value={terminalEmail}
               onChange={(e) => setTerminalEmail(e.target.value)}
               placeholder="terminal@restoran.com"
+              autoComplete="off"
               className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-4 py-2.5 text-white outline-none focus:border-blue-500"
               disabled={terminalSaveLoading}
+              required
             />
           </div>
           <div>
             <label className="mb-1.5 block text-sm text-zinc-300">
-              Terminal parola (değiştirmek için doldur; boş bırakırsan mevcut parola kalır)
+              Terminal parola{" "}
+              {initialTerminalEmail
+                ? "(değiştirmek için doldurun; boş bırakılırsa mevcut parola korunur)"
+                : "(en az 4 karakter) *"}
             </label>
             <input
               type="password"
@@ -177,8 +210,10 @@ export function PrintAgentTokenSection({
               onChange={(e) => setTerminalPassword(e.target.value)}
               placeholder="••••••••"
               minLength={4}
+              autoComplete="new-password"
               className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-4 py-2.5 text-white outline-none focus:border-blue-500"
               disabled={terminalSaveLoading}
+              required={!initialTerminalEmail}
             />
           </div>
           {terminalError && <p className="text-sm text-red-400">{terminalError}</p>}
@@ -201,6 +236,7 @@ export function PrintAgentCategoriesSection({ restaurantId }: { restaurantId: st
   const [panelCategories, setPanelCategories] = useState<PanelCategoryItem[]>([])
   const [panelCategoriesLoading, setPanelCategoriesLoading] = useState(false)
   const [panelCategoriesError, setPanelCategoriesError] = useState<string | null>(null)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const loadPanelCategories = useCallback(async () => {
     setPanelCategoriesLoading(true)
@@ -209,7 +245,9 @@ export function PrintAgentCategoriesSection({ restaurantId }: { restaurantId: st
       const list = await platform.restaurants.categories(restaurantId)
       setPanelCategories(list)
     } catch (err) {
-      setPanelCategoriesError(err instanceof Error ? err.message : "Kategoriler yüklenemedi")
+      setPanelCategoriesError(
+        err instanceof Error ? err.message : "Kategoriler yüklenemedi"
+      )
     } finally {
       setPanelCategoriesLoading(false)
     }
@@ -218,6 +256,18 @@ export function PrintAgentCategoriesSection({ restaurantId }: { restaurantId: st
   useEffect(() => {
     void loadPanelCategories()
   }, [loadPanelCategories])
+
+  const handleCopy = async (id: string) => {
+    try {
+      await navigator.clipboard?.writeText(id)
+      setCopiedId(id)
+      window.setTimeout(() => {
+        setCopiedId((cur) => (cur === id ? null : cur))
+      }, 2000)
+    } catch {
+      // ignore clipboard error
+    }
+  }
 
   return (
     <div className="mt-8 rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6">
@@ -239,7 +289,9 @@ export function PrintAgentCategoriesSection({ restaurantId }: { restaurantId: st
           Yenile
         </button>
       </div>
-      {panelCategoriesError && <p className="mt-3 text-sm text-red-400">{panelCategoriesError}</p>}
+      {panelCategoriesError && (
+        <p className="mt-3 text-sm text-red-400">{panelCategoriesError}</p>
+      )}
       {panelCategoriesLoading && !panelCategoriesError ? (
         <p className="mt-4 text-sm text-zinc-500">Kategoriler yükleniyor…</p>
       ) : (
@@ -264,16 +316,23 @@ export function PrintAgentCategoriesSection({ restaurantId }: { restaurantId: st
                     <td className="p-3 font-medium text-white">{category.name}</td>
                     <td className="p-3">
                       <div className="flex items-center gap-2">
-                        <code className="break-all font-mono text-xs text-zinc-300" title={category.id}>
+                        <code
+                          className="break-all font-mono text-xs text-zinc-300"
+                          title={category.id}
+                        >
                           {category.id}
                         </code>
                         <button
                           type="button"
-                          onClick={() => void navigator.clipboard?.writeText(category.id)}
+                          onClick={() => void handleCopy(category.id)}
                           className="shrink-0 rounded p-1.5 text-zinc-400 hover:bg-[#2a2a2a] hover:text-white"
                           title="ID kopyala"
                         >
-                          <Copy className="h-4 w-4" />
+                          {copiedId === category.id ? (
+                            <Check className="h-4 w-4 text-emerald-400" />
+                          ) : (
+                            <Copy className="h-4 w-4" />
+                          )}
                         </button>
                       </div>
                     </td>

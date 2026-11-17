@@ -82,19 +82,30 @@ async function discoverCupsAndLinuxUsbPrinters() {
     })
   }
 
-  if (process.platform === "linux") {
+  // Same physical USB printer often appears both as a CUPS queue (usb://…)
+  // and as /dev/usb/lpN. Prefer CUPS when present to avoid duplicate rows and
+  // EACCES noise when the agent user cannot open the raw device node.
+  const cupsHasUsb = printers.some((p) =>
+    /^usb:/i.test(String(p.portName || "").trim()),
+  )
+
+  if (process.platform === "linux" && !cupsHasUsb) {
     for (let i = 0; i <= 9; i++) {
       const devPath = `/dev/usb/lp${i}`
-      if (fs.existsSync(devPath)) {
-        printers.push({
-          name: devPath,
-          driverName: "Linux Doğrudan USB Termal",
-          portName: devPath,
-          status: "ready",
-          isDefault: printers.length === 0,
-          source: "linux-usb",
-        })
+      if (!fs.existsSync(devPath)) continue
+      try {
+        fs.accessSync(devPath, fs.constants.W_OK)
+      } catch {
+        continue
       }
+      printers.push({
+        name: devPath,
+        driverName: "Linux Doğrudan USB Termal",
+        portName: devPath,
+        status: "ready",
+        isDefault: printers.length === 0,
+        source: "linux-usb",
+      })
     }
   }
 

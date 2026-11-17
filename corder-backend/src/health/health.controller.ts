@@ -7,9 +7,41 @@ export class HealthController {
 
   @Get()
   async getHealth() {
+    await this.assertDatabaseReady();
+    return {
+      status: 'ok',
+      database: 'up',
+      uptimeSeconds: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @Get('live')
+  getLiveness() {
+    return {
+      status: 'ok',
+      uptimeSeconds: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @Get('ready')
+  async getReadiness() {
+    await this.assertDatabaseReady();
+    return {
+      status: 'ok',
+      database: 'up',
+      uptimeSeconds: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  private async assertDatabaseReady(): Promise<void> {
+    if (!this.dataSource?.isInitialized) {
+      throw new ServiceUnavailableException({ status: 'error', database: 'down' });
+    }
     try {
       await this.dataSource.query('SELECT 1');
-      return { status: 'ok', database: 'up' };
     } catch {
       throw new ServiceUnavailableException({ status: 'error', database: 'down' });
     }

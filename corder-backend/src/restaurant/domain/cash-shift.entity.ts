@@ -108,6 +108,9 @@ export class CashShiftEntity {
   }
 
   adjustSettlementDiff(diff: CheckSettlementShiftDiff): void {
+    this.cashIn = fromMinorUnits(
+      Math.max(0, toMinorUnits(this.cashIn) + diff.cashDiffMinorUnits),
+    );
     this.totalRevenue = fromMinorUnits(
       Math.max(0, toMinorUnits(this.totalRevenue) + diff.netDiffMinorUnits),
     );
@@ -125,13 +128,34 @@ export class CashShiftEntity {
     );
   }
 
-  recordCashMovement(type: string, amountMinorUnits: number): void {
+  recordNonCashCollection(
+    paymentMethod: 'credit-card' | 'meal-card' | 'multinet',
+    amountMinorUnits: number,
+  ): void {
+    if (amountMinorUnits <= 0) return;
+    if (paymentMethod === 'credit-card') {
+      this.totalCard = fromMinorUnits(toMinorUnits(this.totalCard) + amountMinorUnits);
+    } else if (paymentMethod === 'meal-card') {
+      this.totalMealCard = fromMinorUnits(
+        toMinorUnits(this.totalMealCard) + amountMinorUnits,
+      );
+    } else if (paymentMethod === 'multinet') {
+      this.totalMultinet = fromMinorUnits(
+        toMinorUnits(this.totalMultinet) + amountMinorUnits,
+      );
+    }
+    this.transactionCount = (this.transactionCount ?? 0) + 1;
+  }
+
+  recordCashMovement(type: string, amountMinorUnits: number, incrementCount = true): void {
     if (type === 'cash-in' || type === 'sale') {
       this.cashIn = fromMinorUnits(toMinorUnits(this.cashIn) + amountMinorUnits);
     } else {
       this.cashOut = fromMinorUnits(toMinorUnits(this.cashOut) + amountMinorUnits);
     }
-    this.transactionCount = (this.transactionCount ?? 0) + 1;
+    if (incrementCount) {
+      this.transactionCount = (this.transactionCount ?? 0) + 1;
+    }
   }
 
   closeShift(closedBy: string, closingBalanceMinorUnits: number, notes?: string | null): void {

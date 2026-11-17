@@ -8,12 +8,12 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { createHash } from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import { RootAdminEntity } from '../../platform/domain/root-admin.entity';
 import { BossRestaurantEntity } from '../../platform/domain/boss-restaurant.entity';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 import { PlatformBillingConfigEntity } from '../../platform/domain/platform-billing-config.entity';
+import { CashShiftEntity } from '../domain/cash-shift.entity';
 import { RestaurantStaffEntity } from '../domain/restaurant-staff.entity';
 import {
   AuthenticatedRestaurantUserDto,
@@ -22,6 +22,7 @@ import {
   buildPaymentSuspendedErrorMessage,
   buildStaffUserDto,
   buildTerminalUserDto,
+  computeSecretFingerprint,
   isRestaurantPaymentSuspended,
   LoginSessionResultDto,
   RestaurantJwtRole,
@@ -30,15 +31,13 @@ import {
   toBranchSummaryDto,
 } from '../domain/services/billing-suspension.policy';
 import { RolesService } from './roles.service';
-import {
-  DEFAULT_JWT_EXPIRES_IN,
-  requireConfigSecret,
-} from '../../common/security/env.validation';
+import { DEFAULT_JWT_EXPIRES_IN, requireConfigSecret } from '../../common/security/env.validation';
 
 export {
   AuthenticatedRestaurantUserDto,
   BranchSummaryDto,
   buildPaymentSuspendedErrorMessage,
+  computeSecretFingerprint,
   isRestaurantPaymentSuspended,
   LoginSessionResultDto,
   RestaurantJwtRole,
@@ -64,12 +63,15 @@ export class RestaurantAuthService {
     private readonly config: ConfigService,
   ) {}
 
-  private async loadBillingConfig(): Promise<PlatformBillingConfigEntity | null> {
-    const list = await this.billingConfigRepo.find({
-      order: { updatedAt: 'DESC' },
-      take: 1,
-    });
+  async loadBillingConfig(): Promise<PlatformBillingConfigEntity | null> {
+    const list = await this.billingConfigRepo.find({ order: { updatedAt: 'DESC' }, take: 1 });
     return list[0] ?? null;
+  }
+
+  async hasOpenCashShift(restaurantId: string): Promise<boolean> {
+    return this.restaurantRepo.manager.exists(CashShiftEntity, {
+      where: { restaurantId, status: 'open' },
+    });
   }
 
   async getBossOwnedRestaurants(
@@ -87,36 +89,34 @@ export class RestaurantAuthService {
     if (fallbackRestaurantId) ids.add(fallbackRestaurantId);
     if (admin?.restaurantId) ids.add(admin.restaurantId);
 
-    const allRestaurants = await this.restaurantRepo.find({
-      order: { createdAt: 'ASC' },
-    });
+    const brandNorm =
+      admin?.bossTier === 'brand_owner' && admin.brandName?.trim()
+        ? admin.brandName.trim().toLowerCase()
+        : null;
+    if (ids.size === 0 && !brandNorm) return [];
 
-    if (admin?.bossTier === 'brand_owner' && admin.brandName) {
-      const brandNorm = admin.brandName.trim().toLowerCase();
-      for (const r of allRestaurants) {
-        if (r.brandName && r.brandName.trim().toLowerCase() === brandNorm) {
-          ids.add(r.id);
-        }
-      }
+    const qb = this.restaurantRepo.createQueryBuilder('r');
+    if (ids.size > 0 && brandNorm) {
+      qb.where('r.id IN (:...ids) OR LOWER(TRIM(r.brand_name)) = :brandNorm', {
+        ids: Array.from(ids),
+        brandNorm,
+      });
+    } else if (ids.size > 0) {
+      qb.where('r.id IN (:...ids)', { ids: Array.from(ids) });
+    } else if (brandNorm) {
+      qb.where('LOWER(TRIM(r.brand_name)) = :brandNorm', { brandNorm });
     }
-
-    if (ids.size === 0) return [];
-    return allRestaurants.filter((r) => ids.has(r.id));
+    return qb.orderBy('r.createdAt', 'ASC').getMany();
   }
 
-  async assertBossOwnsRestaurant(
-    bossId: string,
-    restaurantId: string,
-  ): Promise<RestaurantEntity> {
+  async assertBossOwnsRestaurant(bossId: string, restaurantId: string): Promise<RestaurantEntity> {
     const admin = await this.rootAdminRepo.findOne({ where: { id: bossId } });
     if (!admin || admin.isActive === false) {
       throw new UnauthorizedException('Boss account is not active');
     }
     const owned = await this.getBossOwnedRestaurants(bossId, admin.restaurantId, admin);
     const target = owned.find((r) => r.id === restaurantId);
-    if (!target) {
-      throw new ForbiddenException('You do not have access to this branch');
-    }
+    if (!target) throw new ForbiddenException('You do not have access to this branch');
     return target;
   }
 
@@ -125,10 +125,10 @@ export class RestaurantAuthService {
     const bossLogin = await this.tryBossLogin(email, dto.password, dto.restaurantId);
     if (bossLogin) return bossLogin;
 
-    const staffLogin = await this.tryStaffLogin(email, dto.password);
+    const staffLogin = await this.tryStaffLogin(email, dto.password, dto.restaurantId);
     if (staffLogin) return staffLogin;
 
-    const terminalLogin = await this.tryTerminalLogin(email, dto.password);
+    const terminalLogin = await this.tryTerminalLogin(email, dto.password, dto.restaurantId);
     if (terminalLogin) return terminalLogin;
 
     throw new UnauthorizedException('Invalid email or password');
@@ -226,7 +226,7 @@ export class RestaurantAuthService {
   }
 
   private computePasswordFingerprint(hash: string): string {
-    return createHash('sha256').update(hash).digest('hex').slice(0, 16);
+    return computeSecretFingerprint(hash);
   }
 
   async getSessionProfile(user: {
@@ -266,11 +266,13 @@ export class RestaurantAuthService {
       type: 'restaurant',
       role: 'root',
       staffRole: 'boss',
+      pwdFp: this.computePasswordFingerprint(admin.passwordHash),
     });
     return {
       accessToken,
       restaurant: toBranchSummaryDto(target),
       restaurants: activeBranches.map((r) => toBranchSummaryDto(r)),
+      user: buildBossUserDto(admin),
     };
   }
 
@@ -320,6 +322,7 @@ export class RestaurantAuthService {
         type: 'restaurant',
         role: 'root',
         staffRole: 'boss',
+        pwdFp: this.computePasswordFingerprint(admin.passwordHash),
       }),
       restaurant: toBranchSummaryDto(selected),
       restaurants: activeBranches.map((r) => toBranchSummaryDto(r)),
@@ -330,11 +333,17 @@ export class RestaurantAuthService {
   private async tryStaffLogin(
     email: string,
     password: string,
+    requestedBranchId?: string,
   ): Promise<LoginSessionResultDto | null> {
     const staffCandidates = await this.staffRepo.find({
       where: { email, isActive: true },
       relations: ['restaurant'],
     });
+    if (requestedBranchId) {
+      staffCandidates.sort((a, b) =>
+        a.restaurantId === requestedBranchId ? -1 : b.restaurantId === requestedBranchId ? 1 : 0,
+      );
+    }
     for (const staff of staffCandidates) {
       if (!staff.passwordHash || !staff.restaurant) continue;
       if (!(await bcrypt.compare(password, staff.passwordHash))) continue;
@@ -360,6 +369,7 @@ export class RestaurantAuthService {
           type: 'restaurant',
           role: 'staff',
           staffRole: resolved.roleKey,
+          pwdFp: this.computePasswordFingerprint(staff.passwordHash),
         }),
         restaurant: summary,
         restaurants: [summary],
@@ -372,59 +382,66 @@ export class RestaurantAuthService {
   private async tryTerminalLogin(
     email: string,
     password: string,
+    requestedBranchId?: string,
   ): Promise<LoginSessionResultDto | null> {
-    const restaurant = await this.restaurantRepo.findOne({ where: { terminalEmail: email } });
-    if (
-      !restaurant?.terminalPasswordHash ||
-      !(await bcrypt.compare(password, restaurant.terminalPasswordHash))
-    ) {
-      return null;
+    const candidates = await this.restaurantRepo.find({ where: { terminalEmail: email } });
+    if (requestedBranchId) {
+      candidates.sort((a, b) =>
+        a.id === requestedBranchId ? -1 : b.id === requestedBranchId ? 1 : 0,
+      );
     }
-    if (isRestaurantPaymentSuspended(restaurant)) {
-      const cfg = await this.loadBillingConfig();
-      throw new UnauthorizedException(buildPaymentSuspendedErrorMessage(restaurant.name, cfg));
+    for (const restaurant of candidates) {
+      if (
+        !restaurant.terminalPasswordHash ||
+        !(await bcrypt.compare(password, restaurant.terminalPasswordHash))
+      ) {
+        continue;
+      }
+      if (isRestaurantPaymentSuspended(restaurant)) {
+        const cfg = await this.loadBillingConfig();
+        throw new UnauthorizedException(buildPaymentSuspendedErrorMessage(restaurant.name, cfg));
+      }
+      if (restaurant.status !== 'active') {
+        throw new UnauthorizedException('Restaurant account is not active');
+      }
+      const summary = toBranchSummaryDto(restaurant);
+      return {
+        accessToken: this.signToken({
+          sub: restaurant.id,
+          restaurantId: restaurant.id,
+          slug: restaurant.slug,
+          email: restaurant.terminalEmail!,
+          name: 'Terminal',
+          type: 'restaurant',
+          role: 'terminal',
+          pwdFp: this.computePasswordFingerprint(restaurant.terminalPasswordHash),
+        }),
+        restaurant: summary,
+        restaurants: [summary],
+        user: buildTerminalUserDto(restaurant),
+      };
     }
-    if (restaurant.status !== 'active') {
-      throw new UnauthorizedException('Restaurant account is not active');
-    }
-    const summary = toBranchSummaryDto(restaurant);
-    return {
-      accessToken: this.signToken({
-        sub: restaurant.id,
-        restaurantId: restaurant.id,
-        slug: restaurant.slug,
-        email: restaurant.terminalEmail!,
-        name: 'Terminal',
-        type: 'restaurant',
-        role: 'terminal',
-      }),
-      restaurant: summary,
-      restaurants: [summary],
-      user: buildTerminalUserDto(restaurant),
-    };
+    return null;
   }
 
   private async getBossSessionProfile(bossId: string, restaurantId: string) {
     const admin = await this.rootAdminRepo.findOne({ where: { id: bossId } });
-    if (!admin || admin.isActive === false) {
-      throw new UnauthorizedException('Boss account not found');
-    }
+    if (!admin || admin.isActive === false) throw new UnauthorizedException('Boss account not found');
     const owned = await this.getBossOwnedRestaurants(admin.id, admin.restaurantId, admin);
-    const activeBranches = owned.filter(
-      (r) => r.status === 'active' && !isRestaurantPaymentSuspended(r),
-    );
-    const current = activeBranches.find((r) => r.id === restaurantId) ?? activeBranches[0];
-    if (!current) {
-      const suspended = owned.find((r) => isRestaurantPaymentSuspended(r));
-      if (suspended) {
-        const cfg = await this.loadBillingConfig();
-        throw new UnauthorizedException(buildPaymentSuspendedErrorMessage(suspended.name, cfg));
-      }
-      throw new NotFoundException('Active restaurant branch not found');
+    const activeBranches = owned.filter((r) => r.status === 'active' && !isRestaurantPaymentSuspended(r));
+    const current =
+      activeBranches.find((r) => r.id === restaurantId) ??
+      activeBranches[0] ??
+      owned.find((r) => r.id === restaurantId) ??
+      owned[0];
+    if (!current) throw new NotFoundException('Active restaurant branch not found');
+    if (isRestaurantPaymentSuspended(current) && !(await this.hasOpenCashShift(current.id))) {
+      const cfg = await this.loadBillingConfig();
+      throw new UnauthorizedException(buildPaymentSuspendedErrorMessage(current.name, cfg));
     }
     return {
       restaurant: toBranchSummaryDto(current),
-      restaurants: activeBranches.map((r) => toBranchSummaryDto(r)),
+      restaurants: (activeBranches.length > 0 ? activeBranches : [current]).map(toBranchSummaryDto),
       user: buildBossUserDto(admin),
     };
   }
@@ -434,35 +451,28 @@ export class RestaurantAuthService {
       where: { id: staffId, restaurantId, isActive: true },
       relations: ['restaurant'],
     });
-    if (!staff || !staff.restaurant) {
-      throw new UnauthorizedException('Staff user not found');
-    }
-    if (isRestaurantPaymentSuspended(staff.restaurant)) {
+    if (!staff || !staff.restaurant) throw new UnauthorizedException('Staff user not found');
+    if (
+      isRestaurantPaymentSuspended(staff.restaurant) &&
+      !(await this.hasOpenCashShift(staff.restaurant.id))
+    ) {
       const cfg = await this.loadBillingConfig();
       throw new UnauthorizedException(buildPaymentSuspendedErrorMessage(staff.restaurant.name, cfg));
     }
     const resolved = await this.rolesService.resolveForStaff(staff);
     const summary = toBranchSummaryDto(staff.restaurant);
-    return {
-      restaurant: summary,
-      restaurants: [summary],
-      user: buildStaffUserDto(staff, resolved),
-    };
+    return { restaurant: summary, restaurants: [summary], user: buildStaffUserDto(staff, resolved) };
   }
 
   private async getTerminalSessionProfile(restaurantId: string) {
     const rest = await this.restaurantRepo.findOne({ where: { id: restaurantId } });
     if (!rest) throw new NotFoundException('Restaurant not found');
-    if (isRestaurantPaymentSuspended(rest)) {
+    if (isRestaurantPaymentSuspended(rest) && !(await this.hasOpenCashShift(rest.id))) {
       const cfg = await this.loadBillingConfig();
       throw new UnauthorizedException(buildPaymentSuspendedErrorMessage(rest.name, cfg));
     }
     const summary = toBranchSummaryDto(rest);
-    return {
-      restaurant: summary,
-      restaurants: [summary],
-      user: buildTerminalUserDto(rest),
-    };
+    return { restaurant: summary, restaurants: [summary], user: buildTerminalUserDto(rest) };
   }
 
   private signToken(payload: RestaurantTokenPayload): string {

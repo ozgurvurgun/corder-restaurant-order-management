@@ -58,6 +58,7 @@ export function useCatalogActions(params: {
     (id: string, data: Partial<PanelProduct>) => {
       if (!token) return
       const body: Parameters<typeof api.products.update>[2] = {}
+      if (data.categoryId !== undefined) body.categoryId = data.categoryId
       if (data.name !== undefined) body.name = data.name.trim()
       if (data.description !== undefined) body.description = data.description
       if (data.price !== undefined) body.price = data.price

@@ -1,7 +1,9 @@
 import type { MenuCategoryTree, OrderDto, RawTableDto } from "./api"
+import { fromMinorUnits, toMinorUnits } from "./format"
 import type {
   OrderItemStatus,
   OrderStatus,
+  TableDiscount,
   TableStatus,
   TerminalCategory,
   TerminalOrder,
@@ -48,7 +50,7 @@ export function mapMenuTreeToCategoriesAndProducts(
         products.push({
           id: product.id,
           name: product.name,
-          price: product.price,
+          price: fromMinorUnits(toMinorUnits(product.price)),
           categoryId: node.id,
           description: product.description,
           imageUrl: product.imageUrl,
@@ -66,10 +68,35 @@ export function mapMenuTreeToCategoriesAndProducts(
   return { categories, products }
 }
 
-export function calculateOrderItemsTotal(items: TerminalOrderItem[]): number {
+export function isItemOnActiveBill(status: string): boolean {
+  return status !== "cancelled" && status !== "ledger"
+}
+
+export function calculateOrderItemsMinorTotal(items: TerminalOrderItem[]): number {
   return items
-    .filter((item) => item.status !== "cancelled")
-    .reduce((sum, item) => sum + item.product.price * item.quantity, 0)
+    .filter((item) => isItemOnActiveBill(item.status))
+    .reduce((sum, item) => sum + toMinorUnits(item.product.price) * item.quantity, 0)
+}
+
+export function calculateOrderItemsTotal(items: TerminalOrderItem[]): number {
+  return fromMinorUnits(calculateOrderItemsMinorTotal(items))
+}
+
+export function applyTableDiscountMinor(
+  subtotalMinor: number,
+  discount?: TableDiscount | null
+): number {
+  if (subtotalMinor <= 0 || !discount) return Math.max(0, subtotalMinor)
+  if (discount.type === "complimentary") return 0
+  const val = Number(discount.value)
+  if (!Number.isFinite(val) || val <= 0) return subtotalMinor
+  if (discount.type === "percent") {
+    if (val >= 100) return 0
+    const discountMinor = Math.round((subtotalMinor * val) / 100)
+    return Math.max(0, subtotalMinor - discountMinor)
+  }
+  const discountMinor = Math.max(0, toMinorUnits(val))
+  return Math.max(0, subtotalMinor - discountMinor)
 }
 
 export function mapOrderDtoToTerminalOrder(
@@ -82,10 +109,11 @@ export function mapOrderDtoToTerminalOrder(
   const tableNumber = extractTableNumber(tableName, 0)
 
   const items: TerminalOrderItem[] = dto.items.map((item) => {
+    const cleanPrice = fromMinorUnits(toMinorUnits(item.price))
     const product: TerminalProduct = productsById?.get(item.productId) ?? {
       id: item.productId,
       name: item.productName,
-      price: item.price,
+      price: cleanPrice,
       categoryId: "",
       isAvailable: true,
     }
@@ -94,7 +122,7 @@ export function mapOrderDtoToTerminalOrder(
       product: {
         ...product,
         name: item.productName || product.name,
-        price: item.price,
+        price: cleanPrice,
       },
       quantity: item.quantity,
       note: item.note,
@@ -141,9 +169,13 @@ export function mapTablesWithOrders(
     const tableOrders = activeOrders.filter(
       (order) => order.tableId === rawTable.id
     )
-    const currentTotal = tableOrders.reduce(
-      (sum, order) => sum + calculateOrderItemsTotal(order.items),
+    const subtotalMinor = tableOrders.reduce(
+      (sum, order) => sum + calculateOrderItemsMinorTotal(order.items),
       0
+    )
+    const subtotalAmount = fromMinorUnits(subtotalMinor)
+    const currentTotal = fromMinorUnits(
+      applyTableDiscountMinor(subtotalMinor, rawTable.discount)
     )
 
     const sortedByUpdated = [...tableOrders].sort(
@@ -177,7 +209,9 @@ export function mapTablesWithOrders(
       openedAt: latestOrder?.updatedAt ?? earliestOrder?.createdAt,
       guestCount: tableOrders.length > 0 ? 1 : undefined,
       activeWaiter,
+      subtotalAmount,
       currentTotal,
+      discount: rawTable.discount ?? null,
       lockedByStaffId: hasActiveLock ? sessionStaffId : undefined,
       lockedByStaffName: hasActiveLock
         ? rawTable.sessionStaffName?.trim() || "Garson"
@@ -192,10 +226,15 @@ export function upsertCartItem(
   quantity = 1,
   note?: string
 ): TerminalOrderItem[] {
-  const existing = cart.find((item) => item.product.id === product.id)
+  const normalizedNote = note?.trim() || undefined
+  const existing = cart.find(
+    (item) =>
+      item.product.id === product.id &&
+      (item.note?.trim() || undefined) === normalizedNote
+  )
   if (existing) {
     return cart.map((item) =>
-      item.product.id === product.id
+      item.id === existing.id
         ? { ...item, quantity: item.quantity + quantity }
         : item
     )
@@ -203,10 +242,10 @@ export function upsertCartItem(
   return [
     ...cart,
     {
-      id: `cart-${product.id}-${Date.now()}`,
+      id: `cart-${product.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       product,
       quantity,
-      note,
+      note: normalizedNote,
       status: "pending",
     },
   ]

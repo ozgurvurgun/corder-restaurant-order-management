@@ -16,7 +16,10 @@ export class PlatformAuthController {
 
   @Post('login')
   async login(@Req() req: Request, @Body() dto: PlatformLoginDto) {
-    this.rateLimiter.consumeLoginAttempt('platform', extractClientIp(req), dto.email);
-    return this.auth.login(dto);
+    const ip = extractClientIp(req);
+    this.rateLimiter.consumeLoginAttempt('platform', ip, dto.email);
+    const result = await this.auth.login(dto);
+    this.rateLimiter.resetLoginAttempts('platform', ip, dto.email);
+    return result;
   }
 }

@@ -41,16 +41,20 @@ export class RootAdminsController {
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.service.findOne(id);
+  findOne(
+    @Param('restaurantId', ParseUUIDPipe) restaurantId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.findOne(id, restaurantId);
   }
 
   @Put(':id')
   update(
+    @Param('restaurantId', ParseUUIDPipe) restaurantId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateRootAdminDto,
   ) {
-    return this.service.update(id, dto);
+    return this.service.update(id, dto, restaurantId);
   }
 
   @Delete(':id')

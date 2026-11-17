@@ -11,6 +11,7 @@ export class CreateStockMaterialDto {
 
   @IsOptional()
   @IsNumber()
+  @Min(0)
   currentStock?: number;
 
   @IsOptional()

@@ -88,13 +88,21 @@ export const ledgerCustomersApi = {
       { token },
     )
   },
-  pay: (token: string, id: string, amount: number) =>
+  pay: (
+    token: string,
+    id: string,
+    amount: number,
+    paymentMethod?: "cash" | "credit-card" | "meal-card" | "multinet",
+  ) =>
     request<LedgerCustomerDto>(
       `/restaurant/ledger-customers/${encodeURIComponent(id)}/payments`,
       {
         method: "POST",
         token,
-        body: JSON.stringify({ amount }),
+        body: JSON.stringify({
+          amount,
+          ...(paymentMethod ? { paymentMethod } : {}),
+        }),
       },
     ),
 }
@@ -150,10 +158,18 @@ export const openAccountsApi = {
       token,
       body: JSON.stringify(body),
     }),
-  pay: (token: string, id: string, amount: number) =>
+  pay: (
+    token: string,
+    id: string,
+    amount: number,
+    paymentMethod?: "cash" | "credit-card" | "meal-card" | "multinet",
+  ) =>
     request<OpenAccountDto>(`/restaurant/open-accounts/${id}/pay`, {
       method: "POST",
       token,
-      body: JSON.stringify({ amount }),
+      body: JSON.stringify({
+        amount,
+        ...(paymentMethod ? { paymentMethod } : {}),
+      }),
     }),
 }

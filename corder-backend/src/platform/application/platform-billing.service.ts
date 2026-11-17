@@ -7,6 +7,7 @@ import {
   RestaurantPaymentRecord,
 } from '../domain/restaurant.entity';
 import { PlatformBillingConfigEntity } from '../domain/platform-billing-config.entity';
+import { CashShiftEntity } from '../../restaurant/domain/cash-shift.entity';
 import {
   RecordRestaurantPaymentDto,
   UpdatePlatformBillingConfigDto,
@@ -23,6 +24,12 @@ export class PlatformBillingService {
     private readonly billingConfigRepo: Repository<PlatformBillingConfigEntity>,
     private readonly restaurantService: RestaurantService,
   ) {}
+
+  private async hasOpenCashShift(restaurantId: string): Promise<boolean> {
+    return this.repo.manager.exists(CashShiftEntity, {
+      where: { restaurantId, status: 'open' },
+    });
+  }
 
   async getBillingConfig(): Promise<PlatformBillingConfigEntity> {
     const existing = await this.billingConfigRepo.find({
@@ -155,7 +162,13 @@ export class PlatformBillingService {
     const all = await this.repo.find();
     let updatedCount = 0;
     for (const r of all) {
-      if (r.status === 'active' && !r.isAccessSuspended && r.lastPaidPeriod !== targetPeriod) {
+      const fee = Number(r.monthlyFee || 0);
+      if (
+        r.status === 'active' &&
+        !r.isAccessSuspended &&
+        fee > 0 &&
+        r.lastPaidPeriod !== targetPeriod
+      ) {
         r.billingStatus = 'pending';
         await this.repo.save(r);
         updatedCount += 1;
@@ -167,8 +180,20 @@ export class PlatformBillingService {
   async suspendAllUnpaidRestaurants() {
     const all = await this.repo.find();
     let suspendedCount = 0;
+    let deferredOpenShiftCount = 0;
     for (const r of all) {
+      const fee = Number(r.monthlyFee || 0);
+      if (fee <= 0) continue;
       if (r.billingStatus === 'pending' || r.billingStatus === 'overdue') {
+        const hasOpenShift = await this.hasOpenCashShift(r.id);
+        if (hasOpenShift) {
+          r.billingStatus = 'overdue';
+          r.isAccessSuspended = false;
+          r.suspensionReason = 'payment_overdue_grace_open_shift';
+          await this.repo.save(r);
+          deferredOpenShiftCount += 1;
+          continue;
+        }
         r.billingStatus = 'suspended';
         r.isAccessSuspended = true;
         r.suspensionReason = 'payment_overdue';
@@ -177,7 +202,7 @@ export class PlatformBillingService {
         suspendedCount += 1;
       }
     }
-    return { suspendedCount };
+    return { suspendedCount, deferredOpenShiftCount };
   }
 }
 

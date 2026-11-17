@@ -23,6 +23,15 @@ export type TerminalScreen =
   | "move-item"
   | "open-orders"
 
+export interface TerminalStaffMember {
+  id: string
+  name: string
+  role: StaffRole
+  roleLabel?: string
+  roleColor?: string
+  hasPin: boolean
+}
+
 export interface TerminalUser {
   id: string
   name: string
@@ -35,6 +44,12 @@ export interface TerminalUser {
   }
 }
 
+export interface TableDiscount {
+  type: "percent" | "amount" | "complimentary"
+  value: number
+  reason?: string
+}
+
 export interface TerminalTable {
   id: string
   number: number
@@ -45,7 +60,9 @@ export interface TerminalTable {
   openedAt?: string
   guestCount?: number
   activeWaiter?: string
+  subtotalAmount: number
   currentTotal: number
+  discount?: TableDiscount | null
   lockedByStaffId?: string
   lockedByStaffName?: string
 }
@@ -77,6 +94,7 @@ export type OrderItemStatus =
   | "ready"
   | "served"
   | "cancelled"
+  | "ledger"
 
 export interface TerminalOrderItem {
   id: string

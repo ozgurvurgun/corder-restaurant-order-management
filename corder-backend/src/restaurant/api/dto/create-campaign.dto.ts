@@ -1,11 +1,13 @@
 import {
   IsBoolean,
+  IsISO8601,
   IsNumber,
   IsOptional,
   IsString,
   Max,
   Min,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreateCampaignBodyDto {
@@ -14,32 +16,37 @@ export class CreateCampaignBodyDto {
   title!: string;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsString()
-  description?: string;
+  description?: string | null;
 
   @IsString()
   @MinLength(1)
   imageUrl!: string;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsNumber()
   @Min(0)
   @Max(100)
-  discountPercent?: number;
+  discountPercent?: number | null;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsNumber()
   @Min(0)
-  originalPrice?: number;
+  originalPrice?: number | null;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsNumber()
   @Min(0)
-  discountedPrice?: number;
+  discountedPrice?: number | null;
 
   @IsOptional()
-  @IsString()
-  validUntil?: string;
+  @ValidateIf((_, v) => v !== null && v !== '')
+  @IsISO8601()
+  validUntil?: string | null;
 
   @IsOptional()
   @IsBoolean()
@@ -53,8 +60,9 @@ export class UpdateCampaignBodyDto {
   title?: string;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsString()
-  description?: string;
+  description?: string | null;
 
   @IsOptional()
   @IsString()
@@ -62,24 +70,28 @@ export class UpdateCampaignBodyDto {
   imageUrl?: string;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsNumber()
   @Min(0)
   @Max(100)
-  discountPercent?: number;
+  discountPercent?: number | null;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsNumber()
   @Min(0)
-  originalPrice?: number;
+  originalPrice?: number | null;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsNumber()
   @Min(0)
-  discountedPrice?: number;
+  discountedPrice?: number | null;
 
   @IsOptional()
-  @IsString()
-  validUntil?: string;
+  @ValidateIf((_, v) => v !== null && v !== '')
+  @IsISO8601()
+  validUntil?: string | null;
 
   @IsOptional()
   @IsBoolean()

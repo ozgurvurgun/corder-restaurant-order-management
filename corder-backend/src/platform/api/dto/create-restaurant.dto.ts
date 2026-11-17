@@ -1,4 +1,14 @@
-import { IsString, IsOptional, IsIn, MinLength, IsNumber, Min, Max, IsBoolean } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsIn,
+  MinLength,
+  IsEmail,
+  IsNumber,
+  Min,
+  Max,
+  IsBoolean,
+} from 'class-validator';
 
 export class CreateRestaurantDto {
   @IsString()
@@ -59,6 +69,15 @@ export class CreateRestaurantDto {
   @IsOptional()
   @IsString()
   billingNotes?: string | null;
+
+  @IsOptional()
+  @IsEmail()
+  terminalEmail?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(4, { message: 'Terminal password must be at least 4 characters' })
+  terminalPassword?: string;
 
   @IsOptional()
   @IsString()

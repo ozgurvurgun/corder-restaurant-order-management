@@ -7,21 +7,34 @@ import { usePanelToast } from "./panel-toast"
 import { Plus, Pencil, Trash2, X, Megaphone, Eye, EyeOff } from "lucide-react"
 import ImageUpload from "./image-upload"
 import type { Campaign } from "@/lib/panel-types"
-
-function formatCurrency(n: number) {
-  return n.toLocaleString("tr-TR", { minimumFractionDigits: 0 })
-}
+import {
+  formatCurrency,
+  formatIstanbulDate,
+  getIstanbulYmd,
+  resolveAssetUrl,
+} from "@/lib/format"
 
 export default function CampaignManagement() {
   const { token } = usePanelAuth()
-  const { campaigns, addCampaign, updateCampaign, deleteCampaign } = usePanelStore()
+  const {
+    campaigns,
+    addCampaign,
+    updateCampaign,
+    deleteCampaign,
+    currentUser,
+    hasPermission,
+  } = usePanelStore()
   const { locale } = usePanelI18n()
   const { showToast } = usePanelToast()
-  
+
+  const isBoss = currentUser?.role === "root"
+  const canManageCampaigns =
+    isBoss || hasPermission("catalog.manage_campaigns")
+
   const [showForm, setShowForm] = useState(false)
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
-  
+
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [image, setImage] = useState("")
@@ -59,7 +72,9 @@ export default function CampaignManagement() {
     setImage(campaign.image)
     setOriginalPrice(campaign.originalPrice?.toString() || "")
     setDiscountedPrice(campaign.discountedPrice?.toString() || "")
-    setValidUntil(campaign.validUntil ? campaign.validUntil.toISOString().split("T")[0] : "")
+    setValidUntil(
+      campaign.validUntil ? getIstanbulYmd(campaign.validUntil) : "",
+    )
     setIsActive(campaign.isActive)
     setShowForm(true)
   }
@@ -70,9 +85,22 @@ export default function CampaignManagement() {
       return
     }
 
-    const orig = originalPrice ? Math.max(0, parseFloat(originalPrice) || 0) : undefined
-    const disc = discountedPrice ? Math.max(0, parseFloat(discountedPrice) || 0) : undefined
-    const percent = orig && disc && orig > 0 ? Math.max(0, Math.round(((orig - disc) / orig) * 100)) : undefined
+    const orig = originalPrice
+      ? Math.max(0, parseFloat(originalPrice) || 0)
+      : undefined
+    const disc = discountedPrice
+      ? Math.max(0, parseFloat(discountedPrice) || 0)
+      : undefined
+
+    if (orig !== undefined && disc !== undefined && disc > orig) {
+      showToast("İndirimli fiyat normal fiyattan yüksek olamaz", "error")
+      return
+    }
+
+    const percent =
+      orig && disc && orig > 0
+        ? Math.max(0, Math.round(((orig - disc) / orig) * 100))
+        : undefined
 
     if (editingCampaign) {
       updateCampaign(editingCampaign.id, {
@@ -82,7 +110,7 @@ export default function CampaignManagement() {
         originalPrice: orig,
         discountedPrice: disc,
         discountPercent: percent,
-        validUntil: validUntil ? new Date(validUntil) : undefined,
+        validUntil: validUntil ? new Date(`${validUntil}T23:59:59+03:00`) : undefined,
         isActive,
       })
     } else {
@@ -93,7 +121,7 @@ export default function CampaignManagement() {
         originalPrice: orig,
         discountedPrice: disc,
         discountPercent: percent,
-        validUntil: validUntil ? new Date(validUntil) : undefined,
+        validUntil: validUntil ? new Date(`${validUntil}T23:59:59+03:00`) : undefined,
         isActive,
       })
     }
@@ -120,16 +148,23 @@ export default function CampaignManagement() {
               {locale === "tr" ? "Kampanya Yönetimi" : "Campaign Management"}
             </h1>
             <p className="text-[13px] text-[#86868b] mt-0.5">
-              {locale === "tr" ? "Menü açılışında gösterilecek kampanyalar" : "Campaigns shown on menu open"}
+              {locale === "tr"
+                ? "Menü açılışında gösterilecek kampanyalar"
+                : "Campaigns shown on menu open"}
             </p>
           </div>
-          <button
-            onClick={() => { resetForm(); setShowForm(true) }}
-            className="flex items-center gap-2 h-9 px-4 bg-[#e63462] hover:bg-[#d42d58] text-white rounded-lg text-[13px] font-semibold transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            {locale === "tr" ? "Kampanya Ekle" : "Add Campaign"}
-          </button>
+          {canManageCampaigns && (
+            <button
+              onClick={() => {
+                resetForm()
+                setShowForm(true)
+              }}
+              className="flex items-center gap-2 h-9 px-4 bg-[#e63462] hover:bg-[#d42d58] text-white rounded-lg text-[13px] font-semibold transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              {locale === "tr" ? "Kampanya Ekle" : "Add Campaign"}
+            </button>
+          )}
         </div>
       </header>
 
@@ -143,8 +178,8 @@ export default function CampaignManagement() {
               {locale === "tr" ? "Henüz kampanya yok" : "No campaigns yet"}
             </h2>
             <p className="text-[13px] text-[#86868b] max-w-sm">
-              {locale === "tr" 
-                ? "Kampanya ekleyerek müşterilerinize özel fırsatlar sunun." 
+              {locale === "tr"
+                ? "Kampanya ekleyerek müşterilerinize özel fırsatlar sunun."
                 : "Add campaigns to offer special deals to your customers."}
             </p>
           </div>
@@ -154,41 +189,62 @@ export default function CampaignManagement() {
               <div
                 key={campaign.id}
                 className={`bg-white rounded-2xl overflow-hidden border transition-all ${
-                  campaign.isActive 
-                    ? "border-[#d1d1d6]/60 shadow-sm" 
+                  campaign.isActive
+                    ? "border-[#d1d1d6]/60 shadow-sm"
                     : "border-dashed border-[#d1d1d6] opacity-60"
                 }`}
               >
                 <div className="relative aspect-[3/2] bg-stone-100">
-                  <img src={campaign.image} alt={campaign.title} className="w-full h-full object-cover" />
+                  <img
+                    src={resolveAssetUrl(campaign.image)}
+                    alt={campaign.title}
+                    className="w-full h-full object-cover"
+                  />
                   {campaign.discountPercent && (
                     <div className="absolute top-3 left-3 px-2.5 py-1 bg-[#e63462] text-white text-xs font-bold rounded-full">
-                      %{campaign.discountPercent} {locale === "tr" ? "İndirim" : "Off"}
+                      %{campaign.discountPercent}{" "}
+                      {locale === "tr" ? "İndirim" : "Off"}
                     </div>
                   )}
-                  <div className={`absolute top-3 right-3 px-2 py-1 text-[10px] font-semibold rounded-full ${
-                    campaign.isActive ? "bg-[#34c759]/20 text-[#34c759]" : "bg-[#86868b]/20 text-[#86868b]"
-                  }`}>
-                    {campaign.isActive ? (locale === "tr" ? "Aktif" : "Active") : (locale === "tr" ? "Pasif" : "Inactive")}
+                  <div
+                    className={`absolute top-3 right-3 px-2 py-1 text-[10px] font-semibold rounded-full ${
+                      campaign.isActive
+                        ? "bg-[#34c759]/20 text-[#34c759]"
+                        : "bg-[#86868b]/20 text-[#86868b]"
+                    }`}
+                  >
+                    {campaign.isActive
+                      ? locale === "tr"
+                        ? "Aktif"
+                        : "Active"
+                      : locale === "tr"
+                        ? "Pasif"
+                        : "Inactive"}
                   </div>
                 </div>
 
                 <div className="p-4">
-                  <h3 className="font-semibold text-[#1d1d1f] mb-1">{campaign.title}</h3>
+                  <h3 className="font-semibold text-[#1d1d1f] mb-1">
+                    {campaign.title}
+                  </h3>
                   {campaign.description && (
-                    <p className="text-[13px] text-[#86868b] line-clamp-2 mb-3">{campaign.description}</p>
+                    <p className="text-[13px] text-[#86868b] line-clamp-2 mb-3">
+                      {campaign.description}
+                    </p>
                   )}
-                  
+
                   {(campaign.originalPrice || campaign.discountedPrice) && (
                     <div className="flex items-center gap-2 mb-3">
                       {campaign.discountedPrice && (
                         <span className="text-lg font-bold text-[#e63462]">
-                          {formatCurrency(campaign.discountedPrice)} TL
+                          {"\u20BA"}
+                          {formatCurrency(campaign.discountedPrice)}
                         </span>
                       )}
                       {campaign.originalPrice && campaign.discountedPrice && (
                         <span className="text-sm text-[#86868b] line-through">
-                          {formatCurrency(campaign.originalPrice)} TL
+                          {"\u20BA"}
+                          {formatCurrency(campaign.originalPrice)}
                         </span>
                       )}
                     </div>
@@ -197,37 +253,49 @@ export default function CampaignManagement() {
                   {campaign.validUntil && (
                     <p className="text-[11px] text-[#86868b] mb-3">
                       {locale === "tr" ? "Geçerlilik: " : "Valid until: "}
-                      {new Date(campaign.validUntil).toLocaleDateString("tr-TR")}
+                      {formatIstanbulDate(campaign.validUntil)}
                     </p>
                   )}
 
-                  <div className="flex items-center gap-2 pt-3 border-t border-[#d1d1d6]/40">
-                    <button
-                      onClick={() => toggleActive(campaign)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
-                        campaign.isActive
-                          ? "bg-[#86868b]/10 text-[#86868b] hover:bg-[#86868b]/20"
-                          : "bg-[#34c759]/10 text-[#34c759] hover:bg-[#34c759]/20"
-                      }`}
-                    >
-                      {campaign.isActive ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                      {campaign.isActive ? (locale === "tr" ? "Gizle" : "Hide") : (locale === "tr" ? "Göster" : "Show")}
-                    </button>
-                    <button
-                      onClick={() => openEditForm(campaign)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[#007aff]/10 text-[#007aff] hover:bg-[#007aff]/20 transition-colors"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                      {locale === "tr" ? "Düzenle" : "Edit"}
-                    </button>
-                    <button
-                      onClick={() => setDeleteConfirm(campaign.id)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[#ff3b30]/10 text-[#ff3b30] hover:bg-[#ff3b30]/20 transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      {locale === "tr" ? "Sil" : "Delete"}
-                    </button>
-                  </div>
+                  {canManageCampaigns && (
+                    <div className="flex items-center gap-2 pt-3 border-t border-[#d1d1d6]/40">
+                      <button
+                        onClick={() => toggleActive(campaign)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
+                          campaign.isActive
+                            ? "bg-[#86868b]/10 text-[#86868b] hover:bg-[#86868b]/20"
+                            : "bg-[#34c759]/10 text-[#34c759] hover:bg-[#34c759]/20"
+                        }`}
+                      >
+                        {campaign.isActive ? (
+                          <EyeOff className="w-3.5 h-3.5" />
+                        ) : (
+                          <Eye className="w-3.5 h-3.5" />
+                        )}
+                        {campaign.isActive
+                          ? locale === "tr"
+                            ? "Gizle"
+                            : "Hide"
+                          : locale === "tr"
+                            ? "Göster"
+                            : "Show"}
+                      </button>
+                      <button
+                        onClick={() => openEditForm(campaign)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[#007aff]/10 text-[#007aff] hover:bg-[#007aff]/20 transition-colors"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        {locale === "tr" ? "Düzenle" : "Edit"}
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirm(campaign.id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[#ff3b30]/10 text-[#ff3b30] hover:bg-[#ff3b30]/20 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        {locale === "tr" ? "Sil" : "Delete"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -240,11 +308,18 @@ export default function CampaignManagement() {
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b border-[#d1d1d6]/60">
               <h2 className="text-[17px] font-semibold text-[#1d1d1f]">
-                {editingCampaign 
-                  ? (locale === "tr" ? "Kampanya Düzenle" : "Edit Campaign")
-                  : (locale === "tr" ? "Yeni Kampanya" : "New Campaign")}
+                {editingCampaign
+                  ? locale === "tr"
+                    ? "Kampanya Düzenle"
+                    : "Edit Campaign"
+                  : locale === "tr"
+                    ? "Yeni Kampanya"
+                    : "New Campaign"}
               </h2>
-              <button onClick={resetForm} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#f5f5f7] transition-colors">
+              <button
+                onClick={resetForm}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#f5f5f7] transition-colors"
+              >
                 <X className="w-5 h-5 text-[#86868b]" />
               </button>
             </div>
@@ -258,7 +333,9 @@ export default function CampaignManagement() {
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder={locale === "tr" ? "Kampanya başlığı" : "Campaign title"}
+                  placeholder={
+                    locale === "tr" ? "Kampanya başlığı" : "Campaign title"
+                  }
                   className="w-full h-11 px-4 text-[14px] bg-[#f5f5f7] rounded-xl border border-transparent focus:border-[#e63462]/50 focus:outline-none transition-colors"
                 />
               </div>
@@ -270,18 +347,26 @@ export default function CampaignManagement() {
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder={locale === "tr" ? "Kampanya detayları" : "Campaign details"}
+                  placeholder={
+                    locale === "tr" ? "Kampanya detayları" : "Campaign details"
+                  }
                   rows={3}
                   className="w-full px-4 py-3 text-[14px] bg-[#f5f5f7] rounded-xl border border-transparent focus:border-[#e63462]/50 focus:outline-none transition-colors resize-none"
                 />
               </div>
 
-              <ImageUpload 
-                value={image} 
-                onChange={setImage} 
-                label={locale === "tr" ? "Kampanya Fotoğrafı" : "Campaign Image"}
+              <ImageUpload
+                value={image}
+                onChange={setImage}
+                label={
+                  locale === "tr" ? "Kampanya Fotoğrafı" : "Campaign Image"
+                }
                 required
-                onUpload={token ? (file => api.upload(token, file).then(r => r.url)) : undefined}
+                onUpload={
+                  token
+                    ? (file) => api.upload(token, file).then((r) => r.url)
+                    : undefined
+                }
               />
 
               <div className="grid grid-cols-2 gap-3">
@@ -292,9 +377,10 @@ export default function CampaignManagement() {
                   <input
                     type="number"
                     min={0}
+                    step="0.01"
                     value={originalPrice}
                     onChange={(e) => setOriginalPrice(e.target.value)}
-                    placeholder="0"
+                    placeholder="0.00"
                     className="w-full h-11 px-4 text-[14px] bg-[#f5f5f7] rounded-xl border border-transparent focus:border-[#e63462]/50 focus:outline-none transition-colors"
                   />
                 </div>
@@ -305,9 +391,10 @@ export default function CampaignManagement() {
                   <input
                     type="number"
                     min={0}
+                    step="0.01"
                     value={discountedPrice}
                     onChange={(e) => setDiscountedPrice(e.target.value)}
-                    placeholder="0"
+                    placeholder="0.00"
                     className="w-full h-11 px-4 text-[14px] bg-[#f5f5f7] rounded-xl border border-transparent focus:border-[#e63462]/50 focus:outline-none transition-colors"
                   />
                 </div>
@@ -327,14 +414,18 @@ export default function CampaignManagement() {
 
               <div className="flex items-center justify-between p-3 bg-[#f5f5f7] rounded-xl">
                 <span className="text-[14px] font-medium text-[#1d1d1f]">
-                  {locale === "tr" ? "Aktif olarak yayınla" : "Publish as active"}
+                  {locale === "tr"
+                    ? "Aktif olarak yayınla"
+                    : "Publish as active"}
                 </span>
                 <button
                   type="button"
                   onClick={() => setIsActive(!isActive)}
                   className={`w-12 h-7 rounded-full transition-colors ${isActive ? "bg-[#34c759]" : "bg-[#d1d1d6]"}`}
                 >
-                  <div className={`w-6 h-6 bg-white rounded-full shadow-sm transition-transform ${isActive ? "translate-x-5" : "translate-x-0.5"}`} />
+                  <div
+                    className={`w-6 h-6 bg-white rounded-full shadow-sm transition-transform ${isActive ? "translate-x-5" : "translate-x-0.5"}`}
+                  />
                 </button>
               </div>
             </div>
@@ -352,9 +443,13 @@ export default function CampaignManagement() {
                 onClick={handleSave}
                 className="flex-1 h-11 bg-[#e63462] hover:bg-[#d42d58] text-white rounded-xl text-[14px] font-semibold transition-colors"
               >
-                {editingCampaign 
-                  ? (locale === "tr" ? "Güncelle" : "Update")
-                  : (locale === "tr" ? "Kaydet" : "Save")}
+                {editingCampaign
+                  ? locale === "tr"
+                    ? "Güncelle"
+                    : "Update"
+                  : locale === "tr"
+                    ? "Kaydet"
+                    : "Save"}
               </button>
             </div>
           </div>
@@ -371,8 +466,8 @@ export default function CampaignManagement() {
               {locale === "tr" ? "Kampanyayı Sil" : "Delete Campaign"}
             </h3>
             <p className="text-[13px] text-[#86868b] mb-6">
-              {locale === "tr" 
-                ? "Bu kampanya kalıcı olarak silinecek. Emin misiniz?" 
+              {locale === "tr"
+                ? "Bu kampanya kalıcı olarak silinecek. Emin misiniz?"
                 : "This campaign will be permanently deleted. Are you sure?"}
             </p>
             <div className="flex gap-3">

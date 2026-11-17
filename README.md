@@ -645,9 +645,19 @@ If direct browser upload via presigned URLs is implemented later, the bucket COR
 
 ## Database
 
-The production schema is managed with TypeORM migrations, and migrations run automatically on backend startup by default. Setting `SKIP_MIGRATIONS_ON_START=true` disables this behavior.
+The production schema is managed with TypeORM migrations, and migrations run automatically on backend startup by default (`migrationsTransactionMode: 'each'`). Setting `SKIP_MIGRATIONS_ON_START=true` disables automatic startup migrations.
 
-Migration files are under `corder-backend/src/migrations`. The project does not currently define a package script for running migrations manually. See [DATABASE.md](corder-backend/docs/DATABASE.md) for detailed database notes.
+Migration files are under `corder-backend/src/migrations`. To run or revert migrations manually:
+
+```bash
+cd corder-backend
+pnpm run build
+pnpm run migration:run
+# or revert the last migration:
+pnpm run migration:revert
+```
+
+See [DATABASE.md](corder-backend/docs/DATABASE.md) for detailed database notes, indexes, and backup strategy.
 
 ## Build
 
@@ -814,20 +824,7 @@ DEPLOY_REPO_ROOT
 DEPLOY_SSH_KEY
 ```
 
-> Monorepo note: The current workflow is under `corder-backend/.github/workflows`, while the deploy script assumes the repository root is the backend. For GitHub Actions workflows to run, the workflow should be moved to the root `.github/workflows` directory; the remote script should be updated to run compose under `/opt/corder/corder-backend`.
-
-Recommended pipeline quality gates:
-
-1. Dependency installation (`pnpm install --frozen-lockfile`)
-2. TypeScript typecheck
-3. Lint
-4. Unit and integration tests
-5. NestJS production build
-6. Docker image build
-7. Migration smoke test
-8. Deployment
-9. `/health` and `/ws` smoke test
-10. Rollback on failure
+Workflows are located at the repository root (`.github/workflows/ci.yml` and `.github/workflows/deploy.yml`). The deployment pipeline runs TypeScript typechecking, unit tests (`pnpm test`), and production build verification before connecting over SSH to execute `corder-backend/deploy/remote-deploy.sh` (which takes a pre-deploy `pg_dump` backup, verifies `/health/ready`, and automatically rolls back to the previous commit if readiness fails).
 
 ## Frontend deployment with Cloudflare Pages
 
@@ -930,17 +927,10 @@ The current applications do not require an additional `_redirects` file. If a ro
 - `index.html` should remain on short cache behavior so the latest deployment can be picked up quickly.
 - Cloudflare Pages provides automatic TLS, CDN distribution, immutable deployments, and rollback capability.
 
-## Known gaps
+## Scaling & Operational Notes
 
-These items are known gaps in the current version and will be addressed incrementally in future updates.
-
-- No automated test infrastructure in the packages.
-- Missing shared ESLint configuration for frontend lint scripts.
-- Insufficient backend role-based authorization coverage.
-- Part of staff PIN verification is performed on the terminal client.
-- Offline mode on the terminal does not provide a real offline order queue.
-- The backup API does not produce a real database backup.
-- The health check reports only application status; it does not check database connectivity.
+- **Health & Readiness Probes**: `GET /health` and `GET /health/ready` verify active PostgreSQL connectivity (`SELECT 1`); `GET /health/live` provides a lightweight process liveness probe.
+- **Socket.IO & Rate Limiting Topology**: The default Docker Compose setup runs a single `api` container instance behind `nginx`. Because Socket.IO room state (`/ws`) and `LoginRateLimiterService` buckets are held in process memory, horizontal scaling beyond one `api` replica requires configuring `@socket.io/redis-adapter` and a shared Redis store.
 
 ## License
 

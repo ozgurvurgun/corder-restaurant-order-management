@@ -7,16 +7,24 @@ import { usePanelI18n } from "@/lib/panel-i18n"
 import { usePanelToast } from "./panel-toast"
 import { Filter } from "lucide-react"
 import { CompletedOrdersList } from "./orders/completed-orders-list"
-
-function formatCurrency(n: number) {
-  return n.toLocaleString("tr-TR", { minimumFractionDigits: 2 })
-}
+import {
+  computeDateFilterBounds,
+  formatCurrency,
+  fromMinorUnits,
+  toMinorUnits,
+} from "@/lib/format"
 
 const ITEMS_PER_PAGE = 10
 
 export default function CompletedOrdersView() {
-  const { closedTables, reprintReceipt, users, ledgerCustomers } =
-    usePanelStore()
+  const {
+    closedTables,
+    reprintReceipt,
+    users,
+    ledgerCustomers,
+    currentUser,
+    hasPermission,
+  } = usePanelStore()
   const { locale } = usePanelI18n()
   const { showToast } = usePanelToast()
   const [filterWaiter, setFilterWaiter] = useState("Tumu")
@@ -29,6 +37,11 @@ export default function CompletedOrdersView() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
 
+  const isBoss = currentUser?.role === "root"
+  const canEditCompletedOrder =
+    isBoss || hasPermission("billing.edit_completed_order")
+  const canPrintReceipt = isBoss || hasPermission("order.print_receipt")
+
   useEffect(() => {
     setMounted(true)
   }, [])
@@ -37,35 +50,18 @@ export default function CompletedOrdersView() {
     setCurrentPage(1)
   }, [filterWaiter, filterTable, filterDate, customStartDate, customEndDate])
 
+  const dateBounds = useMemo(
+    () => computeDateFilterBounds(filterDate, customStartDate, customEndDate),
+    [filterDate, customStartDate, customEndDate],
+  )
+
   const filteredTables = useMemo(() => {
     let list = [...closedTables]
 
-    const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const yesterday = new Date(today)
-    yesterday.setDate(yesterday.getDate() - 1)
-    const weekAgo = new Date(today)
-    weekAgo.setDate(weekAgo.getDate() - 7)
-    const monthAgo = new Date(today)
-    monthAgo.setDate(monthAgo.getDate() - 30)
-
-    if (filterDate === "today") {
-      list = list.filter((ct) => new Date(ct.closedAt) >= today)
-    } else if (filterDate === "yesterday") {
+    if (dateBounds) {
       list = list.filter((ct) => {
         const d = new Date(ct.closedAt)
-        return d >= yesterday && d < today
-      })
-    } else if (filterDate === "week") {
-      list = list.filter((ct) => new Date(ct.closedAt) >= weekAgo)
-    } else if (filterDate === "month") {
-      list = list.filter((ct) => new Date(ct.closedAt) >= monthAgo)
-    } else if (filterDate === "custom" && customStartDate) {
-      const start = new Date(customStartDate)
-      const end = customEndDate ? new Date(customEndDate) : new Date()
-      list = list.filter((ct) => {
-        const d = new Date(ct.closedAt)
-        return d >= start && d <= end
+        return d >= dateBounds.from && d <= dateBounds.to
       })
     }
 
@@ -80,14 +76,7 @@ export default function CompletedOrdersView() {
     return list.sort(
       (a, b) => new Date(b.closedAt).getTime() - new Date(a.closedAt).getTime(),
     )
-  }, [
-    closedTables,
-    filterWaiter,
-    filterTable,
-    filterDate,
-    customStartDate,
-    customEndDate,
-  ])
+  }, [closedTables, dateBounds, filterWaiter, filterTable])
 
   const totalPages = Math.ceil(filteredTables.length / ITEMS_PER_PAGE)
   const paginatedTables = filteredTables.slice(
@@ -98,20 +87,26 @@ export default function CompletedOrdersView() {
   const waiters = [...new Set(closedTables.map((ct) => ct.waiter))]
   const tableNames = [
     ...new Set(closedTables.map((ct) => ct.tableName)),
-  ].sort()
-  const totalRevenue = filteredTables.reduce((s, ct) => s + ct.netAmount, 0)
+  ].sort((a, b) => a.localeCompare(b, "tr"))
+  const totalRevenue = fromMinorUnits(
+    filteredTables.reduce((s, ct) => s + toMinorUnits(ct.netAmount), 0),
+  )
 
-  const handlePrintOrder = (orderId: string) => {
-    void reprintReceipt({ orderId })
-    showToast(
-      locale === "tr"
-        ? "Adisyon fişi yazıcıya gönderildi"
-        : "Check receipt sent to printer",
-      "success",
-    )
+  const handlePrintOrder = async (orderId: string) => {
+    if (!canPrintReceipt) return
+    const ok = await reprintReceipt({ orderId })
+    if (ok) {
+      showToast(
+        locale === "tr"
+          ? "Adisyon fişi yazıcıya gönderildi"
+          : "Check receipt sent to printer",
+        "success",
+      )
+    }
   }
 
-  const handlePrint = (closedTable: ClosedTable) => {
+  const handlePrint = async (closedTable: ClosedTable) => {
+    if (!canPrintReceipt) return
     const items = closedTable.orders.flatMap((o) =>
       o.items
         .filter(itemCountsTowardBill)
@@ -122,18 +117,22 @@ export default function CompletedOrdersView() {
           note: i.note,
         })),
     )
-    const lineSum = items.reduce((s, i) => s + i.price * i.quantity, 0)
+    const lineSum = fromMinorUnits(
+      items.reduce((s, i) => s + toMinorUnits(i.price) * i.quantity, 0),
+    )
     const total = closedTable.netAmount > 0 ? closedTable.netAmount : lineSum
-    void reprintReceipt({
+    const ok = await reprintReceipt({
       tableName: closedTable.tableName,
       waiterName: closedTable.waiter,
       items,
       total,
     })
-    showToast(
-      locale === "tr" ? "Fiş gönderildi" : "Receipt sent",
-      "success",
-    )
+    if (ok) {
+      showToast(
+        locale === "tr" ? "Fiş gönderildi" : "Receipt sent",
+        "success",
+      )
+    }
   }
 
   return (
@@ -243,9 +242,11 @@ export default function CompletedOrdersView() {
           currentPage={currentPage}
           totalPages={totalPages}
           setCurrentPage={setCurrentPage}
+          canEditCompletedOrder={canEditCompletedOrder}
+          canPrintReceipt={canPrintReceipt}
           onEditClosed={setEditingClosed}
-          onPrintTable={handlePrint}
-          onPrintOrder={handlePrintOrder}
+          onPrintTable={(ct) => void handlePrint(ct)}
+          onPrintOrder={(id) => void handlePrintOrder(id)}
         />
       </div>
       {editingClosed && (

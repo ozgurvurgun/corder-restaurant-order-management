@@ -3,20 +3,21 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TableEntity } from '../domain/table.entity';
+import { OrderEntity } from '../domain/order.entity';
 import { RestaurantStaffEntity } from '../domain/restaurant-staff.entity';
+import { OrderStatusPolicy } from '../domain/services/order-status.policy';
 import { CreateTableDto } from '../api/dto/create-table.dto';
 import { UpdateTableDto } from '../api/dto/update-table.dto';
 
 /** Grace period (ms) to automatically take over a stale lock after disconnect. */
-const SESSION_LOCK_STALE_MS = 120_000;
+export const SESSION_LOCK_STALE_MS = 120_000;
 
 @Injectable()
-export class TableService implements OnModuleInit {
+export class TableService {
   constructor(
     @InjectRepository(TableEntity)
     private readonly repo: Repository<TableEntity>,
@@ -24,16 +25,19 @@ export class TableService implements OnModuleInit {
     private readonly staffRepo: Repository<RestaurantStaffEntity>,
   ) {}
 
-  async onModuleInit(): Promise<void> {
-    await this.repo
-      .query(
-        `ALTER TABLE "tables" ADD COLUMN IF NOT EXISTS "discount" jsonb, ADD COLUMN IF NOT EXISTS "split_info" jsonb`,
-      )
-      .catch(() => undefined);
+  private sanitizeStaleLock(table: TableEntity, now: Date = new Date()): TableEntity {
+    if (table.sessionStaffId && !table.hasActiveLock(SESSION_LOCK_STALE_MS, now)) {
+      table.releaseSession();
+    }
+    return table;
   }
 
   async findByRestaurant(restaurantId: string): Promise<TableEntity[]> {
+    const now = new Date();
     const tables = await this.repo.find({ where: { restaurantId } });
+    for (const table of tables) {
+      this.sanitizeStaleLock(table, now);
+    }
     return tables.sort((a, b) => {
       const sectionCmp = a.section.localeCompare(b.section, undefined, {
         numeric: true,
@@ -50,14 +54,19 @@ export class TableService implements OnModuleInit {
   async findOne(id: string, restaurantId: string): Promise<TableEntity> {
     const table = await this.repo.findOne({ where: { id, restaurantId } });
     if (!table) throw new NotFoundException('Table not found');
-    return table;
+    return this.sanitizeStaleLock(table);
   }
 
   async create(restaurantId: string, dto: CreateTableDto): Promise<TableEntity> {
+    const name = (dto.name ?? '').trim();
+    if (!name) {
+      throw new BadRequestException('Table name is required');
+    }
+    const section = (dto.section ?? 'default').trim() || 'default';
     const entity = this.repo.create({
       restaurantId,
-      name: dto.name,
-      section: dto.section ?? 'default',
+      name,
+      section,
     });
     return this.repo.save(entity);
   }
@@ -67,36 +76,86 @@ export class TableService implements OnModuleInit {
     restaurantId: string,
     dto: UpdateTableDto,
   ): Promise<TableEntity> {
-    const entity = await this.findOne(id, restaurantId);
-    if (dto.name !== undefined) entity.name = dto.name;
-    if (dto.section !== undefined) entity.section = dto.section;
-    if (dto.discount !== undefined) entity.discount = dto.discount;
-    if (dto.splitInfo !== undefined) entity.splitInfo = dto.splitInfo;
-    if (dto.status !== undefined) {
-      if (dto.status === 'empty') {
-        entity.markEmpty();
-      } else {
-        entity.status = dto.status;
+    return this.repo.manager.transaction(async (em) => {
+      const entity = await em.findOne(TableEntity, {
+        where: { id, restaurantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!entity) throw new NotFoundException('Table not found');
+
+      if (dto.name !== undefined) {
+        const trimmedName = dto.name.trim();
+        if (!trimmedName) throw new BadRequestException('Table name cannot be empty');
+        entity.name = trimmedName;
       }
-    }
-    return this.repo.save(entity);
+      if (dto.section !== undefined) {
+        entity.section = dto.section.trim() || 'default';
+      }
+      if (dto.discount !== undefined) entity.discount = dto.discount;
+      if (dto.splitInfo !== undefined) entity.splitInfo = dto.splitInfo;
+      if (dto.status !== undefined) {
+        if (dto.status === 'empty') {
+          const activeOrders = await em.find(OrderEntity, {
+            where: { restaurantId, tableId: entity.id, status: 'active' },
+            relations: ['items'],
+          });
+          const hasBillableItems = activeOrders.some((o) =>
+            (o.items ?? []).some((i) => OrderStatusPolicy.isItemOnActiveBill(i.status)),
+          );
+          if (hasBillableItems) {
+            throw new BadRequestException(
+              'Cannot mark table as empty while it has active unpaid orders',
+            );
+          }
+          entity.markEmpty();
+        } else {
+          entity.status = dto.status;
+        }
+      }
+      return em.save(TableEntity, entity);
+    });
   }
 
   async remove(id: string, restaurantId: string): Promise<void> {
-    const entity = await this.findOne(id, restaurantId);
-    await this.repo.remove(entity);
+    await this.repo.manager.transaction(async (em) => {
+      const entity = await em.findOne(TableEntity, {
+        where: { id, restaurantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!entity) throw new NotFoundException('Table not found');
+
+      const activeOrders = await em.find(OrderEntity, {
+        where: { restaurantId, tableId: entity.id, status: 'active' },
+        relations: ['items'],
+      });
+      const hasBillableItems = activeOrders.some((o) =>
+        (o.items ?? []).some((i) => OrderStatusPolicy.isItemOnActiveBill(i.status)),
+      );
+      if (hasBillableItems) {
+        throw new BadRequestException(
+          'Cannot delete a table that has active open orders',
+        );
+      }
+      await em.remove(TableEntity, entity);
+    });
   }
 
   async buildSessionPresenceMap(
     restaurantId: string,
   ): Promise<Record<string, { staffId: string; staffName: string }>> {
+    const now = new Date();
     const rows = await this.repo.find({
       where: { restaurantId },
-      select: { id: true, sessionStaffId: true, sessionStaffName: true },
+      select: {
+        id: true,
+        sessionStaffId: true,
+        sessionStaffName: true,
+        sessionLockedAt: true,
+      },
     });
     const out: Record<string, { staffId: string; staffName: string }> = {};
     for (const table of rows) {
-      if (table.sessionStaffId) {
+      if (table.sessionStaffId && table.hasActiveLock(SESSION_LOCK_STALE_MS, now)) {
         out[table.id] = {
           staffId: table.sessionStaffId,
           staffName: (table.sessionStaffName ?? 'Waiter').trim() || 'Waiter',
@@ -128,11 +187,11 @@ export class TableService implements OnModuleInit {
     }
   }
 
-  assertTableFreeForMergeOrMove(toTable: TableEntity): void {
+  assertTableFreeForMergeOrMove(toTable: TableEntity, actorStaffId?: string | null): void {
     if (toTable.status === 'checkout') {
       throw new BadRequestException('Target table is currently in checkout');
     }
-    if (toTable.hasActiveLock(SESSION_LOCK_STALE_MS)) {
+    if (toTable.isLockedByOther(actorStaffId, SESSION_LOCK_STALE_MS)) {
       const holder = (toTable.sessionStaffName ?? 'Waiter').trim() || 'Waiter';
       throw new BadRequestException(
         `Target table is currently being served by ${holder}`,
@@ -173,10 +232,21 @@ export class TableService implements OnModuleInit {
     staffId: string,
     force = false,
   ): Promise<void> {
-    const table = await this.findOne(tableId, restaurantId);
-    if (force || table.sessionStaffId === staffId) {
-      table.releaseSession();
-      await this.repo.save(table);
-    }
+    await this.repo.manager.transaction(async (em) => {
+      const table = await em.findOne(TableEntity, {
+        where: { id: tableId, restaurantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!table) throw new NotFoundException('Table not found');
+      const now = new Date();
+      if (
+        force ||
+        table.sessionStaffId === staffId ||
+        !table.hasActiveLock(SESSION_LOCK_STALE_MS, now)
+      ) {
+        table.releaseSession();
+        await em.save(TableEntity, table);
+      }
+    });
   }
 }

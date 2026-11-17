@@ -1,4 +1,14 @@
-import { IsUUID, IsOptional, IsString, IsArray, ValidateNested, IsNumber, Min, IsIn } from 'class-validator';
+import {
+  IsUUID,
+  IsOptional,
+  IsString,
+  IsArray,
+  ValidateNested,
+  IsNumber,
+  Min,
+  IsIn,
+  IsBoolean,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class PrintReceiptLineDto {
@@ -34,6 +44,11 @@ export class PrintReceiptDto {
   @IsUUID()
   orderId?: string;
 
+  /** Explicit completed order ID for reprinting settled checks. */
+  @IsOptional()
+  @IsUUID()
+  completedOrderId?: string;
+
   @IsOptional()
   @IsUUID()
   tableId?: string;
@@ -55,13 +70,45 @@ export class PrintReceiptDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  subtotal?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discountAmount?: number;
+
+  @IsOptional()
+  @IsString()
+  discountLabel?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  tipAmount?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
   total?: number;
 
+  @IsOptional()
+  @IsString()
+  paymentMethod?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isReprint?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  openCashDrawer?: boolean;
+
   /**
-   * `consolidated` = management panel register receipt (single printer, MANAGEMENT_RECEIPT_PRINTER).
-   * `split` = terminal / category-based check (PRINT_CATEGORY_ROUTES). Default: split.
+   * `consolidated` = management panel register receipt (single printer, merged lines without notes).
+   * `split` = itemized check receipt with notes. Default: split.
    */
   @IsOptional()
   @IsIn(['consolidated', 'split'])
   receiptMode?: 'consolidated' | 'split';
 }
+

@@ -1,20 +1,36 @@
 import { useEffect, useState } from "react"
+import type { RoleTemplateDefinition } from "@/lib/types"
+import { getRoleDisplayName } from "@/lib/permission-labels"
 import { X } from "lucide-react"
 
 interface NewRoleModalProps {
   saving: boolean
+  templates: RoleTemplateDefinition[]
   onClose: () => void
   onSubmit: (payload: {
     name: string
     description?: string
     color: string
+    templateKey?: string
   }) => Promise<void>
 }
 
-export function NewRoleModal({ saving, onClose, onSubmit }: NewRoleModalProps) {
+export function NewRoleModal({
+  saving,
+  templates,
+  onClose,
+  onSubmit,
+}: NewRoleModalProps) {
+  const defaultTplKey =
+    templates.find((t) => t.key === "waiter")?.key ??
+    templates.find((t) => t.key === "runner")?.key ??
+    templates[0]?.key ??
+    ""
+
   const [roleName, setRoleName] = useState("")
   const [roleDescription, setRoleDescription] = useState("")
   const [roleColor, setRoleColor] = useState("#e63462")
+  const [templateKey, setTemplateKey] = useState(defaultTplKey)
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -31,6 +47,7 @@ export function NewRoleModal({ saving, onClose, onSubmit }: NewRoleModalProps) {
       name: roleName.trim(),
       description: roleDescription.trim() || undefined,
       color: roleColor,
+      templateKey: templateKey || undefined,
     })
   }
 
@@ -79,6 +96,25 @@ export function NewRoleModal({ saving, onClose, onSubmit }: NewRoleModalProps) {
               className="h-11 w-full rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3.5 text-[13px] text-[#1d1d1f] outline-none focus:border-[#e63462]"
             />
           </div>
+          {templates.length > 0 && (
+            <div>
+              <label className="mb-1 block text-[12px] font-semibold text-[#1d1d1f]">
+                Başlangıç Yetki Şablonu
+              </label>
+              <select
+                value={templateKey}
+                onChange={(e) => setTemplateKey(e.target.value)}
+                className="h-11 w-full rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3.5 text-[13px] font-semibold text-[#1d1d1f] outline-none focus:border-[#e63462]"
+              >
+                {templates.map((tpl) => (
+                  <option key={tpl.key} value={tpl.key}>
+                    {getRoleDisplayName(tpl.key, tpl.name)} ({tpl.permissions.length} yetki)
+                  </option>
+                ))}
+                <option value="">Boş (Yetkileri Sıfırdan Seç)</option>
+              </select>
+            </div>
+          )}
           <div>
             <label className="mb-1 block text-[12px] font-semibold text-[#1d1d1f]">
               Rozet Rengi
@@ -111,4 +147,3 @@ export function NewRoleModal({ saving, onClose, onSubmit }: NewRoleModalProps) {
     </div>
   )
 }
-

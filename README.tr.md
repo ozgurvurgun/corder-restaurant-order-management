@@ -645,9 +645,19 @@ Tarayıcı R2'ye doğrudan upload yapmıyor. Dosya önce kimliği doğrulanmış
 
 ## Veritabanı
 
-Production şeması TypeORM migration'larıyla yönetilir ve migration'lar varsayılan olarak backend başlangıcında otomatik çalıştırılır. `SKIP_MIGRATIONS_ON_START=true` ayarı bu davranışı devre dışı bırakır.
+Production şeması TypeORM migration'larıyla yönetilir ve migration'lar varsayılan olarak backend başlangıcında otomatik çalıştırılır (`migrationsTransactionMode: 'each'`). `SKIP_MIGRATIONS_ON_START=true` ayarı bu davranışı devre dışı bırakır.
 
-Migration dosyaları `corder-backend/src/migrations` altındadır. Projede şu anda manuel migration çalıştırmak için bir package scripti tanımlı değildir. Ayrıntılı veritabanı notları için [DATABASE.md](corder-backend/docs/DATABASE.md) dosyasına bakın.
+Migration dosyaları `corder-backend/src/migrations` altındadır. Manuel migration çalıştırmak veya geri almak için:
+
+```bash
+cd corder-backend
+pnpm run build
+pnpm run migration:run
+# son migration'ı geri almak için:
+pnpm run migration:revert
+```
+
+Ayrıntılı veritabanı, indeks ve yedekleme notları için [DATABASE.md](corder-backend/docs/DATABASE.md) dosyasına bakın.
 
 ## Build
 
@@ -814,20 +824,7 @@ DEPLOY_REPO_ROOT
 DEPLOY_SSH_KEY
 ```
 
-> Monorepo uyarısı: Mevcut workflow `corder-backend/.github/workflows` altında, deploy scripti ise backend'i repository kökü kabul edecek şekilde yazılmıştır. GitHub Actions workflow'larının çalışması için workflow kök `.github/workflows` dizinine taşınmalı; uzak script `/opt/corder/corder-backend` altında compose çalıştıracak şekilde güncellenmelidir.
-
-Önerilen pipeline kalite kapıları:
-
-1. Dependency kurulumu (`pnpm install --frozen-lockfile`)
-2. TypeScript typecheck
-3. Lint
-4. Unit ve integration testleri
-5. NestJS production build
-6. Docker image build
-7. Migration smoke test
-8. Deployment
-9. `/health` ve `/ws` smoke test
-10. Başarısızlıkta rollback
+GitHub Actions workflow'ları monorepo kökündeki `.github/workflows/ci.yml` ve `.github/workflows/deploy.yml` altındadır. Deploy pipeline'ı SSH ile sunucuya bağlanmadan önce TypeScript tip kontrolü, birim testleri (`pnpm test`) ve production build adımlarını doğrular; sunucuda `corder-backend/deploy/remote-deploy.sh` betiği deploy öncesi otomatik `pg_dump` yedeği alır, `/health/ready` kontrolünü bekler ve hata durumunda önceki commit'e otomatik rollback yapar.
 
 ## Cloudflare Pages ile frontend deployment
 
@@ -930,17 +927,10 @@ Mevcut uygulamalarda ek `_redirects` dosyası gerekmiyor. İleride output içine
 - `index.html` güncel deployment'ın hızlı alınabilmesi için kısa cache davranışında kalmalıdır.
 - Cloudflare Pages otomatik TLS, CDN dağıtımı, immutable deployment ve rollback imkânı sağlar.
 
-## Bilinen eksikler
+## Ölçekleme ve Operasyonel Notlar
 
-Bu maddeler mevcut sürümün bilinen eksikleridir ve sonraki güncellemelerde aşamalı olarak giderilecektir.
-
-- Paketlerde otomatik test altyapısı bulunmuyor.
-- Frontend lint scriptleri için ortak ESLint yapılandırması eksik.
-- Backend rol bazlı yetkilendirme kapsamı yetersiz.
-- Personel PIN doğrulamasının bir bölümü terminal istemcisinde yapılıyor.
-- Terminaldeki çevrimdışı mod gerçek offline sipariş kuyruğu sağlamıyor.
-- Backup API'si gerçek veritabanı yedeği üretmiyor.
-- Health check yalnızca uygulama durumunu bildiriyor; veritabanı bağlantısını kontrol etmiyor.
+- **Health ve Readiness Kontrolleri**: `GET /health` ve `GET /health/ready` uç noktaları PostgreSQL bağlantısını (`SELECT 1`) doğrular; `GET /health/live` ise hafif süreç canlılık kontrolü sunar.
+- **Socket.IO ve Rate Limiter Topolojisi**: Varsayılan Docker Compose kurulumu `nginx` arkasında tek bir `api` container kopyası çalıştırır. Socket.IO oda durumu (`/ws`) ve `LoginRateLimiterService` bellekte tutulduğundan, birden fazla `api` kopyasına yatay ölçekleme yapılacaksa `@socket.io/redis-adapter` ve ortak bir Redis deposu kullanılmalıdır.
 
 ## Lisans
 

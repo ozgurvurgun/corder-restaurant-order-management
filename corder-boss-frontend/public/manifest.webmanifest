@@ -2,6 +2,8 @@
   "name": "Corder Boss — İşletme & Şube Yönetimi",
   "short_name": "Corder Boss",
   "description": "Restoran ve şubeleriniz için canlı ciro, kasa, personel oluşturma ve granüler yetki yönetimi uygulaması.",
+  "lang": "tr",
+  "dir": "ltr",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -12,10 +14,15 @@
   "icons": [
     {
       "src": "/boss-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/boss-icon.svg",
       "sizes": "192x192 512x512",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "maskable"
     }
   ]
 }
-

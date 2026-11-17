@@ -53,7 +53,8 @@ import { useInventoryActions } from "./store/use-inventory-actions"
 export { usePanelStore, type PanelStore, type PanelContextType, type PanelStoreContextType }
 
 export function PanelProvider({ children }: { children: ReactNode }) {
-  const { token } = usePanelAuth()
+  const { token, currentBusiness, switchBusiness, hasPermission } = usePanelAuth()
+  const restaurantId = currentBusiness?.id ?? null
 
   const [currentUser, setCurrentUser] = useState<PanelUser | null>(null)
   const [users, setUsers] = useState<PanelUser[]>([])
@@ -103,6 +104,7 @@ export function PanelProvider({ children }: { children: ReactNode }) {
 
   usePanelHydration({
     token,
+    restaurantId,
     orders,
     users,
     setCurrentUser,
@@ -133,6 +135,7 @@ export function PanelProvider({ children }: { children: ReactNode }) {
     setLedgerCustomers,
     setCancelledItems,
     setNotifications,
+    restaurantId,
   )
 
   const currentShift = cashShifts.find((s) => s.status === "open") || null
@@ -153,6 +156,7 @@ export function PanelProvider({ children }: { children: ReactNode }) {
     setBranches,
     setPrinters,
     setPrinterDepartments,
+    switchBusiness,
   })
 
   const billingActions = useBillingActions({
@@ -172,10 +176,12 @@ export function PanelProvider({ children }: { children: ReactNode }) {
 
   const tableOrderActions = useTableOrderActions({
     token,
+    restaurantId,
     currentUser,
     currentShift,
     tables,
     orders,
+    users,
     sections,
     setTables,
     setOrders,
@@ -243,6 +249,7 @@ export function PanelProvider({ children }: { children: ReactNode }) {
         hourlyDensity,
         campaigns,
         setCurrentUser,
+        hasPermission,
         ...tableOrderActions,
         ...billingActions,
         ...catalogActions,

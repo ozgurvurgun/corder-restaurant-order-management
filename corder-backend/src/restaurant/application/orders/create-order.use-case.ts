@@ -11,6 +11,7 @@ import { OrdersGateway } from '../../api/orders.gateway';
 import { CashShiftService } from '../cash-shift.service';
 import { TableService } from '../table.service';
 import { OrderQueryService } from './order-query.service';
+import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
 
 @Injectable()
 export class CreateOrderUseCase {
@@ -45,8 +46,15 @@ export class CreateOrderUseCase {
       }
     }
     for (const id of uniqueIds) {
-      if (!productById.has(id)) {
+      const prod = productById.get(id);
+      if (!prod) {
         throw new BadRequestException('Product not found or does not belong to this restaurant');
+      }
+      if (prod.inStock === false) {
+        throw new BadRequestException(`Product "${prod.name}" is out of stock`);
+      }
+      if (toMinorUnits(prod.price) < 0) {
+        throw new BadRequestException(`Invalid price for product "${prod.name}"`);
       }
     }
     return productById;
@@ -100,13 +108,17 @@ export class CreateOrderUseCase {
           orderId: saved.id,
           productId: product.id,
           productName: product.name,
-          price: Number(product.price),
+          price: fromMinorUnits(toMinorUnits(product.price)),
           quantity: itemDto.quantity,
           note: itemDto.note?.trim() || undefined,
           status: 'sent',
         });
       });
       await txItemRepo.save(items);
+      if (lockedTable.status === 'empty') {
+        lockedTable.status = 'occupied';
+        await em.save(TableEntity, lockedTable);
+      }
       return { savedId: saved.id, tableName: lockedTable.name ?? null };
     });
 
@@ -130,6 +142,7 @@ export class CreateOrderUseCase {
       }
     }
     this.ordersGateway.emitOrderCreated(restaurantId, payload);
+    this.ordersGateway.emitOrdersUpdated(restaurantId);
     return serialized;
   }
 }

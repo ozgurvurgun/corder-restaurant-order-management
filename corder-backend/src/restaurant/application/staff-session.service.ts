@@ -14,6 +14,7 @@ import {
   PERMISSION_KEYS,
   PermissionKey,
 } from '../domain/permissions.catalog';
+import { computeSecretFingerprint } from '../domain/services/billing-suspension.policy';
 import { RolesService } from './roles.service';
 import {
   DEFAULT_JWT_EXPIRES_IN,
@@ -26,6 +27,7 @@ export interface StaffSessionTokenPayload {
   restaurantId: string;
   name: string;
   role: string;
+  pinFp?: string;
 }
 
 export interface VerifiedStaffIdentity {
@@ -62,13 +64,16 @@ export class StaffSessionService {
     restaurantId: string;
     name: string;
     role: string;
+    pinHash?: string | null;
   }): string {
+    const pinFp = computeSecretFingerprint(staff.pinHash);
     const payload: StaffSessionTokenPayload = {
       typ: 'staff_session',
       sub: staff.id,
       restaurantId: staff.restaurantId,
       name: staff.name,
       role: staff.role,
+      ...(pinFp ? { pinFp } : {}),
     };
     return this.jwt.sign(payload, {
       secret: requireConfigSecret(this.config, 'JWT_SECRET'),
@@ -210,10 +215,19 @@ export class StaffSessionService {
     const staff = await this.staffRepo.findOne({
       where: { id: payload.sub, restaurantId, isActive: true },
     });
-    if (!staff || staff.canAccessTerminal === false) {
-      throw new UnauthorizedException('Staff member not found or terminal access disabled');
+    if (!staff || !staff.pinHash) {
+      throw new UnauthorizedException('Staff member not found or PIN disabled');
+    }
+    if (
+      payload.pinFp &&
+      payload.pinFp !== computeSecretFingerprint(staff.pinHash)
+    ) {
+      throw new UnauthorizedException('Staff PIN has been changed; please sign in again');
     }
     const resolved = await this.rolesService.resolveForStaff(staff);
+    if (!resolved.canAccessTerminal) {
+      throw new UnauthorizedException('Terminal access is disabled for this user');
+    }
     return {
       staffId: staff.id,
       name: staff.name,

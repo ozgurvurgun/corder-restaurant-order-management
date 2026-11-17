@@ -38,10 +38,12 @@ export default function UserManagement() {
   const { users, addUser, updateUser, deleteUser } = usePanelStore()
   const { token, hasPermission, isBoss, currentBusiness } = usePanelAuth()
 
-  const canManageStaff = isBoss || hasPermission("staff.manage", "roles.manage")
-  const canManageRoles = isBoss || hasPermission("roles.manage", "staff.manage")
+  const canViewStaff = isBoss || hasPermission("staff.view", "staff.manage")
+  const canManageStaff = isBoss || hasPermission("staff.manage")
+  const canManageRoles = isBoss || hasPermission("roles.manage")
 
   const [activeTab, setActiveTab] = useState<"staff" | "roles">("staff")
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   // Roles & Catalog state
   const [catalog, setCatalog] = useState<PanelPermissionCatalogDto | null>(null)
@@ -51,9 +53,15 @@ export default function UserManagement() {
   const [showAdd, setShowAdd] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
 
+  useEffect(() => {
+    if (!canViewStaff && canManageRoles && activeTab === "staff") {
+      setActiveTab("roles")
+    }
+  }, [canViewStaff, canManageRoles, activeTab])
+
   const editingUser = useMemo(
     () => (editingId ? users.find((x) => x.id === editingId) ?? null : null),
-    [users, editingId]
+    [users, editingId],
   )
 
   const loadRolesAndCatalog = async () => {
@@ -87,17 +95,19 @@ export default function UserManagement() {
             Şube Personel, Kullanıcı &amp; Yetki Yönetimi
           </h2>
           <div className="flex items-center rounded-lg bg-[#f5f5f7] p-0.5 border border-[#d1d1d6]/60">
-            <button
-              type="button"
-              onClick={() => setActiveTab("staff")}
-              className={`px-3 py-1 rounded-md text-[12px] font-medium transition-colors ${
-                activeTab === "staff"
-                  ? "bg-white text-[#1d1d1f] shadow-2xs"
-                  : "text-[#86868b] hover:text-[#1d1d1f]"
-              }`}
-            >
-              Personel &amp; Kullanıcılar ({users.length})
-            </button>
+            {canViewStaff && (
+              <button
+                type="button"
+                onClick={() => setActiveTab("staff")}
+                className={`px-3 py-1 rounded-md text-[12px] font-medium transition-colors ${
+                  activeTab === "staff"
+                    ? "bg-white text-[#1d1d1f] shadow-2xs"
+                    : "text-[#86868b] hover:text-[#1d1d1f]"
+                }`}
+              >
+                Personel &amp; Kullanıcılar ({users.length})
+              </button>
+            )}
             {canManageRoles && (
               <button
                 type="button"
@@ -165,7 +175,7 @@ export default function UserManagement() {
                     <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
                       Durum
                     </th>
-                    <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide w-[130px]">
+                    <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide w-[160px]">
                       İşlem
                     </th>
                   </tr>
@@ -189,11 +199,11 @@ export default function UserManagement() {
                           <div className="flex items-center gap-2.5">
                             <div className="w-8 h-8 rounded-full bg-[#e63462]/10 flex items-center justify-center">
                               <span className="text-[11px] font-bold text-[#e63462]">
-                                {user.name.charAt(0).toUpperCase()}
+                                {user.name.charAt(0).toLocaleUpperCase("tr-TR")}
                               </span>
                             </div>
                             <div>
-                              <span className="text-[13px] font-medium text-[#1d1d1f] capitalize block">
+                              <span className="text-[13px] font-medium text-[#1d1d1f] block">
                                 {user.name}
                               </span>
                               {user.email && (
@@ -207,7 +217,8 @@ export default function UserManagement() {
                         <td className="px-4 py-3">
                           <span
                             className={`text-[11px] font-medium px-2 py-1 rounded-md ${
-                              ROLE_COLORS[user.role] ?? "bg-gray-100 text-gray-700"
+                              ROLE_COLORS[user.role] ??
+                              "bg-gray-100 text-gray-700"
                             }`}
                           >
                             {getRoleDisplayName(user.role, user.roleLabel)}
@@ -255,7 +266,9 @@ export default function UserManagement() {
                           ) : (
                             <button
                               type="button"
-                              onClick={() => updateUser(user.id, { active: !user.active })}
+                              onClick={() =>
+                                updateUser(user.id, { active: !user.active })
+                              }
                               className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${
                                 user.active
                                   ? "bg-green-50 text-green-600"
@@ -270,6 +283,26 @@ export default function UserManagement() {
                           {user.isRoot || !canManageStaff ? (
                             <div className="flex items-center justify-end">
                               <Lock className="w-3.5 h-3.5 text-[#aeaeb2]" />
+                            </div>
+                          ) : confirmDeleteId === user.id ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  deleteUser(user.id)
+                                  setConfirmDeleteId(null)
+                                }}
+                                className="px-2 h-7 rounded-lg bg-red-600 text-white text-[11px] font-medium hover:bg-red-700"
+                              >
+                                Sil
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="px-2 h-7 rounded-lg bg-[#f5f5f7] text-[#86868b] text-[11px] font-medium hover:bg-[#e8e8ed]"
+                              >
+                                İptal
+                              </button>
                             </div>
                           ) : (
                             <div className="flex items-center justify-end gap-1">
@@ -288,7 +321,7 @@ export default function UserManagement() {
                               <button
                                 type="button"
                                 title="Sil"
-                                onClick={() => deleteUser(user.id)}
+                                onClick={() => setConfirmDeleteId(user.id)}
                                 className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-50 transition-colors"
                               >
                                 <Trash2 className="w-3.5 h-3.5 text-red-400" />
@@ -305,7 +338,9 @@ export default function UserManagement() {
               {users.length === 0 && (
                 <div className="text-center py-12">
                   <Users className="w-10 h-10 text-[#d1d1d6] mx-auto mb-2" />
-                  <p className="text-[13px] text-[#86868b]">Henüz kullanıcı eklenmemiş</p>
+                  <p className="text-[13px] text-[#86868b]">
+                    Henüz kullanıcı eklenmemiş
+                  </p>
                 </div>
               )}
             </div>

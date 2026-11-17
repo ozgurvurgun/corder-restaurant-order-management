@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useBossStore } from "@/lib/boss-store"
 import { bossApi } from "@/lib/api"
-import type { PermissionCategory } from "@/lib/types"
+import type { RoleDefinition } from "@/lib/types"
 import { getRoleDisplayName } from "@/lib/permission-labels"
 import { RolePermissionMatrix } from "./role-permission-matrix"
 import { RoleAccessLimitsCard } from "./role-access-limits-card"
@@ -31,23 +31,51 @@ export function RolesPermissionsTab() {
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [showNewRoleModal, setShowNewRoleModal] = useState(false)
+  const hydratedSnapshotRef = useRef<string>("")
 
   const selectedRole = useMemo(
     () => roles.find((r) => r.key === selectedRoleKey) ?? roles[0] ?? null,
     [roles, selectedRoleKey]
   )
 
+  const applyRoleToDraft = (role: RoleDefinition) => {
+    setSelectedRoleKey(role.key)
+    setDraftPermissions(role.permissions)
+    setDraftPanel(role.canAccessPanel)
+    setDraftTerminal(role.canAccessTerminal)
+    setDraftMaxPct(role.maxDiscountPercent)
+    setDraftMaxAmt(
+      role.maxDiscountAmount != null ? String(role.maxDiscountAmount) : ""
+    )
+    hydratedSnapshotRef.current = `${effectiveBranchId}:${role.key}:${role.updatedAt ?? ""}`
+  }
+
   useEffect(() => {
     if (!selectedRole) return
-    setSelectedRoleKey(selectedRole.key)
-    setDraftPermissions(selectedRole.permissions)
-    setDraftPanel(selectedRole.canAccessPanel)
-    setDraftTerminal(selectedRole.canAccessTerminal)
-    setDraftMaxPct(selectedRole.maxDiscountPercent)
-    setDraftMaxAmt(
-      selectedRole.maxDiscountAmount != null ? String(selectedRole.maxDiscountAmount) : ""
-    )
-  }, [selectedRole])
+    const nextSnapshot = `${effectiveBranchId}:${selectedRole.key}:${selectedRole.updatedAt ?? ""}`
+    if (hydratedSnapshotRef.current !== nextSnapshot) {
+      applyRoleToDraft(selectedRole)
+    }
+  }, [effectiveBranchId, selectedRole])
+
+  const isDirty = useMemo(() => {
+    if (!selectedRole) return false
+    if (draftPanel !== selectedRole.canAccessPanel) return true
+    if (draftTerminal !== selectedRole.canAccessTerminal) return true
+    if (draftMaxPct !== selectedRole.maxDiscountPercent) return true
+    const parsedAmt = draftMaxAmt.trim() !== "" ? Number(draftMaxAmt) : null
+    if (parsedAmt !== selectedRole.maxDiscountAmount) return true
+    if (draftPermissions.length !== selectedRole.permissions.length) return true
+    const rolePermSet = new Set(selectedRole.permissions)
+    return draftPermissions.some((k) => !rolePermSet.has(k))
+  }, [
+    selectedRole,
+    draftPanel,
+    draftTerminal,
+    draftMaxPct,
+    draftMaxAmt,
+    draftPermissions,
+  ])
 
   const togglePermission = (permKey: string) => {
     setDraftPermissions((prev) =>
@@ -55,7 +83,7 @@ export function RolesPermissionsTab() {
     )
   }
 
-  const toggleCategoryAll = (cat: PermissionCategory) => {
+  const toggleCategoryAll = (cat: string) => {
     if (!catalog) return
     const catKeys = catalog.permissions
       .filter((p) => p.category === cat)
@@ -73,13 +101,14 @@ export function RolesPermissionsTab() {
     const roleTitle = getRoleDisplayName(selectedRole.key, selectedRole.name)
     setSaving(true)
     try {
-      await bossApi.roles.update(effectiveBranchId, selectedRole.key, {
+      const updated = await bossApi.roles.update(effectiveBranchId, selectedRole.key, {
         canAccessPanel: draftPanel,
         canAccessTerminal: draftTerminal,
         permissions: draftPermissions,
         maxDiscountPercent: draftMaxPct,
         maxDiscountAmount: draftMaxAmt.trim() !== "" ? Number(draftMaxAmt) : null,
       })
+      applyRoleToDraft(updated)
       await refreshBranchDetails(effectiveBranchId)
       showToast(`${roleTitle} rol yetkileri kaydedildi`)
     } catch (e) {
@@ -95,7 +124,8 @@ export function RolesPermissionsTab() {
     if (!confirm(`${roleTitle} rolünü fabrika varsayılan yetkilerine sıfırlamak istediğinize emin misiniz?`)) return
     setSaving(true)
     try {
-      await bossApi.roles.reset(effectiveBranchId, selectedRole.key)
+      const resetRole = await bossApi.roles.reset(effectiveBranchId, selectedRole.key)
+      applyRoleToDraft(resetRole)
       await refreshBranchDetails(effectiveBranchId)
       showToast(`${roleTitle} varsayılan ayarlara döndürüldü`)
     } catch (e) {
@@ -123,22 +153,26 @@ export function RolesPermissionsTab() {
     name: string
     description?: string
     color: string
+    templateKey?: string
   }) => {
     if (!effectiveBranchId) return
+    const tpl = payload.templateKey
+      ? catalog?.defaultRoleTemplates.find((t) => t.key === payload.templateKey)
+      : undefined
     setSaving(true)
     try {
       const created = await bossApi.roles.create(effectiveBranchId, {
         name: payload.name,
         description: payload.description,
         color: payload.color,
-        canAccessPanel: false,
-        canAccessTerminal: true,
-        permissions: ["order.view", "order.create", "order.add_note"],
-        maxDiscountPercent: 0,
-        maxDiscountAmount: 0,
+        canAccessPanel: tpl ? tpl.canAccessPanel : false,
+        canAccessTerminal: tpl ? tpl.canAccessTerminal : true,
+        permissions: tpl ? [...tpl.permissions] : [],
+        maxDiscountPercent: tpl ? tpl.maxDiscountPercent : 0,
+        maxDiscountAmount: tpl ? tpl.maxDiscountAmount : 0,
       })
+      applyRoleToDraft(created)
       await refreshBranchDetails(effectiveBranchId)
-      setSelectedRoleKey(created.key)
       setShowNewRoleModal(false)
       showToast(`${created.name} rolü oluşturuldu`)
     } catch (e) {
@@ -155,8 +189,9 @@ export function RolesPermissionsTab() {
     setSaving(true)
     try {
       await bossApi.roles.remove(effectiveBranchId, selectedRole.key)
-      await refreshBranchDetails(effectiveBranchId)
+      hydratedSnapshotRef.current = ""
       setSelectedRoleKey("branch_manager")
+      await refreshBranchDetails(effectiveBranchId)
       showToast("Özel rol silindi")
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Silinemedi", "error")
@@ -232,7 +267,7 @@ export function RolesPermissionsTab() {
               <button
                 key={role.key}
                 type="button"
-                onClick={() => setSelectedRoleKey(role.key)}
+                onClick={() => applyRoleToDraft(role)}
                 className={`flex-shrink-0 rounded-2xl border px-3.5 py-2 text-left transition-all ${
                   active
                     ? "border-[#e63462] bg-[#e63462] text-white shadow-md shadow-[#e63462]/20"
@@ -284,11 +319,21 @@ export function RolesPermissionsTab() {
 
           <div className="sticky bottom-[72px] z-20 flex items-center justify-between rounded-2xl border border-[#e63462]/30 bg-white/95 p-3 shadow-lg backdrop-blur-md">
             <div>
-              <p className="text-[12px] font-bold text-[#1d1d1f]">
-                {getRoleDisplayName(selectedRole.key, selectedRole.name)} ({draftPermissions.length} aktif yetki)
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-[12px] font-bold text-[#1d1d1f]">
+                  {getRoleDisplayName(selectedRole.key, selectedRole.name)} ({draftPermissions.length} aktif yetki)
+                </p>
+                {isDirty && (
+                  <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                    Kaydedilmemiş Değişiklik
+                  </span>
+                )}
+              </div>
               <p className="text-[11px] text-[#86868b]">
-                Maks İskonto: %{draftMaxPct} {draftMaxAmt ? `• Maks ${draftMaxAmt} ₺` : "• Tutar Limitsiz"}
+                Maks İskonto: %{draftMaxPct}{" "}
+                {draftMaxAmt.trim() !== ""
+                  ? `• Maks ${draftMaxAmt} ₺`
+                  : "• Tutar Üst Limiti Yok"}
               </p>
             </div>
             <button
@@ -307,6 +352,7 @@ export function RolesPermissionsTab() {
       {showNewRoleModal && (
         <NewRoleModal
           saving={saving}
+          templates={catalog?.defaultRoleTemplates ?? []}
           onClose={() => setShowNewRoleModal(false)}
           onSubmit={handleCreateCustomRole}
         />

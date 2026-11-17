@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MinLength } from 'class-validator';
+import { IsOptional, IsString, MinLength, ValidateIf } from 'class-validator';
 
 export class UpdateRestaurantSettingsDto {
   @IsOptional()
@@ -7,34 +7,42 @@ export class UpdateRestaurantSettingsDto {
   name?: string;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsString()
   address?: string | null;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsString()
   phone?: string | null;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsString()
   taxId?: string | null;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsString()
   whatsapp?: string | null;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsString()
   instagram?: string | null;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsString()
   facebook?: string | null;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsString()
   website?: string | null;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsString()
   workingHours?: string | null;
 }

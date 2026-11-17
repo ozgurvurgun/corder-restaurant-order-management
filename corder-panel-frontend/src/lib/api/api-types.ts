@@ -10,6 +10,8 @@ export interface RawTableDto {
   name: string
   section: string
   status: string
+  sessionStaffId?: string | null
+  sessionStaffName?: string | null
   discount?: { type: PanelDiscountType; value: number; reason: string } | null
   splitInfo?: PanelTable["splitInfo"] | null
 }
@@ -108,6 +110,7 @@ export interface CreateProductBody {
 }
 
 export interface UpdateProductBody {
+  categoryId?: string
   name?: string
   description?: string
   price?: number

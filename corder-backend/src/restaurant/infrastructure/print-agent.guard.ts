@@ -6,7 +6,9 @@ import { Repository } from 'typeorm';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 import {
   buildPaymentSuspendedErrorMessage,
+  computeSecretFingerprint,
   isRestaurantPaymentSuspended,
+  RestaurantAuthService,
   RestaurantTokenPayload,
 } from '../application/restaurant-auth.service';
 import { requireConfigSecret } from '../../common/security/env.validation';
@@ -21,6 +23,7 @@ export class PrintAgentGuard implements CanActivate {
   constructor(
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly authService: RestaurantAuthService,
     @InjectRepository(RestaurantEntity)
     private readonly restaurantRepo: Repository<RestaurantEntity>,
   ) {}
@@ -54,22 +57,32 @@ export class PrintAgentGuard implements CanActivate {
         name: true,
         status: true,
         printAgentUsername: true,
+        printAgentPasswordHash: true,
         isAccessSuspended: true,
         billingStatus: true,
       },
     });
-    if (isRestaurantPaymentSuspended(restaurant)) {
+    if (
+      isRestaurantPaymentSuspended(restaurant) &&
+      (!restaurant || !(await this.authService.hasOpenCashShift(restaurant.id)))
+    ) {
+      const cfg = await this.authService.loadBillingConfig();
       throw new UnauthorizedException(
-        buildPaymentSuspendedErrorMessage(restaurant?.name),
+        buildPaymentSuspendedErrorMessage(restaurant?.name, cfg),
       );
     }
     if (
       !restaurant ||
       restaurant.status !== 'active' ||
       !restaurant.printAgentUsername ||
+      !restaurant.printAgentPasswordHash ||
       restaurant.printAgentUsername !== payload.email
     ) {
       throw new UnauthorizedException('Print Agent account is inactive or changed');
+    }
+    const expectedFp = computeSecretFingerprint(restaurant.printAgentPasswordHash);
+    if (payload.pwdFp && payload.pwdFp !== expectedFp) {
+      throw new UnauthorizedException('Print Agent password has been changed');
     }
     request.printAgentRestaurantId = restaurant.id;
     return true;

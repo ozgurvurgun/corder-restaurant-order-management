@@ -14,7 +14,15 @@ function getLinuxAutostartFile() {
   return path.join(configHome, "autostart", "corder-print-agent.desktop")
 }
 
-function resolveLaunchCommand() {
+function getMacLaunchAgentFile() {
+  return path.join(os.homedir(), "Library", "LaunchAgents", "com.corder.print-agent.plist")
+}
+
+function resolveLaunchCommand(electronApp = null) {
+  if (electronApp && electronApp.isPackaged) {
+    const args = process.platform === "linux" ? ["--no-sandbox"] : []
+    return { binary: process.execPath, args }
+  }
   const electronBin = path.join(
     APP_ROOT,
     "node_modules",
@@ -29,14 +37,14 @@ function resolveLaunchCommand() {
   return { binary: process.execPath, args: [MAIN_ENTRY] }
 }
 
-function configureLinuxAutostart(enabled) {
+function configureLinuxAutostart(enabled, electronApp = null) {
   const desktopFile = getLinuxAutostartFile()
   try {
     if (!enabled) {
       if (fs.existsSync(desktopFile)) fs.unlinkSync(desktopFile)
       return true
     }
-    const { binary, args } = resolveLaunchCommand()
+    const { binary, args } = resolveLaunchCommand(electronApp)
     const execLine = [binary, ...args].map((part) => `"${part}"`).join(" ")
     const content = [
       "[Desktop Entry]",
@@ -59,10 +67,51 @@ function configureLinuxAutostart(enabled) {
   }
 }
 
-function configureWindowsRegistryAutostart(enabled) {
+function configureMacAutostart(enabled, electronApp = null) {
+  const plistFile = getMacLaunchAgentFile()
+  try {
+    if (!enabled) {
+      if (fs.existsSync(plistFile)) fs.unlinkSync(plistFile)
+      return true
+    }
+    const { binary, args } = resolveLaunchCommand(electronApp)
+    const escXml = (s) =>
+      String(s)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+    const programArgs = [binary, ...args].map((a) => `    <string>${escXml(a)}</string>`).join("\n")
+    const content = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
+      '<plist version="1.0">',
+      "<dict>",
+      "  <key>Label</key>",
+      "  <string>com.corder.print-agent</string>",
+      "  <key>ProgramArguments</key>",
+      "  <array>",
+      programArgs,
+      "  </array>",
+      "  <key>WorkingDirectory</key>",
+      `  <string>${escXml(APP_ROOT)}</string>`,
+      "  <key>RunAtLoad</key>",
+      "  <true/>",
+      "</dict>",
+      "</plist>",
+    ].join("\n")
+    fs.mkdirSync(path.dirname(plistFile), { recursive: true })
+    fs.writeFileSync(plistFile, `${content}\n`, { encoding: "utf8", mode: 0o644 })
+    return true
+  } catch (err) {
+    warn("macOS autostart configuration skipped", { error: err.message })
+    return false
+  }
+}
+
+function configureWindowsRegistryAutostart(enabled, electronApp = null) {
   return new Promise((resolve) => {
-    const { binary, args } = resolveLaunchCommand()
-    const commandValue = `"${binary}" ${args.map((a) => `"${a}"`).join(" ")}`
+    const { binary, args } = resolveLaunchCommand(electronApp)
+    const commandValue = `"${binary}" ${args.map((a) => `"${a}"`).join(" ")}`.trim()
     const regArgs = enabled
       ? ["add", WIN_REG_KEY, "/v", WIN_REG_NAME, "/t", "REG_SZ", "/d", commandValue, "/f"]
       : ["delete", WIN_REG_KEY, "/v", WIN_REG_NAME, "/f"]
@@ -81,8 +130,12 @@ function configureWindowsRegistryAutostart(enabled) {
 async function applyAutoStartSetting(enabled, electronApp = null) {
   const shouldEnable = enabled !== false
   try {
-    if (electronApp && typeof electronApp.setLoginItemSettings === "function" && (process.platform === "win32" || process.platform === "darwin")) {
-      const { binary, args } = resolveLaunchCommand()
+    if (
+      electronApp &&
+      typeof electronApp.setLoginItemSettings === "function" &&
+      (process.platform === "win32" || process.platform === "darwin")
+    ) {
+      const { binary, args } = resolveLaunchCommand(electronApp)
       electronApp.setLoginItemSettings({
         openAtLogin: shouldEnable,
         path: binary,
@@ -90,9 +143,11 @@ async function applyAutoStartSetting(enabled, electronApp = null) {
       })
     }
     if (process.platform === "win32") {
-      await configureWindowsRegistryAutostart(shouldEnable)
+      await configureWindowsRegistryAutostart(shouldEnable, electronApp)
     } else if (process.platform === "linux") {
-      configureLinuxAutostart(shouldEnable)
+      configureLinuxAutostart(shouldEnable, electronApp)
+    } else if (process.platform === "darwin" && !electronApp) {
+      configureMacAutostart(shouldEnable, null)
     }
     info(`Auto-start on boot ${shouldEnable ? "enabled" : "disabled"}`, { platform: process.platform })
     return true
@@ -103,4 +158,3 @@ async function applyAutoStartSetting(enabled, electronApp = null) {
 }
 
 module.exports = { applyAutoStartSetting }
-

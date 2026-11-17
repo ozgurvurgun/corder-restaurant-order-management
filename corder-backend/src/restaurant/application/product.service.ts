@@ -1,25 +1,29 @@
-import { Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { ProductEntity } from '../domain/product.entity';
 import { CategoryEntity } from '../domain/category.entity';
+import { StockMaterialEntity } from '../domain/stock-material.entity';
+import { RecipeStockPolicy } from '../domain/services/recipe-stock.policy';
 import { CreateProductDto } from '../api/dto/create-product.dto';
 import { UpdateProductDto } from '../api/dto/update-product.dto';
+import { ProductIngredientInputDto } from '../api/dto/product-ingredient-input.dto';
 
 @Injectable()
-export class ProductService implements OnModuleInit {
+export class ProductService {
   constructor(
     @InjectRepository(ProductEntity)
     private readonly repo: Repository<ProductEntity>,
     @InjectRepository(CategoryEntity)
     private readonly categoryRepo: Repository<CategoryEntity>,
+    @InjectRepository(StockMaterialEntity)
+    private readonly materialRepo: Repository<StockMaterialEntity>,
+    private readonly dataSource: DataSource,
   ) {}
-
-  async onModuleInit(): Promise<void> {
-    await this.repo
-      .query(`ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "cost_price" numeric(10,2)`)
-      .catch(() => undefined);
-  }
 
   async findByRestaurant(restaurantId: string): Promise<ProductEntity[]> {
     return this.repo
@@ -43,38 +47,104 @@ export class ProductService implements OnModuleInit {
     return p;
   }
 
-  private normalizeIngredients(
-    raw: { materialId: string; quantity: number }[] | null | undefined,
-  ): { materialId: string; quantity: number }[] | null {
-    if (raw == null) return null;
-    const out: { materialId: string; quantity: number }[] = [];
+  private async normalizeIngredients(
+    restaurantId: string,
+    raw: ProductIngredientInputDto[] | null | undefined,
+  ): Promise<{ materialId: string; quantity: number; unit?: string }[] | null> {
+    if (raw == null || raw.length === 0) return null;
+    const candidateRows: { materialId: string; quantity: number; unit?: string }[] = [];
     for (const row of raw) {
-      if (!row?.materialId) continue;
+      const materialId = typeof row?.materialId === 'string' ? row.materialId.trim() : '';
+      if (!materialId) continue;
       const q = Number(row.quantity);
       if (!Number.isFinite(q) || q <= 0) continue;
-      out.push({ materialId: String(row.materialId).trim(), quantity: q });
+      const unit = row.unit?.trim() || undefined;
+      candidateRows.push({ materialId, quantity: q, ...(unit ? { unit } : {}) });
     }
+    if (!candidateRows.length) return null;
+
+    const uniqueMaterialIds = [...new Set(candidateRows.map((r) => r.materialId))];
+    const materials = await this.materialRepo.find({
+      where: { id: In(uniqueMaterialIds), restaurantId },
+    });
+    if (materials.length !== uniqueMaterialIds.length) {
+      throw new BadRequestException(
+        'One or more recipe materials do not exist or do not belong to this restaurant.',
+      );
+    }
+    const materialById = new Map(materials.map((m) => [m.id, m]));
+
+    const mergedByMaterial = new Map<
+      string,
+      { materialId: string; quantity: number; unit?: string }
+    >();
+    for (const row of candidateRows) {
+      const mat = materialById.get(row.materialId)!;
+      const existing = mergedByMaterial.get(row.materialId);
+      if (existing) {
+        const targetUnit = existing.unit ?? mat.unit;
+        const converted = RecipeStockPolicy.convertQuantity(
+          row.quantity,
+          row.unit ?? mat.unit,
+          targetUnit,
+        );
+        existing.quantity = Number((existing.quantity + converted).toFixed(3));
+      } else {
+        const qty = Number(row.quantity.toFixed(3));
+        if (qty > 0) {
+          mergedByMaterial.set(row.materialId, {
+            materialId: row.materialId,
+            quantity: qty,
+            ...(row.unit ? { unit: row.unit } : {}),
+          });
+        }
+      }
+    }
+
+    const out = [...mergedByMaterial.values()].filter((r) => r.quantity > 0);
     return out.length ? out : null;
   }
 
+  private async nextOrderInCategory(categoryId: string): Promise<number> {
+    const row = await this.repo
+      .createQueryBuilder('p')
+      .where('p.category_id = :categoryId', { categoryId })
+      .select('MAX(p.order)', 'max')
+      .getRawOne<{ max: string | number | null }>();
+    return Number(row?.max ?? 0) + 1;
+  }
+
   async create(restaurantId: string, dto: CreateProductDto): Promise<ProductEntity> {
-    const cat = await this.categoryRepo.findOne({ where: { id: dto.categoryId, restaurantId } });
+    const cat = await this.categoryRepo.findOne({
+      where: { id: dto.categoryId, restaurantId },
+    });
     if (!cat) throw new NotFoundException('Category not found');
+    const name = dto.name.trim();
+    if (!name) throw new BadRequestException('Product name cannot be empty');
+
     const entity = new ProductEntity();
     entity.categoryId = dto.categoryId;
-    entity.name = dto.name.trim();
-    entity.description = dto.description?.trim() ?? null;
-    entity.price = dto.price;
-    entity.costPrice = dto.costPrice ?? null;
-    entity.imageUrl = dto.imageUrl ?? null;
+    entity.name = name;
+    entity.description = dto.description?.trim() || null;
+    entity.price = Number(Number(dto.price).toFixed(2));
+    entity.costPrice =
+      dto.costPrice != null ? Number(Number(dto.costPrice).toFixed(2)) : null;
+    entity.imageUrl = dto.imageUrl?.trim() || null;
     entity.inStock = dto.inStock ?? true;
-    entity.order = dto.order ?? 0;
-    entity.ingredients = this.normalizeIngredients(dto.ingredients ?? null);
+    entity.order = dto.order ?? (await this.nextOrderInCategory(dto.categoryId));
+    entity.ingredients = await this.normalizeIngredients(
+      restaurantId,
+      dto.ingredients ?? null,
+    );
     const saved = await this.repo.save(entity);
     return this.findOne(saved.id, restaurantId);
   }
 
-  async update(id: string, restaurantId: string, dto: UpdateProductDto): Promise<ProductEntity> {
+  async update(
+    id: string,
+    restaurantId: string,
+    dto: UpdateProductDto,
+  ): Promise<ProductEntity> {
     const entity = await this.findOne(id, restaurantId);
     if (dto.categoryId !== undefined && dto.categoryId !== entity.categoryId) {
       const cat = await this.categoryRepo.findOne({
@@ -83,15 +153,31 @@ export class ProductService implements OnModuleInit {
       if (!cat) throw new NotFoundException('Category not found');
       entity.categoryId = dto.categoryId;
     }
-    if (dto.name !== undefined) entity.name = dto.name.trim();
-    if (dto.description !== undefined) entity.description = dto.description?.trim() ?? null;
-    if (dto.price !== undefined) entity.price = dto.price;
-    if (dto.costPrice !== undefined) entity.costPrice = dto.costPrice;
-    if (dto.imageUrl !== undefined) entity.imageUrl = dto.imageUrl;
+    if (dto.name !== undefined) {
+      const name = dto.name.trim();
+      if (!name) throw new BadRequestException('Product name cannot be empty');
+      entity.name = name;
+    }
+    if (dto.description !== undefined) {
+      entity.description = dto.description?.trim() || null;
+    }
+    if (dto.price !== undefined) {
+      entity.price = Number(Number(dto.price).toFixed(2));
+    }
+    if (dto.costPrice !== undefined) {
+      entity.costPrice =
+        dto.costPrice != null ? Number(Number(dto.costPrice).toFixed(2)) : null;
+    }
+    if (dto.imageUrl !== undefined) {
+      entity.imageUrl = dto.imageUrl?.trim() || null;
+    }
     if (dto.inStock !== undefined) entity.inStock = dto.inStock;
     if (dto.order !== undefined) entity.order = dto.order;
     if (dto.ingredients !== undefined) {
-      entity.ingredients = this.normalizeIngredients(dto.ingredients);
+      entity.ingredients = await this.normalizeIngredients(
+        restaurantId,
+        dto.ingredients,
+      );
     }
     await this.repo.save(entity);
     return this.findOne(id, restaurantId);
@@ -102,21 +188,26 @@ export class ProductService implements OnModuleInit {
     await this.repo.remove(entity);
   }
 
-  async reorder(restaurantId: string, ids: string[]): Promise<void> {
-    if (ids.length === 0) return;
-    // Ensure products belong to this restaurant via category join
+  async reorder(restaurantId: string, ids: string[]): Promise<ProductEntity[]> {
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length === 0) {
+      return this.findByRestaurant(restaurantId);
+    }
     const products = await this.repo
       .createQueryBuilder('p')
       .innerJoin('p.category', 'c')
       .where('c.restaurant_id = :restaurantId', { restaurantId })
-      .andWhere('p.id IN (:...ids)', { ids })
+      .andWhere('p.id IN (:...ids)', { ids: uniqueIds })
       .getMany();
     const existingIds = new Set(products.map((p) => p.id));
-    const orderedIds = ids.filter((id) => existingIds.has(id));
-    await Promise.all(
-      orderedIds.map((id, index) =>
-        this.repo.update({ id }, { order: index + 1 }),
-      ),
-    );
+    const orderedIds = uniqueIds.filter((id) => existingIds.has(id));
+    if (orderedIds.length > 0) {
+      await this.dataSource.transaction(async (em) => {
+        for (let i = 0; i < orderedIds.length; i++) {
+          await em.update(ProductEntity, { id: orderedIds[i] }, { order: i + 1 });
+        }
+      });
+    }
+    return this.findByRestaurant(restaurantId);
   }
 }

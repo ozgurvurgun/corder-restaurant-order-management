@@ -37,7 +37,7 @@ export class RolesController {
   }
 
   @Post()
-  @BossOnly()
+  @RequirePermissions('roles.manage')
   create(
     @RestaurantId() restaurantId: string,
     @Body() dto: CreateRoleDto,
@@ -46,7 +46,7 @@ export class RolesController {
   }
 
   @Put(':idOrKey')
-  @BossOnly()
+  @RequirePermissions('roles.manage')
   update(
     @RestaurantId() restaurantId: string,
     @Param('idOrKey') idOrKey: string,
@@ -56,7 +56,7 @@ export class RolesController {
   }
 
   @Post(':idOrKey/reset')
-  @BossOnly()
+  @RequirePermissions('roles.manage')
   reset(
     @RestaurantId() restaurantId: string,
     @Param('idOrKey') idOrKey: string,
@@ -65,7 +65,7 @@ export class RolesController {
   }
 
   @Delete(':idOrKey')
-  @BossOnly()
+  @RequirePermissions('roles.manage')
   remove(
     @RestaurantId() restaurantId: string,
     @Param('idOrKey') idOrKey: string,

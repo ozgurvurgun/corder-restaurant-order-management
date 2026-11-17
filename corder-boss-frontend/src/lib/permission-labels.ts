@@ -1,7 +1,21 @@
-import type { PermissionCategory } from "./types"
+import type {
+  AuditCategory,
+  PermissionCatalogResponse,
+  PermissionCategory,
+} from "./types"
+
+const PREFERRED_CATEGORY_ORDER: PermissionCategory[] = [
+  "orders_tables",
+  "discounts",
+  "billing_cash",
+  "ledger",
+  "catalog",
+  "inventory",
+  "reports_system",
+]
 
 export const PERMISSION_CATEGORY_LABELS: Record<
-  PermissionCategory,
+  string,
   { title: string; description: string }
 > = {
   orders_tables: {
@@ -289,8 +303,50 @@ export const SYSTEM_ROLE_LABELS: Record<
   },
 }
 
+export const AUDIT_CATEGORY_LABELS: Record<AuditCategory | "ALL", string> = {
+  ALL: "Tümü",
+  order: "Sipariş",
+  table: "Masa",
+  payment: "Ödeme",
+  cash: "Kasa",
+  stock: "Stok",
+  product: "Ürün",
+  staff: "Personel",
+  system: "Sistem",
+}
+
+/**
+ * Derives the ordered list of permission categories from the backend catalog
+ * response so no category or permission is ever dropped if the backend catalog grows.
+ */
+export function getOrderedCatalogCategories(
+  catalog: PermissionCatalogResponse | null
+): string[] {
+  if (!catalog) return [...PREFERRED_CATEGORY_ORDER]
+  const seen = new Set<string>()
+  const result: string[] = []
+  const backendCategories = new Set<string>([
+    ...Object.keys(catalog.categories ?? {}),
+    ...(catalog.permissions ?? []).map((p) => p.category),
+  ])
+
+  for (const cat of PREFERRED_CATEGORY_ORDER) {
+    if (backendCategories.has(cat)) {
+      seen.add(cat)
+      result.push(cat)
+    }
+  }
+  for (const cat of backendCategories) {
+    if (!seen.has(cat)) {
+      seen.add(cat)
+      result.push(cat)
+    }
+  }
+  return result
+}
+
 export function getCategoryLabel(
-  categoryKey: PermissionCategory,
+  categoryKey: string,
   fallback?: { title: string; description: string }
 ): { title: string; description: string } {
   return (
@@ -326,4 +382,3 @@ export function getRoleDisplayDescription(
     "Bu rol için yetki ve limit yapılandırması"
   )
 }
-

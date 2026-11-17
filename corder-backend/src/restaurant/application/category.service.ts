@@ -3,43 +3,49 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
-  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { CategoryEntity } from '../domain/category.entity';
 import { CreateCategoryDto } from '../api/dto/create-category.dto';
 import { UpdateCategoryDto } from '../api/dto/update-category.dto';
 import { ReorderCategoriesDto } from '../api/dto/reorder-categories.dto';
 
 function toSlug(name: string): string {
-  return name
-    .toLowerCase()
+  const slug = name
     .trim()
-    .replace(/\u011f/g, 'g')
-    .replace(/\u00fc/g, 'u')
-    .replace(/\u015f/g, 's')
+    .replace(/\u0130/g, 'i')
+    .replace(/I/g, 'i')
     .replace(/\u0131/g, 'i')
+    .replace(/\u011e/g, 'g')
+    .replace(/\u011f/g, 'g')
+    .replace(/\u00dc/g, 'u')
+    .replace(/\u00fc/g, 'u')
+    .replace(/\u015e/g, 's')
+    .replace(/\u015f/g, 's')
+    .replace(/\u00d6/g, 'o')
     .replace(/\u00f6/g, 'o')
+    .replace(/\u00c7/g, 'c')
     .replace(/\u00e7/g, 'c')
+    .toLowerCase()
+    .replace(/\u0307/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
+  if (!slug) {
+    throw new BadRequestException(
+      'Category name must contain at least one letter or number',
+    );
+  }
+  return slug;
 }
 
 @Injectable()
-export class CategoryService implements OnModuleInit {
+export class CategoryService {
   constructor(
     @InjectRepository(CategoryEntity)
     private readonly repo: Repository<CategoryEntity>,
+    private readonly dataSource: DataSource,
   ) {}
-
-  async onModuleInit(): Promise<void> {
-    await this.repo
-      .query(
-        `ALTER TABLE "categories" ADD COLUMN IF NOT EXISTS "show_in_quick_sale" boolean NOT NULL DEFAULT true`,
-      )
-      .catch(() => undefined);
-  }
 
   async findByRestaurant(restaurantId: string): Promise<CategoryEntity[]> {
     return this.repo.find({
@@ -54,9 +60,14 @@ export class CategoryService implements OnModuleInit {
     return c;
   }
 
-  private async assertParent(restaurantId: string, parentId: string | null): Promise<void> {
+  private async assertParent(
+    restaurantId: string,
+    parentId: string | null,
+  ): Promise<void> {
     if (!parentId) return;
-    const p = await this.repo.findOne({ where: { id: parentId, restaurantId } });
+    const p = await this.repo.findOne({
+      where: { id: parentId, restaurantId },
+    });
     if (!p) throw new NotFoundException('Parent category not found');
   }
 
@@ -81,7 +92,10 @@ export class CategoryService implements OnModuleInit {
     return (await qb.getCount()) > 0;
   }
 
-  private async nextOrder(restaurantId: string, parentId: string | null): Promise<number> {
+  private async nextOrder(
+    restaurantId: string,
+    parentId: string | null,
+  ): Promise<number> {
     const qb = this.repo
       .createQueryBuilder('c')
       .where('c.restaurant_id = :restaurantId', { restaurantId })
@@ -95,7 +109,11 @@ export class CategoryService implements OnModuleInit {
     return Number(row?.max ?? 0) + 1;
   }
 
-  private async wouldCreateCycle(categoryId: string, newParentId: string | null): Promise<boolean> {
+  private async wouldCreateCycle(
+    restaurantId: string,
+    categoryId: string,
+    newParentId: string | null,
+  ): Promise<boolean> {
     if (!newParentId) return false;
     let cur: string | null = newParentId;
     const seen = new Set<string>();
@@ -103,17 +121,23 @@ export class CategoryService implements OnModuleInit {
       if (cur === categoryId) return true;
       if (seen.has(cur)) return true;
       seen.add(cur);
-      const node = await this.repo.findOne({ where: { id: cur } });
+      const node = await this.repo.findOne({
+        where: { id: cur, restaurantId },
+      });
       if (!node) break;
       cur = node.parentId ?? null;
     }
     return false;
   }
 
-  async create(restaurantId: string, dto: CreateCategoryDto): Promise<CategoryEntity> {
+  async create(
+    restaurantId: string,
+    dto: CreateCategoryDto,
+  ): Promise<CategoryEntity> {
     const parentId = dto.parentId?.trim() || null;
     await this.assertParent(restaurantId, parentId);
-    const slug = toSlug(dto.name);
+    const name = dto.name.trim();
+    const slug = toSlug(name);
     if (await this.slugInUse(restaurantId, parentId, slug)) {
       throw new ConflictException('Category slug already exists in this group');
     }
@@ -121,7 +145,7 @@ export class CategoryService implements OnModuleInit {
     const entity = this.repo.create({
       restaurantId,
       parentId,
-      name: dto.name.trim(),
+      name,
       slug,
       showInTerminal: dto.showInTerminal ?? true,
       showInMenu: dto.showInMenu ?? true,
@@ -131,27 +155,44 @@ export class CategoryService implements OnModuleInit {
     return this.repo.save(entity);
   }
 
-  async update(id: string, restaurantId: string, dto: UpdateCategoryDto): Promise<CategoryEntity> {
+  async update(
+    id: string,
+    restaurantId: string,
+    dto: UpdateCategoryDto,
+  ): Promise<CategoryEntity> {
     const entity = await this.findOne(id, restaurantId);
     if (dto.parentId !== undefined) {
       const raw = dto.parentId?.trim() || null;
-      if (raw === id) throw new BadRequestException('Category cannot be its own parent');
+      if (raw === id) {
+        throw new BadRequestException('Category cannot be its own parent');
+      }
       await this.assertParent(restaurantId, raw);
-      if (await this.wouldCreateCycle(id, raw)) {
+      if (await this.wouldCreateCycle(restaurantId, id, raw)) {
         throw new BadRequestException('Circular category parent');
       }
       entity.parentId = raw;
     }
     if (dto.name !== undefined) {
       entity.name = dto.name.trim();
-      entity.slug = toSlug(dto.name);
+      entity.slug = toSlug(entity.name);
     }
-    if (dto.showInTerminal !== undefined) entity.showInTerminal = dto.showInTerminal;
+    if (dto.showInTerminal !== undefined) {
+      entity.showInTerminal = dto.showInTerminal;
+    }
     if (dto.showInMenu !== undefined) entity.showInMenu = dto.showInMenu;
-    if (dto.showInQuickSale !== undefined) entity.showInQuickSale = dto.showInQuickSale;
+    if (dto.showInQuickSale !== undefined) {
+      entity.showInQuickSale = dto.showInQuickSale;
+    }
     if (dto.order !== undefined) entity.order = dto.order;
     const effectiveParent = entity.parentId ?? null;
-    if (await this.slugInUse(restaurantId, effectiveParent, entity.slug, entity.id)) {
+    if (
+      await this.slugInUse(
+        restaurantId,
+        effectiveParent,
+        entity.slug,
+        entity.id,
+      )
+    ) {
       throw new ConflictException('Category slug already exists in this group');
     }
     return this.repo.save(entity);
@@ -162,10 +203,15 @@ export class CategoryService implements OnModuleInit {
     await this.repo.remove(entity);
   }
 
-  async reorder(restaurantId: string, dto: ReorderCategoriesDto): Promise<void> {
-    const ids = dto.ids;
-    if (!ids.length) return;
-    const first = await this.repo.findOne({ where: { id: ids[0], restaurantId } });
+  async reorder(
+    restaurantId: string,
+    dto: ReorderCategoriesDto,
+  ): Promise<CategoryEntity[]> {
+    const ids = [...new Set(dto.ids)];
+    if (!ids.length) return this.findByRestaurant(restaurantId);
+    const first = await this.repo.findOne({
+      where: { id: ids[0], restaurantId },
+    });
     if (!first) throw new NotFoundException('Category not found');
     let expectedParent: string | null;
     if (dto.parentId === undefined) {
@@ -175,18 +221,26 @@ export class CategoryService implements OnModuleInit {
     } else {
       expectedParent = dto.parentId;
     }
+    await this.assertParent(restaurantId, expectedParent);
     for (const cid of ids) {
       const c = await this.repo.findOne({ where: { id: cid, restaurantId } });
       if (!c) throw new NotFoundException('Category not found');
       const p = c.parentId ?? null;
       if (p !== expectedParent) {
-        throw new BadRequestException('All categories must share the same parent');
+        throw new BadRequestException(
+          'All categories must share the same parent',
+        );
       }
     }
-    await Promise.all(
-      ids.map((id, index) =>
-        this.repo.update({ id, restaurantId }, { order: index + 1 }),
-      ),
-    );
+    await this.dataSource.transaction(async (em) => {
+      for (let i = 0; i < ids.length; i++) {
+        await em.update(
+          CategoryEntity,
+          { id: ids[i], restaurantId },
+          { order: i + 1 },
+        );
+      }
+    });
+    return this.findByRestaurant(restaurantId);
   }
 }
