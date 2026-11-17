@@ -20,7 +20,7 @@ import {
   setStoredBranches,
   type PanelSessionUser,
 } from "./api"
-import { formatTitleCaseTr } from "./format"
+import { formatTitleCase } from "./format"
 
 export interface Business {
   id: string
@@ -92,7 +92,7 @@ export function PanelAuthProvider({ children }: { children: ReactNode }) {
     if (t && r) {
       setTokenState(t)
       setCurrentBusiness(toBusiness(r))
-      setSessionUserState(su ? { ...su, name: formatTitleCaseTr(su.name) } : null)
+      setSessionUserState(su ? { ...su, name: formatTitleCase(su.name) } : null)
       setBusinesses(brs.length > 0 ? brs.map(toBusiness) : [toBusiness(r)])
       // Refresh live permissions & branches in background
       void api.restaurant
@@ -102,7 +102,7 @@ export function PanelAuthProvider({ children }: { children: ReactNode }) {
             logout()
             return
           }
-          const normalizedUser = { ...meRes.user, name: formatTitleCaseTr(meRes.user.name) }
+          const normalizedUser = { ...meRes.user, name: formatTitleCase(meRes.user.name) }
           setSessionUser(normalizedUser)
           setSessionUserState(normalizedUser)
           if (meRes.restaurant) {
@@ -134,7 +134,7 @@ export function PanelAuthProvider({ children }: { children: ReactNode }) {
         res.restaurants && res.restaurants.length > 0
           ? res.restaurants
           : [res.restaurant]
-      const normalizedUser = { ...res.user, name: formatTitleCaseTr(res.user.name) }
+      const normalizedUser = { ...res.user, name: formatTitleCase(res.user.name) }
       setToken(res.accessToken)
       setRestaurant(res.restaurant)
       setStoredBranches(brList)

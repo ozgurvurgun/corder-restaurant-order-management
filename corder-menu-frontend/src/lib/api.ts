@@ -131,28 +131,39 @@ export function formatMenuPrice(amount: number): string {
   }).format(major)
 }
 
-export function formatTitleCaseTr(input: string | null | undefined): string {
+const TURKIC_CHAR_RE = /[çğıöşüÇĞİÖŞÜ]/u
+
+function resolveCasingLocale(text: string, explicitLocale?: string): string | undefined {
+  if (explicitLocale) return explicitLocale
+  if (TURKIC_CHAR_RE.test(text)) return "tr"
+  return undefined
+}
+
+export function formatTitleCase(
+  input: string | null | undefined,
+  locale?: string,
+): string {
   if (!input) return ""
-  const lower = String(input)
-    .trim()
-    .replace(/\s+/g, " ")
-    .toLocaleLowerCase("tr-TR")
-    .replace(/\u0307/g, "")
-  if (!lower) return ""
+  const raw = String(input).trim().replace(/\s+/g, " ")
+  if (!raw) return ""
+  const resolvedLocale = resolveCasingLocale(raw, locale)
+  const lower = (
+    resolvedLocale ? raw.toLocaleLowerCase(resolvedLocale) : raw.toLowerCase()
+  ).replace(/\u0307/g, "")
   return lower.replace(
     /([^\p{L}']|^)(\p{L})/gu,
     (_match, prefix: string, letter: string) =>
-      `${prefix}${letter.toLocaleUpperCase("tr-TR")}`
+      `${prefix}${resolvedLocale ? letter.toLocaleUpperCase(resolvedLocale) : letter.toUpperCase()}`,
   )
 }
 
 function normalizeMenuCategoryTree(cat: MenuCategory): MenuCategory {
   return {
     ...cat,
-    name: formatTitleCaseTr(cat.name),
+    name: formatTitleCase(cat.name),
     products: (cat.products ?? []).map((p) => ({
       ...p,
-      name: formatTitleCaseTr(p.name),
+      name: formatTitleCase(p.name),
     })),
     children: cat.children ? cat.children.map(normalizeMenuCategoryTree) : undefined,
   }
@@ -164,7 +175,7 @@ function normalizeMenuResponse(data: MenuResponse): MenuResponse {
     categories: (data.categories ?? []).map(normalizeMenuCategoryTree),
     campaigns: (data.campaigns ?? []).map((c) => ({
       ...c,
-      title: formatTitleCaseTr(c.title),
+      title: formatTitleCase(c.title),
     })),
   }
 }

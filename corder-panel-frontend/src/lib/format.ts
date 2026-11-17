@@ -43,22 +43,39 @@ export function formatCurrency(amount: number | null | undefined): string {
   }).format(safe)
 }
 
-export function normalizeStorageText(input: string | null | undefined): string {
-  if (!input) return ""
-  return String(input)
-    .trim()
-    .replace(/\s+/g, " ")
-    .toLocaleLowerCase("tr-TR")
-    .replace(/\u0307/g, "")
+const TURKIC_CHAR_RE = /[çğıöşüÇĞİÖŞÜ]/u
+
+function resolveCasingLocale(text: string, explicitLocale?: string): string | undefined {
+  if (explicitLocale) return explicitLocale
+  if (TURKIC_CHAR_RE.test(text)) return "tr"
+  return undefined
 }
 
-export function formatTitleCaseTr(input: string | null | undefined): string {
-  const lower = normalizeStorageText(input)
+export function normalizeStorageText(
+  input: string | null | undefined,
+  locale?: string,
+): string {
+  if (!input) return ""
+  const raw = String(input).trim().replace(/\s+/g, " ")
+  if (!raw) return ""
+  const resolvedLocale = resolveCasingLocale(raw, locale)
+  return (resolvedLocale ? raw.toLocaleLowerCase(resolvedLocale) : raw.toLowerCase()).replace(
+    /\u0307/g,
+    "",
+  )
+}
+
+export function formatTitleCase(
+  input: string | null | undefined,
+  locale?: string,
+): string {
+  const lower = normalizeStorageText(input, locale)
   if (!lower) return ""
+  const resolvedLocale = resolveCasingLocale(lower, locale)
   return lower.replace(
     /([^\p{L}']|^)(\p{L})/gu,
     (_match, prefix: string, letter: string) =>
-      `${prefix}${letter.toLocaleUpperCase("tr-TR")}`,
+      `${prefix}${resolvedLocale ? letter.toLocaleUpperCase(resolvedLocale) : letter.toUpperCase()}`,
   )
 }
 

@@ -24,7 +24,7 @@ import {
   setStoredBranches,
   type StoredBossUser,
 } from "./api"
-import { formatTitleCaseTr } from "./format"
+import { formatTitleCase } from "./format"
 import type {
   BossOverviewResponse,
   BranchSummary,
@@ -207,29 +207,29 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
         ])
       setCatalog(catRes)
       setRoles(rolesRes)
-      setStaff(staffRes.map((s) => ({ ...s, name: formatTitleCaseTr(s.name) })))
+      setStaff(staffRes.map((s) => ({ ...s, name: formatTitleCase(s.name) })))
       setTables(tablesRes)
       setOrders(
         ordersRes.map((o) => ({
           ...o,
-          waiterName: o.waiterName ? formatTitleCaseTr(o.waiterName) : o.waiterName,
+          waiterName: o.waiterName ? formatTitleCase(o.waiterName) : o.waiterName,
           items: (o.items ?? []).map((it) => ({
             ...it,
-            productName: formatTitleCaseTr(it.productName),
+            productName: formatTitleCase(it.productName),
           })),
         }))
       )
       setProducts(
         productsRes.map((p) => ({
           ...p,
-          name: formatTitleCaseTr(p.name),
+          name: formatTitleCase(p.name),
           price: Number(p.price),
         }))
       )
       setCategories(
         categoriesRes.map((c) => ({
           ...c,
-          name: formatTitleCaseTr(c.name),
+          name: formatTitleCase(c.name),
         }))
       )
     },
@@ -250,10 +250,10 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
         setOrders(
           ordersRes.map((o) => ({
             ...o,
-            waiterName: o.waiterName ? formatTitleCaseTr(o.waiterName) : o.waiterName,
+            waiterName: o.waiterName ? formatTitleCase(o.waiterName) : o.waiterName,
             items: (o.items ?? []).map((it) => ({
               ...it,
-              productName: formatTitleCaseTr(it.productName),
+              productName: formatTitleCase(it.productName),
             })),
           }))
         )

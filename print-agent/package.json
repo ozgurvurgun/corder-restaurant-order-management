@@ -50,6 +50,13 @@
       ],
       "category": "Office",
       "executableName": "corder-print-agent",
+      "executableArgs": [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu-sandbox",
+        "--no-zygote"
+      ],
       "maintainer": "Corder <dev@corders.uk>",
       "vendor": "Corder",
       "artifactName": "${productName}-${version}-linux-${arch}.${ext}",

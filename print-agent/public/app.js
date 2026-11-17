@@ -26,6 +26,15 @@ function showToast(message, isError = false) {
 }
 
 async function apiCall(url, options = {}) {
+  if (window.corderDesktop?.invokeApi) {
+    const method = String(options.method || "GET").toUpperCase()
+    const body = options.body ? JSON.parse(options.body) : {}
+    const data = await window.corderDesktop.invokeApi(method, url, body)
+    if (!data || data.ok === false) {
+      throw new Error(data?.error || "İstek başarısız")
+    }
+    return data
+  }
   const sessionToken = window.corderDesktop?.sessionToken || ""
   const headers = {
     "Content-Type": "application/json",
@@ -51,17 +60,19 @@ function escapeHtml(str) {
     .replaceAll('"', "&quot;")
 }
 
-function formatTitleCaseTr(input) {
+const TURKIC_CHAR_RE = /[çğıöşüÇĞİÖŞÜ]/u
+
+function formatTitleCase(input, locale) {
   if (input === undefined || input === null) return ""
-  const normalized = String(input)
-    .trim()
-    .replace(/\s+/g, " ")
-    .toLocaleLowerCase("tr-TR")
-    .replace(/\u0307/g, "")
-  if (!normalized) return ""
+  const raw = String(input).trim().replace(/\s+/g, " ")
+  if (!raw) return ""
+  const resolvedLocale = locale || (TURKIC_CHAR_RE.test(raw) ? "tr" : undefined)
+  const normalized = (
+    resolvedLocale ? raw.toLocaleLowerCase(resolvedLocale) : raw.toLowerCase()
+  ).replace(/\u0307/g, "")
   return normalized.replace(
-    /(^|[\s\-/(&+.,:;])([a-zA-ZçğıöşüÇĞİÖŞÜ])/gu,
-    (_m, sep, ch) => `${sep}${ch.toLocaleUpperCase("tr-TR")}`,
+    /([^\p{L}']|^)(\p{L})/gu,
+    (_m, sep, ch) => `${sep}${resolvedLocale ? ch.toLocaleUpperCase(resolvedLocale) : ch.toUpperCase()}`,
   )
 }
 
@@ -234,7 +245,7 @@ function renderRoutingDropdowns() {
         `<option value="none" ${selectedId === "none" ? "selected" : ""}>-- Bu Bilgisayarda Yazdırma --</option>`,
       ].join("")
       return `<div class="category-row ${cat.isSub ? "sub-category" : ""}">
-        <span class="category-name">${cat.isSub ? "↳ " : ""}${escapeHtml(formatTitleCaseTr(cat.name))}</span>
+        <span class="category-name">${cat.isSub ? "↳ " : ""}${escapeHtml(formatTitleCase(cat.name))}</span>
         <select class="category-select" data-category-id="${escapeHtml(cat.id)}">${opts}</select>
       </div>`
     })

@@ -9,7 +9,7 @@ import type {
   RestaurantSettings,
 } from "../panel-types"
 import { api } from "../api"
-import { formatTitleCaseTr } from "../format"
+import { formatTitleCase } from "../format"
 import { showPanelToast } from "@/components/panel/panel-toast"
 import { genId, getReadNotifIds, saveAppearanceSettings, saveReadNotifIds } from "./panel-local-storage"
 import type { LogActivityFn } from "./panel-store-context"
@@ -39,7 +39,7 @@ function mapStaffDtoToPanelUser(dto: {
 }): PanelUser {
   return {
     id: dto.id,
-    name: formatTitleCaseTr(dto.name),
+    name: formatTitleCase(dto.name),
     email: dto.email ?? undefined,
     phone: dto.phone,
     role: dto.role,

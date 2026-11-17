@@ -18,12 +18,12 @@ import type {
   StockMovementDto,
   SupplierDto,
 } from "../api"
-import { formatTitleCaseTr } from "../format"
+import { formatTitleCase } from "../format"
 
 export function mapApiCategoriesToPanel(cats: CategoryDto[]): PanelCategory[] {
   return cats.map((c) => ({
     id: c.id,
-    name: formatTitleCaseTr(c.name),
+    name: formatTitleCase(c.name),
     slug: c.slug,
     order: c.order,
     parentId: c.parentId?.trim() || undefined,
@@ -61,13 +61,13 @@ export function mapApiProductsToPanel(
       ? p.ingredients.map((row) => ({
           materialId: row.materialId,
           quantity: Number(row.quantity),
-          materialName: formatTitleCaseTr(matMap.get(row.materialId)?.name ?? ""),
+          materialName: formatTitleCase(matMap.get(row.materialId)?.name ?? ""),
           unit: matMap.get(row.materialId)?.unit ?? "adet",
         }))
       : undefined
     return {
       id: p.id,
-      name: formatTitleCaseTr(p.name),
+      name: formatTitleCase(p.name),
       price: Number(p.price),
       costPrice: p.costPrice != null ? Number(p.costPrice) : undefined,
       categoryId: p.categoryId,
@@ -83,7 +83,7 @@ export function mapApiProductsToPanel(
 export function mapStockMaterialDtoToPanel(m: StockMaterialDto): StockMaterial {
   return {
     id: m.id,
-    name: formatTitleCaseTr(m.name),
+    name: formatTitleCase(m.name),
     unit: m.unit as StockMaterial["unit"],
     currentStock: Number(m.currentStock),
     minStock: Number(m.minStock),
@@ -97,8 +97,8 @@ export function mapStockMaterialDtoToPanel(m: StockMaterialDto): StockMaterial {
 export function mapSupplierDtoToPanel(s: SupplierDto): Supplier {
   return {
     id: s.id,
-    name: formatTitleCaseTr(s.name),
-    contactPerson: s.contactPerson ? formatTitleCaseTr(s.contactPerson) : undefined,
+    name: formatTitleCase(s.name),
+    contactPerson: s.contactPerson ? formatTitleCase(s.contactPerson) : undefined,
     phone: s.phone ?? undefined,
     email: s.email ?? undefined,
     address: s.address ?? undefined,
@@ -111,7 +111,7 @@ export function mapStockMovementDtoToPanel(mv: StockMovementDto): StockMovement 
   return {
     id: mv.id,
     materialId: mv.materialId,
-    materialName: formatTitleCaseTr(mv.materialName),
+    materialName: formatTitleCase(mv.materialName),
     type: mv.type,
     quantity: Number(mv.quantity),
     previousStock: Number(mv.previousStock),
@@ -120,7 +120,7 @@ export function mapStockMovementDtoToPanel(mv: StockMovementDto): StockMovement 
     totalCost: mv.totalCost != null ? Number(mv.totalCost) : undefined,
     supplierId: mv.supplierId ?? undefined,
     reason: mv.reason ?? undefined,
-    createdBy: formatTitleCaseTr(mv.createdBy),
+    createdBy: formatTitleCase(mv.createdBy),
     createdAt: new Date(mv.createdAt),
   }
 }
@@ -129,17 +129,17 @@ export function mapPurchaseOrderDtoToPanel(po: PurchaseOrderDto): PurchaseOrder 
   return {
     id: po.id,
     supplierId: po.supplierId,
-    supplierName: formatTitleCaseTr(po.supplierName),
+    supplierName: formatTitleCase(po.supplierName),
     items: po.items.map((it) => ({
       materialId: it.materialId,
-      materialName: formatTitleCaseTr(it.materialName),
+      materialName: formatTitleCase(it.materialName),
       quantity: it.quantity,
       unitCost: it.unitCost,
     })),
     totalAmount: Number(po.totalAmount),
     status: po.status,
     notes: po.notes ?? undefined,
-    createdBy: formatTitleCaseTr(po.createdBy),
+    createdBy: formatTitleCase(po.createdBy),
     createdAt: new Date(po.createdAt),
     receivedAt: po.receivedAt ? new Date(po.receivedAt) : undefined,
   }
@@ -151,10 +151,10 @@ export function mapInventoryCountDtoToPanel(
   return {
     id: ic.id,
     date: new Date(ic.date),
-    countedBy: formatTitleCaseTr(ic.countedBy),
+    countedBy: formatTitleCase(ic.countedBy),
     items: ic.items.map((item) => ({
       materialId: item.materialId,
-      materialName: formatTitleCaseTr(item.materialName),
+      materialName: formatTitleCase(item.materialName),
       expectedStock: item.expectedStock,
       actualStock: item.actualStock,
       difference: item.difference,
@@ -167,7 +167,7 @@ export function mapInventoryCountDtoToPanel(
 export function mapCampaignDtoToPanel(c: CampaignDto): Campaign {
   return {
     id: c.id,
-    title: formatTitleCaseTr(c.title),
+    title: formatTitleCase(c.title),
     description: c.description ?? undefined,
     image: c.imageUrl,
     discountPercent: c.discountPercent ?? undefined,

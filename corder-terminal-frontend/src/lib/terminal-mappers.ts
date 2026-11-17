@@ -1,5 +1,5 @@
 import type { MenuCategoryTree, OrderDto, RawTableDto } from "./api"
-import { formatTitleCaseTr, fromMinorUnits, toMinorUnits } from "./format"
+import { formatTitleCase, fromMinorUnits, toMinorUnits } from "./format"
 import type {
   OrderItemStatus,
   OrderStatus,
@@ -40,7 +40,7 @@ export function mapMenuTreeToCategoriesAndProducts(
     nodes.forEach((node, index) => {
       categories.push({
         id: node.id,
-        name: formatTitleCaseTr(node.name),
+        name: formatTitleCase(node.name),
         productCount: countSubtreeProducts(node),
         parentId,
         sortOrder: index,
@@ -49,7 +49,7 @@ export function mapMenuTreeToCategoriesAndProducts(
       for (const product of node.products) {
         products.push({
           id: product.id,
-          name: formatTitleCaseTr(product.name),
+          name: formatTitleCase(product.name),
           price: fromMinorUnits(toMinorUnits(product.price)),
           categoryId: node.id,
           description: product.description,
@@ -110,7 +110,7 @@ export function mapOrderDtoToTerminalOrder(
 
   const items: TerminalOrderItem[] = dto.items.map((item) => {
     const cleanPrice = fromMinorUnits(toMinorUnits(item.price))
-    const formattedItemName = formatTitleCaseTr(item.productName)
+    const formattedItemName = formatTitleCase(item.productName)
     const product: TerminalProduct = productsById?.get(item.productId) ?? {
       id: item.productId,
       name: formattedItemName,
@@ -139,7 +139,7 @@ export function mapOrderDtoToTerminalOrder(
     tableNumber,
     items,
     waiterId: dto.userId ?? "",
-    waiterName: dto.userName?.trim() ? formatTitleCaseTr(dto.userName) : "",
+    waiterName: dto.userName?.trim() ? formatTitleCase(dto.userName) : "",
     createdAt: dto.createdAt,
     updatedAt: dto.updatedAt,
     status: (dto.status as OrderStatus) || "active",
@@ -215,7 +215,7 @@ export function mapTablesWithOrders(
       discount: rawTable.discount ?? null,
       lockedByStaffId: hasActiveLock ? sessionStaffId : undefined,
       lockedByStaffName: hasActiveLock
-        ? formatTitleCaseTr(rawTable.sessionStaffName?.trim() || "Garson")
+        ? formatTitleCase(rawTable.sessionStaffName?.trim() || "Garson")
         : undefined,
     }
   })

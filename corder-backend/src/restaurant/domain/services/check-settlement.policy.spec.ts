@@ -12,7 +12,7 @@ import {
   computeIstanbulDateBoundaries,
   getIstanbulHour,
 } from './boss-overview.policy';
-import { formatTitleCaseTr, normalizeStorageText } from '../../../common/text/text-normalizer';
+import { formatTitleCase, normalizeStorageText } from '../../../common/text/text-normalizer';
 import { CashShiftEntity } from '../cash-shift.entity';
 import { TableEntity } from '../table.entity';
 import { OrderItemEntity } from '../order-item.entity';
@@ -231,15 +231,18 @@ describe('CashShiftEntity & TableEntity & OrderItemEntity', () => {
     assert.equal(shift.transactionCount, 2);
   });
 
-  it('normalizes Turkish text to lowercase for storage and Title Case for UI', () => {
+  it('normalizes text to lowercase for storage and Title Case across global Unicode scripts for UI', () => {
     assert.equal(normalizeStorageText('  NARGİLE   MENÜ  '), 'nargile menü');
     assert.equal(normalizeStorageText('İZMİR   IŞIK'), 'izmir ışık');
-    assert.equal(formatTitleCaseTr('  NARGİLE   MENÜ  '), 'Nargile Menü');
-    assert.equal(formatTitleCaseTr('izmir romantik'), 'İzmir Romantik');
-    assert.equal(formatTitleCaseTr('ırmak'), 'Irmak');
-    assert.equal(formatTitleCaseTr('nargile  + çerez tabağı + çay'), 'Nargile + Çerez Tabağı + Çay');
-    assert.equal(formatTitleCaseTr('marilyn monroe (merlin)'), 'Marilyn Monroe (Merlin)');
-    assert.equal(formatTitleCaseTr('soda/limon'), 'Soda/Limon');
+    assert.equal(normalizeStorageText('  Москва   Чай  '), 'москва чай');
+    assert.equal(formatTitleCase('  NARGİLE   MENÜ  '), 'Nargile Menü');
+    assert.equal(formatTitleCase('ırmak'), 'Irmak');
+    assert.equal(formatTitleCase('nargile  + çerez tabağı + çay'), 'Nargile + Çerez Tabağı + Çay');
+    assert.equal(formatTitleCase('marilyn monroe (merlin)'), 'Marilyn Monroe (Merlin)');
+    assert.equal(formatTitleCase('soda/limon'), 'Soda/Limon');
+    assert.equal(formatTitleCase('москва чай'), 'Москва Чай');
+    assert.equal(formatTitleCase('crème brûlée'), 'Crème Brûlée');
+    assert.equal(formatTitleCase('ice tea'), 'Ice Tea');
   });
 });
 

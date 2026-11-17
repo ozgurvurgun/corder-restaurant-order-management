@@ -14,24 +14,24 @@ import type {
   OpenAccountDto,
   ShiftDto,
 } from "../api"
-import { formatTitleCaseTr } from "../format"
+import { formatTitleCase } from "../format"
 
 export function mapOpenAccountDtoToPanel(a: OpenAccountDto): OpenAccount {
   return {
     id: a.id,
-    customerName: formatTitleCaseTr(a.customerName),
+    customerName: formatTitleCase(a.customerName),
     customerPhone: a.customerPhone ?? undefined,
     amount: a.amount,
     paidAmount: a.paidAmount,
     status: a.status as OpenAccount["status"],
     description: a.description,
-    createdBy: formatTitleCaseTr(a.createdBy),
+    createdBy: formatTitleCase(a.createdBy),
     createdAt: new Date(a.createdAt),
     paidAt: a.paidAt ? new Date(a.paidAt) : undefined,
     items: (a.items ?? []).map((i) => ({
       id: i.id,
       productId: i.productId ?? undefined,
-      productName: formatTitleCaseTr(i.productName),
+      productName: formatTitleCase(i.productName),
       quantity: i.quantity,
       price: i.price,
       note: i.note ?? undefined,
@@ -39,7 +39,7 @@ export function mapOpenAccountDtoToPanel(a: OpenAccountDto): OpenAccount {
     payments: (a.payments ?? []).map((p) => ({
       id: p.id,
       amount: p.amount,
-      receivedBy: formatTitleCaseTr(p.receivedBy),
+      receivedBy: formatTitleCase(p.receivedBy),
       receivedByUserId: p.receivedByUserId ?? undefined,
       note: p.note ?? undefined,
       createdAt: new Date(p.createdAt),
@@ -50,8 +50,8 @@ export function mapOpenAccountDtoToPanel(a: OpenAccountDto): OpenAccount {
 export function mapShiftDtoToPanel(dto: ShiftDto): CashShift {
   return {
     id: dto.id,
-    openedBy: formatTitleCaseTr(dto.openedBy),
-    closedBy: dto.closedBy ? formatTitleCaseTr(dto.closedBy) : undefined,
+    openedBy: formatTitleCase(dto.openedBy),
+    closedBy: dto.closedBy ? formatTitleCase(dto.closedBy) : undefined,
     openedAt: new Date(dto.openedAt),
     closedAt: dto.closedAt ? new Date(dto.closedAt) : undefined,
     openingBalance: dto.openingBalance,
@@ -76,18 +76,18 @@ export function mapCompletedOrderDtoToClosedTable(
     id: o.id,
     tableId: o.tableId ?? "",
     userId: o.userId ?? "",
-    userName: o.userName?.trim() ? formatTitleCaseTr(o.userName) : undefined,
+    userName: o.userName?.trim() ? formatTitleCase(o.userName) : undefined,
     items: o.items.map((i) => ({
       id: i.id,
       productId: i.productId,
-      productName: formatTitleCaseTr(i.productName),
+      productName: formatTitleCase(i.productName),
       price: i.price,
       quantity: i.quantity,
       note: i.note,
       status: i.status as PanelOrder["items"][0]["status"],
       createdAt: new Date(i.createdAt),
       cancelReason: i.cancelReason,
-      cancelledBy: i.cancelledBy ? formatTitleCaseTr(i.cancelledBy) : undefined,
+      cancelledBy: i.cancelledBy ? formatTitleCase(i.cancelledBy) : undefined,
       cancelledAt: i.cancelledAt ? new Date(i.cancelledAt) : undefined,
     })),
     status: o.status as PanelOrder["status"],
@@ -112,13 +112,13 @@ export function mapCompletedOrderDtoToClosedTable(
         }
       : undefined,
     tip: dto.payment.tip,
-    processedBy: formatTitleCaseTr(dto.payment.processedBy),
+    processedBy: formatTitleCase(dto.payment.processedBy),
     createdAt: new Date(dto.payment.createdAt),
     ...(dto.payment.ledgerCustomerId || dto.payment.ledgerCustomerName
       ? {
           ledgerCustomerId: dto.payment.ledgerCustomerId,
           ledgerCustomerName: dto.payment.ledgerCustomerName
-            ? formatTitleCaseTr(dto.payment.ledgerCustomerName)
+            ? formatTitleCase(dto.payment.ledgerCustomerName)
             : undefined,
         }
       : {}),
@@ -128,13 +128,13 @@ export function mapCompletedOrderDtoToClosedTable(
     id: dto.id,
     tableName: dto.tableName,
     section: dto.section,
-    waiter: formatTitleCaseTr(dto.waiter),
+    waiter: formatTitleCase(dto.waiter),
     orders,
     payment,
     totalAmount: dto.totalAmount,
     discountAmount: dto.discountAmount,
     netAmount: dto.netAmount,
-    closedBy: formatTitleCaseTr(dto.closedBy),
+    closedBy: formatTitleCase(dto.closedBy),
     openedAt: new Date(dto.openedAt),
     closedAt: new Date(dto.closedAt),
   }
@@ -150,7 +150,7 @@ export function mapCashTransactionDtoToPanel(
     amount: Number(dto.amount),
     description: dto.description,
     reference: dto.reference ?? undefined,
-    createdBy: formatTitleCaseTr(dto.createdBy),
+    createdBy: formatTitleCase(dto.createdBy),
     createdAt: new Date(dto.createdAt),
   }
 }
@@ -160,7 +160,7 @@ export function mapLedgerCustomerDtoToPanel(
 ): LedgerCustomer {
   return {
     id: c.id,
-    name: formatTitleCaseTr(c.name),
+    name: formatTitleCase(c.name),
     phone: c.phone ?? undefined,
     notes: c.notes ?? undefined,
     balance: Number(c.balance),

@@ -7,21 +7,21 @@ import {
   type PanelUser,
 } from "../panel-types"
 import type { OrderDto, RawTableDto } from "../api"
-import { computeDiscountMinorUnits, formatTitleCaseTr, fromMinorUnits, toMinorUnits } from "../format"
+import { computeDiscountMinorUnits, formatTitleCase, fromMinorUnits, toMinorUnits } from "../format"
 import { getStoredCustomSections } from "../store/panel-local-storage"
 
 export function mapOrderItem(i: OrderDto["items"][0]): PanelOrder["items"][0] {
   return {
     id: i.id,
     productId: i.productId,
-    productName: formatTitleCaseTr(i.productName),
+    productName: formatTitleCase(i.productName),
     price: Number(i.price),
     quantity: Number(i.quantity),
     note: i.note,
     status: (i.status as PanelOrder["items"][0]["status"]) || "sent",
     createdAt: new Date(i.createdAt),
     cancelReason: i.cancelReason,
-    cancelledBy: i.cancelledBy ? formatTitleCaseTr(i.cancelledBy) : undefined,
+    cancelledBy: i.cancelledBy ? formatTitleCase(i.cancelledBy) : undefined,
     cancelledAt: i.cancelledAt ? new Date(i.cancelledAt) : undefined,
   }
 }
@@ -31,7 +31,7 @@ export function mapOrder(o: OrderDto): PanelOrder {
     id: o.id,
     tableId: o.tableId,
     userId: o.userId ?? "",
-    userName: o.userName?.trim() ? formatTitleCaseTr(o.userName) : undefined,
+    userName: o.userName?.trim() ? formatTitleCase(o.userName) : undefined,
     items: o.items.map(mapOrderItem),
     status: (o.status as PanelOrder["status"]) || "active",
     createdAt: new Date(o.createdAt),
@@ -111,7 +111,7 @@ export function mapApiTablesToPanel(
     const waiter =
       resolveStaffNameForTable(t.id, orders, staffUsers) ||
       (orderCount > 0 && t.sessionStaffName?.trim()
-        ? formatTitleCaseTr(t.sessionStaffName)
+        ? formatTitleCase(t.sessionStaffName)
         : undefined)
 
     let discount: PanelTable["discount"] | undefined
@@ -184,7 +184,7 @@ export function mapApiTablesToPanel(
       waiter,
       lockedByStaffId: t.sessionStaffId ?? undefined,
       lockedByStaffName: t.sessionStaffName?.trim()
-        ? formatTitleCaseTr(t.sessionStaffName)
+        ? formatTitleCase(t.sessionStaffName)
         : undefined,
       ...(discount ? { discount } : {}),
       ...(splitInfo ? { splitInfo } : {}),
@@ -228,7 +228,7 @@ export function mapApiStaffToPanelUser(s: {
 }): PanelUser {
   return {
     id: s.id,
-    name: formatTitleCaseTr(s.name),
+    name: formatTitleCase(s.name),
     email: s.email ?? undefined,
     phone: s.phone,
     role: s.role || "waiter",

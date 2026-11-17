@@ -35,20 +35,28 @@ async function startPrintAgentApp(options = {}) {
   })
   uiServer = createUiServer({ store, agent })
 
-  const preferredPort = options.port !== undefined ? Number(options.port) : 4190
-  const { port, url: uiUrl } = await uiServer.listen(preferredPort)
+  const enableHttpServer = options.enableHttpServer !== false
+  let port = null
+  let uiUrl = "ipc://desktop"
+
+  if (enableHttpServer) {
+    const preferredPort = options.port !== undefined ? Number(options.port) : 4190
+    const bound = await uiServer.listen(preferredPort)
+    port = bound.port
+    uiUrl = bound.url
+  }
 
   const pkg = require("../package.json")
   info("Corder Print Agent & Control Center started", {
     version: pkg.version,
     platform: process.platform,
-    uiUrl,
+    mode: enableHttpServer ? uiUrl : "desktop-ipc",
     restaurantName: config.restaurantName || "(giriş bekleniyor)",
     printersCount: config.printers.length,
     queueSize: store.getQueueSize(),
   })
 
-  const shouldOpenBrowser = options.openBrowser ?? process.argv.includes("--open")
+  const shouldOpenBrowser = enableHttpServer && (options.openBrowser ?? process.argv.includes("--open"))
   if (shouldOpenBrowser) {
     openDesktopBrowser(uiUrl)
   }
@@ -63,13 +71,15 @@ async function startPrintAgentApp(options = {}) {
     uiServer,
     stop() {
       agent.stop()
-      uiServer.server.close()
+      if (enableHttpServer && uiServer.server.listening) {
+        uiServer.server.close()
+      }
     },
   }
 }
 
 if (require.main === module) {
-  startPrintAgentApp()
+  startPrintAgentApp({ enableHttpServer: true })
     .then((appInstance) => {
       process.on("SIGINT", () => {
         info("Shutting down print agent (SIGINT)")

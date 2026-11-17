@@ -181,233 +181,235 @@ function createUiServer({ store, agent }) {
     })
   }
 
-  const handleApi = async (req, res, pathname) => {
+  const dispatchApi = async (rawMethod, rawPathname, body = {}) => {
+    const method = String(rawMethod || "GET").toUpperCase()
+    const pathname = String(rawPathname || "").split("?")[0]
+
+    try {
+      if (method === "GET" && pathname === "/api/state") {
+        const saved = loadSettings()
+        return {
+          statusCode: 200,
+          payload: {
+            ok: true,
+            platform: process.platform,
+            status: agent.getStatus(),
+            settings: getPublicSettings(saved),
+            queue: store.getPendingJobs(),
+            recentPrinted: store.getRecentPrinted(15),
+            logs: getRecentLogs().slice(0, 40),
+          },
+        }
+      }
+
+      if (method === "GET" && pathname === "/api/discover-printers") {
+        const extra =
+          typeof electronPrinterProvider === "function"
+            ? await Promise.resolve(electronPrinterProvider()).catch(() => [])
+            : []
+        const printers = await discoverSystemPrinters(extra)
+        return { statusCode: 200, payload: { ok: true, printers } }
+      }
+
+      if (method === "POST" && pathname === "/api/login") {
+        const current = loadSettings()
+        const loginResult = await loginPrintAgent(body.username, body.password, current.backendUrl)
+        const isSameRestaurant =
+          !current.restaurantId || current.restaurantId === loginResult.restaurant?.id
+        const basePrinters = isSameRestaurant ? current.printers : []
+        const nextPrinters = mergePrintersWithBackend(basePrinters, loginResult.printers)
+        const nextCategories = loginResult.categories || []
+        const nextRoutes = seedDepartmentCategoryRoutes(
+          isSameRestaurant ? current.categoryRoutes : {},
+          nextCategories,
+          nextPrinters,
+        )
+        const { publicSettings } = applyAndReload({
+          backendUrl: loginResult.backendUrl,
+          authToken: loginResult.accessToken,
+          refreshToken: loginResult.refreshToken,
+          username: String(body.username || "").trim().toLowerCase(),
+          restaurantId: loginResult.restaurant?.id || "",
+          restaurantName: loginResult.restaurant?.name || "",
+          categories: nextCategories,
+          printers: nextPrinters,
+          categoryRoutes: nextRoutes,
+          printFooterLine: current.printFooterLine || loginResult.restaurant?.name || "",
+        })
+        info("Corder Print Agent logged in", {
+          username: publicSettings.username,
+          restaurantName: publicSettings.restaurantName,
+          categories: publicSettings.categories.length,
+        })
+        return { statusCode: 200, payload: { ok: true, settings: publicSettings } }
+      }
+
+      if (method === "POST" && pathname === "/api/logout") {
+        const { publicSettings } = applyAndReload({
+          authToken: "",
+          refreshToken: "",
+          restaurantId: "",
+          restaurantName: "",
+        })
+        info("Corder Print Agent logged out")
+        return { statusCode: 200, payload: { ok: true, settings: publicSettings } }
+      }
+
+      if (method === "POST" && pathname === "/api/sync-context") {
+        const { publicSettings } = await syncContextFromBackend()
+        info("Branch categories and printers synchronized", {
+          categories: publicSettings.categories.length,
+          printers: publicSettings.printers.length,
+        })
+        return { statusCode: 200, payload: { ok: true, settings: publicSettings } }
+      }
+
+      if (method === "POST" && pathname === "/api/printers") {
+        const current = loadSettings()
+        const printers = [...current.printers]
+        const incomingId = body.id ? String(body.id).trim() : `p-${Date.now().toString(36)}`
+        const entry = {
+          id: incomingId,
+          name: String(body.name || body.systemPrinterName || body.host || "Printer").trim(),
+          type: String(body.type || "thermal").trim(),
+          mode: body.mode === "network" ? "network" : "system",
+          systemPrinterName: body.mode === "network" ? "" : String(body.systemPrinterName || "").trim(),
+          host: String(body.host || "127.0.0.1").trim(),
+          port: Number(body.port) || 9100,
+          department: body.department ? String(body.department).trim() : null,
+          paperWidth: Number(body.paperWidth) === 58 ? 58 : 80,
+          feedLinesBeforeCut: Number(body.feedLinesBeforeCut ?? 6),
+          autoCut: body.autoCut !== false,
+        }
+        const idx = printers.findIndex((p) => p.id === incomingId)
+        if (idx >= 0) printers[idx] = entry
+        else printers.push(entry)
+
+        const { publicSettings } = applyAndReload({ printers })
+        info("Printer saved", { id: entry.id, name: entry.name, mode: entry.mode })
+        return { statusCode: 200, payload: { ok: true, printer: entry, settings: publicSettings } }
+      }
+
+      if (method === "DELETE" && pathname.startsWith("/api/printers/")) {
+        const id = decodeURIComponent(pathname.slice("/api/printers/".length)).trim()
+        const current = loadSettings()
+        const printers = current.printers.filter((p) => p.id !== id)
+        const categoryRoutes = { ...(current.categoryRoutes || {}) }
+        for (const [cid, pid] of Object.entries(categoryRoutes)) {
+          if (pid === id) delete categoryRoutes[cid]
+        }
+        const { publicSettings } = applyAndReload({
+          printers,
+          categoryRoutes,
+          defaultKitchenPrinterId:
+            current.defaultKitchenPrinterId === id ? printers[0]?.id || "" : current.defaultKitchenPrinterId,
+          receiptPrinterId: current.receiptPrinterId === id ? printers[0]?.id || "" : current.receiptPrinterId,
+        })
+        info("Printer removed", { id })
+        return { statusCode: 200, payload: { ok: true, settings: publicSettings } }
+      }
+
+      if (method === "POST" && pathname === "/api/routes") {
+        const current = loadSettings()
+        const patch = {}
+        for (const k of [
+          "defaultKitchenPrinterId",
+          "receiptPrinterId",
+          "printFooterLine",
+          "printTicketStamp",
+        ]) {
+          if (body[k] !== undefined) patch[k] = String(body[k] || "").trim()
+        }
+        if (body.categoryRoutes && typeof body.categoryRoutes === "object") {
+          patch.categoryRoutes = body.categoryRoutes
+        }
+        if (body.printUsbDrainMs !== undefined) patch.printUsbDrainMs = Number(body.printUsbDrainMs || 0)
+        if (body.autoStartOnBoot !== undefined) {
+          patch.autoStartOnBoot = Boolean(body.autoStartOnBoot)
+          await applyAutoStartSetting(patch.autoStartOnBoot, electronAppRef)
+        }
+
+        const { publicSettings } = applyAndReload({ ...current, ...patch })
+        return { statusCode: 200, payload: { ok: true, settings: publicSettings } }
+      }
+
+      if (method === "POST" && pathname === "/api/test-network") {
+        const result = await testTcpPrinterConnection(body.host, body.port, 2500)
+        return { statusCode: 200, payload: result }
+      }
+
+      if (method === "POST" && pathname === "/api/test-print") {
+        const settings = loadSettings()
+        const runtimeConfig = buildRuntimeConfig(settings)
+        const target =
+          body.printer ||
+          settings.printers.find((p) => p.id === body.printerId) ||
+          runtimeConfig.defaultKitchenPrinter
+        if (!target) {
+          return { statusCode: 400, payload: { ok: false, error: "Test için yazıcı seçilmedi" } }
+        }
+        const asciiFallback =
+          runtimeConfig.asciiFallback === true ||
+          (runtimeConfig.asciiFallback !== false && target.mode !== "network")
+        const ticket = buildTestTicket(target, {
+          asciiFallback,
+          feedLinesBeforeCut: Number(target.feedLinesBeforeCut ?? runtimeConfig.ticketFeedLinesBeforeCut ?? 3),
+          charsPerLine: target.paperWidth === 58 ? 32 : 42,
+        })
+        await printBytes(runtimeConfig, ticket, { printer: target })
+        info("Diagnostic test ticket printed", {
+          printer: target.name,
+          mode: target.mode,
+          asciiFallback,
+        })
+        return { statusCode: 200, payload: { ok: true } }
+      }
+
+      if (method === "POST" && pathname === "/api/queue/flush") {
+        await agent.flushQueue()
+        return { statusCode: 200, payload: { ok: true, queue: store.getPendingJobs() } }
+      }
+
+      if (method === "POST" && pathname === "/api/queue/clear") {
+        store.clearQueue()
+        info("Pending print queue cleared via UI")
+        return { statusCode: 200, payload: { ok: true, queue: [] } }
+      }
+
+      if (method === "POST" && pathname === "/api/logs/clear") {
+        clearLogs()
+        return { statusCode: 200, payload: { ok: true } }
+      }
+
+      return { statusCode: 404, payload: { ok: false, error: "API route not found" } }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      warn("UI API request failed", { pathname, error: message })
+      return { statusCode: 500, payload: { ok: false, error: message } }
+    }
+  }
+
+  const handleHttpApi = async (req, res, pathname) => {
     if (!isAllowedLoopbackRequest(req, sessionToken)) {
       sendJson(res, 403, { ok: false, error: "Forbidden local session" })
       return
     }
-
-    if (req.method === "GET" && pathname === "/api/state") {
-      const saved = loadSettings()
-      sendJson(res, 200, {
-        ok: true,
-        platform: process.platform,
-        status: agent.getStatus(),
-        settings: getPublicSettings(saved),
-        queue: store.getPendingJobs(),
-        recentPrinted: store.getRecentPrinted(15),
-        logs: getRecentLogs().slice(0, 40),
-      })
-      return
-    }
-
-    if (req.method === "GET" && pathname === "/api/discover-printers") {
-      const extra =
-        typeof electronPrinterProvider === "function"
-          ? await Promise.resolve(electronPrinterProvider()).catch(() => [])
-          : []
-      const printers = await discoverSystemPrinters(extra)
-      sendJson(res, 200, { ok: true, printers })
-      return
-    }
-
-    if (req.method === "POST" && pathname === "/api/login") {
-      const body = await readJsonBody(req)
-      const current = loadSettings()
-      const loginResult = await loginPrintAgent(body.username, body.password, current.backendUrl)
-      const isSameRestaurant =
-        !current.restaurantId || current.restaurantId === loginResult.restaurant?.id
-      const basePrinters = isSameRestaurant ? current.printers : []
-      const nextPrinters = mergePrintersWithBackend(basePrinters, loginResult.printers)
-      const nextCategories = loginResult.categories || []
-      const nextRoutes = seedDepartmentCategoryRoutes(
-        isSameRestaurant ? current.categoryRoutes : {},
-        nextCategories,
-        nextPrinters,
-      )
-      const { publicSettings } = applyAndReload({
-        backendUrl: loginResult.backendUrl,
-        authToken: loginResult.accessToken,
-        refreshToken: loginResult.refreshToken,
-        username: String(body.username || "").trim().toLowerCase(),
-        restaurantId: loginResult.restaurant?.id || "",
-        restaurantName: loginResult.restaurant?.name || "",
-        categories: nextCategories,
-        printers: nextPrinters,
-        categoryRoutes: nextRoutes,
-        printFooterLine: current.printFooterLine || loginResult.restaurant?.name || "",
-      })
-      info("Corder Print Agent logged in", {
-        username: publicSettings.username,
-        restaurantName: publicSettings.restaurantName,
-        categories: publicSettings.categories.length,
-      })
-      sendJson(res, 200, { ok: true, settings: publicSettings })
-      return
-    }
-
-    if (req.method === "POST" && pathname === "/api/logout") {
-      const { publicSettings } = applyAndReload({
-        authToken: "",
-        refreshToken: "",
-        restaurantId: "",
-        restaurantName: "",
-      })
-      info("Corder Print Agent logged out")
-      sendJson(res, 200, { ok: true, settings: publicSettings })
-      return
-    }
-
-    if (req.method === "POST" && pathname === "/api/sync-context") {
-      const { publicSettings } = await syncContextFromBackend()
-      info("Branch categories and printers synchronized", {
-        categories: publicSettings.categories.length,
-        printers: publicSettings.printers.length,
-      })
-      sendJson(res, 200, { ok: true, settings: publicSettings })
-      return
-    }
-
-    if (req.method === "POST" && pathname === "/api/printers") {
-      const body = await readJsonBody(req)
-      const current = loadSettings()
-      const printers = [...current.printers]
-      const incomingId = body.id ? String(body.id).trim() : `p-${Date.now().toString(36)}`
-      const entry = {
-        id: incomingId,
-        name: String(body.name || body.systemPrinterName || body.host || "Printer").trim(),
-        type: String(body.type || "thermal").trim(),
-        mode: body.mode === "network" ? "network" : "system",
-        systemPrinterName: body.mode === "network" ? "" : String(body.systemPrinterName || "").trim(),
-        host: String(body.host || "127.0.0.1").trim(),
-        port: Number(body.port) || 9100,
-        department: body.department ? String(body.department).trim() : null,
-        paperWidth: Number(body.paperWidth) === 58 ? 58 : 80,
-        feedLinesBeforeCut: Number(body.feedLinesBeforeCut ?? 6),
-        autoCut: body.autoCut !== false,
-      }
-      const idx = printers.findIndex((p) => p.id === incomingId)
-      if (idx >= 0) printers[idx] = entry
-      else printers.push(entry)
-
-      const { publicSettings } = applyAndReload({ printers })
-      info("Printer saved", { id: entry.id, name: entry.name, mode: entry.mode })
-      sendJson(res, 200, { ok: true, printer: entry, settings: publicSettings })
-      return
-    }
-
-    if (req.method === "DELETE" && pathname.startsWith("/api/printers/")) {
-      const id = decodeURIComponent(pathname.slice("/api/printers/".length)).trim()
-      const current = loadSettings()
-      const printers = current.printers.filter((p) => p.id !== id)
-      const categoryRoutes = { ...(current.categoryRoutes || {}) }
-      for (const [cid, pid] of Object.entries(categoryRoutes)) {
-        if (pid === id) delete categoryRoutes[cid]
-      }
-      const { publicSettings } = applyAndReload({
-        printers,
-        categoryRoutes,
-        defaultKitchenPrinterId:
-          current.defaultKitchenPrinterId === id ? printers[0]?.id || "" : current.defaultKitchenPrinterId,
-        receiptPrinterId: current.receiptPrinterId === id ? printers[0]?.id || "" : current.receiptPrinterId,
-      })
-      info("Printer removed", { id })
-      sendJson(res, 200, { ok: true, settings: publicSettings })
-      return
-    }
-
-    if (req.method === "POST" && pathname === "/api/routes") {
-      const body = await readJsonBody(req)
-      const current = loadSettings()
-      const patch = {}
-      for (const k of [
-        "defaultKitchenPrinterId",
-        "receiptPrinterId",
-        "printFooterLine",
-        "printTicketStamp",
-      ]) {
-        if (body[k] !== undefined) patch[k] = String(body[k] || "").trim()
-      }
-      if (body.categoryRoutes && typeof body.categoryRoutes === "object") {
-        patch.categoryRoutes = body.categoryRoutes
-      }
-      if (body.printUsbDrainMs !== undefined) patch.printUsbDrainMs = Number(body.printUsbDrainMs || 0)
-      if (body.autoStartOnBoot !== undefined) {
-        patch.autoStartOnBoot = Boolean(body.autoStartOnBoot)
-        await applyAutoStartSetting(patch.autoStartOnBoot, electronAppRef)
-      }
-
-      const { publicSettings } = applyAndReload({ ...current, ...patch })
-      sendJson(res, 200, { ok: true, settings: publicSettings })
-      return
-    }
-
-    if (req.method === "POST" && pathname === "/api/test-network") {
-      const body = await readJsonBody(req)
-      sendJson(res, 200, await testTcpPrinterConnection(body.host, body.port, 2500))
-      return
-    }
-
-    if (req.method === "POST" && pathname === "/api/test-print") {
-      const body = await readJsonBody(req)
-      const settings = loadSettings()
-      const runtimeConfig = buildRuntimeConfig(settings)
-      const target =
-        body.printer ||
-        settings.printers.find((p) => p.id === body.printerId) ||
-        runtimeConfig.defaultKitchenPrinter
-      if (!target) {
-        sendJson(res, 400, { ok: false, error: "Test için yazıcı seçilmedi" })
-        return
-      }
-      const asciiFallback =
-        runtimeConfig.asciiFallback === true ||
-        (runtimeConfig.asciiFallback !== false && target.mode !== "network")
-      const ticket = buildTestTicket(target, {
-        asciiFallback,
-        feedLinesBeforeCut: Number(target.feedLinesBeforeCut ?? runtimeConfig.ticketFeedLinesBeforeCut ?? 3),
-        charsPerLine: target.paperWidth === 58 ? 32 : 42,
-      })
-      await printBytes(runtimeConfig, ticket, { printer: target })
-      info("Diagnostic test ticket printed", {
-        printer: target.name,
-        mode: target.mode,
-        asciiFallback,
-      })
-      sendJson(res, 200, { ok: true })
-      return
-    }
-
-    if (req.method === "POST" && pathname === "/api/queue/flush") {
-      await agent.flushQueue()
-      sendJson(res, 200, { ok: true, queue: store.getPendingJobs() })
-      return
-    }
-
-    if (req.method === "POST" && pathname === "/api/queue/clear") {
-      store.clearQueue()
-      info("Pending print queue cleared via UI")
-      sendJson(res, 200, { ok: true, queue: [] })
-      return
-    }
-
-    if (req.method === "POST" && pathname === "/api/logs/clear") {
-      clearLogs()
-      sendJson(res, 200, { ok: true })
-      return
-    }
-
-    sendJson(res, 404, { ok: false, error: "API route not found" })
+    const body =
+      req.method === "POST" || req.method === "PUT" || req.method === "PATCH"
+        ? await readJsonBody(req)
+        : {}
+    const { statusCode, payload } = await dispatchApi(req.method, pathname, body)
+    sendJson(res, statusCode, payload)
   }
 
   const server = http.createServer(async (req, res) => {
     try {
       const parsed = new URL(req.url || "/", "http://127.0.0.1")
-      if (parsed.pathname.startsWith("/api/")) await handleApi(req, res, parsed.pathname)
+      if (parsed.pathname.startsWith("/api/")) await handleHttpApi(req, res, parsed.pathname)
       else serveStaticFile(req, res, parsed.pathname, sessionToken)
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
-      warn("UI API request failed", { url: req.url, error: message })
+      warn("UI HTTP request failed", { url: req.url, error: message })
       sendJson(res, 500, { ok: false, error: message })
     }
   })
@@ -415,6 +417,7 @@ function createUiServer({ store, agent }) {
   return {
     server,
     sessionToken,
+    dispatchApi,
     syncContextFromBackend,
     setElectronPrinterProvider(fn, electronApp = null) {
       electronPrinterProvider = fn

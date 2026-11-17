@@ -1,7 +1,8 @@
-const { contextBridge } = require("electron")
+const { contextBridge, ipcRenderer } = require("electron")
 
 contextBridge.exposeInMainWorld("corderDesktop", {
   isElectron: true,
   platform: process.platform,
-  sessionToken: process.env.CORDER_UI_SESSION_TOKEN || "",
+  invokeApi: (method, pathname, body) =>
+    ipcRenderer.invoke("corder:api", { method, pathname, body }),
 })

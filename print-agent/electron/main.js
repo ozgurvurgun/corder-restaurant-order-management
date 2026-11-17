@@ -1,14 +1,26 @@
+process.noDeprecation = true
+
 const path = require("path")
 const { spawn } = require("child_process")
 const electronModule = require("electron")
 
+const LINUX_SAFE_FLAGS = [
+  "--no-sandbox",
+  "--disable-setuid-sandbox",
+  "--disable-dev-shm-usage",
+  "--disable-gpu-sandbox",
+  "--no-zygote",
+]
+
 if (typeof electronModule === "string") {
-  const cleanEnv = { ...process.env }
+  const cleanEnv = { ...process.env, CORDER_LINUX_REEXEC: "1" }
   delete cleanEnv.ELECTRON_RUN_AS_NODE
-  const args = [__filename, ...process.argv.slice(2)]
-  if (process.platform === "linux" && !args.includes("--no-sandbox")) {
-    args.unshift("--no-sandbox")
-  }
+  const userArgs = process.argv.slice(2)
+  const extraFlags =
+    process.platform === "linux"
+      ? LINUX_SAFE_FLAGS.filter((f) => !userArgs.includes(f))
+      : []
+  const args = [...extraFlags, __filename, ...userArgs]
   const child = spawn(electronModule, args, {
     stdio: "inherit",
     env: cleanEnv,
@@ -17,23 +29,41 @@ if (typeof electronModule === "string") {
   return
 }
 
-const { app, BrowserWindow } = electronModule
+if (
+  process.platform === "linux" &&
+  process.env.CORDER_LINUX_REEXEC !== "1" &&
+  (!process.argv.includes("--no-sandbox") || !process.argv.includes("--disable-dev-shm-usage"))
+) {
+  const existingArgs = process.argv.slice(1)
+  const missingFlags = LINUX_SAFE_FLAGS.filter((f) => !existingArgs.includes(f))
+  const child = spawn(process.execPath, [...missingFlags, ...existingArgs], {
+    stdio: "inherit",
+    env: { ...process.env, CORDER_LINUX_REEXEC: "1" },
+  })
+  child.on("exit", (code) => process.exit(code ?? 0))
+  return
+}
+
+const { app, BrowserWindow, ipcMain } = electronModule
 const { getAppDataDir } = require("../src/config")
 const { startPrintAgentApp } = require("../src/index")
 const { info, error } = require("../src/logger")
 
 app.setName("corder-print-agent")
 app.setPath("userData", path.join(getAppDataDir(), "desktop-profile"))
+
 if (process.platform === "linux") {
   app.commandLine.appendSwitch("no-sandbox")
+  app.commandLine.appendSwitch("disable-setuid-sandbox")
+  app.commandLine.appendSwitch("disable-dev-shm-usage")
+  app.commandLine.appendSwitch("disable-gpu-sandbox")
+  app.commandLine.appendSwitch("no-zygote")
 }
 
 let mainWindow = null
 let agentApp = null
 
-async function createMainWindow(uiUrl, uiServer, sessionToken) {
-  process.env.CORDER_UI_SESSION_TOKEN = sessionToken
-
+async function createMainWindow(uiServer) {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 840,
@@ -46,7 +76,7 @@ async function createMainWindow(uiUrl, uiServer, sessionToken) {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      sandbox: false,
       webSecurity: true,
       allowRunningInsecureContent: false,
     },
@@ -66,13 +96,8 @@ async function createMainWindow(uiUrl, uiServer, sessionToken) {
     return { action: "deny" }
   })
 
-  mainWindow.webContents.on("will-navigate", (event, targetUrl) => {
-    if (!targetUrl.startsWith(uiUrl)) {
-      event.preventDefault()
-    }
-  })
-
-  await mainWindow.loadURL(uiUrl)
+  const indexHtmlPath = path.join(__dirname, "..", "public", "index.html")
+  await mainWindow.loadFile(indexHtmlPath)
 
   mainWindow.on("closed", () => {
     mainWindow = null
@@ -92,8 +117,22 @@ if (!singleInstanceLock) {
 
   app.whenReady().then(async () => {
     try {
-      agentApp = await startPrintAgentApp({ openBrowser: false, port: 4190, electronApp: app })
-      await createMainWindow(agentApp.uiUrl, agentApp.uiServer, agentApp.sessionToken)
+      agentApp = await startPrintAgentApp({
+        enableHttpServer: false,
+        openBrowser: false,
+        electronApp: app,
+      })
+
+      ipcMain.handle("corder:api", async (_event, req) => {
+        const res = await agentApp.uiServer.dispatchApi(
+          req?.method,
+          req?.pathname,
+          req?.body || {},
+        )
+        return res.payload
+      })
+
+      await createMainWindow(agentApp.uiServer)
     } catch (err) {
       error("Failed to launch Electron Print Agent", {
         error: err instanceof Error ? err.message : String(err),
