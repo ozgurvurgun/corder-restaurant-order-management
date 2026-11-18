@@ -212,7 +212,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
       setOrders(
         ordersRes.map((o) => ({
           ...o,
-          waiterName: o.waiterName ? formatTitleCase(o.waiterName) : o.waiterName,
+          userName: o.userName ? formatTitleCase(o.userName) : o.userName,
           items: (o.items ?? []).map((it) => ({
             ...it,
             productName: formatTitleCase(it.productName),
@@ -250,7 +250,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
         setOrders(
           ordersRes.map((o) => ({
             ...o,
-            waiterName: o.waiterName ? formatTitleCase(o.waiterName) : o.waiterName,
+            userName: o.userName ? formatTitleCase(o.userName) : o.userName,
             items: (o.items ?? []).map((it) => ({
               ...it,
               productName: formatTitleCase(it.productName),

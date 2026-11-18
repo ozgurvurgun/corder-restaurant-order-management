@@ -11,3 +11,4 @@ dist/
 .DS_Store
 .vercel
 .vite-cache
+*.tsbuildinfo

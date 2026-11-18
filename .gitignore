@@ -2,6 +2,7 @@ node_modules/
 dist/
 dist-test/
 .vite-cache/
+*.tsbuildinfo
 .env
 .env.local
 .env.*.local

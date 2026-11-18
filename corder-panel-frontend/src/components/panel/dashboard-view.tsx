@@ -24,7 +24,6 @@ import {
 } from "recharts"
 import type { PanelViewId } from "@/lib/panel-types"
 import {
-  ISTANBUL_TZ,
   computeDateFilterBounds,
   formatCurrency,
   formatIstanbulTime,
@@ -51,9 +50,7 @@ export default function DashboardView(_props: DashboardViewProps) {
     tables,
     closedTables,
     dailyReport,
-    currentShift,
     auditLogs,
-    notifications,
     currentUser,
     hasPermission,
   } = usePanelStore()
@@ -73,7 +70,6 @@ export default function DashboardView(_props: DashboardViewProps) {
   const occupiedCount = tables.filter((tb) => tb.status !== "empty").length
   const emptyCount = tables.filter((tb) => tb.status === "empty").length
   const recentAuditLogs = auditLogs.slice(0, 8)
-  const unreadNotifications = notifications.filter((n) => !n.read)
 
   const yesterdayStats = useMemo(() => {
     const bounds = computeDateFilterBounds("yesterday", "", "")
