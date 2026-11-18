@@ -342,7 +342,7 @@ export function NavLink({
   to: string
   end?: boolean
   className?: string | ((props: { isActive: boolean }) => string)
-  children?: ReactNode
+  children?: ReactNode | ((props: { isActive: boolean }) => ReactNode)
 }) {
   const { pathname, navigate } = useContext(RouterContext)
   const targetPathname = parseUrlTarget(to).pathname
@@ -351,6 +351,8 @@ export function NavLink({
     : pathname === targetPathname || pathname.startsWith(targetPathname + "/")
   const resolvedClass =
     typeof className === "function" ? className({ isActive }) : className
+  const resolvedChildren =
+    typeof children === "function" ? children({ isActive }) : children
 
   return (
     <a
@@ -364,7 +366,7 @@ export function NavLink({
       }}
       className={resolvedClass}
     >
-      {children}
+      {resolvedChildren}
     </a>
   )
 }

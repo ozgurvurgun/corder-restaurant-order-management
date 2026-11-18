@@ -104,16 +104,8 @@ export function DashboardLayout() {
                       }`
                     }
                   >
-                    {({ isActive }) => (
-                      <>
-                        <Icon
-                          className={`w-[18px] h-[18px] flex-shrink-0 ${
-                            isActive ? "text-[#e63462]" : "text-[#86868b]"
-                          }`}
-                        />
-                        <span className="flex-1">{label}</span>
-                      </>
-                    )}
+                    <Icon className="w-[18px] h-[18px] flex-shrink-0" />
+                    <span className="flex-1">{label}</span>
                   </NavLink>
                 ))}
               </div>
@@ -216,14 +208,10 @@ export function DashboardLayout() {
                   }`
                 }
               >
-                {({ isActive }) => (
-                  <>
-                    <Icon className="h-4 w-4" strokeWidth={isActive ? 2.2 : 1.8} />
-                    <span className="text-[10px] font-medium tracking-tight">
-                      {mobileLabel}
-                    </span>
-                  </>
-                )}
+                <Icon className="h-4 w-4" />
+                <span className="text-[10px] font-medium tracking-tight">
+                  {mobileLabel}
+                </span>
               </NavLink>
             ))}
           </div>
