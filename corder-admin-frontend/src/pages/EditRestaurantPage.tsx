@@ -90,18 +90,22 @@ export function EditRestaurantPage() {
   }, [restaurant])
 
   if (restaurantsLoading && restaurants.length === 0) {
-    return <p className="text-zinc-400">Yükleniyor…</p>
+    return (
+      <div className="rounded-2xl border border-[#e5e5ea] bg-white p-10 text-center text-[13px] text-[#86868b]">
+        Yükleniyor…
+      </div>
+    )
   }
 
   if (restaurantsError || !id || !restaurant) {
     return (
-      <div>
-        <p className={restaurantsError ? "text-red-400" : "text-zinc-400"}>
+      <div className="rounded-2xl border border-[#e5e5ea] bg-white p-6">
+        <p className={restaurantsError ? "text-red-600 text-[13px]" : "text-[#86868b] text-[13px]"}>
           {restaurantsError || "Restoran bulunamadı."}
         </p>
         <Link
           to="/dashboard/restaurants"
-          className="mt-4 inline-block text-blue-400 hover:underline"
+          className="mt-3 inline-block text-[13px] font-semibold text-[#e63462] hover:underline"
         >
           Listeye dön
         </Link>
@@ -225,42 +229,44 @@ export function EditRestaurantPage() {
     restaurant.isAccessSuspended || restaurant.billingStatus === "suspended"
   )
   const inputCls =
-    "w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-4 py-2.5 text-white outline-none focus:border-blue-500"
+    "w-full h-10 rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3.5 text-[13px] text-[#1d1d1f] outline-none focus:border-[#e63462] focus:bg-white transition-all"
 
   return (
-    <div>
-      <Link
-        to="/dashboard/restaurants"
-        className="mb-6 inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Restoranlara dön
-      </Link>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <h1 className="text-2xl font-semibold text-white">{restaurant.name}</h1>
-          {restaurant.brandName && (
-            <span className="inline-flex items-center gap-1 rounded-lg bg-[#e63462]/15 px-2.5 py-1 text-xs font-semibold text-[#e63462]">
-              <Building2 className="h-3.5 w-3.5" />
-              {restaurant.brandName}
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-[#e5e5ea] bg-white p-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            to="/dashboard/restaurants"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#f5f5f7] text-[#636366] hover:bg-[#e8e8ed] hover:text-[#1d1d1f]"
+            title="Restoranlara Dön"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-[16px] font-semibold text-[#1d1d1f]">{restaurant.name}</h2>
+            {restaurant.brandName && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-[#e63462]/10 px-2 py-0.5 text-[11px] font-semibold text-[#e63462]">
+                <Building2 className="h-3 w-3" />
+                {restaurant.brandName}
+              </span>
+            )}
+            <span className="rounded-md bg-[#f5f5f7] px-2 py-0.5 text-[11px] font-medium text-[#636366]">
+              {restaurant.branchType === "franchise"
+                ? "Franchise Şubesi"
+                : restaurant.branchType === "company_owned"
+                  ? "Merkez / Özmal Şube"
+                  : "Bağımsız İşletme"}
             </span>
-          )}
-          <span className="rounded-lg bg-zinc-800 px-2.5 py-1 text-xs text-zinc-300">
-            {restaurant.branchType === "franchise"
-              ? "Franchise Şubesi"
-              : restaurant.branchType === "company_owned"
-                ? "Merkez / Özmal Şube"
-                : "Bağımsız İşletme"}
-          </span>
+          </div>
         </div>
         <button
           type="button"
           onClick={() => void handleDeleteRestaurant()}
           disabled={deleting}
-          className="flex items-center gap-2 rounded-lg border border-red-500/50 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+          className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3.5 text-[12px] font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50"
         >
-          <Trash2 className="h-4 w-4" />
-          {deleting ? "Siliniyor…" : "Restoranı sil"}
+          <Trash2 className="h-3.5 w-3.5" />
+          {deleting ? "Siliniyor…" : "Restoranı Sil"}
         </button>
       </div>
 
@@ -272,15 +278,15 @@ export function EditRestaurantPage() {
         onQuickSuspend={() => void handleQuickSuspend()}
       />
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-2">
-        <div className="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6">
-          <h2 className="text-lg font-medium text-white">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-2xl border border-[#e5e5ea] bg-white p-5">
+          <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
             Mekan, Franchise &amp; Abonelik Bilgileri
           </h2>
           <form onSubmit={handleSaveRestaurant} className="mt-4 space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="mb-1.5 block text-sm text-zinc-300">Restoran adı</label>
+                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Restoran Adı</label>
                 <input
                   type="text"
                   value={name}
@@ -291,19 +297,19 @@ export function EditRestaurantPage() {
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-sm text-zinc-300">Slug</label>
+                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Slug</label>
                 <input
                   type="text"
                   value={slug}
                   onChange={(e) => setSlug(e.target.value)}
-                  className={`${inputCls} font-mono text-sm`}
+                  className={`${inputCls} font-mono`}
                   required
                   disabled={saveLoading}
                 />
               </div>
             </div>
             <div>
-              <label className="mb-1.5 block text-sm text-zinc-300">Adres</label>
+              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Adres</label>
               <input
                 type="text"
                 value={address}
@@ -312,9 +318,9 @@ export function EditRestaurantPage() {
                 disabled={saveLoading}
               />
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="mb-1.5 block text-sm text-zinc-300">Telefon</label>
+                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Telefon</label>
                 <input
                   type="tel"
                   value={phone}
@@ -324,7 +330,7 @@ export function EditRestaurantPage() {
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-sm text-zinc-300">E-posta</label>
+                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">E-posta</label>
                 <input
                   type="email"
                   value={email}
@@ -334,9 +340,9 @@ export function EditRestaurantPage() {
                 />
               </div>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="mb-1.5 block text-sm text-zinc-300">
+                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
                   Vergi No / VKN
                 </label>
                 <input
@@ -349,7 +355,7 @@ export function EditRestaurantPage() {
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-sm text-zinc-300">
+                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
                   Çalışma Saatleri
                 </label>
                 <input
@@ -383,7 +389,7 @@ export function EditRestaurantPage() {
             />
 
             <div>
-              <label className="mb-1.5 block text-sm text-zinc-300">Genel Durum</label>
+              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Genel Durum</label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as "active" | "inactive")}
@@ -394,19 +400,19 @@ export function EditRestaurantPage() {
                 <option value="inactive">Pasif</option>
               </select>
             </div>
-            {error && <p className="text-sm text-red-400">{error}</p>}
-            {saveMsg && <p className="text-sm text-emerald-400">{saveMsg}</p>}
+            {error && <p className="text-[13px] font-medium text-red-600">{error}</p>}
+            {saveMsg && <p className="text-[13px] font-medium text-emerald-700">{saveMsg}</p>}
             <button
               type="submit"
               disabled={saveLoading}
-              className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+              className="h-10 rounded-xl bg-[#e63462] px-5 text-[13px] font-semibold text-white hover:bg-[#d42d56] disabled:opacity-50"
             >
               {saveLoading ? "Kaydediliyor…" : "Bilgileri Kaydet"}
             </button>
           </form>
         </div>
 
-        <div className="space-y-8">
+        <div className="space-y-4">
           <RootAdminsSection
             restaurantId={id}
             brandName={restaurant.brandName}

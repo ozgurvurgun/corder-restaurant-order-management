@@ -134,19 +134,19 @@ export function BossFormModal({
   }
 
   const fieldCls =
-    "w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] px-3.5 py-2.5 text-sm text-white outline-none focus:border-[#e63462]"
+    "w-full h-10 rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3.5 text-[13px] text-[#1d1d1f] outline-none focus:border-[#e63462] focus:bg-white transition-all"
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs"
       onClick={() => !submitting && onClose()}
     >
       <div
-        className="w-full max-w-xl rounded-2xl border border-[#2a2a2a] bg-[#1a1a1a] p-6 shadow-2xl max-h-[92vh] overflow-y-auto"
+        className="w-full max-w-xl rounded-2xl border border-[#e5e5ea] bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-[#2a2a2a] pb-4">
-          <h2 className="text-lg font-semibold text-white">
+        <div className="flex items-center justify-between border-b border-[#f0f0f0] pb-3.5">
+          <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
             {editingBoss
               ? "Boss Hesabını Düzenle"
               : "Yeni Boss (Marka Sahibi / Franchise Sahibi) Oluştur"}
@@ -154,7 +154,7 @@ export function BossFormModal({
           <button
             onClick={() => !submitting && onClose()}
             disabled={submitting}
-            className="rounded-lg p-1.5 text-zinc-400 hover:bg-[#2a2a2a] hover:text-white disabled:opacity-50"
+            className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#f5f5f7] text-[#86868b] hover:bg-[#e8e8ed] disabled:opacity-50"
           >
             <X className="h-4 w-4" />
           </button>
@@ -162,7 +162,7 @@ export function BossFormModal({
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-zinc-300">
+            <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
               Boss Hiyerarşi Seviyesi *
             </label>
             <select
@@ -183,8 +183,8 @@ export function BossFormModal({
           </div>
 
           {bossTier === "brand_owner" && (
-            <div className="rounded-xl border border-purple-500/30 bg-purple-500/10 p-3.5 space-y-2">
-              <label className="block text-xs font-semibold text-purple-200">
+            <div className="rounded-xl border border-purple-200 bg-purple-50/70 p-3.5 space-y-2">
+              <label className="block text-[12px] font-semibold text-purple-900">
                 Marka / Franchise Ağı Adı (Otomatik Tüm Marka Şubelerini Bağlar)
               </label>
               <div className="flex gap-2">
@@ -194,7 +194,7 @@ export function BossFormModal({
                   value={brandName}
                   onChange={(e) => setBrandName(e.target.value)}
                   placeholder="Örn: Burger House Türkiye"
-                  className="flex-1 rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white outline-none focus:border-purple-400"
+                  className="flex-1 h-9 rounded-lg border border-purple-200 bg-white px-3 text-[13px] text-[#1d1d1f] outline-none focus:border-purple-500"
                 />
                 <datalist id="boss-brands-list">
                   {existingBrands.map((b) => (
@@ -205,20 +205,20 @@ export function BossFormModal({
                   <button
                     type="button"
                     onClick={() => selectAllByBrand(brandName)}
-                    className="rounded-lg bg-purple-600 px-3 py-2 text-xs font-semibold text-white hover:bg-purple-500"
+                    className="rounded-lg bg-purple-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-purple-500"
                   >
                     Marka Şubelerini Seç
                   </button>
                 )}
               </div>
-              <p className="text-[11px] text-purple-200/80">
+              <p className="text-[11px] text-purple-800">
                 Bu marka adı altında açılan mevcut ve gelecekteki tüm şubeler otomatik olarak bu Marka Sahibinin ekranına düşer.
               </p>
             </div>
           )}
 
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-zinc-300">
+            <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
               Ad Soyad *
             </label>
             <input
@@ -233,7 +233,7 @@ export function BossFormModal({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-zinc-300">
+              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
                 E-posta (Boss &amp; Panel Girişi) *
               </label>
               <input
@@ -246,7 +246,7 @@ export function BossFormModal({
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-zinc-300">
+              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
                 Telefon
               </label>
               <input
@@ -260,7 +260,7 @@ export function BossFormModal({
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-zinc-300">
+            <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
               {editingBoss
                 ? "Yeni Parola (değiştirmek istemiyorsanız boş bırakın)"
                 : "Parola (en az 8 karakter) *"}
@@ -277,7 +277,7 @@ export function BossFormModal({
           </div>
 
           {editingBoss && (
-            <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+            <label className="flex items-center gap-2 text-[12px] font-medium text-[#1d1d1f] cursor-pointer">
               <input
                 type="checkbox"
                 checked={isActive}
@@ -290,7 +290,7 @@ export function BossFormModal({
 
           <div>
             <div className="mb-1.5 flex items-center justify-between">
-              <label className="text-xs font-medium text-zinc-300">
+              <label className="text-[12px] font-medium text-[#1d1d1f]">
                 Yöneteceği Dükkan / Şubeler ({selectedRestaurantIds.length} seçili)
               </label>
               <div className="flex gap-2">
@@ -299,20 +299,20 @@ export function BossFormModal({
                   onClick={() =>
                     setSelectedRestaurantIds(restaurants.map((r) => r.id))
                   }
-                  className="text-[11px] text-[#e63462] hover:underline"
+                  className="text-[11px] font-medium text-[#e63462] hover:underline"
                 >
                   Tümünü Seç
                 </button>
                 <button
                   type="button"
                   onClick={() => setSelectedRestaurantIds([])}
-                  className="text-[11px] text-zinc-400 hover:underline"
+                  className="text-[11px] font-medium text-[#86868b] hover:underline"
                 >
                   Temizle
                 </button>
               </div>
             </div>
-            <div className="max-h-48 overflow-y-auto rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-2 space-y-1">
+            <div className="max-h-48 overflow-y-auto rounded-xl border border-[#e5e5ea] bg-[#f9f9fb] p-2 space-y-1">
               {restaurants.map((r) => {
                 const checked = selectedRestaurantIds.includes(r.id)
                 return (
@@ -320,28 +320,28 @@ export function BossFormModal({
                     key={r.id}
                     type="button"
                     onClick={() => toggleBranch(r.id)}
-                    className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                    className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] transition-colors ${
                       checked
-                        ? "bg-[#e63462]/15 text-white"
-                        : "text-zinc-400 hover:bg-[#1a1a1a]"
+                        ? "bg-[#e63462]/10 text-[#1d1d1f]"
+                        : "text-[#636366] hover:bg-white"
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
                       <Building2
                         className={`h-4 w-4 ${
-                          checked ? "text-[#e63462]" : "text-zinc-500"
+                          checked ? "text-[#e63462]" : "text-[#86868b]"
                         }`}
                       />
                       <div>
                         <p className="font-medium leading-tight">
                           {r.name}{" "}
                           {r.brandName && (
-                            <span className="text-[11px] text-purple-300">
+                            <span className="text-[11px] text-purple-700">
                               ({r.brandName})
                             </span>
                           )}
                         </p>
-                        <p className="text-[11px] text-zinc-500">
+                        <p className="text-[11px] text-[#86868b]">
                           {r.slug} •{" "}
                           {r.branchType === "franchise"
                             ? "Franchise"
@@ -355,7 +355,7 @@ export function BossFormModal({
                       className={`flex h-5 w-5 items-center justify-center rounded-md border ${
                         checked
                           ? "border-[#e63462] bg-[#e63462] text-white"
-                          : "border-zinc-700"
+                          : "border-[#d1d1d6] bg-white"
                       }`}
                     >
                       {checked && <Check className="h-3.5 w-3.5" />}
@@ -366,20 +366,20 @@ export function BossFormModal({
             </div>
           </div>
 
-          {error && <p className="text-xs text-red-400">{error}</p>}
+          {error && <p className="text-[12px] font-medium text-red-600">{error}</p>}
 
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex justify-end gap-2.5 border-t border-[#f0f0f0] pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-[#2a2a2a] px-4 py-2.5 text-sm text-zinc-300 hover:bg-[#2a2a2a]"
+              className="h-10 rounded-xl border border-[#d1d1d6] px-4 text-[13px] font-medium text-[#86868b] hover:bg-[#f5f5f7]"
             >
               İptal
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-xl bg-[#e63462] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#d42d56] disabled:opacity-50"
+              className="h-10 rounded-xl bg-[#e63462] px-5 text-[13px] font-semibold text-white hover:bg-[#d42d56] disabled:opacity-50"
             >
               {submitting
                 ? "Kaydediliyor…"

@@ -247,48 +247,50 @@ export function BillingPage() {
   })
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-[#e5e5ea] bg-white p-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-white flex items-center gap-2.5">
-            <CreditCard className="h-6 w-6 text-[#e63462]" />
-            Abonelik Ücretleri &amp; Tahsilat Yönetimi
-          </h1>
-          <p className="mt-1 text-sm text-zinc-400">
+          <div className="flex items-center gap-2">
+            <CreditCard className="h-5 w-5 text-[#e63462]" />
+            <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
+              Abonelik Ücretleri &amp; Tahsilat Yönetimi
+            </h2>
+          </div>
+          <p className="mt-0.5 text-[12px] text-[#86868b]">
             Her mekan için ayrı aylık ücret belirleyin, her ayın{" "}
-            <strong className="text-white">
+            <span className="font-semibold text-[#1d1d1f]">
               {billingConfig?.collectionStartDay ?? 25} –{" "}
               {billingConfig?.collectionEndDay ?? 30}
-            </strong>{" "}
-            arası tahsilat durumlarını yönetin ve ödeme yapmayan mekanların erişimini tek tıkla durdurun veya ödeme alındığında otomatik açın.
+            </span>{" "}
+            arası tahsilat durumlarını yönetin ve ödeme yapmayan mekanların erişimini tek tıkla durdurun veya açın.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-300">
-          <CalendarClock className="h-4 w-4 text-amber-400 flex-shrink-0" />
+        <div className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2 text-[12px] text-amber-800">
+          <CalendarClock className="h-4 w-4 text-amber-600 flex-shrink-0" />
           <span>
             Tahsilat Günü:{" "}
-            <strong>
+            <span className="font-semibold">
               Her Ayın {billingConfig?.collectionStartDay ?? 25} -{" "}
               {billingConfig?.collectionEndDay ?? 30}&apos;u Arası
-            </strong>
-            {isCollectionWindow ? " • (Şu Anda Tahsilat Dönemindeyiz)" : ""}
+            </span>
+            {isCollectionWindow ? " • (Tahsilat Dönemindeyiz)" : ""}
           </span>
         </div>
       </div>
 
       {billingConfigError && (
-        <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
           {billingConfigError}
         </div>
       )}
 
       {feedback && (
         <div
-          className={`rounded-xl border px-4 py-3 text-sm font-medium ${
+          className={`rounded-xl border px-4 py-3 text-[13px] font-medium ${
             feedback.type === "err"
-              ? "border-red-500/40 bg-red-500/10 text-red-300"
-              : "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+              ? "border-red-200 bg-red-50 text-red-700"
+              : "border-emerald-200 bg-emerald-50 text-emerald-800"
           }`}
         >
           {feedback.text}

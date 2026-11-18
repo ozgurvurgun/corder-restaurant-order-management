@@ -1,26 +1,45 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
-:root {
-  --bg: #0f0f0f;
-  --card: #1a1a1a;
-  --border: #2a2a2a;
-  --muted: #737373;
-  --accent: #3b82f6;
+@theme inline {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif;
+  --font-mono: 'SF Mono', 'Fira Code', monospace;
 }
 
-body {
-  background: var(--bg);
-  color: #e5e5e5;
-  font-family: system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
+@layer base {
+  :root {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #f5f5f7;
+    color: #1d1d1f;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }
 
-input, select, textarea {
-  background: var(--card);
-  border: 1px solid var(--border);
-  color: #e5e5e5;
+html {
+  overscroll-behavior: none;
 }
 
-input::placeholder, textarea::placeholder {
-  color: var(--muted);
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

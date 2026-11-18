@@ -11,6 +11,8 @@ import {
   CheckCircle2,
   Clock,
   RefreshCw,
+  Plus,
+  Pencil,
 } from "lucide-react"
 
 export function DashboardPage() {
@@ -37,201 +39,216 @@ export function DashboardPage() {
     (r) => r.isAccessSuspended || r.billingStatus === "suspended"
   ).length
 
-  if (restaurantsLoading && restaurants.length === 0) {
-    return (
-      <div>
-        <h1 className="text-2xl font-semibold text-white">Özet</h1>
-        <p className="mt-4 text-zinc-400">Yükleniyor…</p>
-      </div>
-    )
-  }
-
   if (restaurantsError) {
     return (
-      <div>
-        <h1 className="text-2xl font-semibold text-white">Özet</h1>
-        <p className="mt-4 text-red-400">{restaurantsError}</p>
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-[13px] text-red-700">
+        <p className="font-medium">{restaurantsError}</p>
         <button
           type="button"
           onClick={() => {
             void loadRestaurants()
             void loadAllBosses()
           }}
-          className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-4 py-2 text-sm text-zinc-200 hover:bg-[#2a2a2a]"
+          className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-3.5 py-2 text-[12px] font-semibold text-white hover:bg-red-700"
         >
-          <RefreshCw className="h-4 w-4" />
+          <RefreshCw className="h-3.5 w-3.5" />
           Tekrar Dene
         </button>
       </div>
     )
   }
 
+  const kpiCards = [
+    {
+      label: "Toplam Şube / Restoran",
+      value: String(restaurants.length),
+      sub: `${billableRestaurants.length} faturalandırılan mekan`,
+      icon: UtensilsCrossed,
+      color: "#007aff",
+      to: "/dashboard/restaurants",
+    },
+    {
+      label: "Aktif & Erişimi Açık Şube",
+      value: String(activeCount),
+      sub: suspendedCount > 0 ? `${suspendedCount} mekan askıda` : "Tüm şubeler açık",
+      icon: Building2,
+      color: "#34c759",
+      to: "/dashboard/restaurants",
+    },
+    {
+      label: "Marka & Şube Bossları",
+      value: String(allBosses.length),
+      sub: "Kayıtlı yönetici hesabı",
+      icon: Crown,
+      color: "#e63462",
+      to: "/dashboard/bosses",
+    },
+    {
+      label: "Aylık Tahsilat Hedefi (25-30)",
+      value: formatMoney(totalMrr),
+      sub: "Aylık abonelik toplamı",
+      icon: CreditCard,
+      color: "#ff9500",
+      to: "/dashboard/billing",
+    },
+  ]
+
   return (
-    <div>
-      <h1 className="text-2xl font-semibold text-white">Platform Özeti</h1>
-      <p className="mt-1 text-zinc-400">
-        Restoran/Franchise şubeleri, Boss hiyerarşisi ve aylık abonelik tahsilat (25-30) durumu
-      </p>
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-blue-600/20 p-2">
-              <UtensilsCrossed className="h-5 w-5 text-blue-400" />
-            </div>
-            <div>
-              <p className="text-2xl font-semibold text-white">{restaurants.length}</p>
-              <p className="text-sm text-zinc-400">Toplam Şube / Restoran</p>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-emerald-600/20 p-2">
-              <Building2 className="h-5 w-5 text-emerald-400" />
-            </div>
-            <div>
-              <p className="text-2xl font-semibold text-white">{activeCount}</p>
-              <p className="text-sm text-zinc-400">
-                Aktif Şube {suspendedCount > 0 ? `(${suspendedCount} Askıda)` : ""}
+    <div className="space-y-5">
+      {/* Top 4 KPI Cards matching Merchant & Boss Panel */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {kpiCards.map((stat) => {
+          const Icon = stat.icon
+          return (
+            <Link
+              key={stat.label}
+              to={stat.to}
+              className="bg-white rounded-2xl p-4 border border-[#e5e5ea] hover:border-[#d1d1d6] transition-all block"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center"
+                  style={{ backgroundColor: `${stat.color}15` }}
+                >
+                  <Icon
+                    className="w-[18px] h-[18px]"
+                    style={{ color: stat.color }}
+                  />
+                </div>
+                <span className="text-[11px] font-medium text-[#86868b]">
+                  {stat.sub}
+                </span>
+              </div>
+              <p className="text-[22px] font-bold text-[#1d1d1f] leading-tight tabular-nums">
+                {stat.value}
               </p>
-            </div>
-          </div>
-        </div>
-        <Link
-          to="/dashboard/bosses"
-          className="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6 hover:border-[#e63462]/50 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-[#e63462]/20 p-2">
-              <Crown className="h-5 w-5 text-[#e63462]" />
-            </div>
-            <div>
-              <p className="text-2xl font-semibold text-white">{allBosses.length}</p>
-              <p className="text-sm text-zinc-400">Marka &amp; Şube Bossları</p>
-            </div>
-          </div>
-        </Link>
-        <Link
-          to="/dashboard/billing"
-          className="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6 hover:border-emerald-500/50 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-emerald-600/20 p-2">
-              <CreditCard className="h-5 w-5 text-emerald-400" />
-            </div>
-            <div>
-              <p className="text-2xl font-semibold text-white">{formatMoney(totalMrr)}</p>
-              <p className="text-sm text-zinc-400">Aylık Tahsilat (25-30)</p>
-            </div>
-          </div>
-        </Link>
+              <p className="text-[12px] text-[#86868b] mt-0.5">
+                {stat.label}
+              </p>
+            </Link>
+          )
+        })}
       </div>
 
-      <div className="mt-8">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-medium text-white">Son Şubeler &amp; Restoranlar</h2>
-          <div className="flex flex-wrap gap-2">
+      {/* Recent Restaurants & Quick Actions */}
+      <div className="rounded-2xl border border-[#e5e5ea] bg-white overflow-hidden">
+        <div className="p-4 border-b border-[#f0f0f0] flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
+              Son Şubeler &amp; Restoranlar
+            </h2>
+            <p className="text-[12px] text-[#86868b]">
+              Restoran/Franchise şubeleri, Boss atamaları ve aylık abonelik tahsilat durumu
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             <Link
               to="/dashboard/billing"
-              className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-4 py-2 text-sm font-medium text-zinc-200 hover:bg-[#2a2a2a]"
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3.5 text-[12px] font-medium text-[#1d1d1f] hover:bg-[#e8e8ed]"
             >
+              <CreditCard className="h-3.5 w-3.5 text-[#e63462]" />
               Tahsilat &amp; Ücretler
             </Link>
             <Link
               to="/dashboard/bosses"
-              className="rounded-lg bg-[#e63462] px-4 py-2 text-sm font-medium text-white hover:bg-[#d42d56]"
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#e63462]/30 bg-[#fef3f5] px-3.5 text-[12px] font-semibold text-[#e63462] hover:bg-[#e63462]/15"
             >
-              Boss &amp; Franchise Yönetimi
+              <Crown className="h-3.5 w-3.5" />
+              Boss Yönetimi
             </Link>
             <Link
               to="/dashboard/restaurants/new"
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#e63462] px-3.5 text-[12px] font-semibold text-white hover:bg-[#d42d56]"
             >
+              <Plus className="h-3.5 w-3.5" />
               Yeni Şube / Restoran
             </Link>
           </div>
         </div>
-        <div className="mt-4 rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] overflow-hidden">
-          {restaurants.length === 0 ? (
-            <div className="p-8 text-center text-zinc-500">Henüz restoran yok.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-[#2a2a2a] text-zinc-400">
-                    <th className="p-4 font-medium">Restoran / Şube</th>
-                    <th className="p-4 font-medium">Marka / Model</th>
-                    <th className="p-4 font-medium">Aylık Ücret</th>
-                    <th className="p-4 font-medium">Tahsilat &amp; Erişim</th>
-                    <th className="p-4 font-medium">Boss Atamaları</th>
-                    <th className="p-4"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {restaurants.slice(0, 10).map((r) => {
-                    const isSusp = Boolean(
-                      r.isAccessSuspended || r.billingStatus === "suspended"
-                    )
-                    return (
-                      <tr key={r.id} className="border-b border-[#2a2a2a] last:border-0">
-                        <td className="p-4 text-white font-medium">
+
+        {restaurantsLoading && restaurants.length === 0 ? (
+          <div className="p-8 text-center text-[13px] text-[#86868b]">Yükleniyor…</div>
+        ) : restaurants.length === 0 ? (
+          <div className="p-8 text-center text-[13px] text-[#86868b]">Henüz restoran yok.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-[13px]">
+              <thead>
+                <tr className="border-b border-[#f0f0f0] bg-[#fafafa] text-[11px] font-semibold uppercase tracking-wider text-[#86868b]">
+                  <th className="px-4 py-3">Restoran / Şube</th>
+                  <th className="px-4 py-3">Marka / Model</th>
+                  <th className="px-4 py-3">Aylık Ücret</th>
+                  <th className="px-4 py-3">Tahsilat &amp; Erişim</th>
+                  <th className="px-4 py-3">Boss Atamaları</th>
+                  <th className="px-4 py-3 text-right">İşlem</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#f0f0f0]">
+                {restaurants.slice(0, 12).map((r) => {
+                  const isSusp = Boolean(
+                    r.isAccessSuspended || r.billingStatus === "suspended"
+                  )
+                  return (
+                    <tr key={r.id} className="hover:bg-[#f9f9fb] transition-colors">
+                      <td className="px-4 py-3 font-semibold text-[#1d1d1f]">
+                        <Link to={`/dashboard/restaurants/${r.id}`} className="hover:text-[#e63462]">
                           {r.name}
-                          {r.status === "inactive" && (
-                            <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-normal text-zinc-400">
-                              Pasif
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-4 text-zinc-400 text-xs">
-                          {r.brandName ? `${r.brandName} • ` : ""}
-                          {r.branchType === "franchise"
-                            ? "Franchise"
-                            : r.branchType === "company_owned"
-                              ? "Merkez Şube"
-                              : "Bağımsız"}
-                        </td>
-                        <td className="p-4 text-white font-medium">
-                          {formatMoney(r.monthlyFee ?? 0)}
-                        </td>
-                        <td className="p-4">
-                          {isSusp ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-400">
-                              <Ban className="h-3.5 w-3.5" /> Erişim Durduruldu
-                            </span>
-                          ) : r.billingStatus === "pending" ||
-                            r.billingStatus === "overdue" ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-300">
-                              <Clock className="h-3.5 w-3.5" /> Ödeme Bekliyor
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400">
-                              <CheckCircle2 className="h-3.5 w-3.5" /> Ödendi • Aktif
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-4 text-zinc-400 text-xs">
-                          {r.bosses && r.bosses.length > 0
-                            ? r.bosses.map((b) => b.name).join(", ")
-                            : r.rootAdminId
-                              ? "Boss Atanmış"
-                              : "—"}
-                        </td>
-                        <td className="p-4">
-                          <Link
-                            to={`/dashboard/restaurants/${r.id}`}
-                            className="text-blue-400 hover:underline"
-                          >
-                            Düzenle
-                          </Link>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                        </Link>
+                        {r.status === "inactive" && (
+                          <span className="ml-2 rounded-md bg-[#f5f5f7] px-1.5 py-0.5 text-[10px] font-medium text-[#86868b]">
+                            Pasif
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-[12px] text-[#86868b]">
+                        {r.brandName ? `${r.brandName} • ` : ""}
+                        {r.branchType === "franchise"
+                          ? "Franchise"
+                          : r.branchType === "company_owned"
+                            ? "Merkez Şube"
+                            : "Bağımsız"}
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-[#1d1d1f] tabular-nums">
+                        {formatMoney(r.monthlyFee ?? 0)}
+                      </td>
+                      <td className="px-4 py-3">
+                        {isSusp ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">
+                            <Ban className="h-3 w-3" /> Erişim Durduruldu
+                          </span>
+                        ) : r.billingStatus === "pending" ||
+                          r.billingStatus === "overdue" ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                            <Clock className="h-3 w-3" /> Ödeme Bekliyor
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                            <CheckCircle2 className="h-3 w-3" /> Ödendi • Aktif
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-[12px] text-[#636366]">
+                        {r.bosses && r.bosses.length > 0
+                          ? r.bosses.map((b) => b.name).join(", ")
+                          : r.rootAdminId
+                            ? "Boss Atanmış"
+                            : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Link
+                          to={`/dashboard/restaurants/${r.id}`}
+                          className="inline-flex items-center gap-1 rounded-lg bg-[#f5f5f7] px-2.5 py-1 text-[11px] font-medium text-[#1d1d1f] hover:bg-[#e8e8ed]"
+                        >
+                          <Pencil className="h-3 w-3" /> Düzenle
+                        </Link>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -116,19 +116,22 @@ export function PrintAgentTokenSection({
     }
   }
 
+  const inputCls =
+    "w-full h-10 rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3.5 text-[13px] text-[#1d1d1f] outline-none focus:border-[#e63462] focus:bg-white transition-all"
+
   return (
-    <div className="space-y-6">
-      <div className="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6">
-        <h2 className="text-lg font-medium text-white">
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-[#e5e5ea] bg-white p-5">
+        <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
           Print Agent (Masaüstü Yazıcı Uygulaması) Kullanıcısı
         </h2>
-        <p className="mt-1 text-sm text-zinc-400">
+        <p className="mt-1 text-[12px] text-[#86868b]">
           Mekandaki bilgisayara kurulan Corder Yazıcı &amp; Mutfak Merkezi masaüstü uygulamasına
           giriş yapmak için kullanılacak kullanıcı adı ve parola.
         </p>
-        <form onSubmit={handleSavePrintAgent} className="mt-4 space-y-4">
+        <form onSubmit={handleSavePrintAgent} className="mt-4 space-y-3.5">
           <div>
-            <label className="mb-1.5 block text-sm text-zinc-300">Kullanıcı Adı</label>
+            <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Kullanıcı Adı</label>
             <input
               type="text"
               value={printAgentUsername}
@@ -136,13 +139,13 @@ export function PrintAgentTokenSection({
               placeholder="Örn: merkez-yazici"
               minLength={3}
               autoComplete="off"
-              className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-4 py-2.5 font-mono text-sm text-white outline-none focus:border-blue-500"
+              className={`${inputCls} font-mono`}
               disabled={printAgentSaveLoading}
               required
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm text-zinc-300">
+            <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
               Parola{" "}
               {initialPrintAgentUsername
                 ? "(değiştirmek için doldurun; boş bırakılırsa mevcut parola korunur)"
@@ -155,51 +158,51 @@ export function PrintAgentTokenSection({
               placeholder="••••••••"
               minLength={6}
               autoComplete="new-password"
-              className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-4 py-2.5 text-white outline-none focus:border-blue-500"
+              className={inputCls}
               disabled={printAgentSaveLoading}
               required={!initialPrintAgentUsername}
             />
           </div>
-          {printAgentError && <p className="text-sm text-red-400">{printAgentError}</p>}
+          {printAgentError && <p className="text-[12px] font-medium text-red-600">{printAgentError}</p>}
           {printAgentSuccess && (
-            <p className="text-sm text-emerald-400">{printAgentSuccess}</p>
+            <p className="text-[12px] font-medium text-emerald-700">{printAgentSuccess}</p>
           )}
           <button
             type="submit"
             disabled={printAgentSaveLoading}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#e63462] px-4 text-[13px] font-semibold text-white hover:bg-[#d42d56] disabled:opacity-50"
           >
             <Printer className="h-4 w-4" />
             {printAgentSaveLoading
               ? "Kaydediliyor…"
-              : "Print Agent kullanıcısını kaydet"}
+              : "Print Agent Kullanıcısını Kaydet"}
           </button>
         </form>
       </div>
 
-      <div className="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6">
-        <h2 className="text-lg font-medium text-white">Terminal giriş bilgileri</h2>
-        <p className="mt-1 text-sm text-zinc-400">
+      <div className="rounded-2xl border border-[#e5e5ea] bg-white p-5">
+        <h2 className="text-[15px] font-semibold text-[#1d1d1f]">Terminal Giriş Bilgileri</h2>
+        <p className="mt-1 text-[12px] text-[#86868b]">
           Terminal uygulamasında (kasa/garson ekranı) giriş yapmak için kullanılacak e-posta ve
-          parola. Root admin ile ilişkisi yoktur.
+          parola.
         </p>
-        <form onSubmit={handleSaveTerminal} className="mt-4 space-y-4">
+        <form onSubmit={handleSaveTerminal} className="mt-4 space-y-3.5">
           <div>
-            <label className="mb-1.5 block text-sm text-zinc-300">Terminal e-posta</label>
+            <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Terminal E-posta</label>
             <input
               type="email"
               value={terminalEmail}
               onChange={(e) => setTerminalEmail(e.target.value)}
               placeholder="terminal@restoran.com"
               autoComplete="off"
-              className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-4 py-2.5 text-white outline-none focus:border-blue-500"
+              className={inputCls}
               disabled={terminalSaveLoading}
               required
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm text-zinc-300">
-              Terminal parola{" "}
+            <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
+              Terminal Parola{" "}
               {initialTerminalEmail
                 ? "(değiştirmek için doldurun; boş bırakılırsa mevcut parola korunur)"
                 : "(en az 4 karakter) *"}
@@ -211,20 +214,20 @@ export function PrintAgentTokenSection({
               placeholder="••••••••"
               minLength={4}
               autoComplete="new-password"
-              className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-4 py-2.5 text-white outline-none focus:border-blue-500"
+              className={inputCls}
               disabled={terminalSaveLoading}
               required={!initialTerminalEmail}
             />
           </div>
-          {terminalError && <p className="text-sm text-red-400">{terminalError}</p>}
-          {terminalSuccess && <p className="text-sm text-emerald-400">{terminalSuccess}</p>}
+          {terminalError && <p className="text-[12px] font-medium text-red-600">{terminalError}</p>}
+          {terminalSuccess && <p className="text-[12px] font-medium text-emerald-700">{terminalSuccess}</p>}
           <button
             type="submit"
             disabled={terminalSaveLoading}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#e63462] px-4 text-[13px] font-semibold text-white hover:bg-[#d42d56] disabled:opacity-50"
           >
             <Monitor className="h-4 w-4" />
-            {terminalSaveLoading ? "Kaydediliyor…" : "Terminal bilgilerini kaydet"}
+            {terminalSaveLoading ? "Kaydediliyor…" : "Terminal Bilgilerini Kaydet"}
           </button>
         </form>
       </div>
@@ -270,11 +273,11 @@ export function PrintAgentCategoriesSection({ restaurantId }: { restaurantId: st
   }
 
   return (
-    <div className="mt-8 rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6">
+    <div className="rounded-2xl border border-[#e5e5ea] bg-white p-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-lg font-medium text-white">Ürün kategorileri</h2>
-          <p className="mt-1 text-sm text-zinc-400">
+          <h2 className="text-[15px] font-semibold text-[#1d1d1f]">Ürün Kategorileri</h2>
+          <p className="mt-0.5 text-[12px] text-[#86868b]">
             Bu restoranın panelinde tanımlanan kategoriler. Masaüstü Print Agent uygulaması giriş
             yapıldığında bu kategorileri otomatik olarak çeker.
           </p>
@@ -283,41 +286,41 @@ export function PrintAgentCategoriesSection({ restaurantId }: { restaurantId: st
           type="button"
           onClick={() => void loadPanelCategories()}
           disabled={panelCategoriesLoading}
-          className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-[#2a2a2a] px-3 py-2 text-sm text-zinc-300 hover:bg-[#2a2a2a] disabled:opacity-50"
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3 text-[12px] font-medium text-[#1d1d1f] hover:bg-[#e8e8ed] disabled:opacity-50"
         >
-          <RefreshCw className={`h-4 w-4 ${panelCategoriesLoading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`h-3.5 w-3.5 ${panelCategoriesLoading ? "animate-spin" : ""}`} />
           Yenile
         </button>
       </div>
       {panelCategoriesError && (
-        <p className="mt-3 text-sm text-red-400">{panelCategoriesError}</p>
+        <p className="mt-3 text-[12px] font-medium text-red-600">{panelCategoriesError}</p>
       )}
       {panelCategoriesLoading && !panelCategoriesError ? (
-        <p className="mt-4 text-sm text-zinc-500">Kategoriler yükleniyor…</p>
+        <p className="mt-4 text-[13px] text-[#86868b]">Kategoriler yükleniyor…</p>
       ) : (
-        <div className="mt-4 overflow-x-auto rounded-lg border border-[#2a2a2a]">
-          <table className="w-full min-w-[520px] text-left text-sm">
+        <div className="mt-4 overflow-x-auto rounded-xl border border-[#e5e5ea]">
+          <table className="w-full min-w-[520px] text-left text-[13px]">
             <thead>
-              <tr className="border-b border-[#2a2a2a] text-zinc-400">
-                <th className="p-3 font-medium">Kategori adı</th>
-                <th className="p-3 font-medium">Kategori ID</th>
+              <tr className="border-b border-[#f0f0f0] bg-[#fafafa] text-[11px] font-semibold uppercase tracking-wider text-[#86868b]">
+                <th className="px-4 py-2.5">Kategori Adı</th>
+                <th className="px-4 py-2.5">Kategori ID</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-[#f0f0f0]">
               {panelCategories.length === 0 ? (
                 <tr>
-                  <td colSpan={2} className="p-6 text-center text-zinc-500">
+                  <td colSpan={2} className="p-6 text-center text-[12px] text-[#86868b]">
                     Henüz kategori yok. Restoran panelinden ürün kategorisi ekleyin.
                   </td>
                 </tr>
               ) : (
                 panelCategories.map((category) => (
-                  <tr key={category.id} className="border-b border-[#2a2a2a] last:border-0">
-                    <td className="p-3 font-medium text-white">{category.name}</td>
-                    <td className="p-3">
+                  <tr key={category.id} className="hover:bg-[#f9f9fb]">
+                    <td className="px-4 py-2.5 font-medium text-[#1d1d1f]">{category.name}</td>
+                    <td className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
                         <code
-                          className="break-all font-mono text-xs text-zinc-300"
+                          className="break-all font-mono text-[12px] text-[#636366]"
                           title={category.id}
                         >
                           {category.id}
@@ -325,13 +328,13 @@ export function PrintAgentCategoriesSection({ restaurantId }: { restaurantId: st
                         <button
                           type="button"
                           onClick={() => void handleCopy(category.id)}
-                          className="shrink-0 rounded p-1.5 text-zinc-400 hover:bg-[#2a2a2a] hover:text-white"
+                          className="shrink-0 rounded-lg bg-[#f5f5f7] p-1.5 text-[#636366] hover:bg-[#e8e8ed] hover:text-[#1d1d1f]"
                           title="ID kopyala"
                         >
                           {copiedId === category.id ? (
-                            <Check className="h-4 w-4 text-emerald-400" />
+                            <Check className="h-3.5 w-3.5 text-emerald-600" />
                           ) : (
-                            <Copy className="h-4 w-4" />
+                            <Copy className="h-3.5 w-3.5" />
                           )}
                         </button>
                       </div>

@@ -166,49 +166,49 @@ export function RootAdminsSection({
   }
 
   const fieldCls =
-    "w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-3.5 py-2 text-sm text-white outline-none focus:border-[#e63462]"
+    "w-full h-10 rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3.5 text-[13px] text-[#1d1d1f] outline-none focus:border-[#e63462] focus:bg-white transition-all"
 
   return (
-    <div className="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6">
+    <div className="rounded-2xl border border-[#e5e5ea] bg-white p-5">
       <div className="flex items-center gap-2.5">
-        <div className="rounded-lg bg-[#e63462]/20 p-2">
-          <Crown className="h-4 w-4 text-[#e63462]" />
+        <div className="rounded-xl bg-[#e63462]/10 p-2 text-[#e63462]">
+          <Crown className="h-4 w-4" />
         </div>
         <div>
-          <h2 className="text-lg font-medium text-white">
+          <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
             Şube &amp; Marka Boss Hesapları
           </h2>
-          <p className="text-xs text-zinc-400">
-            Bu şubeye hem <strong>Marka Sahibi (HQ)</strong> hem de{" "}
-            <strong>Şube / Franchise Sahibi</strong> atanabilir. Her biri kendi yetki kapsamında ciro ve analizleri görür.
+          <p className="text-[12px] text-[#86868b]">
+            Bu şubeye hem <span className="font-semibold text-[#1d1d1f]">Marka Sahibi (HQ)</span> hem de{" "}
+            <span className="font-semibold text-[#1d1d1f]">Şube / Franchise Sahibi</span> atanabilir.
           </p>
         </div>
       </div>
 
-      {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+      {error && <p className="mt-3 text-[12px] font-medium text-red-600">{error}</p>}
       {adminError && mode === "none" && (
-        <p className="mt-3 text-sm text-red-400">{adminError}</p>
+        <p className="mt-3 text-[12px] font-medium text-red-600">{adminError}</p>
       )}
       {loading ? (
-        <p className="mt-4 text-sm text-zinc-500">Yükleniyor…</p>
+        <p className="mt-4 text-[13px] text-[#86868b]">Yükleniyor…</p>
       ) : (
         <>
-          <ul className="mt-4 space-y-3">
+          <ul className="mt-4 space-y-2.5">
             {rootAdmins.map((admin) => (
               <li
                 key={admin.id}
-                className="rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] p-4 flex items-start justify-between gap-4"
+                className="rounded-xl border border-[#e5e5ea] bg-[#f9f9fb] p-3.5 flex items-start justify-between gap-3"
               >
                 <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium text-white">{admin.name}</p>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <p className="text-[13px] font-semibold text-[#1d1d1f]">{admin.name}</p>
                     <span
-                      className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${
+                      className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${
                         admin.bossTier === "brand_owner"
-                          ? "bg-purple-500/20 text-purple-300"
+                          ? "bg-purple-50 text-purple-700"
                           : admin.bossTier === "regional_manager"
-                            ? "bg-blue-500/20 text-blue-300"
-                            : "bg-[#e63462]/15 text-[#e63462]"
+                            ? "bg-blue-50 text-blue-700"
+                            : "bg-[#fef3f5] text-[#e63462]"
                       }`}
                     >
                       {admin.bossTier === "brand_owner"
@@ -218,34 +218,34 @@ export function RootAdminsSection({
                           : "Şube / Franchise Boss"}
                     </span>
                     {admin.isActive === false && (
-                      <span className="rounded-md bg-red-500/20 px-2 py-0.5 text-[10px] font-semibold text-red-300">
+                      <span className="rounded-md bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600">
                         Pasif
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-zinc-400 mt-0.5">{admin.email}</p>
+                  <p className="text-[12px] text-[#636366] mt-0.5">{admin.email}</p>
                   {admin.phone && (
-                    <p className="text-xs text-zinc-500 mt-0.5">{admin.phone}</p>
+                    <p className="text-[11px] text-[#86868b] mt-0.5">{admin.phone}</p>
                   )}
                   {admin.restaurants && admin.restaurants.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {admin.restaurants.map((br) => (
                         <span
                           key={br.id}
-                          className="inline-flex items-center gap-1 rounded bg-zinc-800 px-2 py-0.5 text-[11px] text-zinc-300"
+                          className="inline-flex items-center gap-1 rounded-md border border-[#e5e5ea] bg-white px-2 py-0.5 text-[11px] font-medium text-[#1d1d1f]"
                         >
-                          <Building2 className="h-3 w-3 text-zinc-400" />
+                          <Building2 className="h-3 w-3 text-[#e63462]" />
                           {br.name}
                         </span>
                       ))}
                     </div>
                   )}
                 </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
+                <div className="flex items-center gap-1 flex-shrink-0">
                   <button
                     type="button"
                     onClick={() => startEditAdmin(admin)}
-                    className="rounded-lg p-1.5 text-zinc-400 hover:bg-[#2a2a2a] hover:text-white"
+                    className="rounded-lg bg-white border border-[#e5e5ea] p-1.5 text-[#636366] hover:bg-[#f5f5f7] hover:text-[#1d1d1f]"
                     title="Boss Bilgilerini Düzenle"
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -253,7 +253,7 @@ export function RootAdminsSection({
                   <button
                     type="button"
                     onClick={() => void handleUnlink(admin)}
-                    className="rounded-lg p-1.5 text-amber-400 hover:bg-amber-500/10"
+                    className="rounded-lg bg-white border border-[#e5e5ea] p-1.5 text-amber-600 hover:bg-amber-50"
                     title="Şubeden Ayır (Hesabı Silmez)"
                   >
                     <Unlink className="h-3.5 w-3.5" />
@@ -261,7 +261,7 @@ export function RootAdminsSection({
                   <button
                     type="button"
                     onClick={() => void handleDeleteAccount(admin)}
-                    className="rounded-lg p-1.5 text-red-400 hover:bg-red-500/10"
+                    className="rounded-lg bg-white border border-[#e5e5ea] p-1.5 text-red-500 hover:bg-red-50"
                     title="Boss Hesabını Sil"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -274,15 +274,15 @@ export function RootAdminsSection({
           {(mode === "create" || mode === "edit") && (
             <form
               onSubmit={handleSaveBossForm}
-              className="mt-4 space-y-3 border-t border-[#2a2a2a] pt-4"
+              className="mt-4 space-y-3 border-t border-[#f0f0f0] pt-4"
             >
-              <h3 className="text-sm font-medium text-white">
+              <h3 className="text-[13px] font-semibold text-[#1d1d1f]">
                 {mode === "edit"
                   ? "Boss Hesabını Düzenle"
                   : "Yeni Boss (Şube / Franchise Sahibi veya Marka Sahibi) Oluştur"}
               </h3>
               <div>
-                <label className="mb-1 block text-xs text-zinc-300">
+                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
                   Boss Hiyerarşi Rolü *
                 </label>
                 <select
@@ -301,7 +301,7 @@ export function RootAdminsSection({
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs text-zinc-300">Ad Soyad *</label>
+                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Ad Soyad *</label>
                 <input
                   type="text"
                   value={adminName}
@@ -314,7 +314,7 @@ export function RootAdminsSection({
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-xs text-zinc-300">
+                  <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
                     E-posta (Boss giriş) *
                   </label>
                   <input
@@ -328,7 +328,7 @@ export function RootAdminsSection({
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-zinc-300">Telefon</label>
+                  <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Telefon</label>
                   <input
                     type="tel"
                     value={adminPhone}
@@ -340,7 +340,7 @@ export function RootAdminsSection({
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-xs text-zinc-300">
+                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
                   {mode === "edit"
                     ? "Yeni Parola (değiştirmek istemiyorsanız boş bırakın)"
                     : "Parola (en az 8 karakter) *"}
@@ -358,7 +358,7 @@ export function RootAdminsSection({
                 />
               </div>
               {mode === "edit" && (
-                <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+                <label className="flex items-center gap-2 text-[12px] font-medium text-[#1d1d1f] cursor-pointer">
                   <input
                     type="checkbox"
                     checked={adminIsActive}
@@ -368,12 +368,12 @@ export function RootAdminsSection({
                   Boss hesabı aktif (giriş yapabilir)
                 </label>
               )}
-              {adminError && <p className="text-xs text-red-400">{adminError}</p>}
+              {adminError && <p className="text-[12px] font-medium text-red-600">{adminError}</p>}
               <div className="flex gap-2">
                 <button
                   type="submit"
                   disabled={adminSubmitLoading}
-                  className="rounded-lg bg-[#e63462] px-4 py-2 text-xs font-medium text-white hover:bg-[#d42d56] disabled:opacity-50"
+                  className="h-9 rounded-xl bg-[#e63462] px-4 text-[12px] font-semibold text-white hover:bg-[#d42d56] disabled:opacity-50"
                 >
                   {adminSubmitLoading
                     ? "Kaydediliyor…"
@@ -387,7 +387,7 @@ export function RootAdminsSection({
                     setMode("none")
                     setEditingAdminId(null)
                   }}
-                  className="rounded-lg border border-[#2a2a2a] px-4 py-2 text-xs text-zinc-300 hover:bg-[#2a2a2a]"
+                  className="h-9 rounded-xl border border-[#d1d1d6] px-4 text-[12px] font-medium text-[#86868b] hover:bg-[#f5f5f7]"
                 >
                   İptal
                 </button>
@@ -398,9 +398,9 @@ export function RootAdminsSection({
           {mode === "link" && (
             <form
               onSubmit={handleLinkExisting}
-              className="mt-4 space-y-3 border-t border-[#2a2a2a] pt-4"
+              className="mt-4 space-y-3 border-t border-[#f0f0f0] pt-4"
             >
-              <h3 className="text-sm font-medium text-white">
+              <h3 className="text-[13px] font-semibold text-[#1d1d1f]">
                 Mevcut Boss Hesabına Bu Şubeyi Bağla
               </h3>
               <select
@@ -418,19 +418,19 @@ export function RootAdminsSection({
                   </option>
                 ))}
               </select>
-              {adminError && <p className="text-xs text-red-400">{adminError}</p>}
+              {adminError && <p className="text-[12px] font-medium text-red-600">{adminError}</p>}
               <div className="flex gap-2">
                 <button
                   type="submit"
                   disabled={adminSubmitLoading || !selectedExistingBossId}
-                  className="rounded-lg bg-[#e63462] px-4 py-2 text-xs font-medium text-white hover:bg-[#d42d56] disabled:opacity-50"
+                  className="h-9 rounded-xl bg-[#e63462] px-4 text-[12px] font-semibold text-white hover:bg-[#d42d56] disabled:opacity-50"
                 >
                   {adminSubmitLoading ? "Bağlanıyor…" : "Şubeyi Bu Boss'a Bağla"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setMode("none")}
-                  className="rounded-lg border border-[#2a2a2a] px-4 py-2 text-xs text-zinc-300 hover:bg-[#2a2a2a]"
+                  className="h-9 rounded-xl border border-[#d1d1d6] px-4 text-[12px] font-medium text-[#86868b] hover:bg-[#f5f5f7]"
                 >
                   İptal
                 </button>
@@ -452,9 +452,9 @@ export function RootAdminsSection({
                   setAdminError("")
                   setMode("create")
                 }}
-                className="flex items-center gap-2 rounded-lg border border-dashed border-[#2a2a2a] px-4 py-2.5 text-xs text-zinc-300 hover:border-[#e63462]/60 hover:text-[#e63462]"
+                className="flex items-center gap-1.5 rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3.5 py-2 text-[12px] font-medium text-[#1d1d1f] hover:bg-[#e8e8ed]"
               >
-                <UserPlus className="h-4 w-4" />
+                <UserPlus className="h-3.5 w-3.5 text-[#e63462]" />
                 Yeni Şube / Marka Boss Oluştur
               </button>
               {linkableBosses.length > 0 && (
@@ -464,9 +464,9 @@ export function RootAdminsSection({
                     setMode("link")
                     setAdminError("")
                   }}
-                  className="flex items-center gap-2 rounded-lg border border-dashed border-[#2a2a2a] px-4 py-2.5 text-xs text-zinc-300 hover:border-blue-500/60 hover:text-blue-400"
+                  className="flex items-center gap-1.5 rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3.5 py-2 text-[12px] font-medium text-[#1d1d1f] hover:bg-[#e8e8ed]"
                 >
-                  <Link2 className="h-4 w-4" />
+                  <Link2 className="h-3.5 w-3.5 text-[#007aff]" />
                   Mevcut Boss&apos;a Şube Olarak Bağla
                 </button>
               )}
