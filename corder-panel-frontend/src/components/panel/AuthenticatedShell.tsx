@@ -15,7 +15,7 @@ import ProductManagement from "@/components/panel/product-management"
 import UserManagement from "@/components/panel/user-management"
 import ReportsView from "@/components/panel/reports-view"
 import SettingsView from "@/components/panel/settings-view"
-import BillingView from "@/components/panel/billing-view"
+import BillingView, { prefetchBillingInfo } from "@/components/panel/billing-view"
 import CashRegisterView from "@/components/panel/cash-register-view"
 import StockView from "@/components/panel/stock-view"
 import TechnicalView from "@/components/panel/technical-view"
@@ -114,7 +114,11 @@ function renderScreen(
 
 export function AuthenticatedShell() {
   const [activeView, setActiveView] = useState<PanelViewId>("dashboard")
-  const { isBoss, hasPermission } = usePanelAuth()
+  const { token, currentBusiness, isBoss, hasPermission } = usePanelAuth()
+
+  useEffect(() => {
+    prefetchBillingInfo(token, currentBusiness?.id)
+  }, [token, currentBusiness?.id])
 
   useEffect(() => {
     if (!isViewPermitted(activeView, isBoss, hasPermission)) {
