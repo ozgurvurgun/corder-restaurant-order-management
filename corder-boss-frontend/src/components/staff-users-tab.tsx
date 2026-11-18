@@ -116,12 +116,12 @@ export function StaffUsersTab() {
           <div>
             <div className="flex items-center gap-2">
               <Users className="h-5 w-5 text-[#e63462]" />
-              <h2 className="text-[16px] font-bold text-[#1d1d1f]">
+              <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
                 Merchant Panel &amp; Terminal Kullanıcıları
               </h2>
             </div>
             <p className="mt-0.5 text-[12px] text-[#86868b]">
-              Şube: <strong className="text-[#1d1d1f]">{effectiveBranch?.name}</strong> — Müdür, kasiyer, garson ve özel yetkili kullanıcıları buradan veya Merchant Panelinden oluşturabilirsiniz.
+              Şube: <span className="font-semibold text-[#1d1d1f]">{effectiveBranch?.name}</span> — Müdür, kasiyer, garson ve özel yetkili kullanıcıları buradan veya Merchant Panelinden oluşturabilirsiniz.
             </p>
           </div>
 
@@ -129,14 +129,14 @@ export function StaffUsersTab() {
             {branches.length > 1 && (
               <div className="inline-flex items-center gap-1.5 rounded-xl border border-[#e63462]/30 bg-[#fef3f5] px-2.5 py-1.5">
                 <Building2 className="h-3.5 w-3.5 text-[#e63462]" />
-                <span className="text-[11px] font-semibold text-[#86868b]">
+                <span className="text-[11px] font-medium text-[#86868b]">
                   {selectedBranchId === "ALL" ? "Düzenlenen:" : "Şube:"}
                 </span>
                 <select
                   value={effectiveBranchId}
                   onChange={(e) => setSelectedBranchId(e.target.value)}
                   aria-label="Düzenlenen Şube"
-                  className="bg-transparent text-[12px] font-bold text-[#1d1d1f] outline-none cursor-pointer"
+                  className="bg-transparent text-[12px] font-semibold text-[#1d1d1f] outline-none cursor-pointer"
                 >
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>
@@ -149,7 +149,7 @@ export function StaffUsersTab() {
             <button
               type="button"
               onClick={openCreateModal}
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#e63462] px-3.5 text-[12px] font-bold text-white shadow-sm hover:bg-[#d42d56]"
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#e63462] px-3.5 text-[12px] font-semibold text-white shadow-sm hover:bg-[#d42d56]"
             >
               <Plus className="h-4 w-4" />
               Yeni Kullanıcı Oluştur
@@ -162,7 +162,7 @@ export function StaffUsersTab() {
         {staff.length === 0 ? (
           <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-10 text-center">
             <Users className="mx-auto h-9 w-9 text-[#86868b]" />
-            <h3 className="mt-2 text-[15px] font-bold text-[#1d1d1f]">
+            <h3 className="mt-2 text-[15px] font-semibold text-[#1d1d1f]">
               Bu şubede henüz kullanıcı yok
             </h3>
             <p className="mt-1 text-[12px] text-[#86868b]">
@@ -171,7 +171,7 @@ export function StaffUsersTab() {
             <button
               type="button"
               onClick={openCreateModal}
-              className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#e63462] px-4 py-2 text-[13px] font-bold text-white"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#e63462] px-4 py-2 text-[13px] font-semibold text-white"
             >
               <Plus className="h-4 w-4" /> İlk Kullanıcıyı Ekle
             </button>
@@ -192,14 +192,14 @@ export function StaffUsersTab() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <div
-                      className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl text-[15px] font-bold text-white"
+                      className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-[14px] font-semibold text-white"
                       style={{ backgroundColor: u.roleColor || "#e63462" }}
                     >
                       {u.name.charAt(0).toLocaleUpperCase("tr-TR")}
                     </div>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <h3 className="truncate text-[15px] font-bold text-[#1d1d1f]">
+                        <h3 className="truncate text-[14px] font-semibold text-[#1d1d1f]">
                           {u.name}
                         </h3>
                         <span

@@ -121,7 +121,7 @@ export function OperationsCatalogTab() {
                 key={item.id}
                 type="button"
                 onClick={() => setSubTab(item.id)}
-                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-bold transition-all ${
+                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold transition-all ${
                   active
                     ? "bg-[#e63462] text-white"
                     : "bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#ebebf0]"
@@ -137,14 +137,14 @@ export function OperationsCatalogTab() {
         {branches.length > 1 && (
           <div className="inline-flex items-center gap-1.5 rounded-xl border border-[#e63462]/30 bg-[#fef3f5] px-2.5 py-1.5">
             <Building2 className="h-3.5 w-3.5 text-[#e63462]" />
-            <span className="text-[11px] font-semibold text-[#86868b]">
+            <span className="text-[11px] font-medium text-[#86868b]">
               {selectedBranchId === "ALL" ? "Aktif Şube:" : "Şube:"}
             </span>
             <select
               value={effectiveBranchId}
               onChange={(e) => setSelectedBranchId(e.target.value)}
               aria-label="Aktif Şube"
-              className="bg-transparent text-[12px] font-bold text-[#1d1d1f] outline-none cursor-pointer"
+              className="bg-transparent text-[12px] font-semibold text-[#1d1d1f] outline-none cursor-pointer"
             >
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>
@@ -160,7 +160,7 @@ export function OperationsCatalogTab() {
       {subTab === "tables" && (
         <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-[14px] font-bold text-[#1d1d1f]">
+            <h3 className="text-[14px] font-semibold text-[#1d1d1f]">
               {effectiveBranch?.name} — Canlı Masa Durumu ({tables.length} Masa)
             </h3>
           </div>
@@ -179,7 +179,7 @@ export function OperationsCatalogTab() {
                   key={t.id}
                   type="button"
                   onClick={() => setSelectedTableId(t.id)}
-                  className={`rounded-2xl border p-3 text-left transition-all ${
+                  className={`rounded-xl border p-3 text-left transition-all ${
                     t.status === "checkout"
                       ? "border-blue-400 bg-blue-50"
                       : occupied
@@ -188,7 +188,7 @@ export function OperationsCatalogTab() {
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-[13px] font-bold text-[#1d1d1f]">
+                    <span className="text-[13px] font-semibold text-[#1d1d1f]">
                       {t.name}
                     </span>
                     <span
@@ -201,7 +201,7 @@ export function OperationsCatalogTab() {
                       }`}
                     />
                   </div>
-                  <p className="mt-1 text-[15px] font-extrabold text-[#1d1d1f] tabular-nums">
+                  <p className="mt-1 text-[15px] font-bold text-[#1d1d1f] tabular-nums">
                     {occupied ? `₺${formatMoney( getTableNetTotal(t) )}` : "Boş"}
                   </p>
                   <p className="mt-0.5 truncate text-[10px] text-[#86868b]">
@@ -271,7 +271,7 @@ export function OperationsCatalogTab() {
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <p className="truncate text-[13px] font-bold text-[#1d1d1f]">
+                      <p className="truncate text-[13px] font-semibold text-[#1d1d1f]">
                         {p.name}
                       </p>
                       {catName && (
@@ -313,7 +313,7 @@ export function OperationsCatalogTab() {
                           setEditingPriceId(p.id)
                           setPriceDraft(String(p.price))
                         }}
-                        className="mt-0.5 text-[13px] font-bold text-[#e63462] hover:underline"
+                        className="mt-0.5 text-[13px] font-semibold text-[#e63462] hover:underline"
                       >
                         ₺{formatMoney(p.price)} (Fiyatı Değiştir)
                       </button>
@@ -323,7 +323,7 @@ export function OperationsCatalogTab() {
                   <button
                     type="button"
                     onClick={() => void handleToggleStock(p)}
-                    className={`rounded-xl px-3 py-1.5 text-[11px] font-bold transition-colors ${
+                    className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold transition-colors ${
                       p.inStock
                         ? "bg-green-100 text-green-700"
                         : "bg-red-100 text-red-600"
@@ -341,7 +341,7 @@ export function OperationsCatalogTab() {
       {/* 3. Critical Stock Alert List */}
       {subTab === "stock" && (
         <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-4">
-          <h3 className="text-[14px] font-bold text-[#1d1d1f] mb-3">
+          <h3 className="text-[14px] font-semibold text-[#1d1d1f] mb-3">
             Kritik Seviyedeki Hammaddeler ({criticalMaterials.length})
           </h3>
           {criticalMaterials.length === 0 ? (
@@ -356,7 +356,7 @@ export function OperationsCatalogTab() {
                   className="flex items-center justify-between rounded-xl border border-orange-200 bg-orange-50/70 px-3.5 py-2.5"
                 >
                   <div>
-                    <p className="text-[13px] font-bold text-[#1d1d1f]">
+                    <p className="text-[13px] font-semibold text-[#1d1d1f]">
                       {m.name}{" "}
                       {m.branchName && (
                         <span className="text-[11px] font-normal text-[#86868b]">
@@ -368,7 +368,7 @@ export function OperationsCatalogTab() {
                       Kategori: {m.category} • Min: {m.minStock} {m.unit}
                     </p>
                   </div>
-                  <span className="rounded-lg bg-red-100 px-2.5 py-1 text-[12px] font-bold text-red-700">
+                  <span className="rounded-lg bg-red-100 px-2.5 py-1 text-[12px] font-semibold text-red-700">
                     {m.currentStock} {m.unit}
                   </span>
                 </div>

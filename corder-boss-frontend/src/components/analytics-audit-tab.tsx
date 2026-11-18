@@ -94,7 +94,7 @@ export function AnalyticsAuditTab() {
         <div className="flex items-center gap-2 mb-3">
           <BarChart3 className="h-4 w-4 text-[#e63462]" />
           <div>
-            <h3 className="text-[14px] font-bold text-[#1d1d1f]">
+            <h3 className="text-[14px] font-semibold text-[#1d1d1f]">
               Saatlik Satış Yoğunluğu (Bugün)
             </h3>
             <p className="text-[11px] text-[#86868b]">
@@ -138,7 +138,7 @@ export function AnalyticsAuditTab() {
         <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-4">
           <div className="flex items-center gap-2 mb-3">
             <Award className="h-4 w-4 text-[#e63462]" />
-            <h3 className="text-[14px] font-bold text-[#1d1d1f]">
+            <h3 className="text-[14px] font-semibold text-[#1d1d1f]">
               En Çok Satan Ürünler (Bu Ay)
             </h3>
           </div>
@@ -177,7 +177,7 @@ export function AnalyticsAuditTab() {
         <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-4">
           <div className="flex items-center gap-2 mb-3">
             <Users className="h-4 w-4 text-[#e63462]" />
-            <h3 className="text-[14px] font-bold text-[#1d1d1f]">
+            <h3 className="text-[14px] font-semibold text-[#1d1d1f]">
               Personel Satış &amp; İskonto Karnesi
             </h3>
           </div>
@@ -216,7 +216,7 @@ export function AnalyticsAuditTab() {
           <div className="flex items-center gap-2">
             <ShieldAlert className="h-4 w-4 text-[#e63462]" />
             <div>
-              <h3 className="text-[14px] font-bold text-[#1d1d1f]">
+              <h3 className="text-[14px] font-semibold text-[#1d1d1f]">
                 Denetim &amp; Kritik İşlem Kayıtları (Audit Log)
               </h3>
               <p className="text-[11px] text-[#86868b]">

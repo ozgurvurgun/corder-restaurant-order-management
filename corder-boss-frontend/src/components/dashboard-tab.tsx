@@ -7,7 +7,7 @@ import {
   type BranchTypeFilter,
 } from "./branch-performance-list"
 import {
-  TrendingUp,
+  DollarSign,
   Utensils,
   Wallet,
   AlertTriangle,
@@ -19,6 +19,8 @@ import {
   Banknote,
   CreditCard,
   BookUser,
+  LayoutGrid,
+  Calendar,
 } from "lucide-react"
 
 function aggregateBranches(branches: BranchLivePulse[]) {
@@ -97,85 +99,96 @@ export function DashboardTab({ onNavigate }: { onNavigate: (tab: BossTabId) => v
     metrics.paymentBreakdown.multinet
   )
 
-  const heroBadgeText =
+  const scopeBadgeText =
     selectedBranchId !== "ALL"
-      ? `${effectiveBranch?.name ?? "Şube"} Canlı Ciro`
+      ? `${effectiveBranch?.name ?? "Şube"} Canlı Özeti`
       : branchTypeFilter === "franchise"
-        ? `${filteredBranches.length} Franchise Şube Ciro`
+        ? `${filteredBranches.length} Franchise Şube`
         : branchTypeFilter === "company_owned"
-          ? `${filteredBranches.length} Merkez Şube Ciro`
-          : `${branches.length} Şube Konsolide Ciro`
+          ? `${filteredBranches.length} Merkez Şube`
+          : `${branches.length} Şube Konsolide`
+
+  const topStats = [
+    {
+      label: "Bugünkü Net Ciro",
+      value: `₺${formatMoney(metrics.todayRevenue)}`,
+      sub: `${metrics.todayOrderCount} kapanan adisyon`,
+      icon: DollarSign,
+      color: "#34c759",
+    },
+    {
+      label: "Açık Masalardaki Tutar",
+      value: `₺${formatMoney(metrics.openChecksTotal)}`,
+      sub: `${metrics.occupiedTableCount} / ${metrics.totalTableCount} masa dolu`,
+      icon: LayoutGrid,
+      color: "#ff9500",
+    },
+    {
+      label: "Son 7 Gün (Haftalık)",
+      value: `₺${formatMoney(metrics.weekRevenue)}`,
+      sub: scopeBadgeText,
+      icon: Calendar,
+      color: "#007aff",
+    },
+    {
+      label: "Bu Ay (Aylık Ciro)",
+      value: `₺${formatMoney(metrics.monthRevenue)}`,
+      sub: scopeBadgeText,
+      icon: Wallet,
+      color: "#e63462",
+    },
+  ]
 
   return (
-    <div className="space-y-4 pb-6">
-      {/* Live Revenue Hero Card */}
-      <div className="rounded-3xl bg-gradient-to-br from-[#e63462] via-[#c62a6b] to-[#7b2d8e] p-5 text-white shadow-xl shadow-[#e63462]/20">
-        <div className="flex items-center justify-between">
-          <div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] font-semibold backdrop-blur-md">
-              <span className="h-2 w-2 rounded-full bg-[#34c759] animate-pulse" />
-              {heroBadgeText}
-            </span>
-            <p className="mt-3 text-[12px] font-medium text-white/80">
-              Bugünkü Net Ciro ({metrics.todayOrderCount} Kapanan Adisyon)
-            </p>
-            <h2 className="mt-0.5 text-[34px] font-extrabold tracking-tight tabular-nums leading-none">
-              ₺{formatMoney(metrics.todayRevenue)}
-            </h2>
-          </div>
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-md">
-            <TrendingUp className="h-6 w-6 text-white" />
-          </div>
-        </div>
-
-        {/* Period Comparisons */}
-        <div className="mt-5 grid grid-cols-3 gap-2.5 border-t border-white/20 pt-4">
-          <div className="rounded-2xl bg-white/10 p-2.5 backdrop-blur-xs">
-            <p className="text-[10px] font-semibold uppercase text-white/70">
-              Açık Masalardaki
-            </p>
-            <p className="mt-0.5 text-[15px] font-bold tabular-nums">
-              ₺{formatMoney(metrics.openChecksTotal)}
-            </p>
-            <p className="text-[10px] text-white/75">
-              {metrics.occupiedTableCount}/{metrics.totalTableCount} Masa Dolu
-            </p>
-          </div>
-          <div className="rounded-2xl bg-white/10 p-2.5 backdrop-blur-xs">
-            <p className="text-[10px] font-semibold uppercase text-white/70">
-              Son 7 Gün
-            </p>
-            <p className="mt-0.5 text-[15px] font-bold tabular-nums">
-              ₺{formatMoney(metrics.weekRevenue)}
-            </p>
-            <p className="text-[10px] text-white/75">Haftalık Ciro</p>
-          </div>
-          <div className="rounded-2xl bg-white/10 p-2.5 backdrop-blur-xs">
-            <p className="text-[10px] font-semibold uppercase text-white/70">
-              Bu Ay
-            </p>
-            <p className="mt-0.5 text-[15px] font-bold tabular-nums">
-              ₺{formatMoney(metrics.monthRevenue)}
-            </p>
-            <p className="text-[10px] text-white/75">Aylık Ciro</p>
-          </div>
-        </div>
+    <div className="space-y-4">
+      {/* Top 4 KPI Cards matching Merchant Panel DashboardView */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {topStats.map((stat) => {
+          const Icon = stat.icon
+          return (
+            <div
+              key={stat.label}
+              className="bg-white rounded-2xl p-4 border border-[#e5e5ea]"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center"
+                  style={{ backgroundColor: `${stat.color}15` }}
+                >
+                  <Icon
+                    className="w-[18px] h-[18px]"
+                    style={{ color: stat.color }}
+                  />
+                </div>
+                <span className="text-[11px] font-medium text-[#86868b]">
+                  {stat.sub}
+                </span>
+              </div>
+              <p className="text-[22px] font-bold text-[#1d1d1f] leading-tight tabular-nums">
+                {stat.value}
+              </p>
+              <p className="text-[12px] text-[#86868b] mt-0.5">
+                {stat.label}
+              </p>
+            </div>
+          )
+        })}
       </div>
 
       {/* Quick Boss Action Shortcuts */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <button
           type="button"
           onClick={() => onNavigate("permissions")}
-          className="flex items-center justify-between rounded-2xl border border-[#d1d1d6]/60 bg-white p-3.5 text-left shadow-xs active:scale-[0.99] hover:border-[#e63462]/40 transition-all"
+          className="flex items-center justify-between rounded-2xl border border-[#e5e5ea] bg-white p-4 text-left hover:border-[#d1d1d6] transition-all"
         >
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#e63462]/10 text-[#e63462]">
               <ShieldCheck className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-[13px] font-bold text-[#1d1d1f]">Rol &amp; Yetkiler</p>
-              <p className="text-[11px] text-[#86868b]">İskonto &amp; aksiyon kısıtları</p>
+              <p className="text-[14px] font-semibold text-[#1d1d1f]">Rol &amp; Yetkiler</p>
+              <p className="text-[12px] text-[#86868b]">İskonto limitleri ve 48 granüler aksiyon yetkisi</p>
             </div>
           </div>
           <ChevronRight className="h-4 w-4 text-[#86868b]" />
@@ -184,18 +197,18 @@ export function DashboardTab({ onNavigate }: { onNavigate: (tab: BossTabId) => v
         <button
           type="button"
           onClick={() => onNavigate("staff")}
-          className="flex items-center justify-between rounded-2xl border border-[#d1d1d6]/60 bg-white p-3.5 text-left shadow-xs active:scale-[0.99] hover:border-[#e63462]/40 transition-all"
+          className="flex items-center justify-between rounded-2xl border border-[#e5e5ea] bg-white p-4 text-left hover:border-[#d1d1d6] transition-all"
         >
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#007aff]/10 text-[#007aff]">
               <Users className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-[13px] font-bold text-[#1d1d1f]">
-                Kullanıcı Oluştur
+              <p className="text-[14px] font-semibold text-[#1d1d1f]">
+                Kullanıcı &amp; Şube Yöneticileri
               </p>
-              <p className="text-[11px] text-[#86868b]">
-                {metrics.staffCount} Aktif Personel
+              <p className="text-[12px] text-[#86868b]">
+                {metrics.staffCount} aktif personel ve şube yetkilileri
               </p>
             </div>
           </div>
@@ -204,10 +217,10 @@ export function DashboardTab({ onNavigate }: { onNavigate: (tab: BossTabId) => v
       </div>
 
       {/* Operational & Security Pulse Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="rounded-2xl border border-[#e5e5ea] bg-white p-4">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-[#86868b]">
+            <span className="text-[12px] font-medium text-[#86868b]">
               İskonto / İkram
             </span>
             <Percent className="h-4 w-4 text-amber-500" />
@@ -218,9 +231,9 @@ export function DashboardTab({ onNavigate }: { onNavigate: (tab: BossTabId) => v
           <p className="text-[11px] text-[#86868b]">Bugün uygulanan indirim</p>
         </div>
 
-        <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-3.5">
+        <div className="rounded-2xl border border-[#e5e5ea] bg-white p-4">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-[#86868b]">
+            <span className="text-[12px] font-medium text-[#86868b]">
               İptal / Zayi
             </span>
             <Ban className="h-4 w-4 text-red-500" />
@@ -233,9 +246,9 @@ export function DashboardTab({ onNavigate }: { onNavigate: (tab: BossTabId) => v
           </p>
         </div>
 
-        <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-3.5">
+        <div className="rounded-2xl border border-[#e5e5ea] bg-white p-4">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-[#86868b]">
+            <span className="text-[12px] font-medium text-[#86868b]">
               Cari Alacaklar
             </span>
             <BookUser className="h-4 w-4 text-blue-500" />
@@ -246,9 +259,9 @@ export function DashboardTab({ onNavigate }: { onNavigate: (tab: BossTabId) => v
           <p className="text-[11px] text-[#86868b]">Açık veresiye bakiyesi</p>
         </div>
 
-        <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-3.5">
+        <div className="rounded-2xl border border-[#e5e5ea] bg-white p-4">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-[#86868b]">
+            <span className="text-[12px] font-medium text-[#86868b]">
               Kritik Stok
             </span>
             <AlertTriangle className="h-4 w-4 text-orange-500" />
@@ -261,15 +274,15 @@ export function DashboardTab({ onNavigate }: { onNavigate: (tab: BossTabId) => v
       </div>
 
       {/* Payment Breakdown Card */}
-      <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-4">
+      <div className="rounded-2xl border border-[#e5e5ea] bg-white p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Wallet className="h-4 w-4 text-[#e63462]" />
-            <h3 className="text-[14px] font-bold text-[#1d1d1f]">
+            <h3 className="text-[14px] font-semibold text-[#1d1d1f]">
               Bugünkü Kasa &amp; Ödeme Dağılımı
             </h3>
           </div>
-          <span className="text-[12px] font-semibold text-[#86868b]">
+          <span className="text-[12px] font-medium text-[#86868b]">
             Toplam: ₺{formatMoney(totalPayments)}
           </span>
         </div>

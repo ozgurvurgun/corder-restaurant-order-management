@@ -10,28 +10,64 @@ import { AnalyticsAuditTab } from "@/components/analytics-audit-tab"
 import { OperationsCatalogTab } from "@/components/operations-catalog-tab"
 import {
   AlertTriangle,
-  LayoutDashboard,
+  Home,
   RefreshCw,
   ShieldCheck,
   Users,
   BarChart3,
   Utensils,
+  Crown,
+  Building2,
+  LogOut,
 } from "lucide-react"
 
-const NAV_TABS: Array<{
-  id: BossTabId
+const NAV_GROUPS: Array<{
   label: string
-  icon: typeof LayoutDashboard
+  items: Array<{
+    id: BossTabId
+    label: string
+    mobileLabel: string
+    icon: typeof Home
+  }>
 }> = [
-  { id: "dashboard", label: "Özet", icon: LayoutDashboard },
-  { id: "permissions", label: "Yetkiler", icon: ShieldCheck },
-  { id: "staff", label: "Ekip", icon: Users },
-  { id: "analytics", label: "Analiz", icon: BarChart3 },
-  { id: "operations", label: "Operasyon", icon: Utensils },
+  {
+    label: "Genel",
+    items: [
+      { id: "dashboard", label: "Ana Sayfa", mobileLabel: "Özet", icon: Home },
+    ],
+  },
+  {
+    label: "Yönetim & Yetki",
+    items: [
+      { id: "permissions", label: "Rol & Yetkiler", mobileLabel: "Yetkiler", icon: ShieldCheck },
+      { id: "staff", label: "Kullanıcılar", mobileLabel: "Ekip", icon: Users },
+    ],
+  },
+  {
+    label: "Operasyon & Analiz",
+    items: [
+      { id: "operations", label: "Canlı Operasyon", mobileLabel: "Operasyon", icon: Utensils },
+      { id: "analytics", label: "Raporlar & Denetim", mobileLabel: "Analiz", icon: BarChart3 },
+    ],
+  },
 ]
 
+const FLAT_TABS = NAV_GROUPS.flatMap((g) => g.items)
+
 function BossShell() {
-  const { isAuthenticated, toast, error, loading, refreshAll } = useBossStore()
+  const {
+    isAuthenticated,
+    user,
+    branches,
+    selectedBranchId,
+    setSelectedBranchId,
+    effectiveBranch,
+    toast,
+    error,
+    loading,
+    refreshAll,
+    logout,
+  } = useBossStore()
   const [activeTab, setActiveTab] = useState<BossTabId>("dashboard")
 
   if (!isAuthenticated) {
@@ -39,81 +75,192 @@ function BossShell() {
   }
 
   return (
-    <div className="min-h-dvh flex flex-col bg-[#f5f5f7] text-[#1d1d1f]">
-      <BranchSwitcherHeader />
-
-      {/* Toast Notification */}
-      {toast && (
-        <div className="fixed top-16 left-1/2 z-50 -translate-x-1/2 px-4 w-full max-w-sm">
-          <div
-            role="status"
-            aria-live="polite"
-            className={`rounded-2xl px-4 py-3 text-center text-[13px] font-semibold text-white shadow-xl ${
-              toast.type === "error" ? "bg-red-600" : "bg-[#1d1d1f]"
-            }`}
-          >
-            {toast.message}
+    <div className="h-dvh flex overflow-hidden bg-[#f5f5f7] text-[#1d1d1f]">
+      {/* Desktop Left Sidebar matching Merchant Panel */}
+      <aside className="hidden md:flex w-[240px] h-full flex-col border-r border-[#d1d1d6]/60 bg-[#f5f5f7]/80 backdrop-blur-2xl flex-shrink-0 select-none">
+        <div className="px-5 pt-5 pb-3 flex flex-col gap-2.5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[#e63462] flex items-center justify-center">
+              <Crown className="w-4 h-4 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-[13px] font-semibold text-[#1d1d1f] leading-tight truncate">
+                {selectedBranchId === "ALL"
+                  ? "Tüm Şubeler"
+                  : effectiveBranch?.name || "Corder Boss"}
+              </h1>
+              <p className="text-[11px] text-[#86868b] leading-tight">
+                Boss Yönetim Paneli
+              </p>
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* Main Content Area */}
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-4 pb-24">
-        {error && (
-          <div
-            role="alert"
-            className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[12px] text-red-700"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <AlertTriangle className="h-4 w-4 flex-shrink-0 text-red-600" />
-              <span className="font-medium leading-snug">{error}</span>
+          {branches.length > 1 && (
+            <div className="flex items-center gap-1.5 rounded-lg border border-[#d1d1d6]/80 bg-white px-2.5 py-1.5">
+              <Building2 className="w-3.5 h-3.5 text-[#e63462] flex-shrink-0" />
+              <select
+                value={selectedBranchId}
+                onChange={(e) => setSelectedBranchId(e.target.value)}
+                className="w-full bg-transparent text-[11px] font-semibold text-[#1d1d1f] outline-none cursor-pointer"
+              >
+                <option value="ALL">Tüm Şubeler ({branches.length})</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    Şube: {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        <nav className="flex-1 px-3 py-1 flex flex-col gap-3 overflow-auto">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.label}>
+              <p className="px-2.5 text-[10px] font-semibold text-[#86868b] uppercase tracking-wider mb-1">
+                {group.label}
+              </p>
+              <div className="flex flex-col gap-0.5">
+                {group.items.map((item) => {
+                  const isActive = activeTab === item.id
+                  const Icon = item.icon
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setActiveTab(item.id)}
+                      className={`flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] font-medium transition-colors w-full text-left ${
+                        isActive
+                          ? "bg-[#e63462]/10 text-[#e63462]"
+                          : "text-[#1d1d1f] hover:bg-black/[0.04]"
+                      }`}
+                    >
+                      <Icon
+                        className={`w-[18px] h-[18px] flex-shrink-0 ${
+                          isActive ? "text-[#e63462]" : "text-[#86868b]"
+                        }`}
+                      />
+                      <span className="flex-1">{item.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </nav>
+
+        <div className="px-4 py-3 border-t border-[#d1d1d6]/40 space-y-2">
+          <div className="flex items-center justify-between rounded-lg bg-white/70 px-2.5 py-1.5 border border-[#d1d1d6]/50">
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#e63462]">
+              <ShieldCheck className="w-3 h-3" />
+              İşletme Sahibi (Boss)
+            </span>
+            <span className="text-[10px] text-[#86868b]">Tam Yetki</span>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-full bg-[#e63462]/15 flex items-center justify-center">
+              <span className="text-[11px] font-semibold text-[#e63462]">
+                {user?.name?.trim()?.charAt(0)?.toUpperCase() ?? "B"}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-semibold text-[#1d1d1f] leading-tight truncate">
+                {user?.name || "Boss"}
+              </p>
+              <p className="text-[10px] text-[#86868b] leading-tight truncate">
+                {user?.email || ""}
+              </p>
             </div>
             <button
               type="button"
-              onClick={() => void refreshAll()}
-              disabled={loading}
-              className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl bg-red-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-red-700 disabled:opacity-50"
+              onClick={logout}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-[#86868b] hover:text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-colors"
+              title="Çıkış Yap"
             >
-              <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
-              Tekrar Dene
+              <LogOut className="w-4 h-4" />
             </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Column */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <BranchSwitcherHeader activeTab={activeTab} />
+
+        {/* Toast Notification */}
+        {toast && (
+          <div className="fixed top-14 left-1/2 z-50 -translate-x-1/2 px-4 w-full max-w-sm">
+            <div
+              role="status"
+              aria-live="polite"
+              className={`rounded-xl px-4 py-2.5 text-center text-[13px] font-medium text-white shadow-lg ${
+                toast.type === "error" ? "bg-red-600" : "bg-[#1d1d1f]"
+              }`}
+            >
+              {toast.message}
+            </div>
           </div>
         )}
 
-        {activeTab === "dashboard" && <DashboardTab onNavigate={setActiveTab} />}
-        {activeTab === "permissions" && <RolesPermissionsTab />}
-        {activeTab === "staff" && <StaffUsersTab />}
-        {activeTab === "analytics" && <AnalyticsAuditTab />}
-        {activeTab === "operations" && <OperationsCatalogTab />}
-      </main>
-
-      {/* Mobile-First Bottom Tab Navigation Bar */}
-      <nav
-        aria-label="Alt Gezinme Menüsü"
-        className="fixed bottom-0 inset-x-0 z-30 border-t border-[#d1d1d6]/70 bg-white/90 backdrop-blur-2xl safe-bottom"
-      >
-        <div className="mx-auto flex h-[62px] max-w-xl items-center justify-around px-2">
-          {NAV_TABS.map((tab) => {
-            const Icon = tab.icon
-            const isActive = activeTab === tab.id
-            return (
+        {/* Main Content Area */}
+        <main className="flex-1 overflow-y-auto w-full p-4 sm:p-6 pb-24 md:pb-6">
+          {error && (
+            <div
+              role="alert"
+              className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[12px] text-red-700"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <AlertTriangle className="h-4 w-4 flex-shrink-0 text-red-600" />
+                <span className="font-medium leading-snug">{error}</span>
+              </div>
               <button
-                key={tab.id}
                 type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex flex-1 flex-col items-center justify-center gap-1 py-1.5 transition-colors ${
-                  isActive ? "text-[#e63462]" : "text-[#86868b] hover:text-[#1d1d1f]"
-                }`}
+                onClick={() => void refreshAll()}
+                disabled={loading}
+                className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-red-700 disabled:opacity-50"
               >
-                <Icon className="h-5 w-5" strokeWidth={isActive ? 2.4 : 2} />
-                <span className="text-[10px] font-semibold tracking-tight">
-                  {tab.label}
-                </span>
+                <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
+                Tekrar Dene
               </button>
-            )
-          })}
-        </div>
-      </nav>
+            </div>
+          )}
+
+          {activeTab === "dashboard" && <DashboardTab onNavigate={setActiveTab} />}
+          {activeTab === "permissions" && <RolesPermissionsTab />}
+          {activeTab === "staff" && <StaffUsersTab />}
+          {activeTab === "analytics" && <AnalyticsAuditTab />}
+          {activeTab === "operations" && <OperationsCatalogTab />}
+        </main>
+
+        {/* Mobile Bottom Tab Navigation Bar */}
+        <nav
+          aria-label="Alt Gezinme Menüsü"
+          className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-[#d1d1d6]/70 bg-white/90 backdrop-blur-2xl safe-bottom"
+        >
+          <div className="mx-auto flex h-[58px] max-w-xl items-center justify-around px-2">
+            {FLAT_TABS.map((tab) => {
+              const Icon = tab.icon
+              const isActive = activeTab === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex flex-1 flex-col items-center justify-center gap-1 py-1.5 transition-colors ${
+                    isActive ? "text-[#e63462]" : "text-[#86868b] hover:text-[#1d1d1f]"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" strokeWidth={isActive ? 2.2 : 1.8} />
+                  <span className="text-[10px] font-medium tracking-tight">
+                    {tab.mobileLabel}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </nav>
+      </div>
     </div>
   )
 }

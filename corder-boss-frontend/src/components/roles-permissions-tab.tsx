@@ -207,12 +207,12 @@ export function RolesPermissionsTab() {
           <div>
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-[#e63462]" />
-              <h2 className="text-[16px] font-bold text-[#1d1d1f]">
+              <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
                 Rol &amp; Yetki Kısıtlama Merkezi
               </h2>
             </div>
             <p className="mt-0.5 text-[12px] text-[#86868b]">
-              Şube: <strong className="text-[#1d1d1f]">{effectiveBranch?.name}</strong> — Masa taşıma, iskonto limitleri, iptal, kasa ve tüm aksiyon yetkileri.
+              Şube: <span className="font-semibold text-[#1d1d1f]">{effectiveBranch?.name}</span> — Masa taşıma, iskonto limitleri, iptal, kasa ve tüm aksiyon yetkileri.
             </p>
           </div>
 
@@ -220,14 +220,14 @@ export function RolesPermissionsTab() {
             {branches.length > 1 && (
               <div className="inline-flex items-center gap-1.5 rounded-xl border border-[#e63462]/30 bg-[#fef3f5] px-2.5 py-1">
                 <Building2 className="h-3.5 w-3.5 text-[#e63462]" />
-                <span className="text-[11px] font-semibold text-[#86868b]">
+                <span className="text-[11px] font-medium text-[#86868b]">
                   {selectedBranchId === "ALL" ? "Düzenlenen:" : "Şube:"}
                 </span>
                 <select
                   value={effectiveBranchId}
                   onChange={(e) => setSelectedBranchId(e.target.value)}
                   aria-label="Düzenlenen Şube"
-                  className="bg-transparent text-[12px] font-bold text-[#1d1d1f] outline-none cursor-pointer"
+                  className="bg-transparent text-[12px] font-semibold text-[#1d1d1f] outline-none cursor-pointer"
                 >
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>
@@ -279,7 +279,7 @@ export function RolesPermissionsTab() {
                     className="h-2.5 w-2.5 rounded-full"
                     style={{ backgroundColor: active ? "#ffffff" : role.color }}
                   />
-                  <span className="text-[13px] font-bold">{roleTitle}</span>
+                  <span className="text-[13px] font-semibold">{roleTitle}</span>
                 </div>
                 <p className={`mt-0.5 text-[10px] ${active ? "text-white/80" : "text-[#86868b]"}`}>
                   {role.permissions.length} Yetki • Maks %{role.maxDiscountPercent} İskonto
@@ -317,10 +317,10 @@ export function RolesPermissionsTab() {
             onToggleCategoryAll={toggleCategoryAll}
           />
 
-          <div className="sticky bottom-[72px] z-20 flex items-center justify-between rounded-2xl border border-[#e63462]/30 bg-white/95 p-3 shadow-lg backdrop-blur-md">
+          <div className="sticky bottom-[72px] md:bottom-4 z-20 flex items-center justify-between rounded-2xl border border-[#e63462]/30 bg-white/95 p-3 shadow-lg backdrop-blur-md">
             <div>
               <div className="flex items-center gap-2">
-                <p className="text-[12px] font-bold text-[#1d1d1f]">
+                <p className="text-[12px] font-semibold text-[#1d1d1f]">
                   {getRoleDisplayName(selectedRole.key, selectedRole.name)} ({draftPermissions.length} aktif yetki)
                 </p>
                 {isDirty && (
@@ -340,7 +340,7 @@ export function RolesPermissionsTab() {
               type="button"
               onClick={() => void handleSaveRole()}
               disabled={saving}
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#e63462] px-5 text-[13px] font-bold text-white shadow-md shadow-[#e63462]/25 hover:bg-[#d42d56] disabled:opacity-50"
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#e63462] px-5 text-[13px] font-semibold text-white shadow-sm hover:bg-[#d42d56] disabled:opacity-50"
             >
               <Save className="h-4 w-4" />
               {saving ? "Kaydediliyor…" : "Değişiklikleri Kaydet"}

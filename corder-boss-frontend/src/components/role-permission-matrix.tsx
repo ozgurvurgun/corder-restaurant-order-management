@@ -66,7 +66,7 @@ export function RolePermissionMatrix({
             >
               <div className="flex items-center justify-between border-b border-[#f0f0f0] bg-[#f9f9fb] px-4 py-3">
                 <div>
-                  <h4 className="text-[14px] font-bold text-[#1d1d1f]">
+                  <h4 className="text-[14px] font-semibold text-[#1d1d1f]">
                     {catMeta.title}
                   </h4>
                   <p className="text-[11px] text-[#86868b]">

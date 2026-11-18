@@ -86,7 +86,7 @@ export function SubBossesSection() {
           <div>
             <div className="flex items-center gap-2">
               <Crown className="h-5 w-5 text-[#e63462]" />
-              <h2 className="text-[15px] font-bold text-[#1d1d1f]">
+              <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
                 Şube &amp; Franchise Sahibi (Şube Boss) Hesapları
               </h2>
             </div>
@@ -100,7 +100,7 @@ export function SubBossesSection() {
               setSbBranchIds(effectiveBranchId ? [effectiveBranchId] : [])
               setShowSubBossModal(true)
             }}
-            className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#1d1d1f] px-3.5 text-[12px] font-bold text-white hover:bg-black/80"
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#1d1d1f] px-3.5 text-[12px] font-semibold text-white hover:bg-black/80"
           >
             <Plus className="h-4 w-4" />
             Şube / Franchise Boss Ata
@@ -120,7 +120,7 @@ export function SubBossesSection() {
               >
                 <div>
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[13px] font-bold text-[#1d1d1f]">{sb.name}</span>
+                    <span className="text-[13px] font-semibold text-[#1d1d1f]">{sb.name}</span>
                     <span
                       className={`rounded px-2 py-0.5 text-[10px] font-semibold ${
                         sb.bossTier === "brand_owner"

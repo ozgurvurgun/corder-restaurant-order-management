@@ -41,7 +41,7 @@ export function RoleAccessLimitsCard({
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#f0f0f0] pb-3">
         <div>
           <div className="flex items-center gap-2">
-            <h3 className="text-[16px] font-bold text-[#1d1d1f]">{displayName}</h3>
+            <h3 className="text-[15px] font-semibold text-[#1d1d1f]">{displayName}</h3>
             <span className="rounded-md bg-[#f5f5f7] px-2 py-0.5 font-mono text-[11px] text-[#86868b]">
               {selectedRole.key}
             </span>
@@ -100,7 +100,7 @@ export function RoleAccessLimitsCard({
               <Monitor className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-[13px] font-bold text-[#1d1d1f]">
+              <p className="text-[13px] font-semibold text-[#1d1d1f]">
                 Merchant Panel Girişi (Web / Kasa PC)
               </p>
               <p className="text-[11px] text-[#86868b]">
@@ -137,7 +137,7 @@ export function RoleAccessLimitsCard({
               <Smartphone className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-[13px] font-bold text-[#1d1d1f]">
+              <p className="text-[13px] font-semibold text-[#1d1d1f]">
                 POS / Garson Terminali Girişi (PIN)
               </p>
               <p className="text-[11px] text-[#86868b]">
@@ -162,7 +162,7 @@ export function RoleAccessLimitsCard({
       <div className="rounded-2xl border border-[#e5e5ea] bg-[#f9f9fb] p-4">
         <div className="flex items-center gap-2 mb-3">
           <Percent className="h-4 w-4 text-[#e63462]" />
-          <h4 className="text-[13px] font-bold text-[#1d1d1f]">
+          <h4 className="text-[13px] font-semibold text-[#1d1d1f]">
             İskonto &amp; Fiyat Müdahale Üst Limitleri
           </h4>
         </div>
