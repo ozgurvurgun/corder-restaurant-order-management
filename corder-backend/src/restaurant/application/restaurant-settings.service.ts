@@ -14,6 +14,7 @@ import {
 
 export interface RestaurantSettingsDto {
   name: string;
+  slug?: string;
   address?: string | null;
   phone?: string | null;
   taxId?: string | null;
@@ -22,6 +23,7 @@ export interface RestaurantSettingsDto {
   facebook?: string | null;
   website?: string | null;
   workingHours?: string | null;
+  logoUrl?: string | null;
 }
 
 export interface MerchantBillingInfoDto {
@@ -89,6 +91,7 @@ export class RestaurantSettingsService {
     }
     return {
       name: r.name,
+      slug: r.slug,
       address: r.menuAddress ?? null,
       phone: r.menuPhone ?? null,
       taxId: r.taxId,
@@ -97,6 +100,7 @@ export class RestaurantSettingsService {
       facebook: r.facebook,
       website: r.website,
       workingHours: r.workingHours,
+      logoUrl: r.logoUrl ?? null,
     };
   }
 
@@ -204,6 +208,9 @@ export class RestaurantSettingsService {
     if (dto.website !== undefined) r.website = dto.website?.trim() || null;
     if (dto.workingHours !== undefined) {
       r.workingHours = dto.workingHours?.trim() || null;
+    }
+    if (dto.logoUrl !== undefined) {
+      r.logoUrl = dto.logoUrl?.trim() || null;
     }
     await this.repo.save(r);
     return this.get(restaurantId);

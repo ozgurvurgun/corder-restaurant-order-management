@@ -3,6 +3,7 @@ import { useAdminStore } from "@/lib/store"
 import { formatIstanbulDate } from "@/lib/money"
 import type { BossTier, RootAdmin } from "@/lib/types"
 import { BossFormModal } from "@/components/BossFormModal"
+import { PaginationBar } from "@/components/ui/pagination-bar"
 import {
   Crown,
   Plus,
@@ -35,6 +36,8 @@ function getTierBadge(tier?: BossTier) {
   }
 }
 
+const BOSSES_PAGE_SIZE = 12
+
 export function BossesPage() {
   const {
     allBosses,
@@ -51,6 +54,14 @@ export function BossesPage() {
   const [showModal, setShowModal] = useState(false)
   const [editingBoss, setEditingBoss] = useState<RootAdmin | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+
+  const totalPages = Math.max(1, Math.ceil(allBosses.length / BOSSES_PAGE_SIZE))
+  const safePage = Math.min(currentPage, totalPages)
+  const paginatedBosses = allBosses.slice(
+    (safePage - 1) * BOSSES_PAGE_SIZE,
+    safePage * BOSSES_PAGE_SIZE
+  )
 
   useEffect(() => {
     void loadAllBosses()
@@ -153,8 +164,9 @@ export function BossesPage() {
           </button>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {allBosses.map((boss) => {
+        <div className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {paginatedBosses.map((boss) => {
             const tierBadge = getTierBadge(boss.bossTier)
             const isActive = boss.isActive !== false
             return (
@@ -264,6 +276,17 @@ export function BossesPage() {
               </div>
             )
           })}
+          </div>
+          <div className="rounded-2xl border border-[#e5e5ea] bg-white overflow-hidden">
+            <PaginationBar
+              currentPage={safePage}
+              totalItems={allBosses.length}
+              pageSize={BOSSES_PAGE_SIZE}
+              onPageChange={setCurrentPage}
+              itemLabel="Boss hesabı"
+              className="border-t-0"
+            />
+          </div>
         </div>
       )}
 

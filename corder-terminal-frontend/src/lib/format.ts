@@ -47,18 +47,77 @@ export function formatTitleCase(
   )
 }
 
-export function resolveImageUrl(url: string | undefined): string | undefined {
+export interface ImageTransformOptions {
+  width?: number
+  quality?: number
+}
+
+export function stripCfImageTransform(url: string): string {
+  return url.replace(/\/cdn-cgi\/image\/[^/]+\//, "/")
+}
+
+export function applyCfImageFallback(
+  img: HTMLImageElement,
+  onFinalError?: () => void
+): void {
+  if (img.dataset.cfFallback !== "1" && img.src.includes("/cdn-cgi/image/")) {
+    img.dataset.cfFallback = "1"
+    img.src = stripCfImageTransform(img.src)
+    return
+  }
+  onFinalError?.()
+}
+
+export function resolveAssetUrl(
+  url: string | null | undefined,
+  options?: ImageTransformOptions
+): string | undefined {
   if (!url) return undefined
   const trimmed = url.trim()
   if (!trimmed) return undefined
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("data:")) {
-    return trimmed
+  if (trimmed.startsWith("data:")) return trimmed
+
+  let resolved = trimmed
+  if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+    const base = getBase()
+    const path = trimmed.startsWith("/") ? trimmed : `/${trimmed}`
+    resolved = base ? `${base.replace(/\/$/, "")}${path}` : path
   }
-  const base = getBase()
-  if (!base) return trimmed.startsWith("/") ? trimmed : `/${trimmed}`
-  const path = trimmed.startsWith("/") ? trimmed : `/${trimmed}`
-  return `${base.replace(/\/$/, "")}${path}`
+
+  if (resolved.startsWith("http://") || resolved.startsWith("https://")) {
+    try {
+      const parsed = new URL(resolved)
+      const host = parsed.hostname.toLowerCase()
+      const isLocal =
+        host === "localhost" ||
+        host === "127.0.0.1" ||
+        host.endsWith(".local") ||
+        /^\d+\.\d+\.\d+\.\d+$/.test(host)
+      const isR2OrCdn =
+        !isLocal &&
+        (host.includes("r2.dev") ||
+          host.includes("cloudflare") ||
+          host.includes("cdn") ||
+          host.includes("media") ||
+          host.includes("assets") ||
+          Boolean(options?.width))
+      if (isR2OrCdn && !parsed.pathname.startsWith("/cdn-cgi/image/")) {
+        const width = options?.width ?? 320
+        const quality = options?.quality ?? 82
+        const cleanPath = parsed.pathname.replace(/^\/+/, "")
+        if (cleanPath) {
+          parsed.pathname = `/cdn-cgi/image/width=${width},quality=${quality},format=auto/${cleanPath}`
+          return parsed.toString()
+        }
+      }
+    } catch {
+      return resolved
+    }
+  }
+  return resolved
 }
+
+export const resolveImageUrl = resolveAssetUrl
 
 export function translateApiError(raw: unknown, fallback = "İşlem gerçekleştirilemedi"): string {
   const msg = raw instanceof Error ? raw.message : typeof raw === "string" ? raw : ""

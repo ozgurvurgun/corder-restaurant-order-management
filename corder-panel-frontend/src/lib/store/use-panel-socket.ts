@@ -2,12 +2,20 @@ import { useEffect, useRef, type MutableRefObject } from "react"
 import { io, type Socket } from "socket.io-client"
 import {
   itemCountsTowardBill,
+  type PanelNotification,
   type PanelOrder,
   type PanelTable,
 } from "../panel-types"
 import { clearToken, getBase, type OrderDto } from "../api"
 import { computeDiscountMinorUnits, fromMinorUnits, toMinorUnits } from "../format"
 import { mapOrder } from "../mappers/orders-tables.mapper"
+import {
+  getNotificationPrefs,
+  playSecurityAlertChime,
+  playWaiterCallChime,
+  showBrowserNotification,
+} from "../notification-sound"
+import { showPanelToast } from "@/components/panel/panel-toast"
 
 export function usePanelSocket(params: {
   token: string | null
@@ -15,8 +23,18 @@ export function usePanelSocket(params: {
   refreshPosRef: MutableRefObject<() => Promise<void>>
   setOrders: (v: PanelOrder[] | ((prev: PanelOrder[]) => PanelOrder[])) => void
   setTables: (v: PanelTable[] | ((prev: PanelTable[]) => PanelTable[])) => void
+  setNotifications?: (
+    v: PanelNotification[] | ((prev: PanelNotification[]) => PanelNotification[]),
+  ) => void
 }) {
-  const { token, restaurantId, refreshPosRef, setOrders, setTables } = params
+  const {
+    token,
+    restaurantId,
+    refreshPosRef,
+    setOrders,
+    setTables,
+    setNotifications,
+  } = params
   const socketRef = useRef<Socket | null>(null)
 
   useEffect(() => {
@@ -100,6 +118,74 @@ export function usePanelSocket(params: {
 
     const handleAuthExpired = () => clearToken()
 
+    const handleWaiterCalled = (payload: {
+      id?: string
+      tableId?: string
+      tableName?: string
+      sectionName?: string
+      requestType?: string
+      note?: string
+      createdAt?: string
+    }) => {
+      const prefs = getNotificationPrefs()
+      if (!prefs.waiterCallEnabled) return
+      const tableName = payload.tableName || "Masa"
+      const sectionName = payload.sectionName || "Salon"
+      const isBill = payload.requestType === "bill"
+      const title = `🔔 ${tableName} (${sectionName}) — ${isBill ? "Hesap İstiyor!" : "Garson Çağırıyor!"}`
+      const message = payload.note
+        ? `Not: ${payload.note}`
+        : `${tableName} masasından ${isBill ? "hesap talebi" : "garson çağrısı"} geldi.`
+      const notifId = payload.id || `waiter-call-${Date.now()}`
+      setNotifications?.((prev) => {
+        if (prev.some((n) => n.id === notifId)) return prev
+        return [
+          {
+            id: notifId,
+            type: "waiter-call",
+            title,
+            message,
+            read: false,
+            createdAt: payload.createdAt ? new Date(payload.createdAt) : new Date(),
+          },
+          ...prev,
+        ]
+      })
+      playWaiterCallChime()
+      showPanelToast(title, "info")
+      showBrowserNotification(title, message)
+    }
+
+    const handleFraudAlert = (payload: {
+      id?: string
+      title?: string
+      description?: string
+      severity?: string
+      createdAt?: string
+    }) => {
+      const title = `🚨 Güvenlik Uyarısı: ${payload.title || "Şüpheli İşlem Tespit Edildi"}`
+      const message =
+        payload.description || "Güvenlik ve suistimal tespit merkezi yeni bir uyarı kaydetti."
+      const notifId = payload.id ? `fraud-${payload.id}` : `fraud-${Date.now()}`
+      setNotifications?.((prev) => {
+        if (prev.some((n) => n.id === notifId)) return prev
+        return [
+          {
+            id: notifId,
+            type: "fraud-alert",
+            title,
+            message,
+            read: false,
+            createdAt: payload.createdAt ? new Date(payload.createdAt) : new Date(),
+          },
+          ...prev,
+        ]
+      })
+      playSecurityAlertChime()
+      showPanelToast(title, "error")
+      showBrowserNotification(title, message)
+    }
+
     socket.on("connect", handleConnect)
     socket.io.on("reconnect", handleReconnect)
     socket.on("auth:expired", handleAuthExpired)
@@ -107,6 +193,8 @@ export function usePanelSocket(params: {
     socket.on("orders:moved", handleOrdersMoved)
     socket.on("orders:updated", handleOrdersUpdated)
     socket.on("tables:presence", handleTablesPresence)
+    socket.on("waiter:called", handleWaiterCalled)
+    socket.on("fraud:alert", handleFraudAlert)
 
     return () => {
       socket.off("connect", handleConnect)
@@ -116,9 +204,11 @@ export function usePanelSocket(params: {
       socket.off("orders:moved", handleOrdersMoved)
       socket.off("orders:updated", handleOrdersUpdated)
       socket.off("tables:presence", handleTablesPresence)
+      socket.off("waiter:called", handleWaiterCalled)
+      socket.off("fraud:alert", handleFraudAlert)
       socket.disconnect()
       socketRef.current = null
     }
-  }, [token, restaurantId, refreshPosRef, setOrders, setTables])
+  }, [token, restaurantId, refreshPosRef, setOrders, setTables, setNotifications])
 }
 

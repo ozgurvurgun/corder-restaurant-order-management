@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { CompletedOrderEntity } from '../domain/completed-order.entity';
@@ -16,6 +16,7 @@ import { UpdateCompletedOrderDto } from '../api/dto/update-completed-order.dto';
 import { OrdersGateway } from '../api/orders.gateway';
 import { LedgerService } from './ledger.service';
 import { StockMovementsService } from './stock-movements.service';
+import { FraudDetectionService } from './fraud-detection.service';
 import {
   fromMinorUnits,
   toMinorUnits,
@@ -43,6 +44,8 @@ export class CompletedOrdersService {
     private readonly ledgerService: LedgerService,
     private readonly stockMovementsService: StockMovementsService,
     private readonly ordersGateway: OrdersGateway,
+    @Optional()
+    private readonly fraudDetection?: FraudDetectionService,
   ) {}
 
   async list(restaurantId: string, filters: ListFilters): Promise<CompletedOrderEntity[]> {
@@ -289,6 +292,7 @@ export class CompletedOrdersService {
     });
 
     this.ordersGateway.emitOrdersUpdated(restaurantId);
+    void this.fraudDetection?.analyzeRestaurantAnomalies(restaurantId).catch(() => undefined);
     return saved;
   }
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useBossStore } from "@/lib/boss-store"
 import { bossApi } from "@/lib/api"
 import type { CatalogProductDto, LiveTableDto } from "@/lib/types"
@@ -7,8 +7,10 @@ import {
   formatMoney,
   getWaiterDisplayName,
 } from "@/lib/format"
+import { formatCloudflareImageUrl } from "@/lib/image"
 import { LiveTableDetailSheet } from "./live-table-detail-sheet"
 import { CustomSelect } from "./ui/custom-inputs"
+import { PaginationBar } from "./ui/pagination-bar"
 import {
   LayoutGrid,
   Package,
@@ -17,6 +19,7 @@ import {
   Check,
   X,
   Building2,
+  Utensils,
 } from "lucide-react"
 
 export function OperationsCatalogTab() {
@@ -41,6 +44,12 @@ export function OperationsCatalogTab() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("ALL")
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null)
   const [priceDraft, setPriceDraft] = useState<string>("")
+  const [catalogPage, setCatalogPage] = useState(1)
+  const catalogPageSize = 12
+
+  useEffect(() => {
+    setCatalogPage(1)
+  }, [searchProduct, selectedCategoryId, effectiveBranchId])
 
   const categoryNameById = useMemo(
     () => new Map(categories.map((c) => [c.id, c.name])),
@@ -93,13 +102,22 @@ export function OperationsCatalogTab() {
     ? getTableActiveOrders(selectedTable.id)
     : []
 
-  const filteredProducts = products.filter((p) => {
-    if (selectedCategoryId !== "ALL" && p.categoryId !== selectedCategoryId) {
-      return false
-    }
-    if (!searchProduct.trim()) return true
-    return p.name.toLowerCase().includes(searchProduct.toLowerCase())
-  })
+  const filteredProducts = useMemo(
+    () =>
+      products.filter((p) => {
+        if (selectedCategoryId !== "ALL" && p.categoryId !== selectedCategoryId) {
+          return false
+        }
+        if (!searchProduct.trim()) return true
+        return p.name.toLowerCase().includes(searchProduct.toLowerCase())
+      }),
+    [products, selectedCategoryId, searchProduct]
+  )
+
+  const pagedProducts = useMemo(() => {
+    const start = (catalogPage - 1) * catalogPageSize
+    return filteredProducts.slice(start, start + catalogPageSize)
+  }, [filteredProducts, catalogPage])
 
   return (
     <div className="space-y-4">
@@ -171,7 +189,8 @@ export function OperationsCatalogTab() {
               const tOrders = getTableActiveOrders(t.id)
               const totals = computeTableTotals(tOrders, t.discount)
               const hasActiveBill = totals.subtotal > 0 || tOrders.length > 0
-              const occupied = hasActiveBill || t.status === "occupied" || t.status === "checkout"
+              const occupied =
+                hasActiveBill || t.status === "occupied" || t.status === "checkout"
               const waiter =
                 t.sessionStaffName ||
                 (tOrders[0] ? getWaiterDisplayName(tOrders[0]) : null)
@@ -203,7 +222,7 @@ export function OperationsCatalogTab() {
                     />
                   </div>
                   <p className="mt-1 text-[15px] font-bold text-[#1d1d1f] tabular-nums">
-                    {occupied ? `₺${formatMoney( getTableNetTotal(t) )}` : "Boş"}
+                    {occupied ? `₺${formatMoney(getTableNetTotal(t))}` : "Boş"}
                   </p>
                   <p className="mt-0.5 truncate text-[10px] text-[#86868b]">
                     {waiter ? `Garson: ${waiter}` : t.section}
@@ -215,7 +234,7 @@ export function OperationsCatalogTab() {
         </div>
       )}
 
-      {/* 2. Quick Mobile Menu Price & Stock Toggle */}
+      {/* 2. Quick Mobile Menu Price & Stock Toggle with Cloudflare Image Transformations & Pagination */}
       {subTab === "catalog" && (
         <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-4 space-y-3">
           <div className="relative">
@@ -263,62 +282,88 @@ export function OperationsCatalogTab() {
           )}
 
           <div className="divide-y divide-[#f0f0f0]">
-            {filteredProducts.map((p) => {
+            {pagedProducts.map((p) => {
               const catName = categoryNameById.get(p.categoryId)
+              const transformedImageUrl = formatCloudflareImageUrl(p.imageUrl, {
+                width: 96,
+                height: 96,
+                fit: "cover",
+                quality: 82,
+              })
               return (
                 <div
                   key={p.id}
                   className="flex items-center justify-between gap-3 py-3"
                 >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <p className="truncate text-[13px] font-semibold text-[#1d1d1f]">
-                        {p.name}
-                      </p>
-                      {catName && (
-                        <span className="rounded bg-[#f5f5f7] px-1.5 py-0.5 text-[10px] font-medium text-[#86868b]">
-                          {catName}
-                        </span>
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    {transformedImageUrl && p.imageUrl ? (
+                      <img
+                        src={transformedImageUrl}
+                        alt={p.name}
+                        loading="lazy"
+                        onError={(e) => {
+                          if (p.imageUrl && e.currentTarget.src !== p.imageUrl) {
+                            e.currentTarget.src = p.imageUrl
+                          }
+                        }}
+                        className="h-11 w-11 flex-shrink-0 rounded-xl object-cover border border-[#e5e5ea] bg-[#f5f5f7]"
+                      />
+                    ) : (
+                      <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-[#e5e5ea] bg-[#f5f5f7] text-[#86868b]">
+                        <Utensils className="h-4 w-4" />
+                      </div>
+                    )}
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="truncate text-[13px] font-semibold text-[#1d1d1f]">
+                          {p.name}
+                        </p>
+                        {catName && (
+                          <span className="rounded bg-[#f5f5f7] px-1.5 py-0.5 text-[10px] font-medium text-[#86868b]">
+                            {catName}
+                          </span>
+                        )}
+                      </div>
+                      {editingPriceId === p.id ? (
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <input
+                            type="number"
+                            step="0.5"
+                            min={0}
+                            value={priceDraft}
+                            onChange={(e) => setPriceDraft(e.target.value)}
+                            className="h-8 w-24 rounded-lg border border-[#e63462] px-2 text-[13px] font-bold"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void handleSavePrice(p)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#34c759] text-white"
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingPriceId(null)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f5f5f7] text-[#86868b]"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingPriceId(p.id)
+                            setPriceDraft(String(p.price))
+                          }}
+                          className="mt-0.5 text-[13px] font-semibold text-[#e63462] hover:underline"
+                        >
+                          ₺{formatMoney(p.price)} (Fiyatı Değiştir)
+                        </button>
                       )}
                     </div>
-                    {editingPriceId === p.id ? (
-                      <div className="mt-1 flex items-center gap-1.5">
-                        <input
-                          type="number"
-                          step="0.5"
-                          min={0}
-                          value={priceDraft}
-                          onChange={(e) => setPriceDraft(e.target.value)}
-                          className="h-8 w-24 rounded-lg border border-[#e63462] px-2 text-[13px] font-bold"
-                          autoFocus
-                        />
-                        <button
-                          type="button"
-                          onClick={() => void handleSavePrice(p)}
-                          className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#34c759] text-white"
-                        >
-                          <Check className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingPriceId(null)}
-                          className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f5f5f7] text-[#86868b]"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingPriceId(p.id)
-                          setPriceDraft(String(p.price))
-                        }}
-                        className="mt-0.5 text-[13px] font-semibold text-[#e63462] hover:underline"
-                      >
-                        ₺{formatMoney(p.price)} (Fiyatı Değiştir)
-                      </button>
-                    )}
                   </div>
 
                   <button
@@ -336,6 +381,14 @@ export function OperationsCatalogTab() {
               )
             })}
           </div>
+
+          <PaginationBar
+            currentPage={catalogPage}
+            totalItems={filteredProducts.length}
+            pageSize={catalogPageSize}
+            onPageChange={setCatalogPage}
+            itemLabel="ürün"
+          />
         </div>
       )}
 

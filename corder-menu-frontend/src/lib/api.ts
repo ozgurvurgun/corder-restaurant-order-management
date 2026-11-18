@@ -29,6 +29,21 @@ export interface MenuCampaign {
   isActive: boolean
 }
 
+export interface MenuTableContext {
+  tableId: string
+  tableName: string
+  sectionName?: string | null
+  tableToken: string
+}
+
+export interface MenuRestaurantInfo {
+  id?: string
+  name?: string
+  slug?: string
+  logo?: string | null
+  logoUrl?: string | null
+}
+
 export interface MenuResponse {
   id: string
   name: string
@@ -37,13 +52,33 @@ export interface MenuResponse {
   phone?: string
   email?: string
   workingHours?: string
-  logo?: string
+  logo?: string | null
+  logoUrl?: string | null
   whatsapp?: string
   instagram?: string
   facebook?: string
   website?: string
+  restaurant?: MenuRestaurantInfo | null
+  tableContext?: MenuTableContext | null
   categories: MenuCategory[]
   campaigns: MenuCampaign[]
+}
+
+export type WaiterCallRequestType = "waiter" | "bill"
+
+export interface CallWaiterPayload {
+  tableToken: string
+  requestType: WaiterCallRequestType
+  note?: string
+}
+
+export interface CallWaiterResponse {
+  ok: boolean
+  id?: string
+  tableName?: string
+  sectionName?: string | null
+  requestType?: WaiterCallRequestType
+  cooldownSeconds?: number
 }
 
 export type MenuErrorKind = "missing_slug" | "not_found" | "suspended" | "network"
@@ -57,21 +92,31 @@ export class MenuFetchError extends Error {
   }
 }
 
-const CACHE_PREFIX = "corder_menu_cache_v1:"
+export interface ImageTransformOptions {
+  width?: number
+  quality?: number
+}
+
+const CACHE_PREFIX = "corder_menu_cache_v2:"
 const CACHE_TTL_MS = 60_000
 const memoryCache = new Map<string, { timestamp: number; data: MenuResponse }>()
 
-function readCachedMenu(slug: string): { timestamp: number; data: MenuResponse } | null {
-  const mem = memoryCache.get(slug)
+function buildCacheKey(slug: string, tableToken?: string): string {
+  const cleanToken = tableToken?.trim() || ""
+  return cleanToken ? `${slug}::t:${cleanToken}` : slug
+}
+
+function readCachedMenu(cacheKey: string): { timestamp: number; data: MenuResponse } | null {
+  const mem = memoryCache.get(cacheKey)
   if (mem) return mem
   if (typeof window === "undefined") return null
   try {
-    const raw = sessionStorage.getItem(`${CACHE_PREFIX}${slug}`)
+    const raw = sessionStorage.getItem(`${CACHE_PREFIX}${cacheKey}`)
     if (!raw) return null
     const parsed = JSON.parse(raw) as { timestamp?: number; data?: MenuResponse }
     if (typeof parsed?.timestamp === "number" && parsed.data?.id) {
       const entry = { timestamp: parsed.timestamp, data: parsed.data }
-      memoryCache.set(slug, entry)
+      memoryCache.set(cacheKey, entry)
       return entry
     }
   } catch {
@@ -80,36 +125,90 @@ function readCachedMenu(slug: string): { timestamp: number; data: MenuResponse }
   return null
 }
 
-function writeCachedMenu(slug: string, data: MenuResponse) {
+function writeCachedMenu(cacheKey: string, data: MenuResponse) {
   const entry = { timestamp: Date.now(), data }
-  memoryCache.set(slug, entry)
+  memoryCache.set(cacheKey, entry)
   if (typeof window === "undefined") return
   try {
-    sessionStorage.setItem(`${CACHE_PREFIX}${slug}`, JSON.stringify(entry))
+    sessionStorage.setItem(`${CACHE_PREFIX}${cacheKey}`, JSON.stringify(entry))
   } catch {
     // Ignore storage quota errors
   }
 }
 
-export function resolveImageUrl(url: string | undefined): string | undefined {
+export function stripCfImageTransform(url: string): string {
+  return url.replace(/\/cdn-cgi\/image\/[^/]+\//, "/")
+}
+
+export function applyCfImageFallback(
+  img: HTMLImageElement,
+  onFinalError?: () => void
+): void {
+  if (img.dataset.cfFallback !== "1" && img.src.includes("/cdn-cgi/image/")) {
+    img.dataset.cfFallback = "1"
+    img.src = stripCfImageTransform(img.src)
+    return
+  }
+  onFinalError?.()
+}
+
+export function resolveAssetUrl(
+  url: string | null | undefined,
+  options?: ImageTransformOptions
+): string | undefined {
   if (!url) return undefined
   const trimmed = url.trim()
   if (!trimmed) return undefined
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("data:")) {
-    return trimmed
+  if (trimmed.startsWith("data:")) return trimmed
+
+  let resolved = trimmed
+  if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+    const base = getBase()
+    const path = trimmed.startsWith("/") ? trimmed : `/${trimmed}`
+    resolved = base ? `${base.replace(/\/$/, "")}${path}` : path
   }
-  const base = getBase()
-  if (!base) return trimmed.startsWith("/") ? trimmed : `/${trimmed}`
-  const path = trimmed.startsWith("/") ? trimmed : `/${trimmed}`
-  return `${base.replace(/\/$/, "")}${path}`
+
+  if (resolved.startsWith("http://") || resolved.startsWith("https://")) {
+    try {
+      const parsed = new URL(resolved)
+      const host = parsed.hostname.toLowerCase()
+      const isLocal =
+        host === "localhost" ||
+        host === "127.0.0.1" ||
+        host.endsWith(".local") ||
+        /^\d+\.\d+\.\d+\.\d+$/.test(host)
+      const isR2OrCdn =
+        !isLocal &&
+        (host.includes("r2.dev") ||
+          host.includes("cloudflare") ||
+          host.includes("cdn") ||
+          host.includes("media") ||
+          host.includes("assets") ||
+          Boolean(options?.width))
+      if (isR2OrCdn && !parsed.pathname.startsWith("/cdn-cgi/image/")) {
+        const width = options?.width ?? 400
+        const quality = options?.quality ?? 82
+        const cleanPath = parsed.pathname.replace(/^\/+/, "")
+        if (cleanPath) {
+          parsed.pathname = `/cdn-cgi/image/width=${width},quality=${quality},format=auto/${cleanPath}`
+          return parsed.toString()
+        }
+      }
+    } catch {
+      return resolved
+    }
+  }
+  return resolved
 }
+
+export const resolveImageUrl = resolveAssetUrl
+export const resolveMenuImageUrl = resolveAssetUrl
 
 export function isCampaignCurrentlyValid(campaign: MenuCampaign): boolean {
   if (!campaign || campaign.isActive === false) return false
   if (!campaign.validUntil) return true
   const parsed = new Date(campaign.validUntil)
   if (Number.isNaN(parsed.getTime())) return true
-  // If validUntil is at midnight (date-only), treat as valid until end of that day
   if (
     parsed.getUTCHours() === 0 &&
     parsed.getUTCMinutes() === 0 &&
@@ -169,9 +268,33 @@ function normalizeMenuCategoryTree(cat: MenuCategory): MenuCategory {
   }
 }
 
-function normalizeMenuResponse(data: MenuResponse): MenuResponse {
+function normalizeMenuResponse(data: MenuResponse, tableToken?: string): MenuResponse {
+  const resolvedLogo =
+    data.logoUrl ?? data.logo ?? data.restaurant?.logoUrl ?? data.restaurant?.logo ?? null
+  const cleanToken = tableToken?.trim() || ""
+  const rawCtx = cleanToken ? data.tableContext : null
+  const validTableContext =
+    rawCtx && typeof rawCtx.tableId === "string" && typeof rawCtx.tableName === "string"
+      ? {
+          tableId: rawCtx.tableId,
+          tableName: rawCtx.tableName,
+          sectionName: rawCtx.sectionName ?? null,
+          tableToken: rawCtx.tableToken || cleanToken,
+        }
+      : null
+
   return {
     ...data,
+    logo: resolvedLogo ?? undefined,
+    logoUrl: resolvedLogo,
+    restaurant: {
+      id: data.restaurant?.id ?? data.id,
+      name: data.restaurant?.name ?? data.name,
+      slug: data.restaurant?.slug ?? data.slug,
+      logo: resolvedLogo,
+      logoUrl: resolvedLogo,
+    },
+    tableContext: validTableContext,
     categories: (data.categories ?? []).map(normalizeMenuCategoryTree),
     campaigns: (data.campaigns ?? []).map((c) => ({
       ...c,
@@ -180,26 +303,39 @@ function normalizeMenuResponse(data: MenuResponse): MenuResponse {
   }
 }
 
-export async function fetchMenu(restaurant: string, options?: { forceRefresh?: boolean }): Promise<MenuResponse> {
+export async function fetchMenu(
+  restaurant: string,
+  options?: { forceRefresh?: boolean; tableToken?: string }
+): Promise<MenuResponse> {
   const cleanSlug = restaurant.trim()
   if (!cleanSlug) {
     throw new MenuFetchError("Restoran bağlantısı belirtilmedi.", "missing_slug")
   }
+  const cleanToken = options?.tableToken?.trim() || ""
+  const cacheKey = buildCacheKey(cleanSlug, cleanToken)
 
-  const cached = readCachedMenu(cleanSlug)
+  const cached = readCachedMenu(cacheKey)
   if (!options?.forceRefresh && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return cached.data
   }
 
   const base = getBase().replace(/\/$/, "")
   const q = encodeURIComponent(cleanSlug)
-  const url = `${base}/menu?restaurant=${q}`
+  const tQuery = cleanToken ? `&t=${encodeURIComponent(cleanToken)}` : ""
+  const url = `${base}/menu?restaurant=${q}${tQuery}`
 
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 12_000)
 
   try {
-    const res = await fetch(url, { signal: controller.signal })
+    let res = await fetch(url, { signal: controller.signal })
+    if (res.status === 404) {
+      const slugUrl = `${base}/menu/${q}${cleanToken ? `?t=${encodeURIComponent(cleanToken)}` : ""}`
+      const altRes = await fetch(slugUrl, { signal: controller.signal }).catch(() => null)
+      if (altRes && altRes.ok) {
+        res = altRes
+      }
+    }
     if (!res.ok) {
       const text = await res.text()
       let message = text
@@ -231,13 +367,19 @@ export async function fetchMenu(restaurant: string, options?: { forceRefresh?: b
       }
       throw new MenuFetchError("Menü yüklenirken bir sorun oluştu.", "network")
     }
-    const rawData = (await res.json()) as MenuResponse
-    const data = normalizeMenuResponse(rawData)
-    writeCachedMenu(cleanSlug, data)
+    let rawData = (await res.json()) as MenuResponse
+    if (cleanToken && rawData.tableContext === undefined) {
+      const slugUrl = `${base}/menu/${q}?t=${encodeURIComponent(cleanToken)}`
+      const altRes = await fetch(slugUrl, { signal: controller.signal }).catch(() => null)
+      if (altRes && altRes.ok) {
+        rawData = (await altRes.json()) as MenuResponse
+      }
+    }
+    const data = normalizeMenuResponse(rawData, cleanToken)
+    writeCachedMenu(cacheKey, data)
     return data
   } catch (err) {
     if (err instanceof MenuFetchError) throw err
-    // Fallback to stale cache if offline/network error occurred
     if (cached) return cached.data
     throw new MenuFetchError(
       "Menü yüklenemedi. Lütfen internet bağlantınızı kontrol edip tekrar deneyin.",
@@ -246,4 +388,40 @@ export async function fetchMenu(restaurant: string, options?: { forceRefresh?: b
   } finally {
     clearTimeout(timeoutId)
   }
+}
+
+export async function callWaiter(
+  slug: string,
+  payload: CallWaiterPayload
+): Promise<CallWaiterResponse> {
+  const cleanSlug = slug.trim()
+  if (!cleanSlug || !payload.tableToken?.trim()) {
+    throw new Error("Geçerli bir masa doğrulaması bulunamadı.")
+  }
+  const base = getBase().replace(/\/$/, "")
+  const url = `${base}/menu/${encodeURIComponent(cleanSlug)}/call-waiter`
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      tableToken: payload.tableToken.trim(),
+      requestType: payload.requestType,
+      ...(payload.note?.trim() ? { note: payload.note.trim() } : {}),
+    }),
+  })
+  if (!res.ok) {
+    const raw = await res.text()
+    let message = "Garson çağrısı gönderilemedi."
+    try {
+      const parsed = JSON.parse(raw) as { message?: string | string[] }
+      const extracted = Array.isArray(parsed.message)
+        ? parsed.message.join(", ")
+        : parsed.message
+      if (extracted) message = extracted
+    } catch {
+      if (raw.trim()) message = raw.trim()
+    }
+    throw new Error(message)
+  }
+  return (await res.json().catch(() => ({ ok: true }))) as CallWaiterResponse
 }

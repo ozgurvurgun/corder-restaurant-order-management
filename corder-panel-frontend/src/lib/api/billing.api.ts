@@ -28,6 +28,21 @@ export const shiftsApi = {
       token,
       body: JSON.stringify({ closingBalance, notes }),
     }),
+  printReport: async (token: string, shiftId: string) => {
+    try {
+      return await request<{ ok: boolean; jobId: string }>(
+        `/restaurant/cash-register/shifts/${encodeURIComponent(shiftId)}/print-report`,
+        { method: "POST", token },
+      )
+    } catch {
+      return request<{ ok: boolean; jobId: string }>(
+        `/restaurant/shifts/${encodeURIComponent(shiftId)}/print-report`,
+        { method: "POST", token },
+      )
+    }
+  },
+  printShiftReport: async (token: string, shiftId: string) =>
+    shiftsApi.printReport(token, shiftId),
 }
 
 export const completedOrdersApi = {

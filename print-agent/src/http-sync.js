@@ -236,6 +236,41 @@ async function fetchAgentContext(config) {
   }
 }
 
+async function pushPrintersToBackend(config, settings) {
+  const base = httpBaseUrl(config)
+  if (!base || (!config?.agentToken && !config?.refreshToken)) return false
+  const printers = Array.isArray(settings?.printers) ? settings.printers : []
+  const receiptPrinterId = String(settings?.receiptPrinterId || "")
+  const defaultKitchenPrinterId = String(settings?.defaultKitchenPrinterId || "")
+  const url = `${base}/restaurant/print-agent/printers/sync`
+  try {
+    const res = await authorizedFetch(config, url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        printers: printers.map((p) => ({
+          id: p.id,
+          name: p.name,
+          mode: p.mode,
+          host: p.host,
+          port: p.port,
+          systemPrinterName: p.systemPrinterName,
+          paperWidth: p.paperWidth,
+          department: p.department || null,
+          autoCut: p.autoCut !== false,
+          role: p.id && p.id === receiptPrinterId ? "receipt" : "kitchen",
+        })),
+        receiptPrinterId,
+        defaultKitchenPrinterId,
+      }),
+    })
+    return res.ok
+  } catch (e) {
+    warn("pushPrintersToBackend error", { error: e instanceof Error ? e.message : String(e) })
+    return false
+  }
+}
+
 module.exports = {
   httpBaseUrl,
   ackKitchenPrinted,
@@ -245,4 +280,5 @@ module.exports = {
   loginPrintAgent,
   refreshAgentSession,
   fetchAgentContext,
+  pushPrintersToBackend,
 }

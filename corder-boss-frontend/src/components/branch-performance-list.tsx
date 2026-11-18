@@ -1,6 +1,8 @@
+import { useEffect, useMemo, useState } from "react"
 import { useBossStore } from "@/lib/boss-store"
 import type { BranchLivePulse } from "@/lib/types"
 import { formatIstanbulTime, formatMoney } from "@/lib/format"
+import { PaginationBar } from "./ui/pagination-bar"
 import {
   AlertTriangle,
   Building2,
@@ -28,6 +30,18 @@ export function BranchPerformanceList({
     selectedBranchId,
     setSelectedBranchId,
   } = useBossStore()
+
+  const [page, setPage] = useState(1)
+  const pageSize = 6
+
+  useEffect(() => {
+    setPage(1)
+  }, [branchTypeFilter, filteredBranches.length])
+
+  const pagedBranches = useMemo(() => {
+    const start = (page - 1) * pageSize
+    return filteredBranches.slice(start, start + pageSize)
+  }, [filteredBranches, page])
 
   const totalBranchesCount = overview?.branches.length ?? 0
   const suspendedBranches = (overview?.allOwnedBranches ?? []).filter(
@@ -119,7 +133,7 @@ export function BranchPerformanceList({
       )}
 
       <div className="space-y-2.5">
-        {filteredBranches.map((br) => (
+        {pagedBranches.map((br) => (
           <div
             key={br.id}
             onClick={() => setSelectedBranchId(br.id)}
@@ -221,6 +235,14 @@ export function BranchPerformanceList({
           </div>
         ))}
       </div>
+
+      <PaginationBar
+        currentPage={page}
+        totalItems={filteredBranches.length}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        itemLabel="şube"
+      />
     </div>
   )
 }

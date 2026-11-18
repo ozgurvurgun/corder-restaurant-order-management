@@ -99,6 +99,36 @@ export class PrintAgentController {
     return this.orders.markPrintJobPrinted(req.printAgentRestaurantId, jobId);
   }
 
+  @Post('printers/sync')
+  @UseGuards(PrintAgentGuard)
+  async syncPrinters(
+    @Req() req: PrintAgentRequest,
+    @Body()
+    body: {
+      printers?: Array<{
+        id?: string;
+        name: string;
+        mode?: string;
+        host?: string;
+        port?: number;
+        systemPrinterName?: string;
+        paperWidth?: number;
+        role?: string;
+        department?: string | null;
+        autoCut?: boolean;
+      }>;
+      receiptPrinterId?: string;
+      defaultKitchenPrinterId?: string;
+    },
+  ) {
+    const printers = await this.printersService.syncFromPrintAgent(
+      req.printAgentRestaurantId,
+      body ?? {},
+    );
+    this.ordersGateway.emitPrintersUpdated(req.printAgentRestaurantId);
+    return { ok: true, printers };
+  }
+
   private async buildContext(restaurantId: string) {
     const [settings, categories, printers] = await Promise.all([
       this.settingsService.get(restaurantId),

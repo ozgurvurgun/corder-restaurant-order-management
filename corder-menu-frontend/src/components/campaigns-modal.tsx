@@ -1,5 +1,5 @@
 import { X, ChevronLeft, ChevronRight } from "lucide-react"
-import { resolveImageUrl, type MenuCampaign } from "@/lib/api"
+import { applyCfImageFallback, resolveImageUrl, type MenuCampaign } from "@/lib/api"
 
 export function CampaignsModal(props: {
   campaigns: MenuCampaign[]
@@ -48,7 +48,10 @@ export function CampaignsModal(props: {
                     loading="lazy"
                     decoding="async"
                     onError={(e) => {
-                      e.currentTarget.style.display = "none"
+                      const el = e.currentTarget
+                      applyCfImageFallback(el, () => {
+                        el.style.display = "none"
+                      })
                     }}
                     className="w-full h-full object-cover"
                   />
@@ -73,7 +76,10 @@ export function CampaignsModal(props: {
                 alt={currentCampaign.title}
                 decoding="async"
                 onError={(e) => {
-                  e.currentTarget.style.display = "none"
+                  const el = e.currentTarget
+                  applyCfImageFallback(el, () => {
+                    el.style.display = "none"
+                  })
                 }}
                 className="w-full h-full object-cover"
               />

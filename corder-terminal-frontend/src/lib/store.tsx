@@ -43,6 +43,7 @@ import {
   mapSessionToTerminalUser,
   useTerminalSessionActions,
 } from "./use-terminal-session-actions"
+import type { ActiveWaiterCall } from "./terminal-notifications"
 
 interface TerminalContextType {
   currentUser: TerminalUser | null
@@ -61,6 +62,8 @@ interface TerminalContextType {
   selectedCategory: string | null
   isLoading: boolean
   error: string | null
+  waiterCalls: ActiveWaiterCall[]
+  dismissWaiterCall: (id: string) => void
   login: (email: string, password: string) => Promise<boolean>
   loginWithPin: (pin: string, staffId?: string) => Promise<{ ok: boolean; error?: string }>
   logout: () => void
@@ -130,6 +133,23 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [waiterCalls, setWaiterCalls] = useState<ActiveWaiterCall[]>([])
+
+  const handleWaiterCalled = useCallback((call: ActiveWaiterCall) => {
+    setWaiterCalls((prev) => {
+      const withoutSameIdOrTable = prev.filter(
+        (c) => c.id !== call.id && !(c.tableId === call.tableId && c.requestType === call.requestType)
+      )
+      return [call, ...withoutSameIdOrTable].slice(0, 20)
+    })
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("corder:waiter-called", { detail: call }))
+    }
+  }, [])
+
+  const dismissWaiterCall = useCallback((id: string) => {
+    setWaiterCalls((prev) => prev.filter((c) => c.id !== id))
+  }, [])
 
   const lockedTableIdRef = useRef<string | null>(null)
   const pendingUnlockTableIdRef = useRef<string | null>(null)
@@ -272,6 +292,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     refreshLiveState,
     pullTables,
     logout: sessionActions.logout,
+    onWaiterCalled: handleWaiterCalled,
   })
 
   const orderActions = useTerminalOrderActions({
@@ -315,6 +336,8 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
         selectedCategory,
         isLoading,
         error,
+        waiterCalls,
+        dismissWaiterCall,
         setActiveScreen,
         toggleOffline,
         refreshData,

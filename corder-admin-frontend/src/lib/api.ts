@@ -1,12 +1,24 @@
 import type {
+  BossDto,
   BossTier,
   PlatformBillingConfig,
-  RestaurantBillingStatus,
-  RestaurantBossSummary,
+  PlatformRestaurantDto,
+  RecordPaymentPayload,
   RestaurantBranchType,
-  RestaurantPaymentRecord,
+  RestaurantDiagnosticsDto,
+  RestaurantSupportActionBody,
   SubscriptionPaymentMethod,
+  UpdatePaymentPayload,
 } from "./types"
+
+export type {
+  BossDto,
+  PlatformRestaurantDto,
+  RecordPaymentPayload,
+  RestaurantDiagnosticsDto,
+  RestaurantSupportActionBody,
+  UpdatePaymentPayload,
+}
 
 const RAW_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:4000"
 const BASE = RAW_BASE.replace(/\/+$/, "")
@@ -65,8 +77,13 @@ export function localizePlatformError(rawMessage: string): string {
   const trimmed = (rawMessage || "").trim()
   if (!trimmed) return "İşlem sırasında beklenmeyen bir hata oluştu"
   const lower = trimmed.toLowerCase()
-  if (lower.includes("invalid email or password") || lower.includes("unauthorized")) {
-    return "Geçersiz e-posta veya parola"
+  if (
+    lower.includes("invalid platform admin auth code") ||
+    lower.includes("invalid auth code") ||
+    lower.includes("invalid email or password") ||
+    lower.includes("unauthorized")
+  ) {
+    return "Geçersiz Platform Admin Auth Kodu"
   }
   if (lower.includes("too many") || lower.includes("rate limit")) {
     return "Çok fazla giriş denemesi yapıldı. Lütfen biraz bekleyip tekrar deneyin."
@@ -106,9 +123,10 @@ export function localizePlatformError(rawMessage: string): string {
 
 async function platformFetch<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  explicitToken?: string
 ): Promise<T> {
-  const token = getPlatformToken()
+  const token = explicitToken || getPlatformToken()
   if (!token) {
     clearPlatformAuth(true)
     throw new Error("Oturum süresi doldu, lütfen tekrar giriş yapın")
@@ -138,103 +156,56 @@ async function platformFetch<T>(
   return res.json()
 }
 
-export interface BossDto {
-  id: string
-  restaurantId: string | null
-  email: string
-  name: string
-  phone?: string | null
-  bossTier?: BossTier
-  brandName?: string | null
-  isActive?: boolean
-  restaurants?: Array<{
-    id: string
-    name: string
-    slug: string
-    status: string
-    brandName?: string | null
-    branchType?: RestaurantBranchType
-    billingStatus?: RestaurantBillingStatus
-    isAccessSuspended?: boolean
-  }>
-  createdAt: string
+export async function getRestaurantDiagnostics(
+  tokenOrRestaurantId: string,
+  maybeRestaurantId?: string
+): Promise<RestaurantDiagnosticsDto> {
+  const hasExplicitToken = typeof maybeRestaurantId === "string"
+  const token = hasExplicitToken ? tokenOrRestaurantId : undefined
+  const restaurantId = hasExplicitToken ? maybeRestaurantId : tokenOrRestaurantId
+  return platformFetch<RestaurantDiagnosticsDto>(
+    `/platform/restaurants/${restaurantId}/diagnostics`,
+    { method: "GET" },
+    token
+  )
 }
 
-export interface PlatformRestaurantDto {
-  id: string
-  name: string
-  slug: string
-  address?: string
-  phone?: string
-  email?: string
-  taxId?: string | null
-  whatsapp?: string | null
-  instagram?: string | null
-  facebook?: string | null
-  website?: string | null
-  workingHours?: string | null
-  status: string
-  brandName?: string | null
-  branchType?: RestaurantBranchType
-  franchiseeCompanyName?: string | null
-  royaltyRate?: number
-  monthlyFee?: number
-  billingStartPeriod?: string
-  billingStatus?: RestaurantBillingStatus
-  currentPeriod?: string
-  isCurrentPeriodPaid?: boolean
-  paidPeriods?: string[]
-  paidThroughPeriod?: string | null
-  prepaidFuturePeriods?: string[]
-  overduePeriods?: string[]
-  duePeriods?: string[]
-  nextUnpaidPeriod?: string
-  totalCollectedAmount?: number
-  isAccessSuspended?: boolean
-  suspensionReason?: string | null
-  suspendedAt?: string | null
-  lastPaymentDate?: string | null
-  lastPaidPeriod?: string | null
-  billingNotes?: string | null
-  paymentHistory?: RestaurantPaymentRecord[]
-  bosses?: RestaurantBossSummary[]
-  rootAdminId?: string | null
-  terminalEmail?: string | null
-  printAgentUsername?: string | null
-  createdAt: string
-}
-
-export interface RecordPaymentPayload {
-  amount?: number
-  periods?: string[]
-  startPeriod?: string
-  monthsCount?: number
-  period?: string
-  paidAt?: string
-  paymentMethod?: SubscriptionPaymentMethod
-  note?: string | null
-  reopenAccess?: boolean
-}
-
-export interface UpdatePaymentPayload {
-  amount?: number
-  periods?: string[]
-  paidAt?: string
-  paymentMethod?: SubscriptionPaymentMethod
-  note?: string | null
+export async function runRestaurantSupportAction(
+  tokenOrRestaurantId: string,
+  restaurantIdOrBody: string | RestaurantSupportActionBody,
+  maybeBody?: RestaurantSupportActionBody
+): Promise<{ success?: boolean; message?: string; affectedCount?: number }> {
+  const hasExplicitToken = typeof restaurantIdOrBody === "string" && maybeBody !== undefined
+  const token = hasExplicitToken ? tokenOrRestaurantId : undefined
+  const restaurantId = hasExplicitToken
+    ? (restaurantIdOrBody as string)
+    : tokenOrRestaurantId
+  const body = hasExplicitToken
+    ? maybeBody!
+    : (restaurantIdOrBody as RestaurantSupportActionBody)
+  return platformFetch<{ success?: boolean; message?: string; affectedCount?: number }>(
+    `/platform/restaurants/${restaurantId}/support-action`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    },
+    token
+  )
 }
 
 export const platform = {
+  getRestaurantDiagnostics,
+  runRestaurantSupportAction,
   auth: {
-    async login(email: string, password: string) {
+    async login(authCode: string) {
       const res = await fetch(`${BASE}/platform/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ authCode: authCode.trim() }),
       })
       if (!res.ok) {
         const body = await res.text()
-        let msg = "Geçersiz e-posta veya parola"
+        let msg = "Geçersiz Platform Admin Auth Kodu"
         try {
           const j = JSON.parse(body)
           if (j.message) msg = Array.isArray(j.message) ? j.message.join(", ") : j.message
@@ -248,6 +219,14 @@ export const platform = {
     },
   },
   restaurants: {
+    getRestaurantDiagnostics,
+    runRestaurantSupportAction,
+    async getDiagnostics(id: string) {
+      return getRestaurantDiagnostics(id)
+    },
+    async runSupportAction(id: string, body: RestaurantSupportActionBody) {
+      return runRestaurantSupportAction(id, body)
+    },
     async list() {
       return platformFetch<PlatformRestaurantDto[]>("/platform/restaurants")
     },

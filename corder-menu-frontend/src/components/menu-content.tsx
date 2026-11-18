@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import {
+  applyCfImageFallback,
   fetchMenu,
   formatMenuPrice,
   isCampaignCurrentlyValid,
   MenuFetchError,
   resolveImageUrl,
+  resolveMenuImageUrl,
   type MenuErrorKind,
   type MenuResponse,
   type MenuProduct,
@@ -18,6 +20,7 @@ import {
   ProductDetailModal,
   type ProductDisplay,
 } from "./menu-modals"
+import { WaiterCallWidget } from "./waiter-call-modal"
 
 function flattenMenuProducts(categories: MenuCategory[]): MenuProduct[] {
   const out: MenuProduct[] = []
@@ -84,7 +87,7 @@ function MenuProductItem(props: {
               alt={product.name}
               loading="lazy"
               decoding="async"
-              onError={() => setImgFailed(true)}
+              onError={(e) => applyCfImageFallback(e.currentTarget, () => setImgFailed(true))}
               className="w-full h-full object-cover"
             />
           </div>
@@ -121,7 +124,13 @@ function MenuSubcategoryBlock(props: {
   )
 }
 
-export function MenuContent({ slug }: { slug: string }) {
+export function MenuContent({
+  slug,
+  tableToken = "",
+}: {
+  slug: string
+  tableToken?: string
+}) {
   const [data, setData] = useState<MenuResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -148,7 +157,7 @@ export function MenuContent({ slug }: { slug: string }) {
       setLoading(true)
       setError(null)
       try {
-        const res = await fetchMenu(slug.trim(), { forceRefresh })
+        const res = await fetchMenu(slug.trim(), { forceRefresh, tableToken })
         setData(res)
         setLogoFailed(false)
         const validCampaigns = (res.campaigns ?? []).filter(isCampaignCurrentlyValid)
@@ -175,7 +184,7 @@ export function MenuContent({ slug }: { slug: string }) {
         setLoading(false)
       }
     },
-    [slug, hasSeenCampaigns]
+    [slug, tableToken, hasSeenCampaigns]
   )
 
   useEffect(() => {
@@ -293,27 +302,43 @@ export function MenuContent({ slug }: { slug: string }) {
   }
 
   const business = data
-  const logoUrl = resolveImageUrl(business.logo)
+  const rawLogoUrl = business.logoUrl ?? business.logo ?? business.restaurant?.logoUrl ?? null
+  const logoUrl = resolveMenuImageUrl(rawLogoUrl, { width: 120 })
+  const verifiedTable =
+    tableToken &&
+    business.tableContext?.tableId &&
+    business.tableContext?.tableName &&
+    business.tableContext?.tableToken
+      ? business.tableContext
+      : null
 
   return (
     <div className="min-h-dvh bg-stone-50 flex flex-col">
       <header className="bg-white">
         <div className="px-5 pt-8 pb-5">
           <div className="flex items-center gap-4">
-            {logoUrl && !logoFailed ? (
-              <img
-                src={logoUrl}
-                alt={business.name}
-                onError={() => setLogoFailed(true)}
-                className="w-14 h-14 rounded-2xl object-cover shadow-md border border-stone-100 flex-shrink-0"
-              />
-            ) : (
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-rose-400 to-orange-400 flex items-center justify-center shadow-lg shadow-rose-200/50 flex-shrink-0">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-rose-400 to-orange-400 flex items-center justify-center shadow-lg shadow-rose-200/50 flex-shrink-0 overflow-hidden">
+              {logoUrl && !logoFailed ? (
+                <img
+                  src={logoUrl}
+                  alt={business.name}
+                  onError={(e) => applyCfImageFallback(e.currentTarget, () => setLogoFailed(true))}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
                 <span className="text-2xl font-bold text-white">{business.name.charAt(0)}</span>
-              </div>
-            )}
+              )}
+            </div>
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-bold text-stone-900 truncate">{business.name}</h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl font-bold text-stone-900 truncate">{business.name}</h1>
+                {verifiedTable && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200/70 text-xs font-semibold">
+                    Masa: {verifiedTable.tableName}
+                    {verifiedTable.sectionName ? ` (${verifiedTable.sectionName})` : ""}
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-3 mt-1 text-xs text-stone-500 flex-wrap">
                 {business.workingHours && (
                   <span className="flex items-center gap-1">
@@ -425,6 +450,8 @@ export function MenuContent({ slug }: { slug: string }) {
           Tüm fiyatlarımıza KDV dahildir.
         </p>
       </footer>
+
+      <WaiterCallWidget slug={slug} tableContext={verifiedTable} />
 
       <ContactPopover
         business={business}

@@ -18,6 +18,21 @@ export const tablesApi = {
       "/restaurant/tables",
       { method: "POST", token, body: JSON.stringify(body) },
     ),
+  bulkCreate: (
+    token: string,
+    body: {
+      section: string
+      prefix: string
+      startNumber: number
+      count: number
+      capacity?: number
+    },
+  ) =>
+    request<RawTableDto[]>("/restaurant/tables/bulk", {
+      method: "POST",
+      token,
+      body: JSON.stringify(body),
+    }),
   update: (
     token: string,
     id: string,

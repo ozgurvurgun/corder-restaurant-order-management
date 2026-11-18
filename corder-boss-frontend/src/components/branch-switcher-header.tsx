@@ -18,6 +18,7 @@ const TAB_TITLES: Record<BossTabId, string> = {
   staff: "Kullanıcılar & Şube Yöneticileri",
   analytics: "Analiz & Denetim Kayıtları",
   operations: "Canlı Operasyon & Menü",
+  security: "Güvenlik & Kaçak Tespiti",
 }
 
 export function BranchSwitcherHeader({ activeTab = "dashboard" }: { activeTab?: BossTabId }) {

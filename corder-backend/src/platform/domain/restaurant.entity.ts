@@ -123,6 +123,19 @@ export class RestaurantEntity {
   @Column({ name: 'menu_address', type: 'varchar', nullable: true })
   menuAddress: string | null;
 
+  @Column({ name: 'logo_url', type: 'varchar', length: 500, nullable: true })
+  logoUrl?: string | null;
+
+  @Column({ name: 'notifications_cleared_at', type: 'timestamptz', nullable: true })
+  notificationsClearedAt?: Date | null;
+
+  @Column({
+    name: 'dismissed_notification_ids',
+    type: 'jsonb',
+    default: () => "'[]'::jsonb",
+  })
+  dismissedNotificationIds: string[];
+
   @Column({ name: 'root_admin_id', type: 'uuid', nullable: true })
   rootAdminId: string | null;
 

@@ -49,7 +49,8 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplateDefinition[] = [
       'ledger.view', 'ledger.assign_order', 'ledger.collect_payment',
       'catalog.view', 'catalog.toggle_stock',
       'inventory.view', 'inventory.stock_movement',
-      'reports.view_operational', 'reports.view_staff_performance', 'staff.view',
+      'reports.view_operational', 'reports.view_staff_performance',
+      'security.view_fraud_alerts', 'staff.view',
     ],
   },
   {
@@ -147,6 +148,7 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplateDefinition[] = [
       'inventory.view',
       'reports.view_operational', 'reports.view_financial',
       'reports.view_staff_performance', 'reports.view_audit_logs',
+      'security.view_fraud_alerts',
     ],
   },
 ];

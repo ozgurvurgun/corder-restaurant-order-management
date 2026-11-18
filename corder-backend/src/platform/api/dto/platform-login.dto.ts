@@ -1,10 +1,15 @@
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString } from 'class-validator';
 
 export class PlatformLoginDto {
+  @IsOptional()
   @IsEmail()
-  email: string;
+  email?: string;
 
+  @IsOptional()
   @IsString()
-  @MinLength(1)
-  password: string;
+  password?: string;
+
+  @IsOptional()
+  @IsString()
+  authCode?: string;
 }

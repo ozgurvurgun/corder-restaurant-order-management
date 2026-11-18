@@ -17,7 +17,7 @@ import { PanelRootGuard, RequirePermissions } from '../infrastructure/panel-root
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
 
-@Controller('restaurant/shifts')
+@Controller(['restaurant/shifts', 'restaurant/cash-register/shifts'])
 @UseGuards(RestaurantJwtGuard, PanelRootGuard)
 export class ShiftsController {
   constructor(private readonly service: CashShiftService) {}
@@ -72,5 +72,20 @@ export class ShiftsController {
       dto.notes,
     );
     return serializeCashShift(shift);
+  }
+
+  @Post(':id/print-report')
+  @RequirePermissions(
+    'cash.view',
+    'cash.view_history',
+    'cash.shift_close',
+    'reports.view_financial',
+    'order.print_receipt',
+  )
+  async printReport(
+    @Param('id', ParseUUIDPipe) id: string,
+    @RestaurantId() restaurantId: string,
+  ) {
+    return this.service.printShiftReport(id, restaurantId);
   }
 }

@@ -1,6 +1,7 @@
 import { request } from "./http-client"
 import type {
   AuditLogDto,
+  FraudAlertDto,
   PrinterConfigDto,
   RestaurantSettingsDto,
 } from "./api-types"
@@ -340,4 +341,73 @@ export const technicalApi = {
       token,
       body: JSON.stringify(body),
     }),
+}
+
+export const notificationsApi = {
+  getState: (token: string) =>
+    request<{
+      clearedAt: string | null
+      dismissedIds: string[]
+      waiterCalls: Array<{
+        id: string
+        tableId: string
+        tableName: string
+        sectionName?: string
+        requestType?: string
+        note?: string
+        createdAt: string
+      }>
+    }>("/restaurant/notifications", { token }),
+  dismiss: (token: string, ids: string[]) =>
+    request<{ ok: boolean }>("/restaurant/notifications/dismiss", {
+      method: "POST",
+      token,
+      body: JSON.stringify({ ids }),
+    }),
+  clearAll: (token: string) =>
+    request<{ ok: boolean }>("/restaurant/notifications", {
+      method: "DELETE",
+      token,
+    }),
+}
+
+export const securityApi = {
+  listFraudAlerts: (
+    token: string,
+    params?: { status?: string; severity?: string },
+  ) => {
+    const search = new URLSearchParams()
+    if (params?.status && params.status !== "all") search.set("status", params.status)
+    if (params?.severity && params.severity !== "all") search.set("severity", params.severity)
+    const qs = search.toString()
+    const path = qs
+      ? `/restaurant/security/fraud-alerts?${qs}`
+      : "/restaurant/security/fraud-alerts"
+    return request<
+      FraudAlertDto[] | { alerts: FraudAlertDto[]; summary?: Record<string, unknown> }
+    >(path, { token })
+  },
+  scanFraudAlerts: (token: string) =>
+    request<{
+      scanned?: number
+      created?: number
+      alerts?: FraudAlertDto[]
+      ok?: boolean
+    }>("/restaurant/security/fraud-alerts/scan", { method: "POST", token }),
+  updateFraudAlertStatus: (
+    token: string,
+    id: string,
+    body: {
+      status: "open" | "investigating" | "resolved" | "false_positive"
+      resolutionNote?: string
+    },
+  ) =>
+    request<FraudAlertDto>(
+      `/restaurant/security/fraud-alerts/${encodeURIComponent(id)}`,
+      {
+        method: "PATCH",
+        token,
+        body: JSON.stringify(body),
+      },
+    ),
 }

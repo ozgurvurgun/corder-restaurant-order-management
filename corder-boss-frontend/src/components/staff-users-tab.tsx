@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useBossStore } from "@/lib/boss-store"
 import { bossApi } from "@/lib/api"
 import type { StaffMemberDto } from "@/lib/types"
@@ -6,6 +6,7 @@ import { getRoleDisplayName } from "@/lib/permission-labels"
 import { StaffUserModal } from "./staff-user-modal"
 import { SubBossesSection } from "./sub-bosses-section"
 import { CustomSelect } from "./ui/custom-inputs"
+import { PaginationBar } from "./ui/pagination-bar"
 import {
   Users,
   Plus,
@@ -36,6 +37,17 @@ export function StaffUsersTab() {
   const [showModal, setShowModal] = useState(false)
   const [editingUser, setEditingUser] = useState<StaffMemberDto | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [page, setPage] = useState(1)
+  const pageSize = 8
+
+  useEffect(() => {
+    setPage(1)
+  }, [effectiveBranchId, staff.length])
+
+  const pagedStaff = useMemo(() => {
+    const start = (page - 1) * pageSize
+    return staff.slice(start, start + pageSize)
+  }, [staff, page])
 
   const openCreateModal = () => {
     setEditingUser(null)
@@ -118,7 +130,7 @@ export function StaffUsersTab() {
             <div className="flex items-center gap-2">
               <Users className="h-5 w-5 text-[#e63462]" />
               <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
-                Merchant Panel &amp; Terminal Kullanıcıları
+                Merchant Panel &amp; Terminal Kullanıcıları ({staff.length})
               </h2>
             </div>
             <p className="mt-0.5 text-[12px] text-[#86868b]">
@@ -159,9 +171,9 @@ export function StaffUsersTab() {
         </div>
       </div>
 
-      <div className="space-y-3">
+      <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-4">
         {staff.length === 0 ? (
-          <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-10 text-center">
+          <div className="p-6 text-center">
             <Users className="mx-auto h-9 w-9 text-[#86868b]" />
             <h3 className="mt-2 text-[15px] font-semibold text-[#1d1d1f]">
               Bu şubede henüz kullanıcı yok
@@ -178,128 +190,140 @@ export function StaffUsersTab() {
             </button>
           </div>
         ) : (
-          staff.map((u) => {
-            const hasOverrides =
-              u.grantedPermissions.length > 0 ||
-              u.revokedPermissions.length > 0 ||
-              u.maxDiscountPercentOverride != null ||
-              u.maxDiscountAmountOverride != null
+          <>
+            <div className="space-y-3">
+              {pagedStaff.map((u) => {
+                const hasOverrides =
+                  u.grantedPermissions.length > 0 ||
+                  u.revokedPermissions.length > 0 ||
+                  u.maxDiscountPercentOverride != null ||
+                  u.maxDiscountAmountOverride != null
 
-            return (
-              <div
-                key={u.id}
-                className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-4 shadow-2xs"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-[14px] font-semibold text-white"
-                      style={{ backgroundColor: u.roleColor || "#e63462" }}
-                    >
-                      {u.name.charAt(0).toLocaleUpperCase("tr-TR")}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <h3 className="truncate text-[14px] font-semibold text-[#1d1d1f]">
-                          {u.name}
-                        </h3>
-                        <span
-                          className="rounded-lg px-2 py-0.5 text-[11px] font-semibold text-white"
+                return (
+                  <div
+                    key={u.id}
+                    className="rounded-2xl border border-[#e5e5ea] bg-[#f9f9fb] p-3.5"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-[14px] font-semibold text-white"
                           style={{ backgroundColor: u.roleColor || "#e63462" }}
                         >
-                          {getRoleDisplayName(u.role, u.roleLabel)}
-                        </span>
-                        {hasOverrides && (
-                          <span className="rounded-lg bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
-                            Özel Yetki Tanımlı
-                          </span>
-                        )}
+                          {u.name.charAt(0).toLocaleUpperCase("tr-TR")}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <h3 className="truncate text-[14px] font-semibold text-[#1d1d1f]">
+                              {u.name}
+                            </h3>
+                            <span
+                              className="rounded-lg px-2 py-0.5 text-[11px] font-semibold text-white"
+                              style={{ backgroundColor: u.roleColor || "#e63462" }}
+                            >
+                              {getRoleDisplayName(u.role, u.roleLabel)}
+                            </span>
+                            {hasOverrides && (
+                              <span className="rounded-lg bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                                Özel Yetki Tanımlı
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-[#86868b]">
+                            {u.email && (
+                              <span className="flex items-center gap-1">
+                                <Mail className="h-3 w-3" /> {u.email}
+                              </span>
+                            )}
+                            {u.phone && (
+                              <span className="flex items-center gap-1">
+                                <Phone className="h-3 w-3" /> {u.phone}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-[#86868b]">
-                        {u.email && (
-                          <span className="flex items-center gap-1">
-                            <Mail className="h-3 w-3" /> {u.email}
-                          </span>
-                        )}
-                        {u.phone && (
-                          <span className="flex items-center gap-1">
-                            <Phone className="h-3 w-3" /> {u.phone}
-                          </span>
-                        )}
+
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => void handleToggleActive(u)}
+                          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                            u.isActive
+                              ? "bg-green-100 text-green-700"
+                              : "bg-red-100 text-red-600"
+                          }`}
+                        >
+                          {u.isActive ? "Aktif" : "Pasif"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(u)}
+                          className="flex h-8 w-8 items-center justify-center rounded-xl bg-white border border-[#e5e5ea] text-[#1d1d1f] hover:bg-[#e8e8ed]"
+                          title="Düzenle & Yetkileri Özelleştir"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(u)}
+                          className="flex h-8 w-8 items-center justify-center rounded-xl bg-white border border-[#e5e5ea] text-red-500 hover:bg-red-50"
+                          title="Sil"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => void handleToggleActive(u)}
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                        u.isActive
-                          ? "bg-green-100 text-green-700"
-                          : "bg-red-100 text-red-600"
-                      }`}
-                    >
-                      {u.isActive ? "Aktif" : "Pasif"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openEditModal(u)}
-                      className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed]"
-                      title="Düzenle & Yetkileri Özelleştir"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleDelete(u)}
-                      className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#f5f5f7] text-red-500 hover:bg-red-50"
-                      title="Sil"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#e5e5ea] pt-2.5">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-semibold ${
+                          u.canAccessPanel
+                            ? "bg-blue-50 text-blue-700"
+                            : "bg-white text-[#86868b]"
+                        }`}
+                      >
+                        <Monitor className="h-3 w-3" />
+                        Merchant Panel: {u.canAccessPanel ? "Açık" : "Kapalı"}
+                      </span>
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-semibold ${
+                          u.canAccessTerminal
+                            ? u.hasPin
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-amber-100 text-amber-800"
+                            : "bg-white text-[#86868b]"
+                        }`}
+                      >
+                        <Smartphone className="h-3 w-3" />
+                        El Terminali (PIN):{" "}
+                        {u.canAccessTerminal
+                          ? u.hasPin
+                            ? "Açık"
+                            : "Açık (PIN Eksik)"
+                          : "Kapalı"}
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-lg bg-[#fef3f5] px-2.5 py-1 text-[11px] font-semibold text-[#e63462]">
+                        <Shield className="h-3 w-3" />
+                        {u.permissions.length} Yetki • Maks %{u.limits.maxDiscountPercent} İskonto
+                        {u.limits.maxDiscountAmount != null
+                          ? ` (Maks ${u.limits.maxDiscountAmount} ₺)`
+                          : ""}
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )
+              })}
+            </div>
 
-                <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#f0f0f0] pt-3">
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-semibold ${
-                      u.canAccessPanel
-                        ? "bg-blue-50 text-blue-700"
-                        : "bg-[#f5f5f7] text-[#86868b]"
-                    }`}
-                  >
-                    <Monitor className="h-3 w-3" />
-                    Merchant Panel: {u.canAccessPanel ? "Açık" : "Kapalı"}
-                  </span>
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-semibold ${
-                      u.canAccessTerminal
-                        ? u.hasPin
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-amber-100 text-amber-800"
-                        : "bg-[#f5f5f7] text-[#86868b]"
-                    }`}
-                  >
-                    <Smartphone className="h-3 w-3" />
-                    El Terminali (PIN):{" "}
-                    {u.canAccessTerminal
-                      ? u.hasPin
-                        ? "Açık"
-                        : "Açık (PIN Eksik)"
-                      : "Kapalı"}
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-lg bg-[#fef3f5] px-2.5 py-1 text-[11px] font-semibold text-[#e63462]">
-                    <Shield className="h-3 w-3" />
-                    {u.permissions.length} Yetki • Maks %{u.limits.maxDiscountPercent} İskonto
-                    {u.limits.maxDiscountAmount != null
-                      ? ` (Maks ${u.limits.maxDiscountAmount} ₺)`
-                      : ""}
-                  </span>
-                </div>
-              </div>
-            )
-          })
+            <PaginationBar
+              currentPage={page}
+              totalItems={staff.length}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              itemLabel="kullanıcı"
+            />
+          </>
         )}
       </div>
 

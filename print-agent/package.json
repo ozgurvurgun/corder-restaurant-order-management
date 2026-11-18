@@ -28,6 +28,12 @@
     "electron": "^41.7.1",
     "electron-builder": "^26.18.0"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "electron-winstaller"
+    ]
+  },
   "build": {
     "appId": "uk.corders.print-agent",
     "productName": "Corder Print Agent",

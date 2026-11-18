@@ -1,4 +1,4 @@
-import { IsString, IsOptional, MinLength } from 'class-validator';
+import { IsInt, IsOptional, IsString, Max, Min, MinLength } from 'class-validator';
 
 export class CreateTableDto {
   @IsString()
@@ -8,4 +8,31 @@ export class CreateTableDto {
   @IsOptional()
   @IsString()
   section?: string;
+}
+
+export class BulkCreateTablesDto {
+  @IsOptional()
+  @IsString()
+  section?: string;
+
+  @IsOptional()
+  @IsString()
+  prefix?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(9999)
+  startNumber?: number;
+
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  count: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  capacity?: number;
 }

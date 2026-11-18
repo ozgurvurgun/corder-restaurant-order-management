@@ -17,7 +17,7 @@ import type { Request } from 'express';
 import { TableService } from '../application/table.service';
 import { StaffSessionService } from '../application/staff-session.service';
 import { EffectivePolicyLimits, PermissionKey } from '../domain/permissions.catalog';
-import { CreateTableDto } from './dto/create-table.dto';
+import { BulkCreateTablesDto, CreateTableDto } from './dto/create-table.dto';
 import { UpdateTableDto } from './dto/update-table.dto';
 import { SessionLockDto } from './dto/session-lock.dto';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
@@ -139,6 +139,18 @@ export class TablesController {
   ) {
     this.assertCanReadTables(user);
     return this.service.findOne(id, restaurantId);
+  }
+
+  @Post('bulk')
+  @UseGuards(PanelRootGuard)
+  @RequirePermissions('system.manage_tables')
+  async createBulk(
+    @RestaurantId() restaurantId: string,
+    @Body() dto: BulkCreateTablesDto,
+  ) {
+    const created = await this.service.createBulk(restaurantId, dto);
+    this.ordersGateway.emitOrdersUpdated(restaurantId);
+    return created;
   }
 
   @Post()

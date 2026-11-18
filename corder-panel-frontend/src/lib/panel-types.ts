@@ -118,6 +118,8 @@ export interface PanelTable {
   name: string
   section: string
   status: PanelTableStatus
+  qrToken?: string
+  capacity?: number
   activeOrderId?: string
   waiter?: string
   lockedByStaffId?: string

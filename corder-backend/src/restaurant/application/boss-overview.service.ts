@@ -11,13 +11,17 @@ import { StockMaterialEntity } from '../domain/stock-material.entity';
 import { RestaurantStaffEntity } from '../domain/restaurant-staff.entity';
 import { LedgerEntryEntity } from '../domain/ledger-entry.entity';
 import { AuditLogEntity } from '../domain/audit-log.entity';
+import { CategoryEntity } from '../domain/category.entity';
+import { ProductEntity } from '../domain/product.entity';
 import {
   BossOverviewPolicy,
   BranchLivePulseDto,
   computeIstanbulDateBoundaries,
 } from '../domain/services/boss-overview.policy';
+import { BossOverviewDetailsPolicy } from '../domain/services/boss-overview-details.policy';
 import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
 import { BossHierarchyService } from './boss-hierarchy.service';
+import { FraudDetectionService } from './fraud-detection.service';
 
 export { BranchLivePulseDto } from '../domain/services/boss-overview.policy';
 
@@ -32,6 +36,7 @@ export class BossOverviewService {
     @InjectRepository(AuditLogEntity)
     private readonly auditRepo: Repository<AuditLogEntity>,
     private readonly hierarchyService: BossHierarchyService,
+    private readonly fraudService: FraudDetectionService,
   ) {}
 
   async getOverview(bossId: string, branchIdFilter?: string) {
@@ -42,13 +47,21 @@ export class BossOverviewService {
         : ownedBranches;
 
     if (targetBranches.length === 0) {
+      const emptyConsolidated = BossOverviewPolicy.emptyConsolidated();
+      const emptyKpis = BossOverviewDetailsPolicy.computeExtendedKpis(emptyConsolidated);
       return {
         branches: [],
         allOwnedBranches: [],
-        consolidated: BossOverviewPolicy.emptyConsolidated(),
+        consolidated: { ...emptyConsolidated, ...emptyKpis },
+        ...emptyKpis,
         hourlySales: [],
+        categoryBreakdown: [],
         topProducts: [],
         staffPerformance: [],
+        waiterPerformance: [],
+        shiftSummaries: [],
+        fraudSummary: { openCount: 0, criticalCount: 0, highCount: 0, totalAmountImpact: 0 },
+        recentFraudAlerts: [],
         criticalMaterials: [],
         recentAudits: [],
       };
@@ -57,7 +70,12 @@ export class BossOverviewService {
     const { startOfToday, startOfWeek, startOfMonth } =
       computeIstanbulDateBoundaries(new Date());
     const branchIds = targetBranches.map((b) => b.id);
-    const data = await this.loadBranchesRawData(branchIds, startOfMonth);
+    const branchNameById = new Map(ownedBranches.map((b) => [b.id, b.name]));
+
+    const [data, fraudData] = await Promise.all([
+      this.loadBranchesRawData(branchIds, startOfMonth),
+      this.fraudService.listForBranches(branchIds, branchNameById),
+    ]);
 
     const branchPulses: BranchLivePulseDto[] = targetBranches.map((branch) =>
       BossOverviewPolicy.buildBranchPulse({
@@ -69,9 +87,23 @@ export class BossOverviewService {
       }),
     );
 
-    const { topProducts, staffPerformance } =
-      BossOverviewPolicy.buildTopProductsAndStaffPerformance(data.completedMonth);
-    const branchNameById = new Map(ownedBranches.map((b) => [b.id, b.name]));
+    const baseConsolidated = BossOverviewPolicy.computeConsolidatedMetrics(branchPulses);
+    const extendedKpis = BossOverviewDetailsPolicy.computeExtendedKpis(baseConsolidated);
+    const { categoryBreakdown, topProducts } =
+      BossOverviewDetailsPolicy.buildCategoryAndProductBreakdown(
+        data.completedMonth,
+        data.products,
+        data.categories,
+      );
+    const waiterPerformance = BossOverviewDetailsPolicy.buildWaiterPerformance(
+      data.completedMonth,
+      data.activeOrders,
+      data.itemsByOrderId,
+    );
+    const shiftSummaries = BossOverviewDetailsPolicy.buildShiftSummaries(
+      data.recentShifts,
+      branchNameById,
+    );
 
     return {
       branches: branchPulses,
@@ -88,10 +120,27 @@ export class BossOverviewService {
         billingStatus: b.billingStatus || 'paid',
         isAccessSuspended: Boolean(b.isAccessSuspended),
       })),
-      consolidated: BossOverviewPolicy.computeConsolidatedMetrics(branchPulses),
-      hourlySales: BossOverviewPolicy.buildHourlySales(data.completedMonth, startOfToday),
+      consolidated: {
+        ...baseConsolidated,
+        ...extendedKpis,
+      },
+      ...extendedKpis,
+      hourlySales: BossOverviewDetailsPolicy.build24HourlySales(
+        data.completedMonth,
+        startOfToday,
+      ),
+      categoryBreakdown,
       topProducts,
-      staffPerformance,
+      staffPerformance: waiterPerformance,
+      waiterPerformance,
+      shiftSummaries,
+      fraudSummary: {
+        openCount: fraudData.summary.openCount + fraudData.summary.investigatingCount,
+        criticalCount: fraudData.summary.criticalCount,
+        highCount: fraudData.summary.highCount,
+        totalAmountImpact: fraudData.summary.totalAmountImpact,
+      },
+      recentFraudAlerts: fraudData.alerts.slice(0, 15),
       criticalMaterials: BossOverviewPolicy.buildCriticalMaterials(
         data.materials,
         branchNameById,
@@ -110,8 +159,10 @@ export class BossOverviewService {
       activeOrders,
       completedMonth,
       openShifts,
+      recentShifts,
       materials,
       staffList,
+      categories,
       ledgerAggRows,
       recentAudits,
     ] = await Promise.all([
@@ -125,8 +176,14 @@ export class BossOverviewService {
         where: { restaurantId: In(branchIds), status: 'open' },
         order: { openedAt: 'DESC' },
       }),
+      em.find(CashShiftEntity, {
+        where: { restaurantId: In(branchIds) },
+        order: { openedAt: 'DESC' },
+        take: 25,
+      }),
       this.stockRepo.find({ where: { restaurantId: In(branchIds) } }),
       em.find(RestaurantStaffEntity, { where: { restaurantId: In(branchIds), isActive: true } }),
+      em.find(CategoryEntity, { where: { restaurantId: In(branchIds) } }),
       em
         .createQueryBuilder(LedgerEntryEntity, 'e')
         .select('e.restaurant_id', 'restaurantId')
@@ -143,6 +200,11 @@ export class BossOverviewService {
         take: 40,
       }),
     ]);
+
+    const categoryIds = categories.map((c) => c.id);
+    const products = categoryIds.length
+      ? await em.find(ProductEntity, { where: { categoryId: In(categoryIds) } })
+      : [];
 
     const openLedgerBalanceByBranchId = new Map<string, number>();
     for (const row of ledgerAggRows) {
@@ -168,8 +230,11 @@ export class BossOverviewService {
       itemsByOrderId,
       completedMonth,
       openShifts,
+      recentShifts,
       materials,
       staffList,
+      categories,
+      products,
       openLedgerBalanceByBranchId,
       recentAudits,
     };

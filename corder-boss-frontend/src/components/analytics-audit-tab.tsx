@@ -4,6 +4,7 @@ import { bossApi } from "@/lib/api"
 import type { AuditCategory, AuditLogDto } from "@/lib/types"
 import { formatIstanbulDateTime, formatMoney } from "@/lib/format"
 import { AUDIT_CATEGORY_LABELS } from "@/lib/permission-labels"
+import { PaginationBar } from "./ui/pagination-bar"
 import {
   BarChart,
   Bar,
@@ -44,6 +45,12 @@ export function AnalyticsAuditTab() {
   const [auditCategory, setAuditCategory] = useState<AuditCategory | "ALL">("ALL")
   const [branchAudits, setBranchAudits] = useState<AuditLogDto[] | null>(null)
   const [loadingAudits, setLoadingAudits] = useState(false)
+  const [auditPage, setAuditPage] = useState(1)
+  const auditPageSize = 10
+
+  useEffect(() => {
+    setAuditPage(1)
+  }, [auditCategory, selectedBranchId, effectiveBranchId])
 
   useEffect(() => {
     if (!effectiveBranchId || selectedBranchId === "ALL") {
@@ -86,6 +93,11 @@ export function AnalyticsAuditTab() {
     if (auditCategory === "ALL") return base
     return base.filter((a) => a.category === auditCategory)
   }, [selectedBranchId, branchAudits, effectiveBranch?.name, overview?.recentAudits, auditCategory])
+
+  const pagedAudits = useMemo(() => {
+    const start = (auditPage - 1) * auditPageSize
+    return audits.slice(start, start + auditPageSize)
+  }, [audits, auditPage])
 
   return (
     <div className="space-y-4">
@@ -148,27 +160,30 @@ export function AnalyticsAuditTab() {
             </p>
           ) : (
             <div className="space-y-2.5">
-              {topProducts.map((p, idx) => (
-                <div
-                  key={p.name}
-                  className="flex items-center justify-between rounded-xl bg-[#f9f9fb] px-3 py-2"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[#e63462]/10 text-[11px] font-bold text-[#e63462]">
-                      {idx + 1}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-[13px] font-semibold text-[#1d1d1f]">
-                        {p.name}
-                      </p>
-                      <p className="text-[11px] text-[#86868b]">{p.quantity} adet satıldı</p>
+              {topProducts.map((p, idx) => {
+                const label = p.name || p.productName || `Ürün #${idx + 1}`
+                return (
+                  <div
+                    key={label}
+                    className="flex items-center justify-between rounded-xl bg-[#f9f9fb] px-3 py-2"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[#e63462]/10 text-[11px] font-bold text-[#e63462]">
+                        {idx + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-semibold text-[#1d1d1f]">
+                          {label}
+                        </p>
+                        <p className="text-[11px] text-[#86868b]">{p.quantity} adet satıldı</p>
+                      </div>
                     </div>
+                    <span className="text-[13px] font-bold text-[#1d1d1f] tabular-nums">
+                      ₺{formatMoney(p.revenue)}
+                    </span>
                   </div>
-                  <span className="text-[13px] font-bold text-[#1d1d1f] tabular-nums">
-                    ₺{formatMoney(p.revenue)}
-                  </span>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
@@ -257,37 +272,46 @@ export function AnalyticsAuditTab() {
             Bu kategoride kayıtlı denetim hareketi bulunmuyor.
           </p>
         ) : (
-          <div className="divide-y divide-[#f0f0f0]">
-            {audits.map((a) => (
-              <div key={a.id} className="py-2.5 flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[12px] font-bold text-[#1d1d1f]">
-                      {a.action}
-                    </span>
-                    <span className="rounded bg-[#f5f5f7] px-1.5 py-0.5 text-[10px] font-medium text-[#86868b]">
-                      {a.userName}
-                    </span>
-                    {a.category && (
-                      <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600">
-                        {AUDIT_CATEGORY_LABELS[a.category as AuditCategory] ?? a.category}
+          <>
+            <div className="divide-y divide-[#f0f0f0]">
+              {pagedAudits.map((a) => (
+                <div key={a.id} className="py-2.5 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[12px] font-bold text-[#1d1d1f]">
+                        {a.action}
                       </span>
-                    )}
-                    {a.branchName && (
-                      <span className="inline-flex items-center gap-0.5 rounded bg-[#fef3f5] px-1.5 py-0.5 text-[10px] font-medium text-[#e63462]">
-                        <Building2 className="h-2.5 w-2.5" /> {a.branchName}
+                      <span className="rounded bg-[#f5f5f7] px-1.5 py-0.5 text-[10px] font-medium text-[#86868b]">
+                        {a.userName}
                       </span>
-                    )}
+                      {a.category && (
+                        <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600">
+                          {AUDIT_CATEGORY_LABELS[a.category as AuditCategory] ?? a.category}
+                        </span>
+                      )}
+                      {a.branchName && (
+                        <span className="inline-flex items-center gap-0.5 rounded bg-[#fef3f5] px-1.5 py-0.5 text-[10px] font-medium text-[#e63462]">
+                          <Building2 className="h-2.5 w-2.5" /> {a.branchName}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-[11px] text-[#86868b]">{a.details}</p>
                   </div>
-                  <p className="mt-0.5 text-[11px] text-[#86868b]">{a.details}</p>
+                  <span className="flex items-center gap-1 flex-shrink-0 text-[10px] text-[#86868b] tabular-nums">
+                    <Clock className="h-3 w-3" />
+                    {formatIstanbulDateTime(a.createdAt)}
+                  </span>
                 </div>
-                <span className="flex items-center gap-1 flex-shrink-0 text-[10px] text-[#86868b] tabular-nums">
-                  <Clock className="h-3 w-3" />
-                  {formatIstanbulDateTime(a.createdAt)}
-                </span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+            <PaginationBar
+              currentPage={auditPage}
+              totalItems={audits.length}
+              pageSize={auditPageSize}
+              onPageChange={setAuditPage}
+              itemLabel="denetim kaydı"
+            />
+          </>
         )}
       </div>
     </div>

@@ -10,7 +10,8 @@ import { TableEntity } from '../domain/table.entity';
 import { OrderEntity } from '../domain/order.entity';
 import { RestaurantStaffEntity } from '../domain/restaurant-staff.entity';
 import { OrderStatusPolicy } from '../domain/services/order-status.policy';
-import { CreateTableDto } from '../api/dto/create-table.dto';
+import { TableQrTokenPolicy } from '../domain/services/table-qr-token.policy';
+import { BulkCreateTablesDto, CreateTableDto } from '../api/dto/create-table.dto';
 import { UpdateTableDto } from '../api/dto/update-table.dto';
 
 /** Grace period (ms) to automatically take over a stale lock after disconnect. */
@@ -29,6 +30,7 @@ export class TableService {
     if (table.sessionStaffId && !table.hasActiveLock(SESSION_LOCK_STALE_MS, now)) {
       table.releaseSession();
     }
+    table.qrToken = TableQrTokenPolicy.generateToken(table.restaurantId, table.id);
     return table;
   }
 
@@ -68,7 +70,45 @@ export class TableService {
       name,
       section,
     });
-    return this.repo.save(entity);
+    const saved = await this.repo.save(entity);
+    saved.qrToken = TableQrTokenPolicy.generateToken(restaurantId, saved.id);
+    return saved;
+  }
+
+  async createBulk(
+    restaurantId: string,
+    dto: BulkCreateTablesDto,
+  ): Promise<TableEntity[]> {
+    const section = (dto.section ?? 'default').trim() || 'default';
+    const rawPrefix =
+      dto.prefix !== undefined ? String(dto.prefix).replace(/^\s+/, '') : 'Masa ';
+    const startNumber = Number.isFinite(Number(dto.startNumber))
+      ? Math.max(1, Math.floor(Number(dto.startNumber)))
+      : 1;
+    const count = Number.isFinite(Number(dto.count))
+      ? Math.min(100, Math.max(1, Math.floor(Number(dto.count))))
+      : 0;
+    if (count < 1 || count > 100) {
+      throw new BadRequestException('Bulk table count must be between 1 and 100');
+    }
+
+    const entities: TableEntity[] = [];
+    for (let i = 0; i < count; i++) {
+      const num = startNumber + i;
+      const name = `${rawPrefix}${num}`.trim() || `Masa ${num}`;
+      entities.push(
+        this.repo.create({
+          restaurantId,
+          name,
+          section,
+        }),
+      );
+    }
+    const saved = await this.repo.save(entities);
+    for (const table of saved) {
+      table.qrToken = TableQrTokenPolicy.generateToken(restaurantId, table.id);
+    }
+    return saved;
   }
 
   async update(
@@ -112,7 +152,9 @@ export class TableService {
           entity.status = dto.status;
         }
       }
-      return em.save(TableEntity, entity);
+      const saved = await em.save(TableEntity, entity);
+      saved.qrToken = TableQrTokenPolicy.generateToken(restaurantId, saved.id);
+      return saved;
     });
   }
 

@@ -75,6 +75,9 @@ export class TableEntity {
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
+  /** Deterministic signed QR token populated on read/write responses. */
+  qrToken?: string;
+
   hasActiveLock(staleThresholdMs: number, now: Date = new Date()): boolean {
     if (!this.sessionStaffId || !this.sessionLockedAt) {
       return false;

@@ -16,7 +16,7 @@ const {
   discoverNetworkPrinters,
   testTcpPrinterConnection,
 } = require("./printer-discovery")
-const { loginPrintAgent, fetchAgentContext } = require("./http-sync")
+const { loginPrintAgent, fetchAgentContext, pushPrintersToBackend } = require("./http-sync")
 const { applyAutoStartSetting } = require("./autostart")
 const { buildTestTicket } = require("./escpos")
 const { printBytes } = require("./printers")
@@ -29,6 +29,7 @@ const MIME_TYPES = {
   ".js": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",
+  ".png": "image/png",
 }
 
 const SECURITY_HEADERS = {
@@ -176,13 +177,15 @@ function createUiServer({ store, agent }) {
       nextCategories,
       nextPrinters,
     )
-    return applyAndReload({
+    const res = applyAndReload({
       restaurantId: ctx.restaurant?.id || current.restaurantId,
       restaurantName: ctx.restaurant?.name || current.restaurantName,
       categories: nextCategories,
       printers: nextPrinters,
       categoryRoutes: nextRoutes,
     })
+    void pushPrintersToBackend(res.runtimeConfig, res.settings)
+    return res
   }
 
   const dispatchApi = async (rawMethod, rawPathname, body = {}) => {
@@ -233,7 +236,7 @@ function createUiServer({ store, agent }) {
           nextCategories,
           nextPrinters,
         )
-        const { publicSettings } = applyAndReload({
+        const { settings, publicSettings, runtimeConfig } = applyAndReload({
           backendUrl: loginResult.backendUrl,
           authToken: loginResult.accessToken,
           refreshToken: loginResult.refreshToken,
@@ -245,6 +248,7 @@ function createUiServer({ store, agent }) {
           categoryRoutes: nextRoutes,
           printFooterLine: current.printFooterLine || loginResult.restaurant?.name || "",
         })
+        void pushPrintersToBackend(runtimeConfig, settings)
         info("Corder Print Agent logged in", {
           username: publicSettings.username,
           restaurantName: publicSettings.restaurantName,
@@ -294,7 +298,8 @@ function createUiServer({ store, agent }) {
         if (idx >= 0) printers[idx] = entry
         else printers.push(entry)
 
-        const { publicSettings } = applyAndReload({ printers })
+        const { settings, publicSettings, runtimeConfig } = applyAndReload({ printers })
+        void pushPrintersToBackend(runtimeConfig, settings)
         info("Printer saved", { id: entry.id, name: entry.name, mode: entry.mode })
         return { statusCode: 200, payload: { ok: true, printer: entry, settings: publicSettings } }
       }
@@ -307,13 +312,14 @@ function createUiServer({ store, agent }) {
         for (const [cid, pid] of Object.entries(categoryRoutes)) {
           if (pid === id) delete categoryRoutes[cid]
         }
-        const { publicSettings } = applyAndReload({
+        const { settings, publicSettings, runtimeConfig } = applyAndReload({
           printers,
           categoryRoutes,
           defaultKitchenPrinterId:
             current.defaultKitchenPrinterId === id ? printers[0]?.id || "" : current.defaultKitchenPrinterId,
           receiptPrinterId: current.receiptPrinterId === id ? printers[0]?.id || "" : current.receiptPrinterId,
         })
+        void pushPrintersToBackend(runtimeConfig, settings)
         info("Printer removed", { id })
         return { statusCode: 200, payload: { ok: true, settings: publicSettings } }
       }
@@ -338,7 +344,8 @@ function createUiServer({ store, agent }) {
           await applyAutoStartSetting(patch.autoStartOnBoot, electronAppRef)
         }
 
-        const { publicSettings } = applyAndReload({ ...current, ...patch })
+        const { settings, publicSettings, runtimeConfig } = applyAndReload({ ...current, ...patch })
+        void pushPrintersToBackend(runtimeConfig, settings)
         return { statusCode: 200, payload: { ok: true, settings: publicSettings } }
       }
 

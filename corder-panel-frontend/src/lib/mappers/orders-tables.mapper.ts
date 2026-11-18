@@ -178,6 +178,8 @@ export function mapApiTablesToPanel(
       name: t.name,
       section: t.section,
       status,
+      ...(t.qrToken ? { qrToken: t.qrToken } : {}),
+      ...(t.capacity != null ? { capacity: Number(t.capacity) } : {}),
       totalAmount,
       orderCount,
       lastUpdated: lastOrder ? lastOrder.updatedAt : undefined,

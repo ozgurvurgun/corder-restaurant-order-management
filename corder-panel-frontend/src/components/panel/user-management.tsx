@@ -9,6 +9,7 @@ import type {
 import { getRoleDisplayName } from "@/lib/permission-labels"
 import { StaffAccountModal } from "./users/staff-account-modal"
 import { RolePermissionsMatrix } from "./users/role-permissions-matrix"
+import { PaginationBar } from "@/components/ui/pagination-bar"
 import {
   Plus,
   Pencil,
@@ -52,6 +53,13 @@ export default function UserManagement() {
   // Staff modal state
   const [showAdd, setShowAdd] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const pageSize = 10
+
+  const paginatedUsers = useMemo(
+    () => users.slice((page - 1) * pageSize, page * pageSize),
+    [users, page],
+  )
 
   useEffect(() => {
     if (!canViewStaff && canManageRoles && activeTab === "staff") {
@@ -178,7 +186,7 @@ export default function UserManagement() {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((user, idx) => {
+                  {paginatedUsers.map((user, idx) => {
                     const hasCustomOverrides =
                       (user.grantedPermissions?.length ?? 0) > 0 ||
                       (user.revokedPermissions?.length ?? 0) > 0 ||
@@ -340,6 +348,15 @@ export default function UserManagement() {
                   </p>
                 </div>
               )}
+              <div className="px-4 pb-3">
+                <PaginationBar
+                  currentPage={page}
+                  totalItems={users.length}
+                  pageSize={pageSize}
+                  onPageChange={setPage}
+                  itemLabel="personel"
+                />
+              </div>
             </div>
           </div>
         ) : (

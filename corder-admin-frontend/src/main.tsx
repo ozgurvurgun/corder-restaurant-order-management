@@ -10,6 +10,23 @@ import "./index.css"
 
 installCustomFormValidation()
 
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then((registration) => {
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") {
+            void registration.update().catch(() => {})
+          }
+        })
+      })
+      .catch(() => {
+        // Service worker registration failed
+      })
+  })
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ClientOnlyShell>

@@ -24,6 +24,8 @@ export function genId(prefix: string): string {
 const CUSTOM_SECTIONS_KEY_PREFIX = "corder-panel-custom-sections"
 const APPEARANCE_KEY = "corder-panel-appearance"
 const READ_NOTIFS_KEY = "corder-panel-read-notifs"
+const DISMISSED_NOTIFS_KEY = "corder-panel-dismissed-notifs"
+const NOTIFS_CLEARED_AT_KEY = "corder-panel-notifs-cleared-at"
 
 function resolveCustomSectionsKey(restaurantId?: string | null): string {
   const id = restaurantId || getRestaurant()?.id
@@ -96,6 +98,49 @@ export function getReadNotifIds(): Set<string> {
 export function saveReadNotifIds(ids: Iterable<string>): void {
   try {
     localStorage.setItem(READ_NOTIFS_KEY, JSON.stringify(Array.from(new Set(ids))))
+  } catch {}
+}
+
+export function getDismissedNotifIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(DISMISSED_NOTIFS_KEY)
+    if (!raw) return new Set()
+    const parsed = JSON.parse(raw)
+    return new Set(
+      Array.isArray(parsed)
+        ? parsed.filter((x): x is string => typeof x === "string")
+        : [],
+    )
+  } catch {
+    return new Set()
+  }
+}
+
+export function saveDismissedNotifIds(ids: Iterable<string>): void {
+  try {
+    localStorage.setItem(
+      DISMISSED_NOTIFS_KEY,
+      JSON.stringify(Array.from(new Set(ids))),
+    )
+  } catch {}
+}
+
+export function getNotifsClearedAt(): string | null {
+  try {
+    const raw = localStorage.getItem(NOTIFS_CLEARED_AT_KEY)
+    return raw && raw.trim() ? raw.trim() : null
+  } catch {
+    return null
+  }
+}
+
+export function saveNotifsClearedAt(isoTimestamp: string | null): void {
+  try {
+    if (!isoTimestamp) {
+      localStorage.removeItem(NOTIFS_CLEARED_AT_KEY)
+    } else {
+      localStorage.setItem(NOTIFS_CLEARED_AT_KEY, isoTimestamp)
+    }
   } catch {}
 }
 

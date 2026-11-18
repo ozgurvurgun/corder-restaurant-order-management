@@ -131,6 +131,25 @@ html {
   overscroll-behavior: none;
 }
 
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(160, 160, 168, 0.45) transparent;
+}
+*::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(160, 160, 168, 0.45);
+  border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(115, 115, 125, 0.7);
+}
+
 .ios-scroll {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;

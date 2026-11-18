@@ -63,6 +63,7 @@ function normalizePrintJob(payload, restaurantId) {
     tipAmount: Number(payload.order.tipAmount || 0),
     cancelledBy: payload.order.cancelledBy || "-",
     cancelReason: payload.order.cancelReason || "-",
+    shiftReport: payload.shiftReport || null,
     items,
     total,
   }

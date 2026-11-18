@@ -45,4 +45,9 @@ export class UpdateRestaurantSettingsDto {
   @ValidateIf((_, v) => v !== null)
   @IsString()
   workingHours?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  logoUrl?: string | null;
 }

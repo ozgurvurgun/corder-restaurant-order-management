@@ -1,9 +1,10 @@
-import { useState } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { AlertTriangle, Check, Link2, Pencil, Plus, Search, Trash2, X } from "lucide-react"
 import type { PanelCategory, PanelProduct, StockMaterial, Supplier } from "@/lib/panel-types"
 import { AddMaterialForm } from "./stock-modals"
 import { formatCurrency } from "@/lib/format"
 import { CustomSelect } from "@/components/ui/custom-inputs"
+import { PaginationBar } from "@/components/ui/pagination-bar"
 
 export function MaterialsTab(props: {
   stockMaterials: StockMaterial[]
@@ -38,6 +39,17 @@ export function MaterialsTab(props: {
   const [editName, setEditName] = useState("")
   const [editMin, setEditMin] = useState("")
   const [editCost, setEditCost] = useState("")
+  const [page, setPage] = useState(1)
+  const pageSize = 12
+
+  useEffect(() => {
+    setPage(1)
+  }, [search, filteredMaterials.length])
+
+  const paginatedMaterials = useMemo(
+    () => filteredMaterials.slice((page - 1) * pageSize, page * pageSize),
+    [filteredMaterials, page],
+  )
 
   const startEdit = (mat: StockMaterial) => {
     setEditingId(mat.id)
@@ -117,7 +129,7 @@ export function MaterialsTab(props: {
             </tr>
           </thead>
           <tbody>
-            {filteredMaterials.map((mat, idx) => {
+            {paginatedMaterials.map((mat, idx) => {
               const isLow = mat.currentStock <= mat.minStock
               const isEditing = editingId === mat.id
               return (
@@ -190,6 +202,15 @@ export function MaterialsTab(props: {
             })}
           </tbody>
         </table>
+        <div className="px-4 pb-3">
+          <PaginationBar
+            currentPage={page}
+            totalItems={filteredMaterials.length}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            itemLabel="malzeme"
+          />
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4 flex items-center justify-between">
@@ -224,6 +245,19 @@ export function ProductLinkTab(props: {
     { materialId: string; quantity: number }[]
   >([])
   const [linkCategoryFilter, setLinkCategoryFilter] = useState<string>("all")
+  const [linkPage, setLinkPage] = useState(1)
+  const linkPageSize = 12
+  const filteredLinkProducts = useMemo(
+    () =>
+      products.filter(
+        (p) => linkCategoryFilter === "all" || p.categoryId === linkCategoryFilter,
+      ),
+    [products, linkCategoryFilter],
+  )
+  const paginatedLinkProducts = useMemo(
+    () => filteredLinkProducts.slice((linkPage - 1) * linkPageSize, linkPage * linkPageSize),
+    [filteredLinkProducts, linkPage],
+  )
 
   const getCategoryName = (categoryId: string) =>
     categories.find((c) => c.id === categoryId)?.name || categoryId
@@ -295,13 +329,7 @@ export function ProductLinkTab(props: {
             </tr>
           </thead>
           <tbody>
-            {products
-              .filter(
-                (p) =>
-                  linkCategoryFilter === "all" ||
-                  p.categoryId === linkCategoryFilter,
-              )
-              .map((product, idx) => {
+            {paginatedLinkProducts.map((product, idx) => {
                 const isEditing = editingProductId === product.id
                 return (
                   <tr key={product.id} className={`border-b border-[#f0f0f0] ${idx % 2 === 1 ? "bg-[#fafafa]" : ""}`}>
@@ -402,6 +430,15 @@ export function ProductLinkTab(props: {
               })}
           </tbody>
         </table>
+        <div className="px-4 pb-3">
+          <PaginationBar
+            currentPage={linkPage}
+            totalItems={filteredLinkProducts.length}
+            pageSize={linkPageSize}
+            onPageChange={setLinkPage}
+            itemLabel="ürün"
+          />
+        </div>
       </div>
     </>
   )

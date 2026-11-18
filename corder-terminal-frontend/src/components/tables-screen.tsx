@@ -1,8 +1,9 @@
 import { useState } from "react"
-import { Menu, UtensilsCrossed, Wine, Hash, RefreshCw, LogOut } from "lucide-react"
+import { Menu, UtensilsCrossed, Wine, Hash, RefreshCw, LogOut, Bell } from "lucide-react"
 import { useApp } from "@/lib/store"
 import { formatCurrency } from "@/lib/format"
 import { useToast } from "@/components/ios-toast"
+import { TerminalNotificationSettingsModal } from "@/components/notification-settings-modal"
 import type { TerminalTable, TerminalUser } from "@/lib/types"
 
 const ALL_SECTIONS = "all"
@@ -22,11 +23,12 @@ interface TablesScreenProps {
 type FilterMode = "all" | "open" | "number"
 
 export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
-  const { tables, currentUser, isLoading, refreshData } = useApp()
+  const { tables, currentUser, isLoading, refreshData, waiterCalls } = useApp()
   const { showToast } = useToast()
   const [activeSection, setActiveSection] = useState<string>(ALL_SECTIONS)
   const [filterMode, setFilterMode] = useState<FilterMode>("all")
   const [menuOpen, setMenuOpen] = useState(false)
+  const [notifSettingsOpen, setNotifSettingsOpen] = useState(false)
   const [tableNumber, setTableNumber] = useState("")
 
   const sectionNames = Array.from(new Set(tables.map((t) => t.section).filter(Boolean)))
@@ -69,14 +71,28 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
           </div>
           <h1 className="text-[17px] font-semibold tracking-tight">Corder</h1>
         </div>
-        <button
-          type="button"
-          onClick={() => setMenuOpen(!menuOpen)}
-          className="p-2 -mr-2 active:opacity-60"
-          aria-label="Menü"
-        >
-          <Menu className="h-[22px] w-[22px]" />
-        </button>
+        <div className="flex items-center gap-1 -mr-2">
+          <button
+            type="button"
+            onClick={() => setNotifSettingsOpen(true)}
+            className="p-2 relative active:opacity-60"
+            aria-label="Bildirim & Ses Ayarları"
+            title="Bildirim & Ses Ayarları"
+          >
+            <Bell className="h-[20px] w-[20px]" />
+            {waiterCalls.length > 0 && (
+              <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-amber-300 ring-2 ring-[#e63462]" />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="p-2 active:opacity-60"
+            aria-label="Menü"
+          >
+            <Menu className="h-[22px] w-[22px]" />
+          </button>
+        </div>
       </header>
 
       {/* Dropdown Menu */}
@@ -118,6 +134,17 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
               >
                 <RefreshCw className={`h-[20px] w-[20px] text-muted-foreground ${isLoading ? "animate-spin" : ""}`} />
                 <span className="text-[15px] text-card-foreground">Verileri Yenile</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false)
+                  setNotifSettingsOpen(true)
+                }}
+                className="flex items-center gap-3 py-3 active:bg-muted/50 -mx-1 px-1 rounded-lg"
+              >
+                <Bell className="h-[20px] w-[20px] text-muted-foreground" />
+                <span className="text-[15px] text-card-foreground">Bildirim & Ses Ayarları</span>
               </button>
               <div className="border-t border-border mt-1 pt-1">
                 <button
@@ -229,6 +256,10 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
           />
         </div>
       </nav>
+      <TerminalNotificationSettingsModal
+        open={notifSettingsOpen}
+        onClose={() => setNotifSettingsOpen(false)}
+      />
     </div>
   )
 }

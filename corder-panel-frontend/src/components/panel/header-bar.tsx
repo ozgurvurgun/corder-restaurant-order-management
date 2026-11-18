@@ -86,7 +86,10 @@ export function HeaderBar({ activeView = "dashboard" }: HeaderBarProps) {
         return <CreditCard className="h-4 w-4 text-[#34c759]" />
       case "alert":
       case "kitchen-alert":
+      case "fraud-alert":
         return <AlertTriangle className="h-4 w-4 text-[#ff3b30]" />
+      case "waiter-call":
+        return <Bell className="h-4 w-4 text-[#e63462]" />
       default:
         return <Bell className="h-4 w-4 text-[#86868b]" />
     }

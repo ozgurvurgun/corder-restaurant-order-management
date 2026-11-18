@@ -1,7 +1,9 @@
+import { useState, useMemo } from "react"
 import { ArrowDown, ArrowUp, ClipboardList, Plus, Trash2 } from "lucide-react"
 import type { InventoryCount, StockMaterial, StockMovement, Supplier } from "@/lib/panel-types"
 import { AddMovementForm, AddSupplierForm } from "./stock-modals"
 import { formatCurrency, formatIstanbulDateTime } from "@/lib/format"
+import { PaginationBar } from "@/components/ui/pagination-bar"
 
 export function MovementsTab(props: {
   stockMaterials: StockMaterial[]
@@ -22,6 +24,12 @@ export function MovementsTab(props: {
   handleAddMovement: () => void
 }) {
   const { stockMaterials, stockMovements, showAddMovement, setShowAddMovement, mvMatId, setMvMatId, mvType, setMvType, mvQty, setMvQty, mvCost, setMvCost, mvReason, setMvReason, canAddMovement = true, handleAddMovement } = props
+  const [page, setPage] = useState(1)
+  const pageSize = 12
+  const paginatedMovements = useMemo(
+    () => stockMovements.slice((page - 1) * pageSize, page * pageSize),
+    [stockMovements, page],
+  )
 
   return (
     <>
@@ -63,7 +71,7 @@ export function MovementsTab(props: {
             </tr>
           </thead>
           <tbody>
-            {stockMovements.map((mv, idx) => (
+            {paginatedMovements.map((mv, idx) => (
               <tr key={mv.id} className={`border-b border-[#f0f0f0] ${idx % 2 === 1 ? "bg-[#fafafa]" : ""}`}>
                 <td className="px-4 py-2 text-[12px] text-[#86868b]">
                   {formatIstanbulDateTime(mv.createdAt)}
@@ -108,6 +116,15 @@ export function MovementsTab(props: {
             ))}
           </tbody>
         </table>
+        <div className="px-4 pb-3">
+          <PaginationBar
+            currentPage={page}
+            totalItems={stockMovements.length}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            itemLabel="stok hareketi"
+          />
+        </div>
       </div>
     </>
   )
@@ -130,6 +147,12 @@ export function SuppliersTab(props: {
   deleteSupplier: (id: string) => void
 }) {
   const { suppliers, showAddSupplier, setShowAddSupplier, supName, setSupName, supContact, setSupContact, supPhone, setSupPhone, savingSupplier, canManageSuppliers = true, handleAddSupplier, updateSupplier, deleteSupplier } = props
+  const [supPage, setSupPage] = useState(1)
+  const supPageSize = 10
+  const paginatedSuppliers = useMemo(
+    () => suppliers.slice((supPage - 1) * supPageSize, supPage * supPageSize),
+    [suppliers, supPage],
+  )
 
   return (
     <>
@@ -175,7 +198,7 @@ export function SuppliersTab(props: {
                 </td>
               </tr>
             ) : (
-              suppliers.map((sup, idx) => (
+              paginatedSuppliers.map((sup, idx) => (
                 <tr key={sup.id} className={`border-b border-[#f0f0f0] ${idx % 2 === 1 ? "bg-[#fafafa]" : ""}`}>
                   <td className="px-4 py-2.5 text-[13px] font-medium text-[#1d1d1f]">
                     {sup.name}
@@ -210,6 +233,15 @@ export function SuppliersTab(props: {
             )}
           </tbody>
         </table>
+        <div className="px-4 pb-3">
+          <PaginationBar
+            currentPage={supPage}
+            totalItems={suppliers.length}
+            pageSize={supPageSize}
+            onPageChange={setSupPage}
+            itemLabel="tedarikçi"
+          />
+        </div>
       </div>
     </>
   )
@@ -227,6 +259,12 @@ export function InventoryCountsTab(props: {
   completeInventoryCount: (countId: string) => void
 }) {
   const { inventoryCounts, canCountInventory = true, startInventoryCount, updateInventoryItem, completeInventoryCount } = props
+  const [page, setPage] = useState(1)
+  const pageSize = 5
+  const paginatedCounts = useMemo(
+    () => inventoryCounts.slice((page - 1) * pageSize, page * pageSize),
+    [inventoryCounts, page],
+  )
 
   return (
     <>
@@ -237,7 +275,7 @@ export function InventoryCountsTab(props: {
           </button>
         </div>
       )}
-      {inventoryCounts.map((ic) => (
+      {paginatedCounts.map((ic) => (
         <div key={ic.id} className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-[#f0f0f0] bg-[#f9f9f9]">
             <div>
@@ -308,6 +346,13 @@ export function InventoryCountsTab(props: {
           </table>
         </div>
       ))}
+      <PaginationBar
+        currentPage={page}
+        totalItems={inventoryCounts.length}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        itemLabel="sayım"
+      />
     </>
   )
 }

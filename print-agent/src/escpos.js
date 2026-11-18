@@ -90,7 +90,83 @@ function buildKitchenTicket(payload, options = {}) {
   return escposBytes(Buffer.concat(chunks), feedBeforeCut, { autoCut: options.autoCut !== false })
 }
 
+function buildShiftReportTicket(payload, options = {}) {
+  const width = clampWidth(options.charsPerLine)
+  const footerLine = String(options.footerLine || "").trim()
+  const feedBeforeCut = Math.min(255, Math.max(0, Number(options.feedLinesBeforeCut) ?? 6))
+  const asciiOnly = Boolean(options.asciiFallback)
+  const chunks = []
+  const push = (s) => chunks.push(encodeCp857(s, asciiOnly))
+  const r = payload.shiftReport || {}
+  const isZ = String(r.reportType || "").toUpperCase() === "Z"
+  const heading = isZ ? "Z RAPORU (KAPANIŞ RAPORU)" : "X RAPORU (ANLIK ÖZET)"
+  const stamp = String(r.restaurantName || options.ticketStamp || "").trim()
+
+  appendTicketBanner(chunks, push, width, payload.isReprint, stamp, heading)
+  push(hrLine("-", width))
+  push(kvLine("Rapor Tarihi", formatTicketDate(payload.createdAt), width))
+  push(kvLine("Vardiya No", orderNumberFromId(r.shiftId || payload.jobId), width))
+  push(kvLine("Vardiya Açan", formatTitleCase(r.openedBy) || "-", width))
+  if (r.closedBy) {
+    push(kvLine("Vardiya Kapatan", formatTitleCase(r.closedBy), width))
+  }
+  push(kvLine("Açılış", formatTicketDate(r.openedAt), width))
+  push(kvLine("Kapanış", r.closedAt ? formatTicketDate(r.closedAt) : "Açık Vardiya", width))
+  push(kvLine("Kapanan Masa", `${Number(r.closedTablesCount || 0)} Adet`, width))
+
+  push(hrLine("-", width))
+  chunks.push(BOLD_ON)
+  push(centerLine("ÖDEME KIRILIMI", width))
+  chunks.push(BOLD_OFF)
+  push(hrLine("-", width))
+  push(justifyLabelAmount("Nakit:", Number(r.totalCash || 0), width))
+  push(justifyLabelAmount("Kredi Kartı:", Number(r.totalCard || 0), width))
+  push(justifyLabelAmount("Yemek Kartı:", Number(r.totalMealCard || 0), width))
+  push(justifyLabelAmount("Multinet:", Number(r.totalMultinet || 0), width))
+  push(justifyLabelAmount("Cari / Açık Hesap:", Number(r.totalLedger || 0), width))
+  if (toMinorUnits(Number(r.discountTotal || 0)) > 0) {
+    push(justifyLabelAmount("Toplam İndirim:", Number(r.discountTotal || 0), width, "-"))
+  }
+
+  push(hrLine("-", width))
+  chunks.push(BOLD_ON)
+  push(centerLine("KASA NAKİT ÖZETİ", width))
+  chunks.push(BOLD_OFF)
+  push(hrLine("-", width))
+  push(justifyLabelAmount("Açılış Bakiyesi:", Number(r.openingBalance || 0), width))
+  push(justifyLabelAmount("Nakit Giriş:", Number(r.cashIn || 0), width, "+"))
+  push(justifyLabelAmount("Nakit Çıkış:", Number(r.cashOut || 0), width, "-"))
+  chunks.push(BOLD_ON)
+  push(justifyLabelAmount("Beklenen Nakit:", Number(r.expectedCash || 0), width))
+  chunks.push(BOLD_OFF)
+  if (r.closingBalance !== undefined && r.closingBalance !== null) {
+    push(justifyLabelAmount("Sayılan Kapanış:", Number(r.closingBalance || 0), width))
+    const diff = Number(r.cashDifference || 0)
+    const diffPrefix = diff > 0 ? "+" : diff < 0 ? "-" : ""
+    push(justifyLabelAmount("Kasa Farkı:", Math.abs(diff), width, diffPrefix))
+  }
+
+  push(hrLine("-", width))
+  chunks.push(BOLD_ON)
+  push(justifyLabelAmount("TOPLAM NET CİRO:", Number(r.totalRevenue || payload.total || 0), width))
+  chunks.push(BOLD_OFF)
+  push(hrLine("-", width))
+
+  chunks.push(BOLD_ON)
+  push(centerLine("DAHİLİ VARDİYA ÖZET RAPORUDUR", width))
+  chunks.push(BOLD_OFF)
+  if (footerLine) push(centerLine(footerLine, width))
+
+  return escposBytes(Buffer.concat(chunks), feedBeforeCut, {
+    autoCut: options.autoCut !== false,
+    openCashDrawer: false,
+  })
+}
+
 function buildReceipt(payload, options = {}) {
+  if (payload && payload.shiftReport) {
+    return buildShiftReportTicket(payload, options)
+  }
   const width = clampWidth(options.charsPerLine)
   const footerLine = String(options.footerLine || "").trim()
   const feedBeforeCut = Math.min(255, Math.max(0, Number(options.feedLinesBeforeCut) ?? 6))
@@ -236,6 +312,7 @@ function buildTestTicket(printerInfo = {}, options = {}) {
 module.exports = {
   buildKitchenTicket,
   buildReceipt,
+  buildShiftReportTicket,
   buildKitchenCancelTicket,
   buildTestTicket,
   formatPaymentMethodLabel,

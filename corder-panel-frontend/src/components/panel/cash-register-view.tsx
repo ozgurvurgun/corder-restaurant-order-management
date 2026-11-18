@@ -10,6 +10,7 @@ import { LedgerCustomersSection } from "./cash-register/ledger-customers-section
 import { DetailReportSection, ZReportSection, type ShiftTotalsSummary } from "./cash-register/shift-history-section"
 import { computeDateFilterBounds, formatCurrency, fromMinorUnits, toMinorUnits } from "@/lib/format"
 import { CustomDatePicker, CustomSelect } from "@/components/ui/custom-inputs"
+import { showPanelToast } from "./panel-toast"
 
 function mapLedgerCustomerDto(c: LedgerCustomerDto): LedgerCustomer {
   return {
@@ -53,112 +54,83 @@ export default function CashRegisterView() {
   const { token } = usePanelAuth()
 
   const isBoss = currentUser?.role === "root"
-  const canViewCashTotals =
-    isBoss || hasPermission("cash.view", "reports.view_financial")
+  const canViewCashTotals = isBoss || hasPermission("cash.view", "reports.view_financial")
   const canOpenShift = isBoss || hasPermission("cash.shift_open")
   const canCloseShift = isBoss || hasPermission("cash.shift_close")
   const canTxIn = isBoss || hasPermission("cash.transaction_in")
   const canTxOut = isBoss || hasPermission("cash.transaction_out")
-  const canViewHistory =
-    isBoss || hasPermission("cash.view_history", "reports.view_financial")
-  const canViewLedger =
-    isBoss ||
-    hasPermission(
-      "ledger.view",
-      "ledger.manage_customers",
-      "ledger.collect_payment",
-    )
+  const canViewHistory = isBoss || hasPermission("cash.view_history", "reports.view_financial")
+  const canViewLedger = isBoss || hasPermission("ledger.view", "ledger.manage_customers", "ledger.collect_payment")
   const canManageLedger = isBoss || hasPermission("ledger.manage_customers")
   const canCollectLedger = isBoss || hasPermission("ledger.collect_payment")
 
-  const [activeTab, setActiveTab] = useState<
-    "overview" | "transactions" | "ledger" | "z-report" | "detail-report"
-  >("overview")
+  const [activeTab, setActiveTab] = useState<"overview" | "transactions" | "ledger" | "z-report" | "detail-report">("overview")
   const [showOpenShift, setShowOpenShift] = useState(false)
   const [showCloseShift, setShowCloseShift] = useState(false)
   const [showAddTransaction, setShowAddTransaction] = useState(false)
   const [filterDate, setFilterDate] = useState("today")
   const [customStartDate, setCustomStartDate] = useState("")
   const [customEndDate, setCustomEndDate] = useState("")
-  const [ledgerTabCustomers, setLedgerTabCustomers] = useState<
-    LedgerCustomer[] | null
-  >(null)
+  const [ledgerTabCustomers, setLedgerTabCustomers] = useState<LedgerCustomer[] | null>(null)
   const [ledgerTabLoading, setLedgerTabLoading] = useState(false)
 
   const [openBalance, setOpenBalance] = useState("")
   const [closeBalance, setCloseBalance] = useState("")
   const [closeNotes, setCloseNotes] = useState("")
-  const [txType, setTxType] = useState<"expense" | "cash-in" | "cash-out">(
-    "expense",
-  )
-  const [expenseMethod, setExpenseMethod] = useState<"cash" | "credit-card">(
-    "cash",
-  )
+  const [txType, setTxType] = useState<"expense" | "cash-in" | "cash-out">("expense")
+  const [expenseMethod, setExpenseMethod] = useState<"cash" | "credit-card">("cash")
   const [txAmount, setTxAmount] = useState("")
   const [txDesc, setTxDesc] = useState("")
   const [shiftError, setShiftError] = useState("")
   const [shiftLoading, setShiftLoading] = useState(false)
+  const [postCloseShift, setPostCloseShift] = useState<CashShift | null>(null)
+  const [printingZReport, setPrintingZReport] = useState(false)
   const shiftLoadingRef = useRef(false)
 
-  const openTablesCount = useMemo(
-    () => tables.filter((t) => t.status !== "empty").length,
-    [tables],
-  )
+  const openTablesCount = useMemo(() => tables.filter((t) => t.status !== "empty").length, [tables])
 
   const shiftTransactions = useMemo(() => {
     if (!currentShift) return []
     return cashTransactions
       .filter((t) => t.shiftId === currentShift.id)
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      )
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }, [cashTransactions, currentShift])
 
   const shiftClosedTables = useMemo(() => {
     if (!currentShift) return []
     const start = new Date(currentShift.openedAt)
-    const end = currentShift.closedAt
-      ? new Date(currentShift.closedAt)
-      : new Date()
+    const end = currentShift.closedAt ? new Date(currentShift.closedAt) : new Date()
     return closedTables.filter((ct) => {
       const d = new Date(ct.closedAt)
       return d >= start && d <= end
     })
   }, [currentShift, closedTables])
 
-  const shiftTotals = useMemo(
-    () => computeTotalsForShift(currentShift, shiftClosedTables),
-    [currentShift, shiftClosedTables],
-  )
+  const shiftTotals = useMemo(() => computeTotalsForShift(currentShift, shiftClosedTables), [currentShift, shiftClosedTables])
 
   const closedShifts = useMemo(
     () =>
       cashShifts
         .filter((s) => s.status === "closed")
-        .sort(
-          (a, b) =>
-            new Date(b.closedAt || b.openedAt).getTime() -
-            new Date(a.closedAt || a.openedAt).getTime(),
-        ),
+        .sort((a, b) => new Date(b.closedAt || b.openedAt).getTime() - new Date(a.closedAt || a.openedAt).getTime()),
     [cashShifts],
   )
 
   const allShiftsSorted = useMemo(() => {
     const list: CashShift[] = []
-    if (currentShift) list.push(currentShift); for (const s of closedShifts) {
+    if (currentShift) list.push(currentShift)
+    for (const s of closedShifts) {
       if (!currentShift || s.id !== currentShift.id) list.push(s)
     }
     return list
   }, [currentShift, closedShifts])
 
-  const [selectedReportShiftId, setSelectedReportShiftId] = useState<
-    string | null
-  >(null)
+  const [selectedReportShiftId, setSelectedReportShiftId] = useState<string | null>(null)
 
   const selectedReportShift = useMemo(() => {
     if (selectedReportShiftId) {
-      const found = allShiftsSorted.find((s) => s.id === selectedReportShiftId); if (found) return found
+      const found = allShiftsSorted.find((s) => s.id === selectedReportShiftId)
+      if (found) return found
     }
     return currentShift ?? closedShifts[0] ?? null
   }, [selectedReportShiftId, allShiftsSorted, currentShift, closedShifts])
@@ -166,9 +138,7 @@ export default function CashRegisterView() {
   const reportShiftClosedTables = useMemo(() => {
     if (!selectedReportShift) return []
     const start = new Date(selectedReportShift.openedAt)
-    const end = selectedReportShift.closedAt
-      ? new Date(selectedReportShift.closedAt)
-      : new Date()
+    const end = selectedReportShift.closedAt ? new Date(selectedReportShift.closedAt) : new Date()
     return closedTables.filter((ct) => {
       const d = new Date(ct.closedAt)
       return d >= start && d <= end
@@ -180,19 +150,12 @@ export default function CashRegisterView() {
     [selectedReportShift, reportShiftClosedTables],
   )
 
-  const ledgerWithBalance = ledgerCustomers.filter((c) => c.balance > 0.009)
   const dateBounds = useMemo(
     () => computeDateFilterBounds(filterDate, customStartDate, customEndDate),
     [filterDate, customStartDate, customEndDate],
   )
   const ledgerBounds = useMemo(
-    () =>
-      dateBounds
-        ? {
-            from: dateBounds.from.toISOString(),
-            to: dateBounds.to.toISOString(),
-          }
-        : undefined,
+    () => (dateBounds ? { from: dateBounds.from.toISOString(), to: dateBounds.to.toISOString() } : undefined),
     [dateBounds],
   )
 
@@ -200,16 +163,20 @@ export default function CashRegisterView() {
     if (!token || !ledgerBounds) return
     setLedgerTabLoading(true)
     try {
-      const rows = await api.ledgerCustomers.list(token, ledgerBounds); setLedgerTabCustomers(rows.map(mapLedgerCustomerDto))
+      const rows = await api.ledgerCustomers.list(token, ledgerBounds)
+      setLedgerTabCustomers(rows.map(mapLedgerCustomerDto))
     } catch {
       setLedgerTabCustomers([])
     } finally {
       setLedgerTabLoading(false)
     }
-  }, [token, ledgerBounds]); useEffect(() => {
+  }, [token, ledgerBounds])
+
+  useEffect(() => {
     if (activeTab !== "ledger" || !token) return
     if (!ledgerBounds) {
-      setLedgerTabCustomers(null); setLedgerTabLoading(false)
+      setLedgerTabCustomers(null)
+      setLedgerTabLoading(false)
       return
     }
     void refetchLedgerTabCustomers()
@@ -223,9 +190,7 @@ export default function CashRegisterView() {
         return d >= dateBounds.from && d <= dateBounds.to
       })
     }
-    return list.sort(
-      (a, b) => new Date(b.closedAt).getTime() - new Date(a.closedAt).getTime(),
-    )
+    return list.sort((a, b) => new Date(b.closedAt).getTime() - new Date(a.closedAt).getTime())
   }, [closedTables, dateBounds])
 
   const displayLedgerCustomers = useMemo(
@@ -235,17 +200,23 @@ export default function CashRegisterView() {
 
   const handleOpenShift = async () => {
     if (shiftLoading || shiftLoadingRef.current) return
-    const bal = parseFloat(openBalance); if (!Number.isFinite(bal) || bal < 0) {
+    const bal = parseFloat(openBalance)
+    if (!Number.isFinite(bal) || bal < 0) {
       setShiftError("Geçerli bir açılış bakiyesi girin (0 veya üzeri)")
       return
     }
-    shiftLoadingRef.current = true; setShiftError(""); setShiftLoading(true)
+    shiftLoadingRef.current = true
+    setShiftError("")
+    setShiftLoading(true)
     try {
-      await openShift(bal); setOpenBalance(""); setShowOpenShift(false)
+      await openShift(bal)
+      setOpenBalance("")
+      setShowOpenShift(false)
     } catch (e) {
       setShiftError(e instanceof Error ? e.message : "Kasa açılamadı")
     } finally {
-      shiftLoadingRef.current = false; setShiftLoading(false)
+      shiftLoadingRef.current = false
+      setShiftLoading(false)
     }
   }
 
@@ -255,72 +226,96 @@ export default function CashRegisterView() {
       setShiftError("Lütfen kasadaki fiziksel nakit tutarını girin")
       return
     }
-    const bal = parseFloat(closeBalance); if (!Number.isFinite(bal) || bal < 0) {
+    const bal = parseFloat(closeBalance)
+    if (!Number.isFinite(bal) || bal < 0) {
       setShiftError("Geçerli bir kapanış bakiyesi girin (0 veya üzeri)")
       return
     }
-    const closingShiftId = currentShift?.id ?? null
-    shiftLoadingRef.current = true; setShiftError(""); setShiftLoading(true)
+    const closingShiftSnapshot = currentShift
+      ? {
+          ...currentShift,
+          status: "closed" as const,
+          closingBalance: bal,
+          closedAt: new Date(),
+          closedBy: currentUser?.name || "Sistem",
+          notes: closeNotes.trim() || currentShift.notes,
+        }
+      : null
+    shiftLoadingRef.current = true
+    setShiftError("")
+    setShiftLoading(true)
     try {
-      await closeShift(bal, closeNotes.trim() || undefined); if (closingShiftId) setSelectedReportShiftId(closingShiftId); setCloseBalance(""); setCloseNotes(""); setShowCloseShift(false)
+      await closeShift(bal, closeNotes.trim() || undefined)
+      if (closingShiftSnapshot) {
+        setSelectedReportShiftId(closingShiftSnapshot.id)
+        setPostCloseShift(closingShiftSnapshot)
+      } else {
+        setShowCloseShift(false)
+      }
+      setCloseBalance("")
+      setCloseNotes("")
     } catch (e) {
       setShiftError(e instanceof Error ? e.message : "Kasa kapatılamadı")
     } finally {
-      shiftLoadingRef.current = false; setShiftLoading(false)
+      shiftLoadingRef.current = false
+      setShiftLoading(false)
+    }
+  }
+
+  const handlePrintClosedShiftZReport = async (shiftId: string) => {
+    if (!token || printingZReport) return
+    setPrintingZReport(true)
+    try {
+      await api.shifts.printReport(token, shiftId)
+      showPanelToast("Z Raporu kasa yazıcısına gönderildi", "success")
+      setPostCloseShift(null)
+      setShowCloseShift(false)
+    } catch (err) {
+      showPanelToast(err instanceof Error ? err.message : "Z Raporu yazıcıya gönderilemedi", "error")
+    } finally {
+      setPrintingZReport(false)
     }
   }
 
   const handleAddTransaction = async () => {
-    const amount = parseFloat(txAmount); if (!Number.isFinite(amount) || amount <= 0 || !txDesc.trim()) return
+    const amount = parseFloat(txAmount)
+    if (!Number.isFinite(amount) || amount <= 0 || !txDesc.trim()) return
     const ok = await addCashTransaction({
       type: txType,
       amount,
       description: txDesc.trim(),
       ...(txType === "expense" ? { reference: expenseMethod } : {}),
       createdBy: currentUser?.name || "Sistem",
-    }); if (ok) {
-      setTxAmount(""); setTxDesc(""); setExpenseMethod("cash"); setShowAddTransaction(false)
+    })
+    if (ok) {
+      setTxAmount("")
+      setTxDesc("")
+      setExpenseMethod("cash")
+      setShowAddTransaction(false)
     }
   }
 
-  const cashRegisterTabs = useMemo(() => {
-    const ledgerLabel = !ledgerBounds
-      ? `Cariler (${ledgerWithBalance.length})`
-      : ledgerTabLoading
-        ? "Cariler (…)"
-        : `Cariler (${(ledgerTabCustomers ?? []).length})`
-    return [
+  const cashRegisterTabs = useMemo(
+    () => [
       { id: "overview" as const, label: "Kasa Özeti" },
-      ...(canViewCashTotals || canTxIn || canTxOut
-        ? [{ id: "transactions" as const, label: "İşlemler" }]
-        : []),
-      ...(canViewLedger ? [{ id: "ledger" as const, label: ledgerLabel }] : []),
+      ...(canViewCashTotals || canTxIn || canTxOut ? [{ id: "transactions" as const, label: "İşlemler" }] : []),
+      ...(canViewLedger ? [{ id: "ledger" as const, label: "Cariler" }] : []),
       ...(canViewHistory
         ? [
             { id: "z-report" as const, label: "X / Z Raporu" },
             { id: "detail-report" as const, label: "Detay Raporu" },
           ]
         : []),
-    ]
-  }, [
-    canTxIn,
-    canTxOut,
-    canViewCashTotals,
-    canViewHistory,
-    canViewLedger,
-    ledgerBounds,
-    ledgerTabLoading,
-    ledgerTabCustomers,
-    ledgerWithBalance.length,
-  ])
+    ],
+    [canTxIn, canTxOut, canViewCashTotals, canViewHistory, canViewLedger],
+  )
 
   const filteredNetTotal = useMemo(
-    () =>
-      fromMinorUnits(
-        filteredClosedTables.reduce((s, ct) => s + toMinorUnits(ct.netAmount), 0),
-      ),
+    () => fromMinorUnits(filteredClosedTables.reduce((s, ct) => s + toMinorUnits(ct.netAmount), 0)),
     [filteredClosedTables],
-  ); return (
+  )
+
+  return (
     <div className="h-full flex flex-col">
       <div className="flex-shrink-0 border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl px-5 py-2.5 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap">
@@ -361,14 +356,27 @@ export default function CashRegisterView() {
                 Kasa Açık - {currentShift.openedBy}
               </span>
               {canCloseShift && (
-                <button onClick={() => { setShiftError(""); setShowCloseShift(true) }} className="h-[30px] px-3 flex items-center gap-1.5 bg-red-500 text-white rounded-lg text-[12px] font-medium hover:bg-red-600 transition-colors">
+                <button
+                  onClick={() => {
+                    setShiftError("")
+                    setPostCloseShift(null)
+                    setShowCloseShift(true)
+                  }}
+                  className="h-[30px] px-3 flex items-center gap-1.5 bg-red-500 text-white rounded-lg text-[12px] font-medium hover:bg-red-600 transition-colors"
+                >
                   Kasa Kapat
                 </button>
               )}
             </>
           ) : (
             canOpenShift && (
-              <button onClick={() => { setShiftError(""); setShowOpenShift(true) }} className="h-[30px] px-3 flex items-center gap-1.5 bg-[#34c759] text-white rounded-lg text-[12px] font-medium hover:bg-[#2db84e] transition-colors">
+              <button
+                onClick={() => {
+                  setShiftError("")
+                  setShowOpenShift(true)
+                }}
+                className="h-[30px] px-3 flex items-center gap-1.5 bg-[#34c759] text-white rounded-lg text-[12px] font-medium hover:bg-[#2db84e] transition-colors"
+              >
                 <Plus className="w-3.5 h-3.5" /> Kasa Aç
               </button>
             )
@@ -402,15 +410,22 @@ export default function CashRegisterView() {
               canTxOut={canTxOut}
               canViewHistory={canViewHistory}
               onOpenShiftModal={() => {
-                setShiftError(""); setShowOpenShift(true)
+                setShiftError("")
+                setShowOpenShift(true)
               }}
               onOpenAddTransaction={(t) => {
-                setTxType(t); setShowAddTransaction(true)
+                setTxType(t)
+                setShowAddTransaction(true)
               }}
             />
           )}
           {activeTab === "transactions" && (
-            <CashTransactionsSection cashTransactions={cashTransactions} currentShift={currentShift} canAddTransaction={canTxIn || canTxOut} onOpenAddTransaction={() => setShowAddTransaction(true)} />
+            <CashTransactionsSection
+              cashTransactions={cashTransactions}
+              currentShift={currentShift}
+              canAddTransaction={canTxIn || canTxOut}
+              onOpenAddTransaction={() => setShowAddTransaction(true)}
+            />
           )}
           {activeTab === "ledger" && (
             <LedgerCustomersSection
@@ -430,7 +445,14 @@ export default function CashRegisterView() {
             />
           )}
           {activeTab === "z-report" && (
-            <ZReportSection settings={settings} selectedShift={selectedReportShift} allShifts={allShiftsSorted} onSelectShift={setSelectedReportShiftId} shiftTotals={reportShiftTotals} shiftClosedCount={reportShiftClosedTables.length} />
+            <ZReportSection
+              settings={settings}
+              selectedShift={selectedReportShift}
+              allShifts={allShiftsSorted}
+              onSelectShift={setSelectedReportShiftId}
+              shiftTotals={reportShiftTotals}
+              shiftClosedCount={reportShiftClosedTables.length}
+            />
           )}
           {activeTab === "detail-report" && (
             <DetailReportSection filteredClosedTables={filteredClosedTables} />
@@ -444,6 +466,9 @@ export default function CashRegisterView() {
       {showCloseShift && (
         <CloseShiftModal
           currentShift={currentShift}
+          closedShift={postCloseShift}
+          printingReport={printingZReport}
+          onPrintZReport={(shiftId) => void handlePrintClosedShiftZReport(shiftId)}
           closeBalance={closeBalance}
           setCloseBalance={setCloseBalance}
           closeNotes={closeNotes}
@@ -452,25 +477,12 @@ export default function CashRegisterView() {
           shiftLoading={shiftLoading}
           canViewExpected={canViewHistory}
           openTablesCount={openTablesCount}
-          onClose={() => setShowCloseShift(false)}
+          onClose={() => { setPostCloseShift(null); setShowCloseShift(false) }}
           onSubmit={() => void handleCloseShift()}
         />
       )}
       {showAddTransaction && (
-        <AddCashTransactionModal
-          txType={txType}
-          setTxType={setTxType}
-          expenseMethod={expenseMethod}
-          setExpenseMethod={setExpenseMethod}
-          txAmount={txAmount}
-          setTxAmount={setTxAmount}
-          txDesc={txDesc}
-          setTxDesc={setTxDesc}
-          canTxIn={canTxIn}
-          canTxOut={canTxOut}
-          onClose={() => setShowAddTransaction(false)}
-          onSubmit={handleAddTransaction}
-        />
+        <AddCashTransactionModal txType={txType} setTxType={setTxType} expenseMethod={expenseMethod} setExpenseMethod={setExpenseMethod} txAmount={txAmount} setTxAmount={setTxAmount} txDesc={txDesc} setTxDesc={setTxDesc} canTxIn={canTxIn} canTxOut={canTxOut} onClose={() => setShowAddTransaction(false)} onSubmit={handleAddTransaction} />
       )}
     </div>
   )

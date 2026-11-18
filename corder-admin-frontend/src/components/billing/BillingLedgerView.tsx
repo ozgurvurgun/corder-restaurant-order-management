@@ -15,6 +15,9 @@ import {
 } from "@/lib/money"
 import { Pencil, ReceiptText, Search, Trash2 } from "lucide-react"
 import { CustomSelect } from "@/components/ui/custom-inputs"
+import { PaginationBar } from "@/components/ui/pagination-bar"
+
+const LEDGER_PAGE_SIZE = 10
 
 interface BillingLedgerViewProps {
   restaurants: Restaurant[]
@@ -39,6 +42,7 @@ export function BillingLedgerView({
   const [yearFilter, setYearFilter] = useState<string>("ALL")
   const [methodFilter, setMethodFilter] = useState<string>("ALL")
   const [searchQuery, setSearchQuery] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const allEntries = useMemo<FlattenedLedgerEntry[]>(() => {
@@ -90,6 +94,13 @@ export function BillingLedgerView({
     [filtered]
   )
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / LEDGER_PAGE_SIZE))
+  const safePage = Math.min(currentPage, totalPages)
+  const paginatedRows = filtered.slice(
+    (safePage - 1) * LEDGER_PAGE_SIZE,
+    safePage * LEDGER_PAGE_SIZE
+  )
+
   const handleDelete = async (
     restaurant: Restaurant,
     payment: RestaurantPaymentRecord
@@ -125,7 +136,10 @@ export function BillingLedgerView({
         <div className="flex flex-wrap items-center gap-2">
           <CustomSelect
             value={yearFilter}
-            onChange={(e) => setYearFilter(e.target.value)}
+            onChange={(e) => {
+              setYearFilter(e.target.value)
+              setCurrentPage(1)
+            }}
             className="h-9 rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3 text-[12px] font-medium text-[#1d1d1f]"
           >
             <option value="ALL">Tüm Yıllar</option>
@@ -138,7 +152,10 @@ export function BillingLedgerView({
 
           <CustomSelect
             value={methodFilter}
-            onChange={(e) => setMethodFilter(e.target.value)}
+            onChange={(e) => {
+              setMethodFilter(e.target.value)
+              setCurrentPage(1)
+            }}
             className="h-9 rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3 text-[12px] font-medium text-[#1d1d1f]"
           >
             <option value="ALL">Tüm Yöntemler</option>
@@ -158,7 +175,10 @@ export function BillingLedgerView({
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                setCurrentPage(1)
+              }}
               placeholder="Mekan, dönem veya not ara..."
               className="h-9 rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] pl-8 pr-3 text-[12px] text-[#1d1d1f] outline-none focus:border-[#e63462]"
             />
@@ -185,7 +205,7 @@ export function BillingLedgerView({
               </tr>
             </thead>
             <tbody className="divide-y divide-[#f0f0f0]">
-              {filtered.map(({ restaurant, payment }) => (
+              {paginatedRows.map(({ restaurant, payment }) => (
                 <tr key={payment.id} className="hover:bg-[#f9f9fb]">
                   <td className="px-4 py-3 font-semibold text-[#1d1d1f] tabular-nums whitespace-nowrap">
                     {formatIstanbulDate(payment.paidAt)}
@@ -265,6 +285,13 @@ export function BillingLedgerView({
               ))}
             </tbody>
           </table>
+          <PaginationBar
+            currentPage={safePage}
+            totalItems={filtered.length}
+            pageSize={LEDGER_PAGE_SIZE}
+            onPageChange={setCurrentPage}
+            itemLabel="tahsilat kaydı"
+          />
         </div>
       )}
     </div>

@@ -1,0 +1,69 @@
+- kasa sayfasında cariler kısmında yanında parantez içinde adet bilgisi yazmasına gerek yok,
+o kısım açıldığında özet kısmında adet ve toplam alınacak vs vs yazar.
+
+
+- x rapororu yazdır butonuna basınca baskı çok bozuk formatlı değil. bu fiş direkt kasa
+yazıcısından çıakrılsın uygun formatla. basılduığında otomatik olarak siaprişlerde olduğu gibi yadırılsın.
+
+
+- çoklu veri gösterilen her yerde pagination olmalı devasa scrollar olmamalı.
+
+
+
+- teknik sayfasında ki yazıcılar ksımında yazıcı ekle yerine electron app den eklenen yazıcılar onalrın
+detayları ve statusleri yer alsın yazıcı ekleme işi vs burada olmasın.
+
+- qr menüde şu an sol üstte logo olarak retoranın baş harfi gösteriliyor, isterse restoran oraya uygun logosunu 
+girebilmeli. eğer logo yüklemedi ise şu anda olduğu gibi baş harfi gösterilsin
+
+
+- bildirimler sistemden silinemiyor. sağ ütte ki bildirimler modalınad tümünü temizle var 
+oraya basıcna anlık her yerde temizlyor ama sayfayı yenieylince geri geliyor bildirimler
+
+
+- kasa kapatılınca Z raporu basma kısmı gelmeli. ve restoran eski kasaları için z raporu alabilmeli eski kapanmış 
+kasalarını görebilmeli tüm detayları ile.  kasa kapanınca o an için z raporu basmak isteyebielcekleri 
+için z raporu bas alanı gelsin o anda basmak istemezse zaten geriye dönük  z raporu alabilir
+
+
+- tüm panellerin custom slide barı olsun tasarım dilimize uygun şekilde. sade ince şık bir slidebar olsun.
+
+
+- https://menu.corders.uk/?restaurant=moscow buraya bir query string daha eklensin bu değer masa numarasını 
+taşıyacak, ama masa numarası dorğudan 22,12,1 gibi sayılar olmamalı, çünkü url den müşteri masa numarsını 
+değiştirebilir. qr menüde garson çağır kısmı olacak bastığında el terminallerine ve merchant panele 
+bildirim gidecek sesli şekilde. push notification gidecek. osuh notificaiton servisini biz kendimiz temiz 
+şekilde yapalım ayrı bir dış servis kullanmalyalım. bu bildirim ayarları hem termianlde hem de 
+merchant panelde olacak. eğer qr kodda masa no tanımlı değil ise garson çağır alanı görünmemeli 
+menüde.
+
+- tüm pannellerin faviconu ve pwa logoları (electron app de dahil) terminal ve merchant panelindeki ile aynı olmalı.
+
+
+- masaları tek tek oluşturmak gerekiyor şu an. örneğin bahçe için 20 masa eklenecekse bahçe bölgesi 
+açılıyor ve tek tek örneğin b1 b2 b3 b4..... şeklinde kayıt giriliyor. bunun bir otomasyonu olmalı o 
+kısımda basit şekilde kullanabilecek. bunun ile koalyca çoklu masa oluşturabilinmeli.
+
+
+- şu an menüde termianlde ve merchrant da (ve başka yerde gösterliyorsa) görseller r2 den direkt 
+çekliyorsa cloudflare in image optimizasyon cache sistemi uygulanmalı Cloudflare Image Transformations.
+
+
+- boss panelinde patron her ama her detayı görmek ister. bütün detayları. şu an çok az metrik gösteriliyor.
+sektör standartı olacak düzeyde ayrıntılı olmalı.
+
+
+- Boss panelin title ve pwa adı Corder Boss olsun. Corder Platform admin de Corder Admin olsun. o da pwa olarak indirilebilsin.
+ platform admin auth kodu ile giriş yapsın. keyi env de olsun. platfrom admin de pwa olarak indirilebilsin.
+
+
+- bildiğin üzere restoranlarda garsonlar kasiyer ve çeşitli elemanlar bir takım zaafiyetlerden 
+operayonel veya yazılımsal açıklardan kaynaklı hırsızlık yaapbiliyor ve bu çok sonraları fark ediliyor 
+veya hiç fark edilmiyor. bunun için çok kapsamlı çok isabetli bir algoritma geliştir olası 
+hırsızlıkları önceden tespit edebilsin. patronu uyarsın. merchant da da bunun için bir alan olsun 
+görünümü aksiyonları vs yetkiye tabi olsun. bu da push notificationa dahil olsun direkt boss paneline 
+bildirim atsın.
+
+
+- admin panelimde de mekanlar ile alakalı tüm tüm tüm bilgileri görebilmeliyim aksiyonda alabilmeliyim
+support gereksinimde iş çözebilmek için bu panel kullanılacak

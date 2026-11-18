@@ -84,6 +84,7 @@ export function usePanelHydration(params: {
         setSettings((prev) => ({
           ...prev,
           name: s.name ?? prev.name,
+          logoUrl: s.logoUrl !== undefined ? s.logoUrl : prev.logoUrl,
           address: s.address ?? undefined,
           phone: s.phone ?? undefined,
           taxId: s.taxId ?? undefined,

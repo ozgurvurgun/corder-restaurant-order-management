@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -32,11 +32,14 @@ import { InventoryCountEntity } from './domain/inventory-count.entity';
 import { PrinterConfigEntity } from './domain/printer-config.entity';
 import { AuditLogEntity } from './domain/audit-log.entity';
 import { PrintJobEntity } from './domain/print-job.entity';
+import { FraudAlertEntity } from './domain/fraud-alert.entity';
+import { WaiterCallEntity } from './domain/waiter-call.entity';
 import { RestaurantAuthService } from './application/restaurant-auth.service';
 import { RestaurantSessionValidatorService } from './application/restaurant-session-validator.service';
 import { RolesService } from './application/roles.service';
 import { BossOverviewService } from './application/boss-overview.service';
 import { BossHierarchyService } from './application/boss-hierarchy.service';
+import { FraudDetectionService } from './application/fraud-detection.service';
 import { CashShiftService } from './application/cash-shift.service';
 import { CashTransactionsService } from './application/cash-transactions.service';
 import { OpenAccountsService } from './application/open-accounts.service';
@@ -90,6 +93,8 @@ import { RestaurantSettingsController } from './api/restaurant-settings.controll
 import { RestaurantMenuController } from './api/restaurant-menu.controller';
 import { OrdersGateway } from './api/orders.gateway';
 import { PrintAgentController } from './api/print-agent.controller';
+import { FraudAlertsController } from './api/fraud-alerts.controller';
+import { NotificationsController } from './api/notifications.controller';
 import { MenuModule } from '../menu/menu.module';
 import { PrintAgentGuard } from './infrastructure/print-agent.guard';
 import { PanelRootGuard } from './infrastructure/panel-root.guard';
@@ -132,8 +137,10 @@ import {
       PrinterConfigEntity,
       AuditLogEntity,
       PrintJobEntity,
+      FraudAlertEntity,
+      WaiterCallEntity,
     ]),
-    MenuModule,
+    forwardRef(() => MenuModule),
     PassportModule.register({ defaultStrategy: 'restaurant-jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -170,6 +177,8 @@ import {
     RestaurantSettingsController,
     RestaurantMenuController,
     PrintAgentController,
+    FraudAlertsController,
+    NotificationsController,
   ],
   providers: [
     RestaurantAuthService,
@@ -177,6 +186,7 @@ import {
     RolesService,
     BossHierarchyService,
     BossOverviewService,
+    FraudDetectionService,
     StaffService,
     StaffSessionService,
     TableService,
@@ -218,6 +228,8 @@ import {
     CategoryService,
     ProductService,
     CashShiftService,
+    FraudDetectionService,
+    OrdersGateway,
   ],
 })
 export class RestaurantModule {}

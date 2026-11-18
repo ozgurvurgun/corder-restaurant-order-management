@@ -12,6 +12,10 @@ import {
 } from '@nestjs/common';
 import { RestaurantService } from '../application/restaurant.service';
 import { PlatformBillingService } from '../application/platform-billing.service';
+import {
+  PlatformSupportService,
+  SupportActionInput,
+} from '../application/platform-support.service';
 import { PlatformAdminEntity } from '../domain/platform-admin.entity';
 import { CreateRestaurantDto } from './dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto';
@@ -40,6 +44,7 @@ export class RestaurantsController {
   constructor(
     private readonly service: RestaurantService,
     private readonly billingService: PlatformBillingService,
+    private readonly supportService: PlatformSupportService,
   ) {}
 
   @Get()
@@ -141,6 +146,24 @@ export class RestaurantsController {
   ) {
     const updated = await this.billingService.unsuspendAccess(id, dto?.note);
     return sanitizeRestaurant(updated);
+  }
+
+  @Get(':id/diagnostics')
+  getDiagnostics(@Param('id', ParseUUIDPipe) id: string) {
+    return this.supportService.getDiagnostics(id);
+  }
+
+  @Post(':id/support-action')
+  executeSupportAction(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: SupportActionInput,
+    @Req() req: { user?: Partial<PlatformAdminEntity> },
+  ) {
+    return this.supportService.executeSupportAction(
+      id,
+      body,
+      resolveActorName(req),
+    );
   }
 
   @Delete(':id')

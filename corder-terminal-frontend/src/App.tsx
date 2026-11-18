@@ -12,6 +12,8 @@ import { CartScreen } from "@/components/cart-screen"
 import { MoveTableScreen } from "@/components/move-table-screen"
 import { OpenOrdersScreen } from "@/components/open-orders-screen"
 import { MoveOrderItemScreen } from "@/components/move-order-item-screen"
+import { WaiterCallAlertBanner } from "@/components/notification-settings-modal"
+import type { ActiveWaiterCall } from "@/lib/terminal-notifications"
 
 export default function App() {
   const {
@@ -26,6 +28,8 @@ export default function App() {
     setActiveScreen,
     selectTable,
     releaseTableSession,
+    waiterCalls,
+    dismissWaiterCall,
   } = useApp()
   const { showToast } = useToast()
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null)
@@ -39,6 +43,19 @@ export default function App() {
   const [leaveCartConfirm, setLeaveCartConfirm] = useState(false)
 
   const currentTableId = selectedTable?.id ?? selectedTableId
+
+  useEffect(() => {
+    const onWaiterCalled = (e: Event) => {
+      const call = (e as CustomEvent<ActiveWaiterCall>).detail
+      if (!call) return
+      const sectionLabel = call.sectionName || "Salon"
+      const actionLabel =
+        call.requestType === "bill" ? "Hesap İstiyor!" : "Garson Çağırıyor!"
+      showToast(`🔔 ${call.tableName} (${sectionLabel}) — ${actionLabel}`, "info")
+    }
+    window.addEventListener("corder:waiter-called", onWaiterCalled)
+    return () => window.removeEventListener("corder:waiter-called", onWaiterCalled)
+  }, [showToast])
 
   useEffect(() => {
     if (!currentUser) {
@@ -240,6 +257,7 @@ export default function App() {
   return (
     <div className="mx-auto max-w-md min-h-dvh relative flex flex-col">
       {offlineBanner}
+      <WaiterCallAlertBanner calls={waiterCalls} onDismiss={dismissWaiterCall} />
       <div className="flex-1 relative">{renderTerminalScreen()}</div>
 
       <ConfirmDialog

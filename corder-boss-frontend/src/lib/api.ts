@@ -5,6 +5,9 @@ import type {
   BranchSummary,
   CatalogCategoryDto,
   CatalogProductDto,
+  FraudAlertDto,
+  FraudAlertStatus,
+  FraudSeverity,
   LiveOrderDto,
   LiveTableDto,
   PermissionCatalogResponse,
@@ -35,6 +38,19 @@ export interface StoredBossUser {
   brandName?: string | null
 }
 
+export interface BossAuthUserResponse {
+  id: string
+  email: string
+  name: string
+  phone?: string | null
+  role: string
+  staffRole: string
+  roleLabel: string
+  isBoss: boolean
+  bossTier?: string
+  brandName?: string | null
+}
+
 export function getApiBase(): string {
   return BASE
 }
@@ -45,11 +61,8 @@ export function isJwtExpired(token: string): boolean {
     if (parts.length !== 3 || !parts[1]) return true
     const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/")
     const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=")
-    const payload = JSON.parse(atob(padded)) as { exp?: number; role?: string }
-    if (typeof payload.exp === "number" && payload.exp * 1000 <= Date.now()) {
-      return true
-    }
-    return false
+    const payload = JSON.parse(atob(padded)) as { exp?: number }
+    return typeof payload.exp === "number" && payload.exp * 1000 <= Date.now()
   } catch {
     return true
   }
@@ -152,9 +165,10 @@ function extractErrorMessage(text: string, fallback: string): string {
 async function bossFetch<T>(
   path: string,
   options: RequestInit = {},
-  branchIdOverride?: string | null
+  branchIdOverride?: string | null,
+  explicitToken?: string | null
 ): Promise<T> {
-  const token = getBossToken()
+  const token = explicitToken || getBossToken()
   if (!token) {
     notifyUnauthorized()
     throw new Error("Oturum bulunamadı, lütfen tekrar giriş yapın.")
@@ -186,7 +200,99 @@ async function bossFetch<T>(
   return res.json() as Promise<T>
 }
 
+function normalizeFraudAlert(raw: Record<string, unknown>, idx: number): FraudAlertDto {
+  const sevRaw = String(raw.severity ?? "medium").toLowerCase()
+  const severity: FraudSeverity =
+    sevRaw === "critical" || sevRaw === "high" || sevRaw === "medium" || sevRaw === "low"
+      ? sevRaw
+      : "medium"
+  const stRaw = String(raw.status ?? "open").toLowerCase()
+  const status: FraudAlertStatus =
+    stRaw === "open" ||
+    stRaw === "investigating" ||
+    stRaw === "resolved" ||
+    stRaw === "false_positive"
+      ? stRaw
+      : "open"
+
+  return {
+    id: String(raw.id ?? `fraud-${idx}`),
+    restaurantId: typeof raw.restaurantId === "string" ? raw.restaurantId : undefined,
+    branchId: typeof raw.branchId === "string" ? raw.branchId : undefined,
+    branchName: typeof raw.branchName === "string" ? raw.branchName : undefined,
+    ruleKey: String(raw.ruleKey ?? raw.ruleCode ?? raw.type ?? "SUSPICIOUS_ACTIVITY"),
+    title: String(raw.title ?? raw.action ?? "Şüpheli İşlem Tespiti"),
+    description: String(raw.description ?? raw.details ?? ""),
+    severity,
+    status,
+    amountImpact: Number(raw.amountImpact ?? raw.amount ?? 0) || 0,
+    staffId: typeof raw.staffId === "string" ? raw.staffId : null,
+    staffName:
+      typeof raw.staffName === "string"
+        ? raw.staffName
+        : typeof raw.actorName === "string"
+          ? raw.actorName
+          : typeof raw.userName === "string"
+            ? raw.userName
+            : null,
+    tableName: typeof raw.tableName === "string" ? raw.tableName : null,
+    orderId: typeof raw.orderId === "string" ? raw.orderId : null,
+    resolutionNote: typeof raw.resolutionNote === "string" ? raw.resolutionNote : null,
+    resolvedBy: typeof raw.resolvedBy === "string" ? raw.resolvedBy : null,
+    resolvedAt: typeof raw.resolvedAt === "string" ? raw.resolvedAt : null,
+    metadata:
+      raw.metadata && typeof raw.metadata === "object"
+        ? (raw.metadata as Record<string, unknown>)
+        : null,
+    createdAt:
+      typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
+  }
+}
+
+export async function getFraudAlerts(
+  token?: string | null,
+  branchId?: string | null
+): Promise<FraudAlertDto[]> {
+  const effectiveToken = token && token.includes(".") ? token : getBossToken()
+  const effectiveBranch =
+    token && !token.includes(".") && branchId === undefined ? token : branchId
+  const q =
+    effectiveBranch && effectiveBranch !== "ALL"
+      ? `?branchId=${encodeURIComponent(effectiveBranch)}`
+      : ""
+  const res = await bossFetch<
+    FraudAlertDto[] | { alerts?: unknown[]; items?: unknown[] }
+  >(`/restaurant/boss/fraud-alerts${q}`, {}, effectiveBranch, effectiveToken)
+  const list = Array.isArray(res)
+    ? res
+    : Array.isArray(res?.alerts)
+      ? res.alerts
+      : Array.isArray(res?.items)
+        ? res.items
+        : []
+  return list.map((item, idx) =>
+    normalizeFraudAlert((item ?? {}) as Record<string, unknown>, idx)
+  )
+}
+
+export async function updateFraudAlert(
+  token: string,
+  id: string,
+  body: { status: string; resolutionNote?: string }
+): Promise<FraudAlertDto> {
+  const effectiveToken = token && token.includes(".") ? token : getBossToken()
+  const raw = await bossFetch<Record<string, unknown>>(
+    `/restaurant/boss/fraud-alerts/${encodeURIComponent(id)}`,
+    { method: "PATCH", body: JSON.stringify(body) },
+    undefined,
+    effectiveToken
+  )
+  return normalizeFraudAlert(raw ?? { id, ...body }, 0)
+}
+
 export const bossApi = {
+  getFraudAlerts,
+  updateFraudAlert,
   auth: {
     async login(email: string, password: string) {
       const res = await fetch(`${BASE}/restaurant/auth/login`, {
@@ -202,36 +308,14 @@ export const bossApi = {
         accessToken: string
         restaurant: BranchSummary
         restaurants: BranchSummary[]
-        user: {
-          id: string
-          email: string
-          name: string
-          phone?: string | null
-          role: string
-          staffRole: string
-          roleLabel: string
-          isBoss: boolean
-          bossTier?: string
-          brandName?: string | null
-        }
+        user: BossAuthUserResponse
       }>
     },
     async me() {
       return bossFetch<{
         restaurant: BranchSummary
         restaurants: BranchSummary[]
-        user: {
-          id: string
-          email: string
-          name: string
-          phone?: string | null
-          role: string
-          staffRole: string
-          roleLabel: string
-          isBoss: boolean
-          bossTier?: string
-          brandName?: string | null
-        }
+        user: BossAuthUserResponse
       }>("/restaurant/auth/me")
     },
     async switchBranch(restaurantId: string) {
@@ -241,10 +325,7 @@ export const bossApi = {
         restaurants: BranchSummary[]
       }>(
         "/restaurant/auth/switch-branch",
-        {
-          method: "POST",
-          body: JSON.stringify({ restaurantId }),
-        },
+        { method: "POST", body: JSON.stringify({ restaurantId }) },
         restaurantId
       )
     },
@@ -255,16 +336,13 @@ export const bossApi = {
       return bossFetch<BossOverviewResponse>(`/restaurant/boss/overview${q}`)
     },
     async syncRoles(sourceRestaurantId: string, targetRestaurantIds?: string[]) {
-      const payload: { sourceRestaurantId: string; targetRestaurantIds?: string[] } = {
+      const payload = {
         sourceRestaurantId,
         ...(targetRestaurantIds ? { targetRestaurantIds } : {}),
       }
       return bossFetch<{ syncedBranches: number; syncedRoles: number }>(
         "/restaurant/boss/sync-roles",
-        {
-          method: "POST",
-          body: JSON.stringify(payload),
-        },
+        { method: "POST", body: JSON.stringify(payload) },
         sourceRestaurantId
       )
     },
@@ -293,49 +371,19 @@ export const bossApi = {
   },
   roles: {
     async catalog(branchId: string) {
-      return bossFetch<PermissionCatalogResponse>(
-        "/restaurant/roles/catalog",
-        {},
-        branchId
-      )
+      return bossFetch<PermissionCatalogResponse>("/restaurant/roles/catalog", {}, branchId)
     },
     async list(branchId: string) {
       return bossFetch<RoleDefinition[]>("/restaurant/roles", {}, branchId)
     },
-    async create(
-      branchId: string,
-      body: {
-        key?: string
-        name: string
-        description?: string
-        color?: string
-        canAccessPanel?: boolean
-        canAccessTerminal?: boolean
-        permissions: string[]
-        maxDiscountPercent?: number
-        maxDiscountAmount?: number | null
-      }
-    ) {
+    async create(branchId: string, body: Record<string, unknown>) {
       return bossFetch<RoleDefinition>(
         "/restaurant/roles",
         { method: "POST", body: JSON.stringify(body) },
         branchId
       )
     },
-    async update(
-      branchId: string,
-      idOrKey: string,
-      body: {
-        name?: string
-        description?: string | null
-        color?: string
-        canAccessPanel?: boolean
-        canAccessTerminal?: boolean
-        permissions?: string[]
-        maxDiscountPercent?: number
-        maxDiscountAmount?: number | null
-      }
-    ) {
+    async update(branchId: string, idOrKey: string, body: Record<string, unknown>) {
       return bossFetch<RoleDefinition>(
         `/restaurant/roles/${encodeURIComponent(idOrKey)}`,
         { method: "PUT", body: JSON.stringify(body) },
@@ -361,48 +409,14 @@ export const bossApi = {
     async list(branchId: string) {
       return bossFetch<StaffMemberDto[]>("/restaurant/staff", {}, branchId)
     },
-    async create(
-      branchId: string,
-      body: {
-        name: string
-        role: string
-        phone?: string
-        email?: string
-        password?: string
-        pin?: string
-        canAccessPanel?: boolean
-        canAccessTerminal?: boolean
-        grantedPermissions?: string[]
-        revokedPermissions?: string[]
-        maxDiscountPercentOverride?: number | null
-        maxDiscountAmountOverride?: number | null
-      }
-    ) {
+    async create(branchId: string, body: Record<string, unknown>) {
       return bossFetch<StaffMemberDto>(
         "/restaurant/staff",
         { method: "POST", body: JSON.stringify(body) },
         branchId
       )
     },
-    async update(
-      branchId: string,
-      id: string,
-      body: {
-        name?: string
-        role?: string
-        phone?: string | null
-        email?: string | null
-        password?: string
-        pin?: string
-        isActive?: boolean
-        canAccessPanel?: boolean
-        canAccessTerminal?: boolean
-        grantedPermissions?: string[]
-        revokedPermissions?: string[]
-        maxDiscountPercentOverride?: number | null
-        maxDiscountAmountOverride?: number | null
-      }
-    ) {
+    async update(branchId: string, id: string, body: Record<string, unknown>) {
       return bossFetch<StaffMemberDto>(
         `/restaurant/staff/${encodeURIComponent(id)}`,
         { method: "PUT", body: JSON.stringify(body) },
@@ -420,12 +434,7 @@ export const bossApi = {
   auditLogs: {
     async list(
       branchId: string,
-      params?: {
-        category?: AuditCategory
-        limit?: number
-        from?: string
-        to?: string
-      }
+      params?: { category?: AuditCategory; limit?: number; from?: string; to?: string }
     ) {
       const qs = new URLSearchParams()
       if (params?.category) qs.set("category", params.category)

@@ -11,7 +11,15 @@ import type {
 import { api } from "../api"
 import { formatTitleCase } from "../format"
 import { showPanelToast } from "@/components/panel/panel-toast"
-import { genId, getReadNotifIds, saveAppearanceSettings, saveReadNotifIds } from "./panel-local-storage"
+import {
+  genId,
+  getDismissedNotifIds,
+  getReadNotifIds,
+  saveAppearanceSettings,
+  saveDismissedNotifIds,
+  saveNotifsClearedAt,
+  saveReadNotifIds,
+} from "./panel-local-storage"
 import type { LogActivityFn } from "./panel-store-context"
 
 type StateSetter<T> = (v: T | ((prev: T) => T)) => void
@@ -218,11 +226,12 @@ export function useSystemActions(params: {
         }
       }
       if (!token) return
-      const serverFields = ["name", "address", "phone", "taxId", "whatsapp", "instagram", "facebook", "website", "workingHours"] as const
+      const serverFields = ["name", "logoUrl", "address", "phone", "taxId", "whatsapp", "instagram", "facebook", "website", "workingHours"] as const
       if (!serverFields.some((k) => s[k] !== undefined)) return
       api.restaurant
         .updateSettings(token, {
           ...(s.name?.trim() ? { name: s.name.trim() } : {}),
+          ...(s.logoUrl !== undefined ? { logoUrl: s.logoUrl || null } : {}),
           address: s.address ?? null,
           phone: s.phone ?? null,
           taxId: s.taxId ?? null,
@@ -263,7 +272,35 @@ export function useSystemActions(params: {
       setNotifications((prev) => [{ ...n, id: genId("n"), createdAt: new Date(), read: false }, ...prev]),
     [setNotifications],
   )
-  const clearAllNotifications = useCallback(() => setNotifications([]), [setNotifications])
+  const dismissNotification = useCallback(
+    (id: string) => {
+      const dismissed = getDismissedNotifIds()
+      dismissed.add(id)
+      saveDismissedNotifIds(dismissed)
+      setNotifications((prev) => prev.filter((n) => n.id !== id))
+      if (token) {
+        void api.notifications.dismiss(token, [id]).catch(() => {})
+      }
+    },
+    [token, setNotifications],
+  )
+  const clearAllNotifications = useCallback(() => {
+    const nowIso = new Date().toISOString()
+    saveNotifsClearedAt(nowIso)
+    setNotifications((prev) => {
+      const dismissed = getDismissedNotifIds()
+      const ids = prev.map((n) => n.id)
+      ids.forEach((id) => dismissed.add(id))
+      saveDismissedNotifIds(dismissed)
+      if (token && ids.length > 0) {
+        void api.notifications.dismiss(token, ids).catch(() => {})
+      }
+      return []
+    })
+    if (token) {
+      void api.notifications.clearAll(token).catch(() => {})
+    }
+  }, [token, setNotifications])
 
   const switchBranch = useCallback(
     (id: string) => {
@@ -427,6 +464,7 @@ export function useSystemActions(params: {
     markNotificationRead,
     markAllNotificationsRead,
     addNotification,
+    dismissNotification,
     clearAllNotifications,
     switchBranch,
     addBranch,

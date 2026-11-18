@@ -1,24 +1,27 @@
 import { useState, useMemo, useEffect } from "react"
 import { usePanelStore } from "@/lib/panel-store"
-import { Bell, Shield, CheckCircle2, XCircle, AlertTriangle, Printer, Plus, Trash2 } from "lucide-react"
-import type { PrinterConfig } from "@/lib/panel-types"
+import { usePanelAuth } from "@/lib/panel-auth"
+import { api } from "@/lib/api"
+import { showPanelToast } from "./panel-toast"
+import {
+  Bell,
+  Shield,
+  ShieldAlert,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Printer,
+  RefreshCw,
+  Trash2,
+} from "lucide-react"
 import { computeDateFilterBounds, formatIstanbulDateTime } from "@/lib/format"
-import { CustomDatePicker, CustomSelect } from "@/components/ui/custom-inputs"
+import { CustomDatePicker } from "@/components/ui/custom-inputs"
+import { PaginationBar } from "@/components/ui/pagination-bar"
+import { SecurityFraudTab } from "./security-fraud-tab"
 
-type TechnicalTab = "notifications" | "printers" | "audit"
+type TechnicalTab = "notifications" | "printers" | "security" | "audit"
 
-const AUDIT_CATEGORIES = [
-  "all",
-  "auth",
-  "order",
-  "payment",
-  "product",
-  "user",
-  "settings",
-  "stock",
-  "cash-register",
-  "table",
-]
+const AUDIT_CATEGORIES = ["all", "auth", "order", "payment", "product", "user", "settings", "stock", "cash-register", "table"]
 
 const categoryLabels: Record<string, string> = {
   all: "Tümü",
@@ -39,73 +42,87 @@ function actionGroupLabel(action: string): string {
   if (action.startsWith("table_")) return "Masa"
   if (action.startsWith("order_")) return "Sipariş"
   if (action.startsWith("supplier_")) return "Tedarikçi"
-  if (action.startsWith("material_") || action.startsWith("stock_"))
-    return "Stok"
-  if (action.startsWith("ledger_") || action.startsWith("open_account_"))
-    return "Cari"
+  if (action.startsWith("material_") || action.startsWith("stock_")) return "Stok"
+  if (action.startsWith("ledger_") || action.startsWith("open_account_")) return "Cari"
   if (action.startsWith("shift_") || action.startsWith("cash_")) return "Kasa"
   if (action.startsWith("printer_")) return "Yazıcı"
   if (action.startsWith("campaign_")) return "Kampanya"
   if (action.startsWith("settings_")) return "Ayar"
   if (action.startsWith("branch_")) return "Şube"
-  if (action.startsWith("discount_") || action.startsWith("bill_"))
-    return "Ödeme"
+  if (action.startsWith("discount_") || action.startsWith("bill_")) return "Ödeme"
   return "Diğer"
 }
 
 export default function TechnicalView() {
-  const { notifications, markNotificationRead, markAllNotificationsRead, auditLogs, printers, addPrinter, updatePrinter, deletePrinter, testPrinter, currentUser, hasPermission } = usePanelStore()
+  const { notifications, markNotificationRead, markAllNotificationsRead, dismissNotification, clearAllNotifications, auditLogs, printers: storePrinters, testPrinter, currentUser, hasPermission } = usePanelStore()
+  const { token } = usePanelAuth()
 
   const isBoss = currentUser?.role === "root"
   const canManagePrinters = isBoss || hasPermission("system.manage_printers")
   const canViewAuditLogs = isBoss || hasPermission("reports.view_audit_logs")
+  const canViewFraudAlerts =
+    isBoss || hasPermission("security.view_fraud_alerts", "security.manage_fraud_alerts")
+  const canManageFraudAlerts = isBoss || hasPermission("security.manage_fraud_alerts")
 
   const [activeTab, setActiveTab] = useState<TechnicalTab>("notifications")
   const [auditFilter, setAuditFilter] = useState<string>("all")
-  const [datePreset, setDatePreset] = useState<
-    "all" | "today" | "7d" | "30d" | "custom"
-  >("all")
+  const [datePreset, setDatePreset] = useState<"all" | "today" | "7d" | "30d" | "custom">("all")
   const [fromDate, setFromDate] = useState("")
   const [toDate, setToDate] = useState("")
+  const [notifPage, setNotifPage] = useState(1)
+  const [auditPage, setAuditPage] = useState(1)
+  const [localPrinters, setLocalPrinters] = useState(storePrinters)
+  const [refreshingPrinters, setRefreshingPrinters] = useState(false)
 
-  // Printer form state
-  const [showAddPrinter, setShowAddPrinter] = useState(false)
-  const [pName, setPName] = useState("")
-  const [pType, setPType] = useState<PrinterConfig["type"]>("kitchen")
-  const [pConn, setPConn] = useState<PrinterConfig["connection"]>("network")
-  const [pIp, setPIp] = useState("")
-  const [pPort, setPPort] = useState("9100")
-  const [pPaper, setPPaper] = useState<58 | 80>(80)
+  useEffect(() => {
+    setLocalPrinters(storePrinters)
+  }, [storePrinters])
+
+  useEffect(() => {
+    setAuditPage(1)
+  }, [auditFilter, datePreset, fromDate, toDate])
 
   const unreadCount = useMemo(
     () => notifications.filter((n) => !n.read).length,
     [notifications],
   )
 
+  const handleRefreshPrinters = async () => {
+    if (!token || refreshingPrinters) return
+    setRefreshingPrinters(true)
+    try {
+      const prs = await api.printers.list(token)
+      setLocalPrinters(
+        prs.map((p) => ({
+          id: p.id,
+          name: p.name,
+          type: p.type,
+          connection: p.connection,
+          ipAddress: p.ipAddress ?? undefined,
+          port: p.port ?? undefined,
+          department: p.department ?? undefined,
+          status: p.status,
+          paperWidth: p.paperWidth === 58 ? 58 : 80,
+          autoCut: p.autoCut,
+        })),
+      )
+      showPanelToast("Print Agent yazıcı listesi yenilendi", "success")
+    } catch (err) {
+      showPanelToast(err instanceof Error ? err.message : "Yazıcı listesi alınamadı", "error")
+    } finally {
+      setRefreshingPrinters(false)
+    }
+  }
+
   const TABS = useMemo(() => {
-    const list: {
-      id: TechnicalTab
-      label: string
-      icon: typeof Bell
-    }[] = [
-      {
-        id: "notifications",
-        label: `Bildirimler${unreadCount > 0 ? ` (${unreadCount})` : ""}`,
-        icon: Bell,
-      },
+    const list: { id: TechnicalTab; label: string; icon: typeof Bell }[] = [
+      { id: "notifications", label: `Bildirimler${unreadCount > 0 ? ` (${unreadCount})` : ""}`, icon: Bell },
     ]
-    if (canManagePrinters) {
-      list.push({
-        id: "printers",
-        label: `Yazıcılar (${printers.length})`,
-        icon: Printer,
-      })
-    }
-    if (canViewAuditLogs) {
-      list.push({ id: "audit", label: "Aktivite Logları", icon: Shield })
-    }
+    if (canManagePrinters) list.push({ id: "printers", label: `Yazıcılar (${localPrinters.length})`, icon: Printer })
+    if (canViewFraudAlerts) list.push({ id: "security", label: "Güvenlik & Suistimal Tespiti", icon: ShieldAlert })
+    if (canViewAuditLogs) list.push({ id: "audit", label: "Aktivite Logları", icon: Shield })
     return list
-  }, [unreadCount, canManagePrinters, printers.length, canViewAuditLogs])
+  }, [unreadCount, canManagePrinters, localPrinters.length, canViewFraudAlerts, canViewAuditLogs])
 
   useEffect(() => {
     if (TABS.length > 0 && !TABS.some((t) => t.id === activeTab)) {
@@ -114,14 +131,8 @@ export default function TechnicalView() {
   }, [TABS, activeTab])
 
   const filteredLogs = useMemo(() => {
-    const presetMap =
-      datePreset === "7d"
-        ? "week"
-        : datePreset === "30d"
-          ? "month"
-          : datePreset
+    const presetMap = datePreset === "7d" ? "week" : datePreset === "30d" ? "month" : datePreset
     const bounds = computeDateFilterBounds(presetMap, fromDate, toDate)
-
     return auditLogs.filter((l) => {
       if (auditFilter !== "all" && l.category !== auditFilter) return false
       if (!bounds) return true
@@ -130,24 +141,16 @@ export default function TechnicalView() {
     })
   }, [auditLogs, auditFilter, datePreset, fromDate, toDate])
 
-  const handleAddPrinter = () => {
-    if (!pName.trim()) return
-    const parsedPort = parseInt(pPort, 10)
-    addPrinter({
-      name: pName.trim(),
-      type: pType,
-      connection: pConn,
-      ipAddress: pConn === "network" ? pIp.trim() || undefined : undefined,
-      port:
-        pConn === "network" && Number.isFinite(parsedPort) ? parsedPort : 9100,
-      status: "online",
-      paperWidth: pPaper,
-      autoCut: true,
-    })
-    setPName("")
-    setPIp("")
-    setShowAddPrinter(false)
-  }
+  const notifPageSize = 10
+  const auditPageSize = 12
+  const paginatedNotifs = useMemo(
+    () => notifications.slice((notifPage - 1) * notifPageSize, notifPage * notifPageSize),
+    [notifications, notifPage],
+  )
+  const paginatedLogs = useMemo(
+    () => filteredLogs.slice((auditPage - 1) * auditPageSize, auditPage * auditPageSize),
+    [filteredLogs, auditPage],
+  )
 
   return (
     <div className="h-full flex flex-col">
@@ -157,9 +160,7 @@ export default function TechnicalView() {
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`px-3.5 py-[5px] rounded-lg text-[12px] font-medium transition-colors flex-shrink-0 flex items-center gap-1.5 ${
-              activeTab === tab.id
-                ? "bg-[#e63462] text-white"
-                : "text-[#86868b] hover:bg-black/[0.04]"
+              activeTab === tab.id ? "bg-[#e63462] text-white" : "text-[#86868b] hover:bg-black/[0.04]"
             }`}
           >
             <tab.icon className="w-3.5 h-3.5" /> {tab.label}
@@ -173,181 +174,182 @@ export default function TechnicalView() {
             <>
               <div className="flex justify-between items-center">
                 <p className="text-[12px] text-[#86868b]">
-                  {unreadCount} okunmamış bildirim
+                  {notifications.length} bildirim ({unreadCount} okunmamış)
                 </p>
-                {unreadCount > 0 && (
-                  <button onClick={markAllNotificationsRead} className="text-[12px] font-medium text-[#e63462] hover:underline">Tümünü Okundu İşaretle</button>
-                )}
+                <div className="flex items-center gap-3">
+                  {unreadCount > 0 && (
+                    <button onClick={markAllNotificationsRead} className="text-[12px] font-medium text-[#e63462] hover:underline">
+                      Tümünü Okundu İşaretle
+                    </button>
+                  )}
+                  {notifications.length > 0 && (
+                    <button
+                      onClick={clearAllNotifications}
+                      className="h-[28px] px-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-[11px] font-medium flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3 h-3" /> Tümünü Temizle
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <div className="flex flex-col gap-2">
-                {notifications.map((n) => (
-                  <button
-                    key={n.id}
-                    onClick={() => markNotificationRead(n.id)}
-                    className={`w-full text-left bg-white rounded-xl border p-4 transition-colors hover:bg-[#f9f9fb] ${
-                      n.read
-                        ? "border-[#d1d1d6]/60 opacity-60"
-                        : "border-[#e63462]/30 bg-[#e63462]/[0.02]"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start gap-3">
-                        <div
-                          className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                            n.type === "stock-low"
-                              ? "bg-amber-50"
-                              : n.type === "system"
-                                ? "bg-blue-50"
-                                : n.type === "kitchen-alert"
-                                  ? "bg-red-50"
-                                  : "bg-green-50"
-                          }`}
-                        >
-                          {n.type === "stock-low" ? (
-                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                          ) : n.type === "system" ? (
-                            <Shield className="w-3.5 h-3.5 text-blue-600" />
-                          ) : n.type === "kitchen-alert" ? (
-                            <XCircle className="w-3.5 h-3.5 text-red-500" />
-                          ) : (
-                            <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-                          )}
+              {notifications.length === 0 ? (
+                <div className="bg-white rounded-xl border border-[#d1d1d6]/60 py-14 text-center">
+                  <Bell className="w-9 h-9 text-[#d1d1d6] mx-auto mb-2" />
+                  <p className="text-[13px] text-[#86868b]">Aktif bildirim bulunmuyor.</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {paginatedNotifs.map((n) => (
+                    <div
+                      key={n.id}
+                      onClick={() => markNotificationRead(n.id)}
+                      className={`w-full text-left bg-white rounded-xl border p-4 transition-colors hover:bg-[#f9f9fb] cursor-pointer ${
+                        n.read ? "border-[#d1d1d6]/60 opacity-65" : "border-[#e63462]/30 bg-[#e63462]/[0.02]"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                              n.type === "stock-low"
+                                ? "bg-amber-50"
+                                : n.type === "waiter-call"
+                                  ? "bg-[#e63462]/10"
+                                  : n.type === "fraud-alert" || n.type === "kitchen-alert"
+                                    ? "bg-red-50"
+                                    : n.type === "system"
+                                      ? "bg-blue-50"
+                                      : "bg-green-50"
+                            }`}
+                          >
+                            {n.type === "stock-low" ? (
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                            ) : n.type === "waiter-call" ? (
+                              <Bell className="w-3.5 h-3.5 text-[#e63462]" />
+                            ) : n.type === "fraud-alert" || n.type === "kitchen-alert" ? (
+                              <XCircle className="w-3.5 h-3.5 text-red-500" />
+                            ) : n.type === "system" ? (
+                              <Shield className="w-3.5 h-3.5 text-blue-600" />
+                            ) : (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                            )}
+                          </div>
+                          <div>
+                            <h4 className="text-[13px] font-semibold text-[#1d1d1f]">{n.title}</h4>
+                            <p className="text-[12px] text-[#86868b] mt-0.5">{n.message}</p>
+                          </div>
                         </div>
-                        <div>
-                          <h4 className="text-[13px] font-semibold text-[#1d1d1f]">
-                            {n.title}
-                          </h4>
-                          <p className="text-[12px] text-[#86868b] mt-0.5">
-                            {n.message}
-                          </p>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-[10px] text-[#86868b]">{formatIstanbulDateTime(n.createdAt)}</span>
+                          {!n.read && <div className="w-2 h-2 rounded-full bg-[#e63462]" />}
+                          <button
+                            type="button"
+                            title="Bildirimi Sil"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              dismissNotification(n.id)
+                            }}
+                            className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-red-50 text-[#86868b] hover:text-red-500"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="text-[10px] text-[#86868b]">
-                          {formatIstanbulDateTime(n.createdAt)}
-                        </span>
-                        {!n.read && (
-                          <div className="w-2 h-2 rounded-full bg-[#e63462]" />)}</div>
                     </div>
-                  </button>
-                ))}
-              </div>
+                  ))}
+                  <PaginationBar
+                    currentPage={notifPage}
+                    totalItems={notifications.length}
+                    pageSize={notifPageSize}
+                    onPageChange={setNotifPage}
+                    itemLabel="bildirim"
+                  />
+                </div>
+              )}
             </>
           )}
 
           {activeTab === "printers" && canManagePrinters && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <p className="text-[12px] text-[#86868b]">Şube yazıcılarını tanımlayın ve bağlantılarını test edin.</p>
-                <button type="button" onClick={() => setShowAddPrinter((v) => !v)} className="h-[30px] px-3 flex items-center gap-1.5 bg-[#e63462] text-white rounded-lg text-[12px] font-medium hover:bg-[#d42d56]">
-                  <Plus className="w-3.5 h-3.5" /> Yazıcı Ekle
+              <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-[14px] font-semibold text-[#1d1d1f]">
+                    Print Agent Masaüstü Uygulaması Yazıcıları
+                  </h3>
+                  <p className="text-[12px] text-[#86868b] mt-0.5">
+                    Yazıcılar şube bilgisayarındaki Corder Print Agent masaüstü uygulamasından otomatik eşitlenir (salt-okunur).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={refreshingPrinters}
+                  onClick={() => void handleRefreshPrinters()}
+                  className="h-[32px] px-3.5 flex items-center gap-1.5 bg-[#f5f5f7] hover:bg-[#e8e8ed] border border-[#d1d1d6]/60 text-[#1d1d1f] rounded-lg text-[12px] font-medium disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${refreshingPrinters ? "animate-spin" : ""}`} />
+                  Listeyi Yenile
                 </button>
               </div>
-
-              {showAddPrinter && (
-                <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4 space-y-3">
-                  <div className="grid grid-cols-3 gap-3">
-                    <input type="text" value={pName} onChange={(e) => setPName(e.target.value)} placeholder="Yazıcı adı (Örn: Mutfak)" className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60" />
-                    <CustomSelect value={pType} onChange={(e) => setPType(e.target.value as PrinterConfig["type"]) } className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60">
-                      <option value="kitchen">Mutfak</option>
-                      <option value="bar">Bar</option>
-                      <option value="receipt">Adisyon / Kasa</option>
-                      <option value="label">Etiket</option>
-                    </CustomSelect>
-                    <CustomSelect value={pConn} onChange={(e) => setPConn(e.target.value as PrinterConfig["connection"]) } className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60">
-                      <option value="network">Ağ (IP/TCP)</option>
-                      <option value="usb">USB</option>
-                      <option value="bluetooth">Bluetooth</option>
-                    </CustomSelect>
-                  </div>
-                  {pConn === "network" && (
-                    <div className="grid grid-cols-3 gap-3">
-                      <input type="text" value={pIp} onChange={(e) => setPIp(e.target.value)} placeholder="IP Adresi (Örn: 192.168.1.200)" className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60" />
-                      <input type="number" value={pPort} onChange={(e) => setPPort(e.target.value)} placeholder="Port (9100)" className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60" />
-                      <CustomSelect value={pPaper} onChange={(e) => setPPaper(Number(e.target.value) as 58 | 80) } className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60">
-                        <option value={80}>80mm Kağıt</option>
-                        <option value={58}>58mm Kağıt</option>
-                      </CustomSelect>
-                    </div>
-                  )}
-                  <div className="flex justify-end gap-2">
-                    <button type="button" onClick={() => setShowAddPrinter(false)} className="h-[32px] px-3 text-[12px] text-[#86868b] rounded-lg border border-[#d1d1d6]/60">
-                      İptal
-                    </button>
-                    <button type="button" onClick={handleAddPrinter} className="h-[32px] px-4 text-[12px] font-medium text-white bg-[#e63462] rounded-lg">Kaydet</button>
-                  </div>
-                </div>
-              )}
 
               <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
                 <table className="w-full">
                   <thead>
                     <tr className="bg-[#f9f9f9] border-b border-[#f0f0f0]">
-                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase">Yazıcı</th>
-                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase">Tür</th>
-                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase">Bağlantı</th>
+                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase">Yazıcı Adı</th>
+                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase">Görev / Tür</th>
+                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase">Bağlantı &amp; Cihaz/IP</th>
+                      <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase">Kağıt Genişliği</th>
                       <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase">Durum</th>
                       <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase">İşlem</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {printers.length === 0 ? (
+                    {localPrinters.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center text-[12px] text-[#86868b]">Henüz kayıtlı yazıcı bulunmuyor.</td>
+                        <td colSpan={6} className="px-4 py-10 text-center text-[12px] text-[#86868b]">
+                          Print Agent masaüstü uygulamasından eşitlenmiş yazıcı bulunmuyor. Şube bilgisayarında Print Agent uygulamasını açıp yazıcı eşleştirmesi yapın.
+                        </td>
                       </tr>
                     ) : (
-                      printers.map((pr, idx) => (
+                      localPrinters.map((pr, idx) => (
                         <tr key={pr.id} className={`border-b border-[#f0f0f0] ${idx % 2 === 1 ? "bg-[#fafafa]" : ""}`}>
-                          <td className="px-4 py-2.5 text-[13px] font-medium text-[#1d1d1f]">
-                            {pr.name}
-                          </td>
+                          <td className="px-4 py-2.5 text-[13px] font-medium text-[#1d1d1f]">{pr.name}</td>
                           <td className="px-4 py-2.5 text-[12px] text-[#86868b]">
                             {pr.type === "kitchen"
                               ? "Mutfak"
                               : pr.type === "bar"
                                 ? "Bar"
-                                : pr.type === "receipt"
-                                  ? "Adisyon"
-                                  : "Etiket"}{" "}
-                            ({pr.paperWidth}mm)
+                                : pr.type === "receipt" || pr.type === "cashier"
+                                  ? "Kasa Fişi"
+                                  : "Etiket"}
                           </td>
                           <td className="px-4 py-2.5 text-[12px] text-[#86868b]">
                             {pr.connection === "network"
-                              ? `${pr.ipAddress || "-"}:${pr.port || 9100}`
-                              : pr.connection.toUpperCase()}
+                              ? `Ağ • ${pr.ipAddress || "-"}:${pr.port || 9100}`
+                              : `${pr.connection.toUpperCase()}${pr.department ? ` • ${pr.department}` : ""}`}
+                          </td>
+                          <td className="px-4 py-2.5 text-center text-[12px] font-medium text-[#1d1d1f]">
+                            {pr.paperWidth}mm
                           </td>
                           <td className="px-4 py-2.5 text-center">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                updatePrinter(pr.id, {
-                                  status:
-                                    pr.status === "online"
-                                      ? "offline"
-                                      : "online",
-                                })
-                              }
-                              className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
-                                pr.status === "online"
-                                  ? "bg-green-50 text-green-600"
-                                  : "bg-red-50 text-red-500"
+                            <span
+                              className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${
+                                pr.status === "online" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"
                               }`}
                             >
-                              {pr.status === "online"
-                                ? "Çevrimiçi"
-                                : "Çevrimdışı"}
-                            </button>
+                              <span className={`w-1.5 h-1.5 rounded-full ${pr.status === "online" ? "bg-green-500" : "bg-red-500"}`} />
+                              {pr.status === "online" ? "Çevrimiçi" : "Çevrimdışı"}
+                            </span>
                           </td>
                           <td className="px-4 py-2.5 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button type="button" onClick={() => testPrinter(pr.id)} className="h-[26px] px-2.5 rounded bg-[#f5f5f7] text-[11px] font-medium text-[#1d1d1f] hover:bg-[#e8e8ed]">
-                                Test Et
-                              </button>
-                              <button type="button" onClick={() => deletePrinter(pr.id)} className="w-7 h-7 rounded flex items-center justify-center hover:bg-red-50">
-                                <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                              </button>
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => testPrinter(pr.id)}
+                              className="h-[28px] px-3 rounded-lg bg-[#1d1d1f] text-[11px] font-medium text-white hover:bg-[#3a3a3c]"
+                            >
+                              Test Fişi Gönder
+                            </button>
                           </td>
                         </tr>
                       ))
@@ -356,6 +358,10 @@ export default function TechnicalView() {
                 </table>
               </div>
             </div>
+          )}
+
+          {activeTab === "security" && canViewFraudAlerts && (
+            <SecurityFraudTab canManageAlerts={canManageFraudAlerts} />
           )}
 
           {activeTab === "audit" && canViewAuditLogs && (
@@ -418,17 +424,13 @@ export default function TechnicalView() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredLogs.slice(0, 250).map((log, idx) => (
-                      <tr key={log.id} className={`border-b border-[#f0f0f0] ${ idx % 2 === 1 ? "bg-[#fafafa]" : "" }`}>
+                    {paginatedLogs.map((log, idx) => (
+                      <tr key={log.id} className={`border-b border-[#f0f0f0] ${idx % 2 === 1 ? "bg-[#fafafa]" : ""}`}>
                         <td className="px-4 py-2 text-[12px] text-[#86868b] whitespace-nowrap">
                           {formatIstanbulDateTime(log.createdAt)}
                         </td>
-                        <td className="px-4 py-2 text-[12px] font-medium text-[#1d1d1f]">
-                          {log.userName}
-                        </td>
-                        <td className="px-4 py-2 text-[12px] text-[#1d1d1f]">
-                          {log.action}
-                        </td>
+                        <td className="px-4 py-2 text-[12px] font-medium text-[#1d1d1f]">{log.userName}</td>
+                        <td className="px-4 py-2 text-[12px] text-[#1d1d1f]">{log.action}</td>
                         <td className="px-4 py-2 text-center">
                           <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[#f5f5f7] text-[#86868b]">
                             {actionGroupLabel(log.action)}
@@ -442,9 +444,7 @@ export default function TechnicalView() {
                         <td className="px-4 py-2 text-[12px] text-[#86868b] max-w-[420px]">
                           <div className="truncate">{log.details}</div>
                           {log.metadata && (
-                            <div className="text-[10px] text-[#a0a0a6] mt-0.5 truncate">
-                              {JSON.stringify(log.metadata)}
-                            </div>
+                            <div className="text-[10px] text-[#a0a0a6] mt-0.5 truncate">{JSON.stringify(log.metadata)}</div>
                           )}
                         </td>
                       </tr>
@@ -456,6 +456,15 @@ export default function TechnicalView() {
                     )}
                   </tbody>
                 </table>
+                <div className="px-4 pb-3">
+                  <PaginationBar
+                    currentPage={auditPage}
+                    totalItems={filteredLogs.length}
+                    pageSize={auditPageSize}
+                    onPageChange={setAuditPage}
+                    itemLabel="işlem kaydı"
+                  />
+                </div>
               </div>
             </>
           )}

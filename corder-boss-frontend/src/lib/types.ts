@@ -17,6 +17,71 @@ export type AuditCategory =
   | "staff"
   | "system"
 
+export type FraudSeverity = "critical" | "high" | "medium" | "low"
+
+export type FraudAlertStatus =
+  | "open"
+  | "investigating"
+  | "resolved"
+  | "false_positive"
+
+export interface FraudAlertDto {
+  id: string
+  restaurantId?: string
+  branchId?: string
+  branchName?: string
+  ruleKey: string
+  title: string
+  description: string
+  severity: FraudSeverity
+  status: FraudAlertStatus
+  amountImpact: number
+  staffId?: string | null
+  staffName?: string | null
+  tableName?: string | null
+  orderId?: string | null
+  resolutionNote?: string | null
+  resolvedBy?: string | null
+  resolvedAt?: string | null
+  metadata?: Record<string, unknown> | null
+  createdAt: string
+}
+
+export interface FraudSummaryDto {
+  openCount: number
+  criticalCount: number
+  totalAmountImpact: number
+}
+
+export interface ShiftSummaryDto {
+  id: string
+  branchName?: string
+  openedBy: string
+  closedBy?: string | null
+  status: string
+  openingBalance: number
+  closingBalance?: number | null
+  expectedCash?: number
+  difference?: number
+  openedAt: string
+  closedAt?: string | null
+}
+
+export interface WaiterPerformanceDto {
+  waiterName: string
+  ordersCount: number
+  revenue: number
+  cancelledCount: number
+  cancelledAmount: number
+  discountGiven?: number
+}
+
+export interface CategoryBreakdownDto {
+  categoryName: string
+  revenue: number
+  quantity: number
+}
+
 export interface PermissionDefinition {
   key: string
   category: PermissionCategory | string
@@ -164,7 +229,7 @@ export interface AuditLogDto {
   createdAt: string
 }
 
-export interface BossOverviewResponse {
+export interface BossOverviewDto {
   branches: BranchLivePulse[]
   allOwnedBranches: Array<{
     id: string
@@ -199,6 +264,14 @@ export interface BossOverviewResponse {
     franchiseBranchCount?: number
     todayEstimatedRoyalty?: number
     monthEstimatedRoyalty?: number
+    grossRevenue?: number
+    discountTotal?: number
+    discountRatePct?: number
+    cancelledCount?: number
+    cancelRatePct?: number
+    averageOrderValue?: number
+    revenuePerTable?: number
+    openLedgerTotal?: number
     paymentBreakdown: {
       cash: number
       creditCard: number
@@ -207,14 +280,45 @@ export interface BossOverviewResponse {
       ledger: number
     }
   }
-  hourlySales: Array<{ hour: string; revenue: number; orders: number }>
-  topProducts: Array<{ name: string; quantity: number; revenue: number }>
+  grossRevenue?: number
+  discountTotal?: number
+  discountRatePct?: number
+  cancelledCount?: number
+  cancelRatePct?: number
+  averageOrderValue?: number
+  revenuePerTable?: number
+  openLedgerTotal?: number
+  hourlySales: Array<{
+    hour: string
+    revenue: number
+    orders?: number
+    ordersCount?: number
+  }>
+  categoryBreakdown?: CategoryBreakdownDto[]
+  topProducts: Array<{
+    name?: string
+    productName?: string
+    quantity: number
+    revenue: number
+  }>
   staffPerformance: Array<{
     name: string
     ordersCount: number
     revenue: number
     discountGiven: number
+    cancelledCount?: number
+    cancelledAmount?: number
   }>
+  waiterPerformance?: WaiterPerformanceDto[]
+  shiftSummaries?: ShiftSummaryDto[]
+  fraudSummary?: FraudSummaryDto
+  liveOrders?: Array<
+    LiveOrderDto & {
+      branchName?: string
+      tableName?: string
+      totalAmount?: number
+    }
+  >
   criticalMaterials: Array<{
     id: string
     restaurantId: string
@@ -227,6 +331,8 @@ export interface BossOverviewResponse {
   }>
   recentAudits: AuditLogDto[]
 }
+
+export type BossOverviewResponse = BossOverviewDto
 
 export interface TableDiscountDto {
   type: "percent" | "amount" | "complimentary"
@@ -306,3 +412,4 @@ export type BossTabId =
   | "staff"
   | "analytics"
   | "operations"
+  | "security"

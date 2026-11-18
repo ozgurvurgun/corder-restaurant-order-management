@@ -15,8 +15,10 @@ export class PlatformAdminSeed implements OnModuleInit {
 
   async onModuleInit() {
     const rawEmail = this.config.get<string>('PLATFORM_ADMIN_EMAIL');
-    const rawPassword = this.config.get<string>('PLATFORM_ADMIN_PASSWORD');
-    const email = rawEmail?.trim().toLowerCase();
+    const rawPassword =
+      this.config.get<string>('PLATFORM_ADMIN_AUTH_CODE') ||
+      this.config.get<string>('PLATFORM_ADMIN_PASSWORD');
+    const email = rawEmail?.trim().toLowerCase() || 'admin@corder.app';
     const password = rawPassword?.trim();
     if (!email || !password) return;
     const existing = await this.repo.findOne({ where: { email } });

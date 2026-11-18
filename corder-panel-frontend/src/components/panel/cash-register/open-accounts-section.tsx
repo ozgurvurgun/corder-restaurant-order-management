@@ -1,3 +1,4 @@
+import { useState, useMemo } from "react"
 import {
   ArrowDownCircle,
   ArrowUpCircle,
@@ -18,6 +19,7 @@ import {
   fromMinorUnits,
   toMinorUnits,
 } from "@/lib/format"
+import { PaginationBar } from "@/components/ui/pagination-bar"
 
 export function ShiftOverviewSection(props: {
   currentShift: CashShift | null
@@ -328,8 +330,19 @@ export function CashTransactionsSection(props: {
     canAddTransaction = true,
     onOpenAddTransaction,
   } = props
-  const sorted = [...cashTransactions].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  const [page, setPage] = useState(1)
+  const pageSize = 12
+  const sorted = useMemo(
+    () =>
+      [...cashTransactions].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      ),
+    [cashTransactions],
+  )
+  const paginated = useMemo(
+    () => sorted.slice((page - 1) * pageSize, page * pageSize),
+    [sorted, page],
   )
 
   return (
@@ -368,7 +381,7 @@ export function CashTransactionsSection(props: {
           </tr>
         </thead>
         <tbody>
-          {sorted.map((tx, idx) => (
+          {paginated.map((tx, idx) => (
             <tr
               key={tx.id}
               className={`border-b border-[#f0f0f0] ${idx % 2 === 1 ? "bg-[#fafafa]" : ""}`}
@@ -410,6 +423,15 @@ export function CashTransactionsSection(props: {
           ))}
         </tbody>
       </table>
+      <div className="px-4 pb-3">
+        <PaginationBar
+          currentPage={page}
+          totalItems={sorted.length}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          itemLabel="işlem"
+        />
+      </div>
     </div>
   )
 }

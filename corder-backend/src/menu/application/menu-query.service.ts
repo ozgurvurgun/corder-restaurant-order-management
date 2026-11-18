@@ -1,11 +1,24 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  forwardRef,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, MoreThanOrEqual, Repository } from 'typeorm';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 import { CategoryEntity } from '../../restaurant/domain/category.entity';
 import { ProductEntity } from '../../restaurant/domain/product.entity';
 import { CampaignEntity } from '../../restaurant/domain/campaign.entity';
+import { TableEntity } from '../../restaurant/domain/table.entity';
+import {
+  WaiterCallEntity,
+  WaiterCallRequestType,
+} from '../../restaurant/domain/waiter-call.entity';
 import { isRestaurantPaymentSuspended } from '../../restaurant/domain/services/billing-suspension.policy';
+import { TableQrTokenPolicy } from '../../restaurant/domain/services/table-qr-token.policy';
+import { OrdersGateway } from '../../restaurant/api/orders.gateway';
 import {
   buildMenuCategoryTree,
   isCampaignValidNow,
@@ -16,6 +29,13 @@ import {
 
 export type { MenuCategoryTreeDto, MenuProductRow };
 
+export interface MenuTableContextDto {
+  tableId: string;
+  tableName: string;
+  sectionName: string;
+  tableToken: string;
+}
+
 export interface MenuBusinessDto {
   id: string;
   name: string;
@@ -25,10 +45,21 @@ export interface MenuBusinessDto {
   email?: string;
   workingHours?: string;
   logo?: string;
+  logoUrl?: string | null;
   whatsapp?: string;
   instagram?: string;
   facebook?: string;
   website?: string;
+  restaurant?: {
+    id: string;
+    name: string;
+    slug: string;
+    logoUrl: string | null;
+    address: string | null;
+    phone: string | null;
+    workingHours: string | null;
+  };
+  tableContext?: MenuTableContextDto | null;
   categories: MenuCategoryTreeDto[];
   campaigns: {
     id: string;
@@ -54,9 +85,17 @@ export class MenuQueryService {
     private readonly productRepo: Repository<ProductEntity>,
     @InjectRepository(CampaignEntity)
     private readonly campaignRepo: Repository<CampaignEntity>,
+    @InjectRepository(TableEntity)
+    private readonly tableRepo: Repository<TableEntity>,
+    @InjectRepository(WaiterCallEntity)
+    private readonly waiterCallRepo: Repository<WaiterCallEntity>,
+    @Inject(forwardRef(() => OrdersGateway))
+    private readonly ordersGateway: OrdersGateway,
   ) {}
 
-  async getBusinessBySlug(slug: string | null): Promise<MenuBusinessDto> {
+  private async resolveActiveRestaurantBySlug(
+    slug: string | null,
+  ): Promise<RestaurantEntity> {
     const normalizedSlug = slug?.trim();
     if (!normalizedSlug) {
       throw new NotFoundException('restaurant query is required');
@@ -71,7 +110,91 @@ export class MenuQueryService {
     if (!restaurant || isRestaurantPaymentSuspended(restaurant)) {
       throw new NotFoundException('Business not found');
     }
-    return this.buildMenuDto(restaurant, false);
+    return restaurant;
+  }
+
+  async getBusinessBySlug(
+    slug: string | null,
+    tableToken?: string,
+  ): Promise<MenuBusinessDto> {
+    const restaurant = await this.resolveActiveRestaurantBySlug(slug);
+    return this.buildMenuDto(restaurant, false, tableToken);
+  }
+
+  async callWaiter(
+    slug: string | null,
+    dto: {
+      tableToken?: string;
+      requestType?: WaiterCallRequestType;
+      note?: string;
+    },
+  ) {
+    const restaurant = await this.resolveActiveRestaurantBySlug(slug);
+    const token = (dto?.tableToken ?? '').trim();
+    if (!token) {
+      throw new BadRequestException('Geçersiz masa QR kodu');
+    }
+
+    const tables = await this.tableRepo.find({
+      where: { restaurantId: restaurant.id },
+    });
+    const matched = TableQrTokenPolicy.findMatchingTable(
+      restaurant.id,
+      token,
+      tables,
+    );
+    if (!matched) {
+      throw new BadRequestException('Geçersiz masa QR kodu');
+    }
+
+    const recentCall = await this.waiterCallRepo.findOne({
+      where: {
+        restaurantId: restaurant.id,
+        tableId: matched.id,
+        createdAt: MoreThanOrEqual(new Date(Date.now() - 20_000)),
+      },
+      order: { createdAt: 'DESC' },
+    });
+    if (recentCall) {
+      throw new BadRequestException(
+        'Talebiniz zaten iletildi. Lütfen 20 saniye bekleyin.',
+      );
+    }
+
+    const requestType: WaiterCallRequestType =
+      dto.requestType === 'bill' ? 'bill' : 'waiter';
+    const note = dto.note?.trim().slice(0, 255) || null;
+
+    const saved = await this.waiterCallRepo.save(
+      this.waiterCallRepo.create({
+        restaurantId: restaurant.id,
+        tableId: matched.id,
+        tableName: matched.name,
+        sectionName: matched.section || null,
+        requestType,
+        note,
+        acknowledged: false,
+      }),
+    );
+
+    const payload = {
+      id: saved.id,
+      restaurantId: saved.restaurantId,
+      tableId: saved.tableId,
+      tableName: saved.tableName,
+      sectionName: saved.sectionName,
+      requestType: saved.requestType,
+      note: saved.note,
+      createdAt: saved.createdAt.toISOString(),
+    };
+
+    this.ordersGateway.emitWaiterCalled(restaurant.id, payload);
+    this.ordersGateway.emitNotificationsUpdated(restaurant.id);
+
+    return {
+      ok: true,
+      ...payload,
+    };
   }
 
   async getTerminalMenuByRestaurantId(restaurantId: string): Promise<MenuBusinessDto> {
@@ -87,8 +210,10 @@ export class MenuQueryService {
   private async buildMenuDto(
     restaurant: RestaurantEntity,
     forTerminal: boolean,
+    tableToken?: string,
   ): Promise<MenuBusinessDto> {
-    const [allCats, rawCampaigns] = await Promise.all([
+    const cleanToken = (tableToken ?? '').trim();
+    const [allCats, rawCampaigns, tables] = await Promise.all([
       this.categoryRepo.find({
         where: { restaurantId: restaurant.id },
         order: { order: 'ASC', name: 'ASC' },
@@ -97,7 +222,14 @@ export class MenuQueryService {
         where: { restaurantId: restaurant.id, isActive: true },
         order: { order: 'ASC' },
       }),
+      cleanToken
+        ? this.tableRepo.find({ where: { restaurantId: restaurant.id } })
+        : Promise.resolve([] as TableEntity[]),
     ]);
+
+    const matchedTable = cleanToken
+      ? TableQrTokenPolicy.findMatchingTable(restaurant.id, cleanToken, tables)
+      : null;
 
     const { visibleIds, roots, productCategoryIds } = resolveVisibleCategoryIds(
       allCats,
@@ -123,10 +255,29 @@ export class MenuQueryService {
       address: restaurant.menuAddress ?? undefined,
       phone: restaurant.menuPhone ?? undefined,
       workingHours: restaurant.workingHours ?? undefined,
+      logo: restaurant.logoUrl ?? undefined,
+      logoUrl: restaurant.logoUrl ?? null,
       whatsapp: restaurant.whatsapp ?? undefined,
       instagram: restaurant.instagram ?? undefined,
       facebook: restaurant.facebook ?? undefined,
       website: restaurant.website ?? undefined,
+      restaurant: {
+        id: restaurant.id,
+        name: restaurant.name,
+        slug: restaurant.slug,
+        logoUrl: restaurant.logoUrl ?? null,
+        address: restaurant.menuAddress ?? null,
+        phone: restaurant.menuPhone ?? null,
+        workingHours: restaurant.workingHours ?? null,
+      },
+      tableContext: matchedTable
+        ? {
+            tableId: matchedTable.id,
+            tableName: matchedTable.name,
+            sectionName: matchedTable.section,
+            tableToken: cleanToken,
+          }
+        : null,
       categories,
       campaigns: activeCampaigns.map((c) => ({
         id: c.id,

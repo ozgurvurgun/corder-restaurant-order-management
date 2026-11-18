@@ -2,11 +2,21 @@ import { useState, useEffect } from "react"
 import { useParams, useNavigate, Link } from "react-router-dom"
 import { ArrowLeft, Trash2, Building2 } from "lucide-react"
 import { useAdminStore } from "@/lib/store"
-import { formatMoney, formatPeriodsSummary, fromMinorUnits, getIstanbulBillingPeriod, toMinorUnits } from "@/lib/money"
+import {
+  formatMoney,
+  formatPeriodsSummary,
+  fromMinorUnits,
+  getIstanbulBillingPeriod,
+  toMinorUnits,
+} from "@/lib/money"
 import type { RestaurantBranchType, RestaurantPaymentRecord } from "@/lib/types"
 import { RootAdminsSection } from "@/components/RootAdminsSection"
 import { PrintAgentTokenSection } from "@/components/PrintAgentTokenSection"
-import { RestaurantBillingBanner, RestaurantBillingSection } from "@/components/RestaurantBillingSection"
+import {
+  RestaurantBillingBanner,
+  RestaurantBillingSection,
+} from "@/components/RestaurantBillingSection"
+import { RestaurantSupportConsole } from "@/components/RestaurantSupportConsole"
 import { PaymentFormModal } from "@/components/billing/PaymentFormModal"
 import { RestaurantBillingHistoryModal } from "@/components/billing/RestaurantBillingHistoryModal"
 import { CustomSelect } from "@/components/ui/custom-inputs"
@@ -151,9 +161,7 @@ export function EditRestaurantPage() {
         franchiseeCompanyName:
           branchType === "franchise" ? franchiseeCompanyName.trim() || null : null,
         royaltyRate:
-          branchType === "franchise"
-            ? Math.max(0, Math.min(100, Number(royaltyRate) || 0))
-            : 0,
+          branchType === "franchise" ? Math.max(0, Math.min(100, Number(royaltyRate) || 0)) : 0,
         monthlyFee: Math.max(0, fromMinorUnits(toMinorUnits(monthlyFee))),
         billingStartPeriod,
         billingNotes: billingNotes.trim() || null,
@@ -168,21 +176,14 @@ export function EditRestaurantPage() {
   }
 
   const handleQuickSuspend = async () => {
-    if (
-      !confirm(
-        `${restaurant.name} mekanının tüm sistemlere erişimini durdurmak istediğinize emin misiniz?`
-      )
-    ) {
+    if (!confirm(`${restaurant.name} mekanının tüm sistemlere erişimini durdurmak istediğinize emin misiniz?`)) {
       return
     }
     setBillingBusy(true)
     setError("")
     setSaveMsg("")
     try {
-      await suspendRestaurantUnpaid(
-        id,
-        billingNotes.trim() || "Ödeme alınmadığı için erişim durduruldu."
-      )
+      await suspendRestaurantUnpaid(id, billingNotes.trim() || "Ödeme alınmadığı için erişim durduruldu.")
       setSaveMsg("Mekanın tüm sistemlere erişimi durduruldu.")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erişim durdurulamadı")
@@ -206,10 +207,7 @@ export function EditRestaurantPage() {
   }
 
   const handleDeleteRestaurant = async () => {
-    if (
-      deleting ||
-      !confirm("Bu restoranı ve ilişkili kayıtları silmek istediğinize emin misiniz?")
-    ) {
+    if (deleting || !confirm("Bu restoranı ve ilişkili kayıtları silmek istediğinize emin misiniz?")) {
       return
     }
     setDeleting(true)
@@ -223,9 +221,7 @@ export function EditRestaurantPage() {
     }
   }
 
-  const isSuspended = Boolean(
-    restaurant.isAccessSuspended || restaurant.billingStatus === "suspended"
-  )
+  const isSuspended = Boolean(restaurant.isAccessSuspended || restaurant.billingStatus === "suspended")
   const inputCls =
     "w-full h-10 rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3.5 text-[13px] text-[#1d1d1f] outline-none focus:border-[#e63462] focus:bg-white transition-all"
 
@@ -278,6 +274,8 @@ export function EditRestaurantPage() {
         onUnsuspend={() => void handleQuickUnsuspend()}
       />
 
+      <RestaurantSupportConsole restaurantId={id} restaurantName={restaurant.name} />
+
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-[#e5e5ea] bg-white p-5">
           <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
@@ -286,9 +284,7 @@ export function EditRestaurantPage() {
           <form onSubmit={handleSaveRestaurant} className="mt-4 space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                  Restoran Adı
-                </label>
+                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Restoran Adı</label>
                 <input
                   type="text"
                   value={name}
@@ -299,9 +295,7 @@ export function EditRestaurantPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                  Slug
-                </label>
+                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Slug</label>
                 <input
                   type="text"
                   value={slug}
@@ -313,9 +307,7 @@ export function EditRestaurantPage() {
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                Adres
-              </label>
+              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Adres</label>
               <input
                 type="text"
                 value={address}
@@ -326,9 +318,7 @@ export function EditRestaurantPage() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                  Telefon
-                </label>
+                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Telefon</label>
                 <input
                   type="tel"
                   value={phone}
@@ -338,9 +328,7 @@ export function EditRestaurantPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                  Müşteri İletişim E-postası
-                </label>
+                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Müşteri İletişim E-postası</label>
                 <input
                   type="email"
                   value={email}
@@ -353,9 +341,7 @@ export function EditRestaurantPage() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                  Vergi No / VKN
-                </label>
+                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Vergi No / VKN</label>
                 <input
                   type="text"
                   value={taxId}
@@ -366,9 +352,7 @@ export function EditRestaurantPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                  Çalışma Saatleri
-                </label>
+                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Çalışma Saatleri</label>
                 <input
                   type="text"
                   value={workingHours}
@@ -400,9 +384,7 @@ export function EditRestaurantPage() {
             />
 
             <div>
-              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                Genel Durum
-              </label>
+              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Genel Durum</label>
               <CustomSelect
                 value={status}
                 onChange={(e) => setStatus(e.target.value as "active" | "inactive")}
@@ -414,9 +396,7 @@ export function EditRestaurantPage() {
               </CustomSelect>
             </div>
             {error && <p className="text-[13px] font-medium text-red-600">{error}</p>}
-            {saveMsg && (
-              <p className="text-[13px] font-medium text-emerald-700">{saveMsg}</p>
-            )}
+            {saveMsg && <p className="text-[13px] font-medium text-emerald-700">{saveMsg}</p>}
             <button
               type="submit"
               disabled={saveLoading}

@@ -71,7 +71,15 @@ export interface InventoryCount {
 
 export interface PanelNotification {
   id: string
-  type: "new-order" | "order-ready" | "stock-low" | "shift-reminder" | "system" | "kitchen-alert"
+  type:
+    | "new-order"
+    | "order-ready"
+    | "stock-low"
+    | "shift-reminder"
+    | "system"
+    | "kitchen-alert"
+    | "waiter-call"
+    | "fraud-alert"
   title: string
   message: string
   read: boolean
@@ -165,6 +173,7 @@ export interface HourlyDensity {
 
 export interface RestaurantSettings {
   name: string
+  logoUrl?: string | null
   address?: string
   phone?: string
   taxId?: string

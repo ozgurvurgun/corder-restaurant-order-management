@@ -38,6 +38,7 @@ export interface PrintJobSocketPayload {
   includeLineNotes?: boolean;
   isReprint?: boolean;
   openCashDrawer?: boolean;
+  shiftReport?: Record<string, unknown> | null;
   order: {
     tableId?: string;
     orderId?: string;
@@ -209,6 +210,18 @@ export class OrdersGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 
   emitPrintersUpdated(restaurantId: string) {
     this.server.to(getRestaurantRoom(restaurantId)).emit('printers:updated');
+  }
+
+  emitWaiterCalled(restaurantId: string, payload: Record<string, unknown>) {
+    this.server.to(getRestaurantRoom(restaurantId)).emit('waiter:called', payload);
+  }
+
+  emitNotificationsUpdated(restaurantId: string) {
+    this.server.to(getRestaurantRoom(restaurantId)).emit('notifications:updated');
+  }
+
+  emitFraudAlert(restaurantId: string, payload: Record<string, unknown>) {
+    this.server.to(getRestaurantRoom(restaurantId)).emit('fraud:alert', payload);
   }
 
   emitPrintJob(restaurantId: string, payload: PrintJobSocketPayload) {

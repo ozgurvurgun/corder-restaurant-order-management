@@ -8,7 +8,11 @@ import {
   MessageCircle,
   Globe,
 } from "lucide-react"
-import type { MenuProduct, MenuResponse } from "@/lib/api"
+import {
+  applyCfImageFallback,
+  type MenuProduct,
+  type MenuResponse,
+} from "@/lib/api"
 
 export { CampaignsModal } from "./campaigns-modal"
 
@@ -273,7 +277,10 @@ export function MenuSearchOverlay(props: {
                         loading="lazy"
                         decoding="async"
                         onError={(e) => {
-                          e.currentTarget.style.display = "none"
+                          const el = e.currentTarget
+                          applyCfImageFallback(el, () => {
+                            el.style.display = "none"
+                          })
                         }}
                         className="w-14 h-14 rounded-lg object-cover bg-stone-100 flex-shrink-0"
                       />
@@ -322,7 +329,9 @@ export function ProductDetailModal(props: {
               src={product.image}
               alt={product.name}
               decoding="async"
-              onError={() => setImgFailed(true)}
+              onError={(e) =>
+                applyCfImageFallback(e.currentTarget, () => setImgFailed(true))
+              }
               className="w-full h-full object-cover"
             />
           </div>

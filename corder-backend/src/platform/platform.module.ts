@@ -12,6 +12,7 @@ import { RestaurantSubscriptionPaymentEntity } from './domain/restaurant-subscri
 import { PlatformAuthService } from './application/platform-auth.service';
 import { RestaurantService } from './application/restaurant.service';
 import { PlatformBillingService } from './application/platform-billing.service';
+import { PlatformSupportService } from './application/platform-support.service';
 import { RootAdminService } from './application/root-admin.service';
 import { PlatformAuthController } from './api/platform-auth.controller';
 import {
@@ -62,10 +63,17 @@ import {
     PlatformAuthService,
     RestaurantService,
     PlatformBillingService,
+    PlatformSupportService,
     RootAdminService,
     PlatformJwtStrategy,
     PlatformAdminSeed,
   ],
-  exports: [PlatformAuthService, RestaurantService, PlatformBillingService, RootAdminService],
+  exports: [
+    PlatformAuthService,
+    RestaurantService,
+    PlatformBillingService,
+    PlatformSupportService,
+    RootAdminService,
+  ],
 })
 export class PlatformModule {}

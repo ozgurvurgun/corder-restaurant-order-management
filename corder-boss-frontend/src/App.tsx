@@ -3,17 +3,19 @@ import { BossStoreProvider, useBossStore } from "@/lib/boss-store"
 import type { BossTabId } from "@/lib/types"
 import { BossLogin } from "@/components/boss-login"
 import { BranchSwitcherHeader } from "@/components/branch-switcher-header"
-import { DashboardTab } from "@/components/dashboard-tab"
+import { DashboardView } from "@/components/dashboard-view"
 import { RolesPermissionsTab } from "@/components/roles-permissions-tab"
 import { StaffUsersTab } from "@/components/staff-users-tab"
 import { AnalyticsAuditTab } from "@/components/analytics-audit-tab"
 import { OperationsCatalogTab } from "@/components/operations-catalog-tab"
+import { SecurityFraudTab } from "@/components/security-fraud-tab"
 import { CustomSelect } from "@/components/ui/custom-inputs"
 import {
   AlertTriangle,
   Home,
   RefreshCw,
   ShieldCheck,
+  ShieldAlert,
   Users,
   BarChart3,
   Utensils,
@@ -45,9 +47,10 @@ const NAV_GROUPS: Array<{
     ],
   },
   {
-    label: "Operasyon & Analiz",
+    label: "Operasyon & Güvenlik",
     items: [
       { id: "operations", label: "Canlı Operasyon", mobileLabel: "Operasyon", icon: Utensils },
+      { id: "security", label: "Güvenlik & Kaçak Tespiti", mobileLabel: "Güvenlik", icon: ShieldAlert },
       { id: "analytics", label: "Raporlar & Denetim", mobileLabel: "Analiz", icon: BarChart3 },
     ],
   },
@@ -63,6 +66,7 @@ function BossShell() {
     selectedBranchId,
     setSelectedBranchId,
     effectiveBranch,
+    openCriticalHighAlertCount,
     toast,
     error,
     loading,
@@ -125,6 +129,8 @@ function BossShell() {
                 {group.items.map((item) => {
                   const isActive = activeTab === item.id
                   const Icon = item.icon
+                  const showBadge =
+                    item.id === "security" && openCriticalHighAlertCount > 0
                   return (
                     <button
                       key={item.id}
@@ -141,7 +147,12 @@ function BossShell() {
                           isActive ? "text-[#e63462]" : "text-[#86868b]"
                         }`}
                       />
-                      <span className="flex-1">{item.label}</span>
+                      <span className="flex-1 truncate">{item.label}</span>
+                      {showBadge && (
+                        <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-600 px-1.5 text-[10px] font-bold text-white tabular-nums">
+                          {openCriticalHighAlertCount}
+                        </span>
+                      )}
                     </button>
                   )
                 })}
@@ -227,11 +238,12 @@ function BossShell() {
             </div>
           )}
 
-          {activeTab === "dashboard" && <DashboardTab onNavigate={setActiveTab} />}
+          {activeTab === "dashboard" && <DashboardView onNavigate={setActiveTab} />}
           {activeTab === "permissions" && <RolesPermissionsTab />}
           {activeTab === "staff" && <StaffUsersTab />}
           {activeTab === "analytics" && <AnalyticsAuditTab />}
           {activeTab === "operations" && <OperationsCatalogTab />}
+          {activeTab === "security" && <SecurityFraudTab />}
         </main>
 
         {/* Mobile Bottom Tab Navigation Bar */}
@@ -239,20 +251,29 @@ function BossShell() {
           aria-label="Alt Gezinme Menüsü"
           className="md:hidden flex-shrink-0 border-t border-[#d1d1d6]/70 bg-white/95 backdrop-blur-2xl safe-bottom"
         >
-          <div className="mx-auto flex h-[58px] max-w-xl items-center justify-around px-2">
+          <div className="mx-auto flex h-[58px] max-w-xl items-center justify-around px-1">
             {FLAT_TABS.map((tab) => {
               const Icon = tab.icon
               const isActive = activeTab === tab.id
+              const showBadge =
+                tab.id === "security" && openCriticalHighAlertCount > 0
               return (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex flex-1 flex-col items-center justify-center gap-1 py-1.5 transition-colors ${
+                  className={`relative flex flex-1 flex-col items-center justify-center gap-1 py-1.5 transition-colors ${
                     isActive ? "text-[#e63462]" : "text-[#86868b] hover:text-[#1d1d1f]"
                   }`}
                 >
-                  <Icon className="h-4 w-4" strokeWidth={isActive ? 2.2 : 1.8} />
+                  <div className="relative">
+                    <Icon className="h-4 w-4" strokeWidth={isActive ? 2.2 : 1.8} />
+                    {showBadge && (
+                      <span className="absolute -right-2.5 -top-1.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-bold text-white tabular-nums">
+                        {openCriticalHighAlertCount}
+                      </span>
+                    )}
+                  </div>
                   <span className="text-[10px] font-medium tracking-tight">
                     {tab.mobileLabel}
                   </span>

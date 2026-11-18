@@ -182,6 +182,13 @@ export interface PanelStore {
   updateSection: (id: string, name: string) => void | Promise<boolean>
   deleteSection: (id: string) => void | Promise<boolean>
   addTable: (name: string, section: string) => void
+  bulkCreateTables: (body: {
+    section: string
+    prefix: string
+    startNumber: number
+    count: number
+    capacity?: number
+  }) => Promise<PanelTable[]>
   deleteTable: (id: string) => void
 
   // Settings & Receipt
@@ -272,6 +279,7 @@ export interface PanelStore {
   markNotificationRead: (id: string) => void
   markAllNotificationsRead: () => void
   addNotification: (n: Omit<PanelNotification, "id" | "createdAt" | "read">) => void
+  dismissNotification: (id: string) => void
   clearAllNotifications: () => void
   addAuditLog: (log: Omit<AuditLog, "id" | "createdAt">) => void
 

@@ -47,19 +47,7 @@ export function useTableSettlementActions(params: {
     error?: string
   }>
 }) {
-  const {
-    token,
-    restaurantId,
-    currentUser,
-    tables,
-    orders,
-    sections,
-    setTables,
-    setSections,
-    logActivity,
-    addAuditLog,
-    closeTableWithPayment,
-  } = params
+  const { token, restaurantId, currentUser, tables, orders, sections, setTables, setSections, logActivity, addAuditLog, closeTableWithPayment } = params
 
   const addSection = useCallback(
     (name: string) => {
@@ -138,7 +126,16 @@ export function useTableSettlementActions(params: {
         .then((created) => {
           setTables((prev) => [
             ...prev,
-            { id: created.id, name: created.name, section: created.section, status: "empty", totalAmount: 0, orderCount: 0 },
+            {
+              id: created.id,
+              name: created.name,
+              section: created.section,
+              status: "empty",
+              ...(created.qrToken ? { qrToken: created.qrToken } : {}),
+              ...(created.capacity != null ? { capacity: Number(created.capacity) } : {}),
+              totalAmount: 0,
+              orderCount: 0,
+            },
           ])
           logActivity({
             action: "table_created",
@@ -151,6 +148,54 @@ export function useTableSettlementActions(params: {
         .catch((err) => showPanelToast(err instanceof Error ? err.message : "Masa eklenemedi", "error"))
     },
     [token, setTables, logActivity],
+  )
+
+  const bulkCreateTables = useCallback(
+    async (body: {
+      section: string
+      prefix: string
+      startNumber: number
+      count: number
+      capacity?: number
+    }): Promise<PanelTable[]> => {
+      if (!token) return []
+      const sectionName = body.section.trim()
+      if (!sectionName) return []
+      try {
+        const createdList = await api.tables.bulkCreate(token, { ...body, section: sectionName })
+        const mapped: PanelTable[] = createdList.map((c) => ({
+          id: c.id,
+          name: c.name,
+          section: c.section,
+          status: "empty",
+          ...(c.qrToken ? { qrToken: c.qrToken } : {}),
+          ...(c.capacity != null ? { capacity: Number(c.capacity) } : {}),
+          totalAmount: 0,
+          orderCount: 0,
+        }))
+        setSections((prev) => {
+          if (prev.some((s) => s.name === sectionName)) return prev
+          setStoredCustomSections([...getStoredCustomSections(restaurantId), sectionName], restaurantId)
+          return [...prev, { id: genId("ps"), name: sectionName }]
+        })
+        setTables((prev) => {
+          const existingIds = new Set(prev.map((t) => t.id))
+          return [...prev, ...mapped.filter((m) => !existingIds.has(m.id))]
+        })
+        logActivity({
+          action: "tables_bulk_created",
+          category: "table",
+          details: `${sectionName} bölgesine ${mapped.length} masa toplu oluşturuldu`,
+          metadata: { section: sectionName, count: mapped.length, prefix: body.prefix },
+        })
+        showPanelToast(`${mapped.length} masa oluşturuldu`, "success")
+        return mapped
+      } catch (err) {
+        showPanelToast(err instanceof Error ? err.message : "Çoklu masa oluşturulamadı", "error")
+        return []
+      }
+    },
+    [token, restaurantId, setSections, setTables, logActivity],
   )
 
   const deleteTable = useCallback(
@@ -433,18 +478,5 @@ export function useTableSettlementActions(params: {
     [token, tables, currentUser, setTables, addAuditLog, closeTableWithPayment],
   )
 
-  return {
-    addSection,
-    updateSection,
-    deleteSection,
-    addTable,
-    deleteTable,
-    reprintReceipt,
-    applyDiscount,
-    clearDiscount,
-    splitBillByPerson,
-    splitBillByItems,
-    clearSplitBill,
-    payPersonShare,
-  }
+  return { addSection, updateSection, deleteSection, addTable, bulkCreateTables, deleteTable, reprintReceipt, applyDiscount, clearDiscount, splitBillByPerson, splitBillByItems, clearSplitBill, payPersonShare }
 }

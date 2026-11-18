@@ -6,12 +6,15 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
 import { BossOverviewService } from '../application/boss-overview.service';
 import { BossHierarchyService } from '../application/boss-hierarchy.service';
+import { FraudDetectionService } from '../application/fraud-detection.service';
+import { FraudAlertStatus } from '../domain/fraud-alert.entity';
 import { SyncRolesDto } from './dto/sync-roles.dto';
 import { CreateSubBossDto } from './dto/create-sub-boss.dto';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
@@ -26,6 +29,7 @@ export class BossController {
   constructor(
     private readonly bossOverview: BossOverviewService,
     private readonly bossHierarchy: BossHierarchyService,
+    private readonly fraudService: FraudDetectionService,
   ) {}
 
   private assertBossActor(user: { role?: string; isBoss?: boolean }, message: string): void {
@@ -81,6 +85,45 @@ export class BossController {
       user.sub,
       body?.sourceRestaurantId || currentRestaurantId,
       body?.targetRestaurantIds,
+    );
+  }
+
+  @Get('fraud-alerts')
+  async listFraudAlerts(
+    @RestaurantUser() user: { sub: string; role?: string; isBoss?: boolean },
+    @Query('branchId') branchId?: string,
+  ) {
+    this.assertBossActor(user, 'Only Boss accounts can access multi-branch fraud alerts');
+    const ownedBranches = await this.bossHierarchy.loadBossOwnedBranches(user.sub);
+    const targetBranches =
+      branchId && branchId !== 'ALL'
+        ? ownedBranches.filter((b) => b.id === branchId)
+        : ownedBranches;
+    const branchNameById = new Map(ownedBranches.map((b) => [b.id, b.name]));
+    return this.fraudService.listForBranches(
+      targetBranches.map((b) => b.id),
+      branchNameById,
+    );
+  }
+
+  @Patch('fraud-alerts/:id')
+  async updateFraudAlert(
+    @RestaurantUser()
+    user: { sub: string; name?: string; role?: string; isBoss?: boolean },
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body()
+    body: {
+      status: FraudAlertStatus;
+      resolutionNote?: string;
+    },
+  ) {
+    this.assertBossActor(user, 'Only Boss accounts can update multi-branch fraud alerts');
+    const ownedBranches = await this.bossHierarchy.loadBossOwnedBranches(user.sub);
+    return this.fraudService.updateStatus(
+      id,
+      ownedBranches.map((b) => b.id),
+      body,
+      user.name || 'Boss',
     );
   }
 }

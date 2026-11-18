@@ -27,7 +27,8 @@ function resolveSlugFromLocation(searchParams: URLSearchParams): string {
 function MenuWithQuery() {
   const [searchParams] = useSearchParams()
   const restaurant = resolveSlugFromLocation(searchParams)
-  return <MenuContent slug={restaurant} />
+  const tableToken = searchParams.get("t")?.trim() || ""
+  return <MenuContent slug={restaurant} tableToken={tableToken} />
 }
 
 export default function App() {

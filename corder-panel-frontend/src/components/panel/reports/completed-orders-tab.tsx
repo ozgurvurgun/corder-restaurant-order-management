@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { ChevronDown, ChevronUp } from "lucide-react"
 import type {
   CancelledItem,
@@ -11,6 +11,7 @@ import {
   fromMinorUnits,
   toMinorUnits,
 } from "@/lib/format"
+import { PaginationBar } from "@/components/ui/pagination-bar"
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: "Nakit",
@@ -27,8 +28,24 @@ export function HistoryTab(props: {
   ledgerCustomers: LedgerCustomer[]
 }) {
   const { closedTables, cancelledItems, ledgerCustomers } = props
-  const [showClosedDetail, setShowClosedDetail] = useState(false)
-  const [showCancelledDetail, setShowCancelledDetail] = useState(false)
+  const [showClosedDetail, setShowClosedDetail] = useState(true)
+  const [showCancelledDetail, setShowCancelledDetail] = useState(true)
+  const [closedPage, setClosedPage] = useState(1)
+  const [cancelledPage, setCancelledPage] = useState(1)
+  const pageSize = 10
+
+  const paginatedClosed = useMemo(
+    () => closedTables.slice((closedPage - 1) * pageSize, closedPage * pageSize),
+    [closedTables, closedPage],
+  )
+  const paginatedCancelled = useMemo(
+    () =>
+      cancelledItems.slice(
+        (cancelledPage - 1) * pageSize,
+        cancelledPage * pageSize,
+      ),
+    [cancelledItems, cancelledPage],
+  )
 
   const formatPaymentLabel = (ct: ClosedTable) => {
     if (ct.payment.method === "ledger") {
@@ -86,7 +103,7 @@ export function HistoryTab(props: {
               </tr>
             </thead>
             <tbody>
-              {closedTables.map((ct, idx) => (
+              {paginatedClosed.map((ct, idx) => (
                 <tr
                   key={ct.id}
                   className={`border-b border-[#f0f0f0] ${
@@ -122,6 +139,17 @@ export function HistoryTab(props: {
               ))}
             </tbody>
           </table>
+        )}
+        {showClosedDetail && (
+          <div className="px-4 pb-3">
+            <PaginationBar
+              currentPage={closedPage}
+              totalItems={closedTables.length}
+              pageSize={pageSize}
+              onPageChange={setClosedPage}
+              itemLabel="kapanmış masa"
+            />
+          </div>
         )}
       </div>
 
@@ -161,7 +189,7 @@ export function HistoryTab(props: {
               </tr>
             </thead>
             <tbody>
-              {cancelledItems.map((ci, idx) => (
+              {paginatedCancelled.map((ci, idx) => (
                 <tr
                   key={ci.id}
                   className={`border-b border-[#f0f0f0] ${
@@ -192,6 +220,17 @@ export function HistoryTab(props: {
               ))}
             </tbody>
           </table>
+        )}
+        {showCancelledDetail && (
+          <div className="px-4 pb-3">
+            <PaginationBar
+              currentPage={cancelledPage}
+              totalItems={cancelledItems.length}
+              pageSize={pageSize}
+              onPageChange={setCancelledPage}
+              itemLabel="iptal kaydı"
+            />
+          </div>
         )}
       </div>
     </>

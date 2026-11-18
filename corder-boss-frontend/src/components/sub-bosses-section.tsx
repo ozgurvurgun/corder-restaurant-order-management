@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useBossStore } from "@/lib/boss-store"
 import { bossApi } from "@/lib/api"
 import type { SubBossItemDto } from "@/lib/types"
@@ -10,6 +10,7 @@ import {
 import { Building2, Crown, Plus, X } from "lucide-react"
 import { CustomSelect } from "./ui/custom-inputs"
 import { PasswordInputWithGenerator } from "./ui/password-input"
+import { PaginationBar } from "./ui/pagination-bar"
 
 export function SubBossesSection() {
   const { branches, effectiveBranchId, showToast } = useBossStore()
@@ -24,6 +25,8 @@ export function SubBossesSection() {
   const [sbTier, setSbTier] = useState<"franchise_owner" | "regional_manager">("franchise_owner")
   const [sbBranchIds, setSbBranchIds] = useState<string[]>([])
   const [sbSubmitting, setSbSubmitting] = useState(false)
+  const [page, setPage] = useState(1)
+  const pageSize = 4
 
   useEffect(() => {
     setLoadingList(true)
@@ -33,6 +36,11 @@ export function SubBossesSection() {
       .catch(() => {})
       .finally(() => setLoadingList(false))
   }, [])
+
+  const pagedSubBosses = useMemo(() => {
+    const start = (page - 1) * pageSize
+    return subBosses.slice(start, start + pageSize)
+  }, [subBosses, page])
 
   const targetBranch =
     branches.find((b) => b.id === sbBranchIds[0]) ??
@@ -102,7 +110,7 @@ export function SubBossesSection() {
             <div className="flex items-center gap-2">
               <Crown className="h-5 w-5 text-[#e63462]" />
               <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
-                Şube &amp; Franchise Sahibi (Şube Boss) Hesapları
+                Şube &amp; Franchise Sahibi (Şube Boss) Hesapları ({subBosses.length})
               </h2>
             </div>
             <p className="mt-0.5 text-[12px] text-[#86868b]">
@@ -127,57 +135,66 @@ export function SubBossesSection() {
         )}
 
         {subBosses.length > 0 && (
-          <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
-            {subBosses.map((sb) => (
-              <div
-                key={sb.id}
-                className="rounded-xl border border-[#e5e5ea] bg-[#f9f9fb] p-3 flex items-start justify-between gap-2"
-              >
-                <div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[13px] font-semibold text-[#1d1d1f]">{sb.name}</span>
-                    <span
-                      className={`rounded px-2 py-0.5 text-[10px] font-semibold ${
-                        sb.bossTier === "brand_owner"
-                          ? "bg-purple-100 text-purple-800"
-                          : sb.bossTier === "regional_manager"
-                            ? "bg-blue-100 text-blue-800"
-                            : "bg-[#e63462]/15 text-[#e63462]"
-                      }`}
-                    >
-                      {sb.bossTier === "brand_owner"
-                        ? "Marka Sahibi (HQ)"
-                        : sb.bossTier === "regional_manager"
-                          ? "Bölge Yöneticisi"
-                          : "Şube / Franchise Boss"}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-[#86868b] mt-0.5">{sb.email}</p>
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    {sb.branches.map((br) => (
+          <>
+            <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+              {pagedSubBosses.map((sb) => (
+                <div
+                  key={sb.id}
+                  className="rounded-xl border border-[#e5e5ea] bg-[#f9f9fb] p-3 flex items-start justify-between gap-2"
+                >
+                  <div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[13px] font-semibold text-[#1d1d1f]">{sb.name}</span>
                       <span
-                        key={br.id}
-                        className="inline-flex items-center gap-1 rounded bg-white border border-[#e5e5ea] px-2 py-0.5 text-[10px] font-medium text-[#1d1d1f]"
+                        className={`rounded px-2 py-0.5 text-[10px] font-semibold ${
+                          sb.bossTier === "brand_owner"
+                            ? "bg-purple-100 text-purple-800"
+                            : sb.bossTier === "regional_manager"
+                              ? "bg-blue-100 text-blue-800"
+                              : "bg-[#e63462]/15 text-[#e63462]"
+                        }`}
                       >
-                        <Building2 className="h-2.5 w-2.5 text-[#e63462]" />
-                        {br.name}
-                        {!sb.isSelf && sb.bossTier !== "brand_owner" && (
-                          <button
-                            type="button"
-                            onClick={() => void handleUnlinkSubBoss(sb.id, br.id, sb.name)}
-                            className="ml-1 text-red-500 hover:text-red-700"
-                            title="Şubeden Ayır"
-                          >
-                            ×
-                          </button>
-                        )}
+                        {sb.bossTier === "brand_owner"
+                          ? "Marka Sahibi (HQ)"
+                          : sb.bossTier === "regional_manager"
+                            ? "Bölge Yöneticisi"
+                            : "Şube / Franchise Boss"}
                       </span>
-                    ))}
+                    </div>
+                    <p className="text-[11px] text-[#86868b] mt-0.5">{sb.email}</p>
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {sb.branches.map((br) => (
+                        <span
+                          key={br.id}
+                          className="inline-flex items-center gap-1 rounded bg-white border border-[#e5e5ea] px-2 py-0.5 text-[10px] font-medium text-[#1d1d1f]"
+                        >
+                          <Building2 className="h-2.5 w-2.5 text-[#e63462]" />
+                          {br.name}
+                          {!sb.isSelf && sb.bossTier !== "brand_owner" && (
+                            <button
+                              type="button"
+                              onClick={() => void handleUnlinkSubBoss(sb.id, br.id, sb.name)}
+                              className="ml-1 text-red-500 hover:text-red-700"
+                              title="Şubeden Ayır"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+            <PaginationBar
+              currentPage={page}
+              totalItems={subBosses.length}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              itemLabel="şube yöneticisi"
+            />
+          </>
         )}
       </div>
 

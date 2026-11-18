@@ -1,7 +1,8 @@
-import { useEffect, useRef, type MutableRefObject } from "react"
-import { io, type Socket } from "socket.io-client"
-import { api, getBase, getStaffSession, getToken } from "./api"
+import { useEffect, type MutableRefObject } from "react"
+import { api, getStaffSession, getToken } from "./api"
 import type { TerminalOrderItem, TerminalUser } from "./types"
+import type { ActiveWaiterCall } from "./terminal-notifications"
+import { useTerminalApiSync } from "./use-terminal-api-sync"
 
 export const CARTS_STORAGE_KEY = "terminal_carts_v1"
 export const LOCKED_TABLE_STORAGE_KEY = "terminal_locked_table_id"
@@ -42,6 +43,7 @@ export function useTerminalLifecycle(params: {
   refreshLiveState: () => Promise<void>
   pullTables: () => Promise<void>
   logout: () => void
+  onWaiterCalled?: (call: ActiveWaiterCall) => void
 }) {
   const {
     isLoggedIn,
@@ -54,8 +56,8 @@ export function useTerminalLifecycle(params: {
     refreshLiveState,
     pullTables,
     logout,
+    onWaiterCalled,
   } = params
-  const socketRef = useRef<Socket | null>(null)
 
   useEffect(() => {
     const handleOnline = () => {
@@ -84,36 +86,14 @@ export function useTerminalLifecycle(params: {
     }
   }, [isLoggedIn, refreshLiveState])
 
-  useEffect(() => {
-    if (!isLoggedIn) return
-    const token = getToken()
-    if (!token) return
-    const socketUrl = getBase() || (typeof window !== "undefined" ? window.location.origin : "")
-    if (!socketUrl) return
-    const socket = io(socketUrl, {
-      path: "/ws",
-      auth: { token },
-      transports: ["websocket", "polling"],
-      reconnectionAttempts: Infinity,
-      reconnectionDelayMax: 10000,
-      timeout: 20000,
-    })
-    socketRef.current = socket
-    const syncLive = () => void refreshLiveState()
-    socket.on("order:created", syncLive)
-    socket.on("orders:moved", syncLive)
-    socket.on("orders:updated", syncLive)
-    socket.on("tables:presence", () => void pullTables())
-    socket.on("connect", () => {
-      setIsOffline(false)
-      void refreshLiveState()
-    })
-    socket.io.on("reconnect", () => void refreshData())
-    return () => {
-      socketRef.current?.disconnect()
-      socketRef.current = null
-    }
-  }, [isLoggedIn, refreshData, refreshLiveState, pullTables, setIsOffline])
+  useTerminalApiSync({
+    isLoggedIn,
+    setIsOffline,
+    refreshData,
+    refreshLiveState,
+    pullTables,
+    onWaiterCalled,
+  })
 
   // Keep server lock alive while waiter is working on a table & release on tab close
   useEffect(() => {

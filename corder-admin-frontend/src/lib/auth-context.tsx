@@ -23,8 +23,13 @@ function loadStoredAdmin(): PlatformAdmin | null {
     const raw = localStorage.getItem("corder-platform-admin")
     if (!raw) return null
     const { id, email, name } = JSON.parse(raw)
-    if (!id || !email) return null
-    return { id, email, name: name || email, role: "super" }
+    if (!id) return null
+    return {
+      id,
+      email: email || "admin@corder.app",
+      name: name || email || "Platform Admin",
+      role: "super",
+    }
   } catch {
     return null
   }
@@ -32,8 +37,9 @@ function loadStoredAdmin(): PlatformAdmin | null {
 
 type AuthContextType = {
   user: PlatformAdmin | null
+  token: string | null
   isAuthenticated: boolean
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
+  login: (authCode: string) => Promise<{ success: boolean; error?: string }>
   logout: () => void
 }
 
@@ -70,11 +76,16 @@ export function PlatformAuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (authCode: string) => {
     try {
-      const { accessToken, admin } = await platform.auth.login(email.trim(), password)
-      setPlatformAuth(accessToken, admin)
-      setUser({ ...admin, role: "super" })
+      const { accessToken, admin } = await platform.auth.login(authCode.trim())
+      const safeAdmin = {
+        id: admin?.id || "platform-admin",
+        email: admin?.email || "admin@corder.app",
+        name: admin?.name || "Platform Admin",
+      }
+      setPlatformAuth(accessToken, safeAdmin)
+      setUser({ ...safeAdmin, role: "super" })
       return { success: true }
     } catch (e) {
       return {
@@ -90,7 +101,15 @@ export function PlatformAuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token: user ? getPlatformToken() : null,
+        isAuthenticated: !!user,
+        login,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )

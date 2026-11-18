@@ -3,15 +3,9 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, Respons
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react"
 import { itemCountsTowardBill, type CancelledItem, type ClosedTable, type DailyReport, type HourlyDensity, type PeriodReport, type ProductTrend } from "@/lib/panel-types"
 import { formatCurrency, fromMinorUnits, getIstanbulDayOfWeekIndex, getIstanbulHour, getIstanbulYmd, toMinorUnits } from "@/lib/format"
+import { PaginationBar } from "@/components/ui/pagination-bar"
 
-const HEATMAP_COLORS = [
-  "#f5f5f7",
-  "#fce4ec",
-  "#f8bbd0",
-  "#f06292",
-  "#e63462",
-  "#c62828",
-]
+const HEATMAP_COLORS = ["#f5f5f7", "#fce4ec", "#f8bbd0", "#f06292", "#e63462", "#c62828"]
 function getHeatColor(value: number, max: number) {
   if (max === 0) return HEATMAP_COLORS[0]
   return HEATMAP_COLORS[Math.min(5, Math.floor((value / max) * 5))]
@@ -287,19 +281,24 @@ export function PeriodComparisonTab(props: {
 export function ProductTrendsTab(props: { productTrends: ProductTrend[] }) {
   const { productTrends } = props
   const [selectedTrendProduct, setSelectedTrendProduct] = useState("")
+  const [page, setPage] = useState(1)
+  const pageSize = 12
+  const paginatedTrends = useMemo(
+    () => productTrends.slice((page - 1) * pageSize, page * pageSize),
+    [productTrends, page],
+  )
   const selectedTrend = useMemo(
     () =>
       !selectedTrendProduct
         ? productTrends[0]
-        : productTrends.find((t) => t.productName === selectedTrendProduct) ||
-          productTrends[0],
+        : productTrends.find((t) => t.productName === selectedTrendProduct) || productTrends[0],
     [productTrends, selectedTrendProduct],
   )
 
   return (
     <>
-      <div className="flex items-center gap-3 flex-wrap">
-        {productTrends.map((t) => (
+      <div className="flex items-center gap-2 flex-wrap">
+        {paginatedTrends.map((t) => (
           <button
             key={t.productName}
             onClick={() => setSelectedTrendProduct(t.productName)}
@@ -309,6 +308,7 @@ export function ProductTrendsTab(props: { productTrends: ProductTrend[] }) {
           </button>
         ))}
       </div>
+      <PaginationBar currentPage={page} totalItems={productTrends.length} pageSize={pageSize} onPageChange={setPage} itemLabel="ürün" />
 
       {selectedTrend && (
         <div className="grid grid-cols-2 gap-4">
@@ -419,16 +419,19 @@ export function HourlyDensityTab(props: { hourlyDensity: HourlyDensity[] }) {
 
 export function WaitersTab(props: { dailyReport: DailyReport }) {
   const { dailyReport } = props
+  const [page, setPage] = useState(1)
+  const pageSize = 10
   const waiterMetrics = useMemo(
     () =>
       dailyReport.waiterPerformance.map((w) => ({
         ...w,
-        avgOrderValue:
-          w.orders > 0
-            ? fromMinorUnits(Math.round(toMinorUnits(w.revenue) / w.orders))
-            : 0,
+        avgOrderValue: w.orders > 0 ? fromMinorUnits(Math.round(toMinorUnits(w.revenue) / w.orders)) : 0,
       })),
     [dailyReport],
+  )
+  const paginatedWaiters = useMemo(
+    () => waiterMetrics.slice((page - 1) * pageSize, page * pageSize),
+    [waiterMetrics, page],
   )
 
   return (
@@ -446,7 +449,7 @@ export function WaitersTab(props: { dailyReport: DailyReport }) {
             </tr>
           </thead>
           <tbody>
-            {waiterMetrics.map((w, idx) => (
+            {paginatedWaiters.map((w, idx) => (
               <tr key={w.name} className={`border-b border-[#f0f0f0] ${idx % 2 === 1 ? "bg-[#fafafa]" : ""}`}>
                 <td className="px-4 py-3 text-[13px] font-medium text-[#1d1d1f]"> {w.name} </td>
                 <td className="px-4 py-3 text-[13px] text-right text-[#86868b]"> {w.tables} </td>
@@ -457,6 +460,9 @@ export function WaitersTab(props: { dailyReport: DailyReport }) {
             ))}
           </tbody>
         </table>
+        <div className="px-4 pb-3">
+          <PaginationBar currentPage={page} totalItems={waiterMetrics.length} pageSize={pageSize} onPageChange={setPage} itemLabel="garson" />
+        </div>
       </div>
       <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4">
         <h3 className="text-[13px] font-semibold text-[#1d1d1f] mb-3">Garson Bazlı Ciro</h3>

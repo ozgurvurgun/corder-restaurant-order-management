@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { DataSource, EntityManager, In } from 'typeorm';
 import { OrderEntity } from '../../domain/order.entity';
@@ -10,6 +10,7 @@ import { OrderStatusPolicy } from '../../domain/services/order-status.policy';
 import { OrdersGateway } from '../../api/orders.gateway';
 import { CashShiftService } from '../cash-shift.service';
 import { TableService } from '../table.service';
+import { FraudDetectionService } from '../fraud-detection.service';
 import { OrderQueryService } from './order-query.service';
 import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
 
@@ -21,6 +22,8 @@ export class CancelOrderItemUseCase {
     private readonly cashShiftService: CashShiftService,
     private readonly tableService: TableService,
     private readonly orderQuery: OrderQueryService,
+    @Optional()
+    private readonly fraudDetection?: FraudDetectionService,
   ) {}
 
   async execute(
@@ -141,6 +144,7 @@ export class CancelOrderItemUseCase {
     }
     this.ordersGateway.emitOrdersUpdated(restaurantId);
     this.ordersGateway.emitPrintJob(restaurantId, cancelPayload);
+    void this.fraudDetection?.analyzeRestaurantAnomalies(restaurantId).catch(() => undefined);
     return { ok: true };
   }
 

@@ -76,6 +76,114 @@ export class PrintersService {
     }
     return { ok: true };
   }
+
+  async syncFromPrintAgent(
+    restaurantId: string,
+    body: {
+      printers?: Array<{
+        id?: string;
+        name?: string;
+        mode?: string;
+        host?: string;
+        port?: number;
+        systemPrinterName?: string;
+        paperWidth?: number;
+        role?: string;
+        department?: string | null;
+        autoCut?: boolean;
+      }>;
+      receiptPrinterId?: string;
+      defaultKitchenPrinterId?: string;
+    },
+  ): Promise<PrinterConfigEntity[]> {
+    const incoming = Array.isArray(body?.printers) ? body.printers : [];
+    const receiptId = (body?.receiptPrinterId ?? '').trim();
+    const uuidRe =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    return this.repo.manager.transaction(async (em) => {
+      const existing = await em.find(PrinterConfigEntity, {
+        where: { restaurantId },
+        order: { createdAt: 'ASC' },
+      });
+      const claimedIds = new Set<string>();
+      const savedList: PrinterConfigEntity[] = [];
+
+      for (const p of incoming) {
+        const name = String(p.name || p.systemPrinterName || p.host || 'Yazıcı')
+          .trim()
+          .slice(0, 100);
+        if (!name) continue;
+        const isReceipt =
+          Boolean(p.id && receiptId && p.id === receiptId) ||
+          p.role === 'receipt' ||
+          /kasa|adisyon|fiş|fis|receipt/i.test(name);
+        const isNetwork = p.mode === 'network';
+        const connection = isNetwork ? 'network' : 'usb';
+        const ipAddress = isNetwork
+          ? (p.host?.trim() || '127.0.0.1').slice(0, 100)
+          : (p.systemPrinterName?.trim() || 'USB').slice(0, 100);
+        const port = isNetwork ? Number(p.port) || 9100 : null;
+        const paperWidth = Number(p.paperWidth) === 58 ? 58 : 80;
+        const department =
+          (p.department?.trim() || (isReceipt ? 'Kasa' : 'Mutfak')).slice(0, 100);
+        const autoCut = p.autoCut !== false;
+
+        let match =
+          p.id && uuidRe.test(p.id)
+            ? existing.find((e) => e.id === p.id && !claimedIds.has(e.id))
+            : undefined;
+        if (!match) {
+          match = existing.find(
+            (e) =>
+              !claimedIds.has(e.id) &&
+              e.name.trim().toLowerCase() === name.toLowerCase(),
+          );
+        }
+
+        if (match) {
+          claimedIds.add(match.id);
+          Object.assign(match, {
+            name,
+            type: isReceipt ? 'receipt' : 'kitchen',
+            connection,
+            ipAddress,
+            port,
+            department,
+            paperWidth,
+            autoCut,
+            status: 'online',
+            updatedAt: new Date(),
+          });
+          savedList.push(await em.save(PrinterConfigEntity, match));
+        } else {
+          const created = em.create(PrinterConfigEntity, {
+            restaurantId,
+            name,
+            type: isReceipt ? 'receipt' : 'kitchen',
+            connection,
+            ipAddress,
+            port,
+            department,
+            paperWidth,
+            autoCut,
+            status: 'online',
+          });
+          const saved = await em.save(PrinterConfigEntity, created);
+          claimedIds.add(saved.id);
+          savedList.push(saved);
+        }
+      }
+
+      for (const oldRow of existing) {
+        if (!claimedIds.has(oldRow.id)) {
+          await em.remove(PrinterConfigEntity, oldRow);
+        }
+      }
+
+      return savedList;
+    });
+  }
 }
 
 

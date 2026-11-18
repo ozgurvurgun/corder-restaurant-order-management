@@ -21,6 +21,9 @@ import {
   Unlock,
 } from "lucide-react"
 import { PaymentFormModal } from "@/components/billing/PaymentFormModal"
+import { PaginationBar } from "@/components/ui/pagination-bar"
+
+const RESTAURANTS_PAGE_SIZE = 10
 
 export function RestaurantsPage() {
   const {
@@ -34,6 +37,7 @@ export function RestaurantsPage() {
   } = useAdminStore()
 
   const [searchQuery, setSearchQuery] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [payModalRestId, setPayModalRestId] = useState<string | null>(null)
   const [notice, setNotice] = useState<{ type: "ok" | "err"; text: string } | null>(
@@ -109,6 +113,13 @@ export function RestaurantsPage() {
     )
   })
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / RESTAURANTS_PAGE_SIZE))
+  const safePage = Math.min(currentPage, totalPages)
+  const paginatedRestaurants = filtered.slice(
+    (safePage - 1) * RESTAURANTS_PAGE_SIZE,
+    safePage * RESTAURANTS_PAGE_SIZE
+  )
+
   const payModalRestaurant: Restaurant | null = payModalRestId
     ? restaurants.find((r) => r.id === payModalRestId) ?? null
     : null
@@ -131,7 +142,10 @@ export function RestaurantsPage() {
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                setCurrentPage(1)
+              }}
               placeholder="Restoran, marka veya Boss ara..."
               className="h-9 rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] pl-8 pr-3 text-[12px] text-[#1d1d1f] outline-none focus:border-[#e63462]"
             />
@@ -193,7 +207,7 @@ export function RestaurantsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f0f0f0]">
-                {filtered.map((r) => {
+                {paginatedRestaurants.map((r) => {
                   const isSusp = Boolean(
                     r.isAccessSuspended || r.billingStatus === "suspended"
                   )
@@ -352,6 +366,13 @@ export function RestaurantsPage() {
                 )}
               </tbody>
             </table>
+            <PaginationBar
+              currentPage={safePage}
+              totalItems={filtered.length}
+              pageSize={RESTAURANTS_PAGE_SIZE}
+              onPageChange={setCurrentPage}
+              itemLabel="restoran"
+            />
           </div>
         )}
       </div>

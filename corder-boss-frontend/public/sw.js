@@ -1,5 +1,12 @@
-const CACHE_NAME = "corder-boss-pwa-v3";
-const APP_SHELL = ["/", "/index.html", "/manifest.webmanifest", "/boss-icon.svg"];
+const CACHE_NAME = "corder-boss-pwa-v4";
+const APP_SHELL = [
+  "/",
+  "/index.html",
+  "/manifest.webmanifest",
+  "/corder-logo.png",
+  "/icon-192x192.png",
+  "/icon-512x512.png"
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -22,6 +29,51 @@ self.addEventListener("activate", (event) => {
         )
       )
       .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener("push", (event) => {
+  let payload = {
+    title: "Corder Boss — Güvenlik & Kaçak Uyarısı",
+    body: "Kritik bir kasa veya adisyon güvenlik uyarısı tespit edildi.",
+    icon: "/icon-192x192.png",
+    badge: "/icon-96x96.png",
+    tag: "corder-boss-fraud-alert"
+  };
+  if (event.data) {
+    try {
+      const parsed = event.data.json();
+      payload = { ...payload, ...parsed };
+    } catch {
+      payload.body = event.data.text() || payload.body;
+    }
+  }
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: payload.icon || "/icon-192x192.png",
+      badge: payload.badge || "/icon-96x96.png",
+      tag: payload.tag || "corder-boss-fraud-alert",
+      renotify: true,
+      data: payload.data || { tab: "security" }
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ("focus" in client) {
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow("/");
+      }
+      return undefined;
+    })
   );
 });
 
@@ -62,6 +114,8 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (
+    url.pathname === "/corder-logo.png" ||
+    url.pathname.startsWith("/icon-") ||
     url.pathname === "/boss-icon.svg" ||
     url.pathname === "/manifest.webmanifest" ||
     url.pathname.startsWith("/assets/")

@@ -10,11 +10,15 @@ export interface RawTableDto {
   name: string
   section: string
   status: string
+  qrToken?: string
+  capacity?: number
   sessionStaffId?: string | null
   sessionStaffName?: string | null
   discount?: { type: PanelDiscountType; value: number; reason: string; appliedBy?: string } | null
   splitInfo?: PanelTable["splitInfo"] | null
 }
+
+export type TableDto = RawTableDto
 
 export interface ShiftDto {
   id: string
@@ -312,6 +316,7 @@ export interface OpenAccountDto {
 
 export interface RestaurantSettingsDto {
   name: string
+  logoUrl?: string | null
   address?: string | null
   phone?: string | null
   taxId?: string | null
@@ -320,6 +325,28 @@ export interface RestaurantSettingsDto {
   facebook?: string | null
   website?: string | null
   workingHours?: string | null
+}
+
+export interface FraudAlertDto {
+  id: string
+  restaurantId: string
+  ruleCode: string
+  severity: "low" | "medium" | "high" | "critical"
+  status: "open" | "investigating" | "resolved" | "false_positive"
+  title: string
+  description: string
+  estimatedRiskAmount: number
+  staffId?: string | null
+  staffName?: string | null
+  tableId?: string | null
+  tableName?: string | null
+  orderId?: string | null
+  shiftId?: string | null
+  metadata?: Record<string, unknown> | null
+  resolutionNote?: string | null
+  resolvedBy?: string | null
+  resolvedAt?: string | null
+  createdAt: string
 }
 
 export interface PrinterConfigDto {

@@ -79,21 +79,62 @@ export function formatTitleCase(
   )
 }
 
-export function resolveAssetUrl(url: string | undefined | null): string {
+export function optimizeR2ImageUrl(
+  url: string | undefined | null,
+  width = 400,
+  quality = 82,
+): string {
   if (!url) return ""
   const trimmed = url.trim()
-  if (!trimmed) return ""
   if (
-    trimmed.startsWith("http://") ||
-    trimmed.startsWith("https://") ||
+    !trimmed ||
     trimmed.startsWith("data:") ||
-    trimmed.startsWith("blob:")
+    trimmed.startsWith("blob:") ||
+    trimmed.includes("/cdn-cgi/image/")
   ) {
     return trimmed
   }
-  const base = getBase()
-  if (!base) return trimmed
-  return `${base.replace(/\/+$/, "")}${trimmed.startsWith("/") ? "" : "/"}${trimmed}`
+  const params = `width=${Math.max(32, Math.round(width))},quality=${Math.min(100, Math.max(30, Math.round(quality)))},fit=scale-down,format=auto`
+  try {
+    const parsed = new URL(trimmed)
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.hostname === "localhost" ||
+      parsed.hostname === "127.0.0.1" ||
+      parsed.hostname.endsWith(".r2.dev") ||
+      parsed.hostname.endsWith(".r2.cloudflarestorage.com")
+    ) {
+      return trimmed
+    }
+    return `${parsed.origin}/cdn-cgi/image/${params}${parsed.pathname}${parsed.search}`
+  } catch {
+    return trimmed
+  }
+}
+
+export function resolveAssetUrl(
+  url: string | undefined | null,
+  opts?: { width?: number; quality?: number },
+): string {
+  if (!url) return ""
+  const trimmed = url.trim()
+  if (!trimmed) return ""
+  let resolved = trimmed
+  if (
+    !trimmed.startsWith("http://") &&
+    !trimmed.startsWith("https://") &&
+    !trimmed.startsWith("data:") &&
+    !trimmed.startsWith("blob:")
+  ) {
+    const base = getBase()
+    if (base) {
+      resolved = `${base.replace(/\/+$/, "")}${trimmed.startsWith("/") ? "" : "/"}${trimmed}`
+    }
+  }
+  if (opts?.width) {
+    return optimizeR2ImageUrl(resolved, opts.width, opts.quality ?? 82)
+  }
+  return resolved
 }
 
 export function formatIstanbulTime(d: Date | string | number): string {
