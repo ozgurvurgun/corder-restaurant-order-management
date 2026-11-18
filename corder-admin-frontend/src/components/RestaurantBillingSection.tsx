@@ -1,4 +1,5 @@
 import type { Restaurant, RestaurantBranchType } from "@/lib/types"
+import { CustomMonthPicker, CustomSelect } from "@/components/ui/custom-inputs"
 import {
   PAYMENT_METHOD_LABELS,
   formatIstanbulDate,
@@ -228,7 +229,7 @@ export function RestaurantBillingSection({
             <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
               Şube Tipi
             </label>
-            <select
+            <CustomSelect
               value={branchType}
               onChange={(e) =>
                 onBranchTypeChange(e.target.value as RestaurantBranchType)
@@ -239,7 +240,7 @@ export function RestaurantBillingSection({
               <option value="independent">Bağımsız Tekil İşletme</option>
               <option value="company_owned">Merkez / Özmal Şube</option>
               <option value="franchise">Franchise Şubesi</option>
-            </select>
+            </CustomSelect>
           </div>
           <div>
             <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
@@ -314,8 +315,7 @@ export function RestaurantBillingSection({
             <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
               Abonelik Başlangıç Dönemi (Ay / Yıl)
             </label>
-            <input
-              type="month"
+            <CustomMonthPicker
               value={billingStartPeriod}
               onChange={(e) => onBillingStartPeriodChange(e.target.value)}
               className={inputCls}

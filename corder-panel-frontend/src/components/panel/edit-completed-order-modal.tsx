@@ -6,6 +6,7 @@ import { usePanelStore } from "@/lib/panel-store"
 import { usePanelToast } from "./panel-toast"
 import { Loader2, X } from "lucide-react"
 import { computeDiscountMinorUnits, formatCurrency, fromMinorUnits, toMinorUnits } from "@/lib/format"
+import { CustomSelect } from "@/components/ui/custom-inputs"
 
 function cloneOrders(orders: PanelOrder[]): PanelOrder[] {
   return orders.map((o) => ({
@@ -355,13 +356,13 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
 
           <div className="mt-2">
             <label className="block text-[11px] font-medium text-[#86868b] mb-1">Ödeme yöntemi</label>
-            <select disabled={saving} className="w-full h-10 px-3 rounded-lg border border-[#d1d1d6] bg-white" value={method} onChange={(e) => setMethod(e.target.value as PanelPaymentMethod)}>
+            <CustomSelect disabled={saving} className="w-full h-10 px-3 rounded-lg border border-[#d1d1d6] bg-white" value={method} onChange={(e) => setMethod(e.target.value as PanelPaymentMethod)}>
               {METHODS.map((m) => (
                 <option key={m.value} value={m.value}>
                   {m.label}
                 </option>
               ))}
-            </select>
+            </CustomSelect>
           </div>
 
           {method === "split" && (
@@ -404,14 +405,14 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
           {(method === "ledger" || splitHasLedger) && (
             <div className="mt-3">
               <label className="block text-[11px] font-medium text-[#86868b] mb-1">Cari Müşteri *</label>
-              <select disabled={saving} value={ledgerCustomerId} onChange={(e) => setLedgerCustomerId(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#d1d1d6] bg-white">
+              <CustomSelect disabled={saving} value={ledgerCustomerId} onChange={(e) => setLedgerCustomerId(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#d1d1d6] bg-white">
                 <option value="">Cari Müşteri Seçin</option>
                 {ledgerCustomers.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
                   </option>
                 ))}
-              </select>
+              </CustomSelect>
             </div>
           )}
 

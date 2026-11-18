@@ -4,6 +4,7 @@ import type { PanelCategory, PanelProduct } from "@/lib/panel-types"
 import { orderedCategoryList } from "@/lib/panel-api-sync"
 import { categoryDepth } from "./category-modals"
 import ImageUpload from "../image-upload"
+import { CustomSelect } from "@/components/ui/custom-inputs"
 
 export function AddProductInlineForm(props: {
   productName: string
@@ -179,7 +180,7 @@ export function EditProductModal(props: {
                 <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
                   Kategori
                 </label>
-                <select
+                <CustomSelect
                   value={editCategoryId}
                   onChange={(e) => setEditCategoryId(e.target.value)}
                   className="w-full h-[40px] px-3 text-[13px] bg-[#f5f5f7] rounded-xl border border-transparent focus:border-[#e63462]/50 focus:outline-none"
@@ -190,7 +191,7 @@ export function EditProductModal(props: {
                       {c.name}
                     </option>
                   ))}
-                </select>
+                </CustomSelect>
               </div>
             </>
           )}

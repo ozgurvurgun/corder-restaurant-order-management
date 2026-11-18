@@ -16,6 +16,7 @@ import {
   FranchiseConfigCard,
   InitialSubscriptionCard,
 } from "@/components/NewRestaurantFormSections"
+import { CustomSelect } from "@/components/ui/custom-inputs"
 import {
   formatCanonicalCorderEmail,
   toCorderEmailTenantSlug,
@@ -218,7 +219,7 @@ export function NewRestaurantPage() {
             </div>
             <div>
               <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Durum</label>
-              <select
+              <CustomSelect
                 value={status}
                 onChange={(e) => setStatus(e.target.value as "active" | "inactive")}
                 className={inputCls}
@@ -226,7 +227,7 @@ export function NewRestaurantPage() {
               >
                 <option value="active">Aktif</option>
                 <option value="inactive">Pasif</option>
-              </select>
+              </CustomSelect>
             </div>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react"
 import { Loader2, X } from "lucide-react"
 import type { LedgerCustomer } from "@/lib/panel-types"
+import { CustomSelect } from "@/components/ui/custom-inputs"
 
 function formatCurrency(n: number) {
   return n.toLocaleString("tr-TR", { minimumFractionDigits: 2 })
@@ -131,11 +132,11 @@ export function TableLedgerModal(props: {
             <label className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wide block mb-1.5">
               Cari Müşteri
             </label>
-            <select
+            <CustomSelect
               value={assignCustomerId}
               disabled={assignLoading}
               onChange={(e) => setAssignCustomerId(e.target.value)}
-              className="w-full h-[42px] px-3 text-[13px] bg-[#f5f5f7] rounded-xl border border-[#d1d1d6]/60 focus:outline-none focus:ring-2 focus:ring-[#e63462]/30"
+              className="w-full h-[42px] px-3 text-[13px] bg-[#f5f5f7] rounded-xl border border-[#d1d1d6]/60"
             >
               <option value="">Seçin...</option>
               {ledgerCustomers.map((c) => (
@@ -143,7 +144,7 @@ export function TableLedgerModal(props: {
                   {c.name}
                 </option>
               ))}
-            </select>
+            </CustomSelect>
             {ledgerCustomers.length === 0 && (
               <p className="text-[11px] text-amber-600 mt-2">
                 Kasa → Cariler sekmesinden müşteri ekleyin.

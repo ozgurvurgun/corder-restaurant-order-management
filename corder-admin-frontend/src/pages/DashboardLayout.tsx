@@ -151,7 +151,7 @@ export function DashboardLayout() {
       {/* Main Column */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top White HeaderBar matching Merchant & Boss Panel */}
-        <header className="h-[52px] flex items-center justify-between gap-4 px-4 sm:px-6 border-b border-[#e5e5ea] bg-white/80 backdrop-blur-xl flex-shrink-0 sticky top-0 z-30">
+        <header className="h-[52px] flex items-center justify-between gap-4 px-3 sm:px-4 border-b border-[#e5e5ea] bg-white/80 backdrop-blur-xl flex-shrink-0 sticky top-0 z-30">
           <div className="flex items-center gap-3 min-w-0">
             <h1 className="text-[16px] font-semibold text-[#1d1d1f] truncate">
               {pageTitle}
@@ -187,7 +187,7 @@ export function DashboardLayout() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto w-full p-4 sm:p-6">
+        <main className="flex-1 overflow-y-auto w-full p-3 sm:p-4">
           <Outlet />
         </main>
 

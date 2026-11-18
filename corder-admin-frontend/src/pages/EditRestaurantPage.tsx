@@ -9,6 +9,7 @@ import { PrintAgentTokenSection } from "@/components/PrintAgentTokenSection"
 import { RestaurantBillingBanner, RestaurantBillingSection } from "@/components/RestaurantBillingSection"
 import { PaymentFormModal } from "@/components/billing/PaymentFormModal"
 import { RestaurantBillingHistoryModal } from "@/components/billing/RestaurantBillingHistoryModal"
+import { CustomSelect } from "@/components/ui/custom-inputs"
 import { toCorderEmailTenantSlug } from "@/lib/corder-email"
 
 export function EditRestaurantPage() {
@@ -402,7 +403,7 @@ export function EditRestaurantPage() {
               <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
                 Genel Durum
               </label>
-              <select
+              <CustomSelect
                 value={status}
                 onChange={(e) => setStatus(e.target.value as "active" | "inactive")}
                 className={inputCls}
@@ -410,7 +411,7 @@ export function EditRestaurantPage() {
               >
                 <option value="active">Aktif</option>
                 <option value="inactive">Pasif</option>
-              </select>
+              </CustomSelect>
             </div>
             {error && <p className="text-[13px] font-medium text-red-600">{error}</p>}
             {saveMsg && (

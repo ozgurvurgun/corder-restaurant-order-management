@@ -3,6 +3,7 @@ import { UserPlus, Link2, Crown, Building2, Pencil, Unlink, Trash2 } from "lucid
 import type { BossTier, RootAdmin } from "@/lib/types"
 import { useAdminStore } from "@/lib/store"
 import { CorderEmailInput } from "@/components/CorderEmailInput"
+import { CustomSelect } from "@/components/ui/custom-inputs"
 import { formatCanonicalCorderEmail } from "@/lib/corder-email"
 
 interface RootAdminsSectionProps {
@@ -295,7 +296,7 @@ export function RootAdminsSection({
                 <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
                   Boss Hiyerarşi Rolü *
                 </label>
-                <select
+                <CustomSelect
                   value={adminTier}
                   onChange={(e) => setAdminTier(e.target.value as BossTier)}
                   className={fieldCls}
@@ -308,7 +309,7 @@ export function RootAdminsSection({
                     Marka &amp; Üst Franchise Sahibi (HQ)
                   </option>
                   <option value="regional_manager">Bölge Yöneticisi</option>
-                </select>
+                </CustomSelect>
               </div>
               <div>
                 <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Ad Soyad *</label>
@@ -412,7 +413,7 @@ export function RootAdminsSection({
               <h3 className="text-[13px] font-semibold text-[#1d1d1f]">
                 Mevcut Boss Hesabına Bu Şubeyi Bağla
               </h3>
-              <select
+              <CustomSelect
                 value={selectedExistingBossId}
                 onChange={(e) => setSelectedExistingBossId(e.target.value)}
                 className={fieldCls}
@@ -426,7 +427,7 @@ export function RootAdminsSection({
                     {b.restaurants?.length ?? 0} şube
                   </option>
                 ))}
-              </select>
+              </CustomSelect>
               {adminError && <p className="text-[12px] font-medium text-red-600">{adminError}</p>}
               <div className="flex gap-2">
                 <button

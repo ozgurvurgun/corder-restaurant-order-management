@@ -9,300 +9,370 @@
 <body>
   <!-- Full-Screen Login View (shown when not authenticated) -->
   <div id="loginView" class="login-shell hidden">
-    <div class="login-card">
+    <div class="login-wrapper">
       <div class="login-brand">
-        <div class="brand-logo brand-logo-lg">C</div>
+        <div class="brand-logo brand-logo-lg">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+            <path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/>
+            <rect x="6" y="14" width="12" height="8" rx="1"/>
+          </svg>
+        </div>
         <h1 class="login-title">Corder Print Agent</h1>
         <p class="login-subtitle">
-          Yazıcı ve sipariş fişi yönetim sistemine devam etmek için kullanıcı adı ve parolanızla giriş yapın.
+          Masaüstü termal yazıcı, adisyon fişi ve mutfak kategori yönlendirme merkezi
         </p>
       </div>
 
-      <form id="formLogin" class="form-stack">
-        <div class="field-group">
-          <label for="inputUsername">Kullanıcı Adı</label>
-          <input
-            type="text"
-            id="inputUsername"
-            placeholder="Kullanıcı adınızı girin"
-            autocomplete="username"
-            required
-          />
+      <div class="login-card">
+        <div class="login-card-head">
+          <h2>Yazıcı Merkezi Girişi</h2>
+          <p>Admin panelinde tanımlanan Print Agent kullanıcı adı ve parolanızla oturum açın</p>
         </div>
-        <div class="field-group">
-          <label for="inputPassword">Parola</label>
-          <input
-            type="password"
-            id="inputPassword"
-            placeholder="••••••••"
-            autocomplete="current-password"
-            required
-          />
-        </div>
-        <div id="loginErrorBox" class="inline-feedback status-err hidden"></div>
-        <button type="submit" class="btn btn-primary btn-block" id="btnLoginSubmit">
-          Giriş Yap
-        </button>
-      </form>
+        <form id="formLogin" class="form-stack">
+          <div class="field-group">
+            <label for="inputUsername">Kullanıcı Adı</label>
+            <input
+              type="text"
+              id="inputUsername"
+              placeholder="Örn: moscow-print-agent"
+              autocomplete="username"
+              required
+            />
+          </div>
+          <div class="field-group">
+            <label for="inputPassword">Parola</label>
+            <input
+              type="password"
+              id="inputPassword"
+              placeholder="••••••••"
+              autocomplete="current-password"
+              required
+            />
+          </div>
+          <div id="loginErrorBox" class="inline-feedback status-err hidden"></div>
+          <button type="submit" class="btn btn-primary btn-block" id="btnLoginSubmit">
+            Giriş Yap
+          </button>
+        </form>
+      </div>
     </div>
   </div>
 
-  <!-- Authenticated Main Application Shell -->
-  <div id="appShell" class="app-shell hidden">
-    <!-- Top Header -->
-    <header class="topbar">
-      <div class="brand">
-        <div class="brand-logo">C</div>
-        <div>
-          <h1 class="brand-title">Corder Print Agent</h1>
-          <p class="brand-subtitle" id="headerBranchInfo">Otomatik Fiş &amp; Kategori Yönlendirme Sistemi</p>
+  <!-- Authenticated Main Application Shell (Merchant Panel Layout) -->
+  <div id="appShell" class="app-layout hidden">
+    <!-- Left Sidebar (240px, matching Merchant Panel) -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-logo">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+            <path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/>
+            <rect x="6" y="14" width="12" height="8" rx="1"/>
+          </svg>
+        </div>
+        <div class="sidebar-brand-meta">
+          <h1 class="brand-title" id="sidebarRestaurantTitle">Corder Print Agent</h1>
+          <p class="brand-subtitle">Yazıcı &amp; Mutfak Merkezi</p>
         </div>
       </div>
 
-      <div class="topbar-actions">
-        <div class="status-pill status-warn" id="connectionPill">
-          <span class="status-dot"></span>
-          <span id="connectionText">Durum Kontrol Ediliyor...</span>
+      <nav class="sidebar-nav">
+        <div class="nav-group">
+          <p class="nav-group-label">Yazıcı &amp; Yönlendirme</p>
+          <button type="button" class="tab-btn active" data-tab="workspace" data-title="Yazıcılar & Kategori Eşleştirme">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+              <path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/>
+              <rect x="6" y="14" width="12" height="8" rx="1"/>
+            </svg>
+            <span>Yazıcılar &amp; Kategoriler</span>
+          </button>
+          <button type="button" class="tab-btn" data-tab="settings" data-title="Fiş & Başlangıç Ayarları">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            <span>Fiş &amp; Başlangıç Ayarları</span>
+          </button>
         </div>
 
-        <div class="queue-badge" id="headerQueueBadge" title="Kuyrukta bekleyen fiş sayısı">
-          Bekleyen: <strong id="headerQueueCount">0</strong>
+        <div class="nav-group">
+          <p class="nav-group-label">Takip &amp; Tanılama</p>
+          <button type="button" class="tab-btn" data-tab="queue" data-title="Canlı Kuyruk & Sistem Günlüğü">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            <span>Canlı Kuyruk &amp; Loglar</span>
+          </button>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-role-badge">
+          <span class="sidebar-role-text">Print Agent Servisi</span>
+          <span class="sidebar-role-tag">Aktif</span>
+        </div>
+        <div class="sidebar-user-row">
+          <div class="sidebar-avatar" id="sidebarAvatar">P</div>
+          <div class="sidebar-user-meta">
+            <p class="sidebar-user-name" id="headerBranchInfo">Bağlı İşletme</p>
+            <p class="sidebar-user-sub" id="sidebarUsernameSub">Otomatik Fiş Sistemi</p>
+          </div>
+          <button type="button" class="sidebar-logout-btn" id="btnLogoutSidebar" title="Çıkış Yap">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Column -->
+    <div class="main-column">
+      <!-- 52px Top Header Bar matching Merchant Panel -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <h2 class="page-heading" id="activePageHeading">Yazıcılar &amp; Kategori Eşleştirme</h2>
         </div>
 
-        <button class="btn btn-secondary btn-sm" id="btnFlushTop">
-          Bekleyenleri Yazdır
-        </button>
+        <div class="topbar-actions">
+          <div class="status-pill status-warn" id="connectionPill">
+            <span class="status-dot"></span>
+            <span id="connectionText">Durum Kontrol Ediliyor...</span>
+          </div>
 
-        <button class="btn btn-danger btn-sm" id="btnLogoutTop">
-          Çıkış Yap
-        </button>
+          <div class="queue-badge" id="headerQueueBadge" title="Kuyrukta bekleyen fiş sayısı">
+            Bekleyen: <strong id="headerQueueCount">0</strong>
+          </div>
+
+          <button type="button" class="btn btn-secondary btn-sm" id="btnFlushTop">
+            Bekleyenleri Yazdır
+          </button>
+
+          <button type="button" class="btn btn-danger btn-sm" id="btnLogoutTop">
+            Çıkış Yap
+          </button>
+        </div>
+      </header>
+
+      <!-- Scrollable Workspace -->
+      <div class="content-scroll">
+        <!-- TAB 1: Main Workspace (Printers + Category Routing) -->
+        <main class="tab-panel active" id="tab-workspace">
+          <div class="workspace-grid">
+            <!-- Left Column: Printers -->
+            <section class="column-stack">
+              <!-- Configured Printers Card -->
+              <div class="card">
+                <div class="card-header">
+                  <div>
+                    <h2>Tanımlı Yazıcılarım</h2>
+                    <p class="card-desc">Kasa, mutfak ve bar için eklediğiniz aktif termal yazıcılar</p>
+                  </div>
+                  <span class="badge" id="printerCountBadge">0 Yazıcı</span>
+                </div>
+                <div id="configuredPrintersList" class="printer-list"></div>
+              </div>
+
+              <!-- Discover OS/USB Printers Card -->
+              <div class="card">
+                <div class="card-header">
+                  <div>
+                    <h2>USB / Bilgisayar Yazıcıları</h2>
+                    <p class="card-desc">Bilgisayara bağlı Windows, Linux (CUPS / USB) veya macOS yazıcıları tek tıkla ekleyin</p>
+                  </div>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btnDiscoverPrinters">
+                    Bilgisayardaki Yazıcıları Tara
+                  </button>
+                </div>
+                <div id="discoveredPrintersList" class="discovered-list">
+                  <div class="empty-hint">Bilgisayarınızdaki yazıcıları görmek için "Bilgisayardaki Yazıcıları Tara" butonuna tıklayın.</div>
+                </div>
+              </div>
+
+              <!-- Add Network (Ethernet/Wi-Fi IP) Printer Card -->
+              <div class="card">
+                <div class="card-header">
+                  <div>
+                    <h2>Ağ (IP:Port) Yazıcısı Ekle</h2>
+                    <p class="card-desc">Yerel ağdaki Ethernet / Wi-Fi termal yazıcıyı doğrudan IP ile bağlayın</p>
+                  </div>
+                </div>
+                <form id="formAddNetworkPrinter" class="form-grid">
+                  <div class="field-group full">
+                    <label for="netPrinterName">Yazıcı Adı (Örn: Mutfak, Bar, Tatlıcı)</label>
+                    <input type="text" id="netPrinterName" placeholder="Örn: Mutfak Termal" required />
+                  </div>
+                  <div class="field-group">
+                    <label for="netPrinterHost">IP Adresi</label>
+                    <input type="text" id="netPrinterHost" placeholder="192.168.1.50" required />
+                  </div>
+                  <div class="field-group">
+                    <label for="netPrinterPort">Port (Standart: 9100)</label>
+                    <input type="number" id="netPrinterPort" value="9100" required />
+                  </div>
+                  <div class="field-group">
+                    <label for="netPrinterWidth">Kağıt Genişliği</label>
+                    <select id="netPrinterWidth">
+                      <option value="80">80mm (Standart Geniş)</option>
+                      <option value="58">58mm (Dar Fiş)</option>
+                    </select>
+                  </div>
+                  <div class="field-group form-actions-inline">
+                    <button type="button" class="btn btn-secondary" id="btnTestIp">IP Bağlantı Testi</button>
+                    <button type="submit" class="btn btn-primary">+ Yazıcıyı Ekle</button>
+                  </div>
+                </form>
+                <div id="ipTestResult" class="inline-feedback hidden"></div>
+              </div>
+            </section>
+
+            <!-- Right Column: Category & Receipt Routing -->
+            <section class="column-stack">
+              <!-- Default Printers Card -->
+              <div class="card">
+                <div class="card-header">
+                  <div>
+                    <h2>Temel Fiş Yönlendirmeleri</h2>
+                    <p class="card-desc">Hesap adisyonları ve varsayılan mutfak siparişlerinin çıkacağı yazıcılar</p>
+                  </div>
+                </div>
+                <div class="form-grid">
+                  <div class="field-group">
+                    <label for="selectReceiptPrinter">Kasa / Hesap Fişi Yazıcısı</label>
+                    <select id="selectReceiptPrinter"></select>
+                    <small class="field-hint">Masa hesap fişi ve kasa adisyonu bu yazıcıdan çıkar.</small>
+                  </div>
+                  <div class="field-group">
+                    <label for="selectDefaultKitchenPrinter">Varsayılan Mutfak Yazıcısı</label>
+                    <select id="selectDefaultKitchenPrinter"></select>
+                    <small class="field-hint">Özel yazıcı seçilmeyen kategoriler bu yazıcıdan çıkar.</small>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Category Routing Matrix Card -->
+              <div class="card">
+                <div class="card-header">
+                  <div>
+                    <h2>Kategori Bazlı Mutfak Yazıcısı Eşleştirme</h2>
+                    <p class="card-desc">Hangi kategorideki yemek veya içecek siparişi hangi yazıcıdan çıksın?</p>
+                  </div>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btnRefreshCategories">
+                    Kategorileri Yenile
+                  </button>
+                </div>
+                <div id="categoryRoutingList" class="category-list"></div>
+              </div>
+            </section>
+          </div>
+        </main>
+
+        <!-- TAB 2: Ticket & Auto-Start Settings -->
+        <main class="tab-panel" id="tab-settings">
+          <div class="workspace-grid">
+            <section class="card">
+              <div class="card-header">
+                <div>
+                  <h2>Fiş Görünümü &amp; Yazdırma Ayarları</h2>
+                  <p class="card-desc">Termal fişin alt bilgi metni ve USB yazdırma ince ayarları</p>
+                </div>
+              </div>
+              <form id="formTicketSettings" class="form-stack">
+                <div class="field-group">
+                  <label for="inputFooterLine">Fiş Alt Bilgi Metni (Footer)</label>
+                  <input type="text" id="inputFooterLine" placeholder="Örn: Afiyet Olsun" />
+                </div>
+                <div class="field-group">
+                  <label for="inputTicketStamp">Fiş Üst Başlık / Damga (İsteğe Bağlı)</label>
+                  <input type="text" id="inputTicketStamp" placeholder="Örn: MUTFAK / KASA" />
+                </div>
+                <div class="field-group">
+                  <label for="inputUsbDrainMs">USB Yazdırma Bekleme Süresi (ms)</label>
+                  <input type="number" id="inputUsbDrainMs" min="0" max="5000" step="50" value="400" />
+                  <small class="field-hint">USB yazıcılarda arka arkaya fişlerde tampon dolmasını önlemek için bekleme süresi.</small>
+                </div>
+                <div class="field-group">
+                  <label class="checkbox-row" for="inputAutoStartOnBoot">
+                    <input type="checkbox" id="inputAutoStartOnBoot" checked />
+                    <span>Bilgisayar açıldığında Corder Print Agent otomatik çalışsın (Windows / Linux / macOS)</span>
+                  </label>
+                </div>
+                <div class="form-footer">
+                  <button type="submit" class="btn btn-primary">Ayarları Kaydet</button>
+                </div>
+              </form>
+            </section>
+
+            <section class="card">
+              <div class="card-header">
+                <div>
+                  <h2>Oturum &amp; Sistem Bilgisi</h2>
+                  <p class="card-desc">Çıkış yapılana kadar oturumunuz otomatik olarak açık tutulur</p>
+                </div>
+              </div>
+              <div class="form-stack">
+                <div class="printer-item">
+                  <div class="printer-meta">
+                    <div class="printer-title"><span id="infoRestaurantName">-</span></div>
+                    <div class="printer-sub" id="infoUsername">Kullanıcı: -</div>
+                  </div>
+                  <span class="tag tag-net">Kalıcı Oturum Aktif</span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </main>
+
+        <!-- TAB 3: Live Queue & Logs -->
+        <main class="tab-panel" id="tab-queue">
+          <div class="workspace-grid">
+            <section class="column-stack">
+              <div class="card">
+                <div class="card-header">
+                  <div>
+                    <h2>Bekleyen Yazdırma Kuyruğu</h2>
+                    <p class="card-desc">Yazıcı kapalıyken veya kağıt bittiğinde hafızada tutulan fişler</p>
+                  </div>
+                  <div class="btn-group">
+                    <button type="button" class="btn btn-primary btn-sm" id="btnQueueFlush">Şimdi Yazdır</button>
+                    <button type="button" class="btn btn-danger btn-sm" id="btnQueueClear">Kuyruğu Temizle</button>
+                  </div>
+                </div>
+                <div id="pendingQueueContainer" class="table-list"></div>
+              </div>
+
+              <div class="card">
+                <div class="card-header">
+                  <div>
+                    <h2>Son Yazdırılan Fişler</h2>
+                    <p class="card-desc">Başarıyla yazıcıdan çıkan son 15 sipariş ve adisyon fişi</p>
+                  </div>
+                </div>
+                <div id="recentPrintedContainer" class="table-list"></div>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="card-header">
+                <div>
+                  <h2>Canlı Sistem Günlüğü (Loglar)</h2>
+                  <p class="card-desc">Bellek korumalı: Yalnızca son 40 kayıt tutulur, eski kayıtlar otomatik temizlenir</p>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" id="btnClearLogs">Logları Temizle</button>
+              </div>
+              <div id="logsContainer" class="log-viewer"></div>
+            </section>
+          </div>
+        </main>
       </div>
-    </header>
-
-    <!-- Navigation Tabs -->
-    <nav class="tabs-nav">
-      <button class="tab-btn active" data-tab="workspace">
-        1. Yazıcılar &amp; Kategori Eşleştirme
-      </button>
-      <button class="tab-btn" data-tab="settings">
-        2. Fiş &amp; Başlangıç Ayarları
-      </button>
-      <button class="tab-btn" data-tab="queue">
-        3. Canlı Kuyruk &amp; Loglar
-      </button>
-    </nav>
-
-    <!-- TAB 1: Main Workspace (Printers + Category Routing) -->
-    <main class="tab-panel active" id="tab-workspace">
-      <div class="workspace-grid">
-        <!-- Left Column: Printers -->
-        <section class="column-stack">
-          <!-- Configured Printers Card -->
-          <div class="card">
-            <div class="card-header">
-              <div>
-                <h2>Tanımlı Yazıcılarım</h2>
-                <p class="card-desc">Kasa, mutfak ve bar için eklediğiniz aktif termal yazıcılar</p>
-              </div>
-              <span class="badge" id="printerCountBadge">0 Yazıcı</span>
-            </div>
-            <div id="configuredPrintersList" class="printer-list"></div>
-          </div>
-
-          <!-- Discover OS/USB Printers Card -->
-          <div class="card">
-            <div class="card-header">
-              <div>
-                <h2>USB / Bilgisayar Yazıcıları</h2>
-                <p class="card-desc">Bilgisayara bağlı Windows, Linux (CUPS / USB) veya macOS yazıcıları tek tıkla ekleyin</p>
-              </div>
-              <button class="btn btn-secondary btn-sm" id="btnDiscoverPrinters">
-                Bilgisayardaki Yazıcıları Tara
-              </button>
-            </div>
-            <div id="discoveredPrintersList" class="discovered-list">
-              <div class="empty-hint">Bilgisayarınızdaki yazıcıları görmek için "Bilgisayardaki Yazıcıları Tara" butonuna tıklayın.</div>
-            </div>
-          </div>
-
-          <!-- Add Network (Ethernet/Wi-Fi IP) Printer Card -->
-          <div class="card">
-            <div class="card-header">
-              <div>
-                <h2>Ağ (IP:Port) Yazıcısı Ekle</h2>
-                <p class="card-desc">Yerel ağdaki Ethernet / Wi-Fi termal yazıcıyı doğrudan IP ile bağlayın</p>
-              </div>
-            </div>
-            <form id="formAddNetworkPrinter" class="form-grid">
-              <div class="field-group full">
-                <label for="netPrinterName">Yazıcı Adı (Örn: Mutfak, Bar, Tatlıcı)</label>
-                <input type="text" id="netPrinterName" placeholder="Örn: Mutfak Termal" required />
-              </div>
-              <div class="field-group">
-                <label for="netPrinterHost">IP Adresi</label>
-                <input type="text" id="netPrinterHost" placeholder="192.168.1.50" required />
-              </div>
-              <div class="field-group">
-                <label for="netPrinterPort">Port (Standart: 9100)</label>
-                <input type="number" id="netPrinterPort" value="9100" required />
-              </div>
-              <div class="field-group">
-                <label for="netPrinterWidth">Kağıt Genişliği</label>
-                <select id="netPrinterWidth">
-                  <option value="80">80mm (Standart Geniş)</option>
-                  <option value="58">58mm (Dar Fiş)</option>
-                </select>
-              </div>
-              <div class="field-group form-actions-inline">
-                <button type="button" class="btn btn-secondary" id="btnTestIp">IP Bağlantı Testi</button>
-                <button type="submit" class="btn btn-primary">+ Yazıcıyı Ekle</button>
-              </div>
-            </form>
-            <div id="ipTestResult" class="inline-feedback hidden"></div>
-          </div>
-        </section>
-
-        <!-- Right Column: Category & Receipt Routing -->
-        <section class="column-stack">
-          <!-- Default Printers Card -->
-          <div class="card">
-            <div class="card-header">
-              <div>
-                <h2>Temel Fiş Yönlendirmeleri</h2>
-                <p class="card-desc">Hesap adisyonları ve varsayılan mutfak siparişlerinin çıkacağı yazıcılar</p>
-              </div>
-            </div>
-            <div class="form-grid">
-              <div class="field-group">
-                <label for="selectReceiptPrinter">Kasa / Hesap Fişi Yazıcısı</label>
-                <select id="selectReceiptPrinter"></select>
-                <small class="field-hint">Masa hesap fişi ve kasa adisyonu bu yazıcıdan çıkar.</small>
-              </div>
-              <div class="field-group">
-                <label for="selectDefaultKitchenPrinter">Varsayılan Mutfak Yazıcısı</label>
-                <select id="selectDefaultKitchenPrinter"></select>
-                <small class="field-hint">Özel yazıcı seçilmeyen kategoriler bu yazıcıdan çıkar.</small>
-              </div>
-            </div>
-          </div>
-
-          <!-- Category Routing Matrix Card -->
-          <div class="card">
-            <div class="card-header">
-              <div>
-                <h2>Kategori Bazlı Mutfak Yazıcısı Eşleştirme</h2>
-                <p class="card-desc">Hangi kategorideki yemek veya içecek siparişi hangi yazıcıdan çıksın?</p>
-              </div>
-              <button class="btn btn-secondary btn-sm" id="btnRefreshCategories">
-                Kategorileri Yenile
-              </button>
-            </div>
-            <div id="categoryRoutingList" class="category-list"></div>
-          </div>
-        </section>
-      </div>
-    </main>
-
-    <!-- TAB 2: Ticket & Auto-Start Settings -->
-    <main class="tab-panel" id="tab-settings">
-      <div class="workspace-grid">
-        <section class="card">
-          <div class="card-header">
-            <div>
-              <h2>Fiş Görünümü &amp; Yazdırma Ayarları</h2>
-              <p class="card-desc">Termal fişin alt bilgi metni ve USB yazdırma ince ayarları</p>
-            </div>
-          </div>
-          <form id="formTicketSettings" class="form-stack">
-            <div class="field-group">
-              <label for="inputFooterLine">Fiş Alt Bilgi Metni (Footer)</label>
-              <input type="text" id="inputFooterLine" placeholder="Örn: Afiyet Olsun" />
-            </div>
-            <div class="field-group">
-              <label for="inputTicketStamp">Fiş Üst Başlık / Damga (İsteğe Bağlı)</label>
-              <input type="text" id="inputTicketStamp" placeholder="Örn: MUTFAK / KASA" />
-            </div>
-            <div class="field-group">
-              <label for="inputUsbDrainMs">USB Yazdırma Bekleme Süresi (ms)</label>
-              <input type="number" id="inputUsbDrainMs" min="0" max="5000" step="50" value="400" />
-              <small class="field-hint">USB yazıcılarda arka arkaya fişlerde tampon dolmasını önlemek için bekleme süresi.</small>
-            </div>
-            <div class="field-group">
-              <label class="checkbox-row" for="inputAutoStartOnBoot">
-                <input type="checkbox" id="inputAutoStartOnBoot" checked />
-                <span>Bilgisayar açıldığında Corder Print Agent otomatik çalışsın (Windows / Linux / macOS)</span>
-              </label>
-            </div>
-            <div class="form-footer">
-              <button type="submit" class="btn btn-primary">Ayarları Kaydet</button>
-            </div>
-          </form>
-        </section>
-
-        <section class="card">
-          <div class="card-header">
-            <div>
-              <h2>Oturum &amp; Sistem Bilgisi</h2>
-              <p class="card-desc">Çıkış yapılana kadar oturumunuz otomatik olarak açık tutulur</p>
-            </div>
-          </div>
-          <div class="form-stack">
-            <div class="printer-item">
-              <div class="printer-meta">
-                <div class="printer-title"><span id="infoRestaurantName">-</span></div>
-                <div class="printer-sub" id="infoUsername">Kullanıcı: -</div>
-              </div>
-              <span class="tag tag-net">Kalıcı Oturum Aktif</span>
-            </div>
-          </div>
-        </section>
-      </div>
-    </main>
-
-    <!-- TAB 3: Live Queue & Logs -->
-    <main class="tab-panel" id="tab-queue">
-      <div class="workspace-grid">
-        <section class="column-stack">
-          <div class="card">
-            <div class="card-header">
-              <div>
-                <h2>Bekleyen Yazdırma Kuyruğu</h2>
-                <p class="card-desc">Yazıcı kapalıyken veya kağıt bittiğinde hafızada tutulan fişler</p>
-              </div>
-              <div class="btn-group">
-                <button class="btn btn-primary btn-sm" id="btnQueueFlush">Şimdi Yazdır</button>
-                <button class="btn btn-danger btn-sm" id="btnQueueClear">Kuyruğu Temizle</button>
-              </div>
-            </div>
-            <div id="pendingQueueContainer" class="table-list"></div>
-          </div>
-
-          <div class="card">
-            <div class="card-header">
-              <div>
-                <h2>Son Yazdırılan Fişler</h2>
-                <p class="card-desc">Başarıyla yazıcıdan çıkan son 15 sipariş ve adisyon fişi</p>
-              </div>
-            </div>
-            <div id="recentPrintedContainer" class="table-list"></div>
-          </div>
-        </section>
-
-        <section class="card">
-          <div class="card-header">
-            <div>
-              <h2>Canlı Sistem Günlüğü (Loglar)</h2>
-              <p class="card-desc">Bellek korumalı: Yalnızca son 40 kayıt tutulur, eski kayıtlar otomatik temizlenir</p>
-            </div>
-            <button class="btn btn-secondary btn-sm" id="btnClearLogs">Logları Temizle</button>
-          </div>
-          <div id="logsContainer" class="log-viewer"></div>
-        </section>
-      </div>
-    </main>
+    </div>
   </div>
 
-  <!-- Nickname / Rename Modal (Electron-compatible replacement for window.prompt) -->
+  <!-- Nickname / Rename Modal -->
   <div id="nicknameModal" class="modal-backdrop hidden">
     <div class="modal-card">
       <h3 id="nicknameModalTitle" class="modal-title">Yazıcı Takma Adı</h3>

@@ -7,6 +7,7 @@ import { usePanelI18n } from "@/lib/panel-i18n"
 import { usePanelToast } from "./panel-toast"
 import { Filter } from "lucide-react"
 import { CompletedOrdersList } from "./orders/completed-orders-list"
+import { CustomDatePicker, CustomSelect } from "@/components/ui/custom-inputs"
 import {
   computeDateFilterBounds,
   formatCurrency,
@@ -143,10 +144,10 @@ export default function CompletedOrdersView() {
           <div className="flex items-center gap-1.5 text-[11px] text-[#86868b]">
             <Filter className="w-3 h-3" />
           </div>
-          <select
+          <CustomSelect
             value={filterDate}
             onChange={(e) => setFilterDate(e.target.value)}
-            className="h-[30px] px-2.5 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 appearance-none pr-7 cursor-pointer"
+            className="h-[30px] px-2.5 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60"
           >
             <option value="today">{locale === "tr" ? "Bugün" : "Today"}</option>
             <option value="yesterday">
@@ -162,33 +163,31 @@ export default function CompletedOrdersView() {
               {locale === "tr" ? "Özel Tarih" : "Custom Date"}
             </option>
             <option value="all">{locale === "tr" ? "Tümü" : "All"}</option>
-          </select>
+          </CustomSelect>
           {filterDate === "custom" && (
             <>
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] text-[#86868b]">Başlangıç:</span>
-                <input
-                  type="datetime-local"
-                  value={customStartDate}
+                <CustomDatePicker
+                  value={customStartDate.slice(0, 10)}
                   onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="h-[30px] px-2 text-[11px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
+                  className="h-[30px] px-2 text-[11px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60"
                 />
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] text-[#86868b]">Bitiş:</span>
-                <input
-                  type="datetime-local"
-                  value={customEndDate}
+                <CustomDatePicker
+                  value={customEndDate.slice(0, 10)}
                   onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="h-[30px] px-2 text-[11px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
+                  className="h-[30px] px-2 text-[11px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60"
                 />
               </div>
             </>
           )}
-          <select
+          <CustomSelect
             value={filterTable}
             onChange={(e) => setFilterTable(e.target.value)}
-            className="h-[30px] px-2.5 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 appearance-none pr-7 cursor-pointer"
+            className="h-[30px] px-2.5 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60"
           >
             <option value="Tumu">
               {locale === "tr" ? "Tüm Masalar" : "All Tables"}
@@ -198,11 +197,11 @@ export default function CompletedOrdersView() {
                 {t}
               </option>
             ))}
-          </select>
-          <select
+          </CustomSelect>
+          <CustomSelect
             value={filterWaiter}
             onChange={(e) => setFilterWaiter(e.target.value)}
-            className="h-[30px] px-2.5 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 appearance-none pr-7 cursor-pointer"
+            className="h-[30px] px-2.5 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60"
           >
             <option value="Tumu">
               {locale === "tr" ? "Tüm Garsonlar" : "All Waiters"}
@@ -212,7 +211,7 @@ export default function CompletedOrdersView() {
                 {w}
               </option>
             ))}
-          </select>
+          </CustomSelect>
         </div>
         <div className="flex items-center gap-2 text-[12px] text-[#86868b]">
           <span className="font-medium">

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import type { BossTier, Restaurant, RootAdmin } from "@/lib/types"
 import { Building2, Check, X } from "lucide-react"
 import { CorderEmailInput } from "@/components/CorderEmailInput"
+import { CustomSelect } from "@/components/ui/custom-inputs"
 import { formatCanonicalCorderEmail } from "@/lib/corder-email"
 
 interface BossFormModalProps {
@@ -175,7 +176,7 @@ export function BossFormModal({
             <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
               Boss Hiyerarşi Seviyesi *
             </label>
-            <select
+            <CustomSelect
               value={bossTier}
               onChange={(e) => setBossTier(e.target.value as BossTier)}
               className={fieldCls}
@@ -189,7 +190,7 @@ export function BossFormModal({
               <option value="regional_manager">
                 Bölge / Grup Yöneticisi (Atanan Bölgedeki Şubeleri Yönetir)
               </option>
-            </select>
+            </CustomSelect>
           </div>
 
           {bossTier === "brand_owner" && (

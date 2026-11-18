@@ -9,6 +9,7 @@ import { CashTransactionsSection, ShiftOverviewSection } from "./cash-register/o
 import { LedgerCustomersSection } from "./cash-register/ledger-customers-section"
 import { DetailReportSection, ZReportSection, type ShiftTotalsSummary } from "./cash-register/shift-history-section"
 import { computeDateFilterBounds, formatCurrency, fromMinorUnits, toMinorUnits } from "@/lib/format"
+import { CustomDatePicker, CustomSelect } from "@/components/ui/custom-inputs"
 
 function mapLedgerCustomerDto(c: LedgerCustomerDto): LedgerCustomer {
   return {
@@ -324,10 +325,10 @@ export default function CashRegisterView() {
       <div className="flex-shrink-0 border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl px-5 py-2.5 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap">
           <Filter className="w-3.5 h-3.5 text-[#86868b]" />
-          <select
+          <CustomSelect
             value={filterDate}
             onChange={(e) => setFilterDate(e.target.value)}
-            className="h-[30px] px-2.5 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 appearance-none pr-7 cursor-pointer"
+            className="h-[30px] px-2.5 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 cursor-pointer"
           >
             <option value="today">Bugün</option>
             <option value="yesterday">Dün</option>
@@ -335,26 +336,16 @@ export default function CashRegisterView() {
             <option value="month">Son 30 Gün</option>
             <option value="custom">Özel Tarih</option>
             <option value="all">Tümü</option>
-          </select>
+          </CustomSelect>
           {filterDate === "custom" && (
             <>
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] text-[#86868b]">Başlangıç:</span>
-                <input
-                  type="datetime-local"
-                  value={customStartDate}
-                  onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="h-[30px] px-2 text-[11px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
-                />
+                <CustomDatePicker value={customStartDate.slice(0, 10)} onChange={(e) => setCustomStartDate(e.target.value)} className="h-[30px] px-2.5 text-[11px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] text-[#86868b]">Bitiş:</span>
-                <input
-                  type="datetime-local"
-                  value={customEndDate}
-                  onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="h-[30px] px-2 text-[11px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
-                />
+                <CustomDatePicker value={customEndDate.slice(0, 10)} onChange={(e) => setCustomEndDate(e.target.value)} className="h-[30px] px-2.5 text-[11px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
               </div>
             </>
           )}

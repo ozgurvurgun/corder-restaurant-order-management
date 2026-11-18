@@ -55,7 +55,15 @@ async function apiCall(url, options = {}) {
 }
 
 function switchTab(tabId) {
-  document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tabId))
+  closeAllCustomSelects()
+  let activeTitle = "Yazıcılar & Kategori Eşleştirme"
+  document.querySelectorAll(".tab-btn").forEach((b) => {
+    const isTarget = b.dataset.tab === tabId
+    b.classList.toggle("active", isTarget)
+    if (isTarget && b.dataset.title) activeTitle = b.dataset.title
+  })
+  const heading = $("activePageHeading")
+  if (heading) heading.textContent = activeTitle
   document.querySelectorAll(".tab-panel").forEach((p) => p.classList.toggle("active", p.id === `tab-${tabId}`))
 }
 
@@ -94,9 +102,17 @@ function renderAuthGateAndHeader() {
   const rName = state.settings.restaurantName || state.status.restaurantName || ""
   const uname = state.settings.username || ""
   $("headerQueueCount").textContent = String(state.queue.length || 0)
-  $("headerBranchInfo").textContent = rName
-    ? `${rName}${uname ? ` • Kullanıcı: ${uname}` : ""}`
-    : "Otomatik Fiş & Kategori Yönlendirme Sistemi"
+  $("headerBranchInfo").textContent = rName || "Bağlı İşletme"
+  if ($("sidebarRestaurantTitle")) {
+    $("sidebarRestaurantTitle").textContent = rName ? formatTitleCase(rName) : "Corder Print Agent"
+  }
+  if ($("sidebarUsernameSub")) {
+    $("sidebarUsernameSub").textContent = uname || "Print Agent"
+  }
+  if ($("sidebarAvatar")) {
+    const ch = (rName || uname || "P").trim().charAt(0).toLocaleUpperCase("tr-TR")
+    $("sidebarAvatar").textContent = ch || "P"
+  }
 
   $("infoRestaurantName").textContent = rName || "Bağlı İşletme"
   $("infoUsername").textContent = `Kullanıcı: ${uname || "-"}`
@@ -228,6 +244,7 @@ function renderRoutingDropdowns() {
   const routes = state.settings.categoryRoutes || {}
   if (!categories.length) {
     catContainer.innerHTML = `<div class="empty-hint">Henüz kategori tanımlanmamış. "Kategorileri Yenile" butonuna basarak menü kategorilerinizi güncelleyebilirsiniz.</div>`
+    upgradeAllCustomSelects()
     return
   }
 
@@ -259,6 +276,101 @@ function renderRoutingDropdowns() {
       </div>`
     })
     .join("")
+  upgradeAllCustomSelects()
+}
+
+let activeFloatingMenu = null
+let activeSelectWrapper = null
+
+function closeAllCustomSelects() {
+  if (activeFloatingMenu) {
+    activeFloatingMenu.remove()
+    activeFloatingMenu = null
+  }
+  if (activeSelectWrapper) {
+    activeSelectWrapper.classList.remove("open")
+    activeSelectWrapper = null
+  }
+}
+
+function openCustomSelectMenu(selectEl, wrapper, triggerBtn) {
+  if (activeSelectWrapper === wrapper) {
+    closeAllCustomSelects()
+    return
+  }
+  closeAllCustomSelects()
+  wrapper.classList.add("open")
+  activeSelectWrapper = wrapper
+
+  const menu = document.createElement("div")
+  menu.className = "c-select-menu open"
+  const options = Array.from(selectEl.options)
+  menu.innerHTML = options
+    .map((opt) => {
+      const isSelected = opt.value === selectEl.value
+      const checkSvg = isSelected
+        ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
+        : ""
+      return `<button type="button" class="c-select-option ${isSelected ? "selected" : ""}" data-val="${escapeHtml(opt.value)}">
+        <span>${escapeHtml(opt.textContent)}</span>
+        ${checkSvg}
+      </button>`
+    })
+    .join("")
+
+  document.body.appendChild(menu)
+  activeFloatingMenu = menu
+
+  const rect = triggerBtn.getBoundingClientRect()
+  const menuHeight = Math.min(240, options.length * 36 + 12)
+  const spaceBelow = window.innerHeight - rect.bottom
+  const top = spaceBelow < menuHeight + 12 && rect.top > menuHeight
+    ? rect.top - menuHeight - 4
+    : rect.bottom + 4
+  menu.style.width = `${Math.max(rect.width, 190)}px`
+  menu.style.left = `${Math.min(rect.left, window.innerWidth - Math.max(rect.width, 190) - 8)}px`
+  menu.style.top = `${Math.max(8, top)}px`
+
+  menu.addEventListener("click", (e) => {
+    const btn = e.target.closest(".c-select-option")
+    if (!btn) return
+    const nextVal = btn.dataset.val ?? ""
+    if (selectEl.value !== nextVal) {
+      selectEl.value = nextVal
+      selectEl.dispatchEvent(new Event("change", { bubbles: true }))
+    }
+    const labelSpan = triggerBtn.querySelector(".c-select-label")
+    const selectedOpt = Array.from(selectEl.options).find((o) => o.value === selectEl.value) || selectEl.options[0]
+    if (labelSpan && selectedOpt) labelSpan.textContent = selectedOpt.textContent
+    closeAllCustomSelects()
+  })
+}
+
+function upgradeSelectToCustom(selectEl) {
+  if (!selectEl) return
+  let wrapper = selectEl.nextElementSibling
+  if (!wrapper || !wrapper.classList.contains("c-select")) {
+    selectEl.classList.add("sr-only-select")
+    wrapper = document.createElement("div")
+    wrapper.className = "c-select"
+    wrapper.innerHTML = `<button type="button" class="c-select-trigger">
+      <span class="c-select-label"></span>
+      <svg class="c-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>`
+    selectEl.insertAdjacentElement("afterend", wrapper)
+    const triggerBtn = wrapper.querySelector(".c-select-trigger")
+    triggerBtn.addEventListener("click", (e) => {
+      e.stopPropagation()
+      openCustomSelectMenu(selectEl, wrapper, triggerBtn)
+    })
+  }
+  const labelSpan = wrapper.querySelector(".c-select-label")
+  const selectedOpt = Array.from(selectEl.options).find((o) => o.value === selectEl.value) || selectEl.options[0]
+  if (labelSpan) labelSpan.textContent = selectedOpt ? selectedOpt.textContent : "Seçin..."
+}
+
+function upgradeAllCustomSelects() {
+  document.querySelectorAll("select").forEach((sel) => upgradeSelectToCustom(sel))
 }
 
 function renderQueueAndLogs() {

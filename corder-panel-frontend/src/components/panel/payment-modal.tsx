@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { usePanelStore } from "@/lib/panel-store"
+import { CustomSelect } from "@/components/ui/custom-inputs"
 import { usePanelToast } from "./panel-toast"
 import type { CloseCheckSplitMethod, PanelDiscountType, PanelPaymentMethod } from "@/lib/panel-types"
 import { X, Banknote, CreditCard, UtensilsCrossed, SplitSquareVertical, Wallet, BookUser, Loader2, ShieldAlert } from "lucide-react"
@@ -285,11 +286,11 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill,
             {needsLedgerCustomer && (
               <div className="mt-3 space-y-2">
                 <label className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wide block">Cari Müşteri *</label>
-                <select
+                <CustomSelect
                   value={effectiveLedgerCustomerId}
                   disabled={isSubmitting || Boolean(lockedShareLedgerCustomerId)}
                   onChange={(e) => setLedgerCustomerId(e.target.value)}
-                  className="w-full h-[40px] px-3 text-[13px] bg-[#f5f5f7] rounded-xl border border-[#d1d1d6]/60 focus:outline-none focus:ring-2 focus:ring-[#e63462]/30 text-[#1d1d1f]"
+                  className="w-full h-[40px] px-3 text-[13px] bg-[#f5f5f7] rounded-xl border border-[#d1d1d6]/60 text-[#1d1d1f]"
                 >
                   <option value="">Seçin...</option>
                   {ledgerCustomers.map((c) => (
@@ -297,7 +298,7 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill,
                       {c.name}{c.balance > 0 ? ` (borç: ${formatCurrency(c.balance)} TL)` : c.balance < 0 ? ` (alacak: ${formatCurrency(-c.balance)} TL)` : ""}
                     </option>
                   ))}
-                </select>
+                </CustomSelect>
                 {lockedShareLedgerCustomerId && <p className="text-[11px] text-[#007aff]">Önceki kişi payında seçilen cari müşteri kullanılmaktadır.</p>}
                 {ledgerCustomers.length === 0 && <p className="text-[11px] text-amber-600">Kasada Cariler sekmesinden müşteri ekleyin.</p>}
               </div>

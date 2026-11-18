@@ -8,6 +8,7 @@ import {
   sanitizeCorderEmailLocalPartInput,
 } from "@/lib/corder-email"
 import { StaffPermissionOverrides } from "./staff-permission-overrides"
+import { CustomSelect } from "./ui/custom-inputs"
 import { Monitor, KeyRound, AlertCircle, X } from "lucide-react"
 
 interface StaffUserModalProps {
@@ -237,17 +238,17 @@ export function StaffUserModal({
             </div>
             <div>
               <label className="mb-1 block text-[12px] font-semibold text-[#1d1d1f]">Rolü *</label>
-              <select
+              <CustomSelect
                 value={role}
                 onChange={(e) => handleRoleChange(e.target.value)}
-                className="h-11 w-full rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3.5 text-[13px] font-semibold text-[#1d1d1f] outline-none focus:border-[#e63462]"
+                className="h-11 w-full rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3.5 text-[13px] font-semibold text-[#1d1d1f]"
               >
                 {roles.map((r) => (
                   <option key={r.key} value={r.key}>
                     {getRoleDisplayName(r.key, r.name)} ({r.permissions.length} yetki)
                   </option>
                 ))}
-              </select>
+              </CustomSelect>
             </div>
           </div>
 

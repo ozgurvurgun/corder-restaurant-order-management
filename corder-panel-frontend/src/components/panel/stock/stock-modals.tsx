@@ -1,5 +1,6 @@
 import { X } from "lucide-react"
 import type { StockMaterial, Supplier } from "@/lib/panel-types"
+import { CustomSelect } from "@/components/ui/custom-inputs"
 
 export function AddMaterialForm(props: {
   matName: string
@@ -62,10 +63,10 @@ export function AddMaterialForm(props: {
           placeholder="Malzeme adı"
           className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
         />
-        <select
+        <CustomSelect
           value={matUnit}
           onChange={(e) => setMatUnit(e.target.value as StockMaterial["unit"])}
-          className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none"
+          className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60"
         >
           {(["kg", "lt", "adet", "gr", "ml", "paket", "koli"] as const).map(
             (u) => (
@@ -74,7 +75,7 @@ export function AddMaterialForm(props: {
               </option>
             ),
           )}
-        </select>
+        </CustomSelect>
         <input
           type="number"
           min={0}
@@ -110,10 +111,10 @@ export function AddMaterialForm(props: {
           className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
         />
         {setMatSupplier && (
-          <select
+          <CustomSelect
             value={matSupplier}
             onChange={(e) => setMatSupplier(e.target.value)}
-            className="col-span-2 h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none"
+            className="col-span-2 h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60"
           >
             <option value="">Tedarikçi seçin (opsiyonel)</option>
             {suppliers
@@ -123,7 +124,7 @@ export function AddMaterialForm(props: {
                   {s.name}
                 </option>
               ))}
-          </select>
+          </CustomSelect>
         )}
       </div>
       <div className="flex justify-end gap-2 mt-3">
@@ -192,7 +193,7 @@ export function AddMovementForm(props: {
         </button>
       </div>
       <div className="grid grid-cols-3 gap-3">
-        <select
+        <CustomSelect
           value={mvMatId}
           onChange={(e) => setMvMatId(e.target.value)}
           className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60"
@@ -203,7 +204,7 @@ export function AddMovementForm(props: {
               {m.name} ({m.currentStock} {m.unit})
             </option>
           ))}
-        </select>
+        </CustomSelect>
         <div className="flex gap-2">
           {(["in", "out", "waste"] as const).map((t) => (
             <button

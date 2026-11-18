@@ -21,6 +21,7 @@ import { usePanelStore } from "@/lib/panel-store"
 import { usePanelI18n } from "@/lib/panel-i18n"
 import { usePanelAuth } from "@/lib/panel-auth"
 import type { PanelViewId } from "@/lib/panel-types"
+import { CustomSelect } from "@/components/ui/custom-inputs"
 
 export type PanelScreen = PanelViewId
 
@@ -193,17 +194,17 @@ export default function PanelSidebar({
         {businesses.length > 1 && (
           <div className="flex items-center gap-1.5 rounded-lg border border-[#d1d1d6]/80 bg-white px-2.5 py-1.5">
             <Building2 className="w-3.5 h-3.5 text-[#e63462] flex-shrink-0" />
-            <select
+            <CustomSelect
               value={currentBusiness?.id ?? ""}
               onChange={(e) => void switchBusiness(e.target.value)}
-              className="w-full bg-transparent text-[11px] font-semibold text-[#1d1d1f] outline-none cursor-pointer"
+              className="w-full bg-transparent text-[11px] font-semibold text-[#1d1d1f]"
             >
               {businesses.map((b) => (
                 <option key={b.id} value={b.id}>
                   Şube: {b.name}
                 </option>
               ))}
-            </select>
+            </CustomSelect>
           </div>
         )}
       </div>

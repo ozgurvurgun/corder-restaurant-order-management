@@ -8,6 +8,7 @@ import { RolesPermissionsTab } from "@/components/roles-permissions-tab"
 import { StaffUsersTab } from "@/components/staff-users-tab"
 import { AnalyticsAuditTab } from "@/components/analytics-audit-tab"
 import { OperationsCatalogTab } from "@/components/operations-catalog-tab"
+import { CustomSelect } from "@/components/ui/custom-inputs"
 import {
   AlertTriangle,
   Home,
@@ -98,10 +99,10 @@ function BossShell() {
           {branches.length > 1 && (
             <div className="flex items-center gap-1.5 rounded-lg border border-[#d1d1d6]/80 bg-white px-2.5 py-1.5">
               <Building2 className="w-3.5 h-3.5 text-[#e63462] flex-shrink-0" />
-              <select
+              <CustomSelect
                 value={selectedBranchId}
                 onChange={(e) => setSelectedBranchId(e.target.value)}
-                className="w-full bg-transparent text-[11px] font-semibold text-[#1d1d1f] outline-none cursor-pointer"
+                className="w-full bg-transparent text-[11px] font-semibold text-[#1d1d1f]"
               >
                 <option value="ALL">Tüm Şubeler ({branches.length})</option>
                 {branches.map((b) => (
@@ -109,7 +110,7 @@ function BossShell() {
                     Şube: {b.name}
                   </option>
                 ))}
-              </select>
+              </CustomSelect>
             </div>
           )}
         </div>
@@ -204,7 +205,7 @@ function BossShell() {
         )}
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto w-full p-4 sm:p-6">
+        <main className="flex-1 overflow-y-auto w-full p-3 sm:p-4">
           {error && (
             <div
               role="alert"

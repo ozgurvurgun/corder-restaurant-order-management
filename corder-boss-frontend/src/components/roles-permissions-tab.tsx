@@ -6,6 +6,7 @@ import { getRoleDisplayName } from "@/lib/permission-labels"
 import { RolePermissionMatrix } from "./role-permission-matrix"
 import { RoleAccessLimitsCard } from "./role-access-limits-card"
 import { NewRoleModal } from "./new-role-modal"
+import { CustomSelect } from "./ui/custom-inputs"
 import { ShieldCheck, Plus, Save, CopyCheck, Building2 } from "lucide-react"
 
 export function RolesPermissionsTab() {
@@ -223,18 +224,18 @@ export function RolesPermissionsTab() {
                 <span className="text-[11px] font-medium text-[#86868b]">
                   {selectedBranchId === "ALL" ? "Düzenlenen:" : "Şube:"}
                 </span>
-                <select
+                <CustomSelect
                   value={effectiveBranchId}
                   onChange={(e) => setSelectedBranchId(e.target.value)}
                   aria-label="Düzenlenen Şube"
-                  className="bg-transparent text-[12px] font-semibold text-[#1d1d1f] outline-none cursor-pointer"
+                  className="bg-transparent text-[12px] font-semibold text-[#1d1d1f]"
                 >
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.name}
                     </option>
                   ))}
-                </select>
+                </CustomSelect>
               </div>
             )}
             {branches.length > 1 && (

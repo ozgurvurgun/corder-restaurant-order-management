@@ -28,6 +28,7 @@ import {
   BillingConfigModal,
   BillingKpiCards,
 } from "@/components/billing/BillingConfigModal"
+import { CustomMonthPicker } from "@/components/ui/custom-inputs"
 import {
   RecordPaymentModal,
   type BillingStatusFilter,
@@ -267,13 +268,12 @@ export function BillingPage() {
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <input
-              type="month"
+            <CustomMonthPicker
               value={selectedPeriod}
               onChange={(e) => {
                 if (e.target.value) setSelectedPeriod(e.target.value)
               }}
-              className="h-7 bg-transparent px-2 text-[12px] font-semibold text-[#1d1d1f] outline-none cursor-pointer"
+              className="h-7 bg-transparent px-2 text-[12px] font-semibold text-[#1d1d1f]"
             />
             <button
               type="button"

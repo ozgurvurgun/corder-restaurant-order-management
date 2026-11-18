@@ -21,3 +21,4 @@ export class SeparateMerchantMenuContactFields1760000006000
     `);
   }
 }
+

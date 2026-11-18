@@ -1,6 +1,7 @@
 /* global MAX_UI_LOGS, state, $, showToast, apiCall, switchTab, renderAuthGateAndHeader,
    printerLabel, activeModalResolver, closeNicknameModal, askNicknameModal,
-   renderPrinters, renderDiscoveredPrinters, renderRoutingDropdowns, renderQueueAndLogs */
+   renderPrinters, renderDiscoveredPrinters, renderRoutingDropdowns, renderQueueAndLogs,
+   upgradeAllCustomSelects, closeAllCustomSelects */
 
 async function loadState(rerenderAll = false) {
   try {
@@ -99,7 +100,7 @@ function bindAuthEvents() {
     }
   })
 
-  $("btnLogoutTop").addEventListener("click", async () => {
+  const doLogout = async () => {
     try {
       await apiCall("/api/logout", { method: "POST" })
       showToast("Oturum kapatıldı")
@@ -107,7 +108,9 @@ function bindAuthEvents() {
     } catch (err) {
       showToast(err.message, true)
     }
-  })
+  }
+  $("btnLogoutTop").addEventListener("click", doLogout)
+  if ($("btnLogoutSidebar")) $("btnLogoutSidebar").addEventListener("click", doLogout)
 }
 
 function bindPrinterManagementEvents() {
@@ -229,6 +232,8 @@ function bindPrinterManagementEvents() {
       })
       e.target.reset()
       $("netPrinterPort").value = "9100"
+      $("netPrinterWidth").value = "80"
+      upgradeAllCustomSelects()
       showToast(`"${name}" ağ yazıcısı eklendi`)
       await loadState(true)
     } catch (err) {
@@ -326,6 +331,17 @@ document.addEventListener("DOMContentLoaded", () => {
   document
     .querySelectorAll(".tab-btn")
     .forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)))
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".c-select") && !e.target.closest(".c-select-menu")) {
+      closeAllCustomSelects()
+    }
+  })
+  window.addEventListener("resize", () => closeAllCustomSelects())
+  window.addEventListener("scroll", () => closeAllCustomSelects(), true)
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeAllCustomSelects()
+  })
+  upgradeAllCustomSelects()
   bindModalEvents()
   bindAuthEvents()
   bindPrinterManagementEvents()

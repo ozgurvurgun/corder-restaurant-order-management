@@ -3,6 +3,7 @@ import { AlertTriangle, Check, Link2, Pencil, Plus, Search, Trash2, X } from "lu
 import type { PanelCategory, PanelProduct, StockMaterial, Supplier } from "@/lib/panel-types"
 import { AddMaterialForm } from "./stock-modals"
 import { formatCurrency } from "@/lib/format"
+import { CustomSelect } from "@/components/ui/custom-inputs"
 
 export function MaterialsTab(props: {
   stockMaterials: StockMaterial[]
@@ -315,7 +316,7 @@ export function ProductLinkTab(props: {
                         <div className="flex flex-col gap-2">
                           {editingIngredients.map((ing, ingIdx) => (
                             <div key={ingIdx} className="flex items-center gap-2">
-                              <select
+                              <CustomSelect
                                 value={ing.materialId}
                                 onChange={(e) => {
                                   const newIng = [...editingIngredients]
@@ -330,7 +331,7 @@ export function ProductLinkTab(props: {
                                     {m.name} ({m.unit})
                                   </option>
                                 ))}
-                              </select>
+                              </CustomSelect>
                               <input
                                 type="number"
                                 min={0}

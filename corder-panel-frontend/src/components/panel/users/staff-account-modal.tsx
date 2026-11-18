@@ -10,6 +10,7 @@ import {
 import { usePanelAuth } from "@/lib/panel-auth"
 import { usePanelStore } from "@/lib/panel-store"
 import type { PanelUser, PanelUserRole } from "@/lib/panel-types"
+import { CustomSelect } from "@/components/ui/custom-inputs"
 import { usePanelToast } from "../panel-toast"
 import { Sliders, X } from "lucide-react"
 
@@ -236,7 +237,7 @@ export function StaffAccountModal({
         </div>
         <div>
           <label className="block text-[11px] font-semibold text-[#86868b] mb-1">Temel Rolü *</label>
-          <select
+          <CustomSelect
             value={formRole}
             onChange={(e) => {
               const nextRole = e.target.value
@@ -247,12 +248,12 @@ export function StaffAccountModal({
                 setFormCanAccessTerminal(rDef.canAccessTerminal)
               }
             }}
-            className={`${inputClass} cursor-pointer`}
+            className={inputClass}
           >
             {roleOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
-          </select>
+          </CustomSelect>
         </div>
         <div>
           <label className="block text-[11px] font-semibold text-[#86868b] mb-1">Telefon Numarası</label>

@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 import type { PanelCategory } from "@/lib/panel-types"
 import { orderedCategoryList } from "@/lib/panel-api-sync"
+import { CustomSelect } from "@/components/ui/custom-inputs"
 
 export function categoryDepth(cats: PanelCategory[], id: string): number {
   let d = 0
@@ -60,7 +61,7 @@ export function AddCategoryInlineForm(props: {
       <label className="block text-[10px] font-medium text-[#86868b] mb-0.5">
         Üst kategori
       </label>
-      <select
+      <CustomSelect
         value={newCategoryParentId}
         onChange={(e) => setNewCategoryParentId(e.target.value)}
         className="w-full h-[28px] px-2 text-[11px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 mb-1.5"
@@ -72,7 +73,7 @@ export function AddCategoryInlineForm(props: {
             {c.name}
           </option>
         ))}
-      </select>
+      </CustomSelect>
       <input
         type="text"
         value={catName}
@@ -328,7 +329,7 @@ export function CategorySettingsModal(props: {
             <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
               Üst kategori
             </label>
-            <select
+            <CustomSelect
               className="w-full h-[38px] px-3 text-[13px] bg-[#f5f5f7] rounded-xl border border-transparent focus:border-[#e63462]/50 focus:outline-none"
               value={editingCatSettings.parentId ?? ""}
               onChange={(e) => {
@@ -356,7 +357,7 @@ export function CategorySettingsModal(props: {
                     {c.name}
                   </option>
                 ))}
-            </select>
+            </CustomSelect>
           </div>
         </div>
         <div className="px-5 py-4 border-t border-[#e8e8ed]">

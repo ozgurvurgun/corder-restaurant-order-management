@@ -8,6 +8,7 @@ import {
   getWaiterDisplayName,
 } from "@/lib/format"
 import { LiveTableDetailSheet } from "./live-table-detail-sheet"
+import { CustomSelect } from "./ui/custom-inputs"
 import {
   LayoutGrid,
   Package,
@@ -140,18 +141,18 @@ export function OperationsCatalogTab() {
             <span className="text-[11px] font-medium text-[#86868b]">
               {selectedBranchId === "ALL" ? "Aktif Şube:" : "Şube:"}
             </span>
-            <select
+            <CustomSelect
               value={effectiveBranchId}
               onChange={(e) => setSelectedBranchId(e.target.value)}
               aria-label="Aktif Şube"
-              className="bg-transparent text-[12px] font-semibold text-[#1d1d1f] outline-none cursor-pointer"
+              className="bg-transparent text-[12px] font-semibold text-[#1d1d1f]"
             >
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
                 </option>
               ))}
-            </select>
+            </CustomSelect>
           </div>
         )}
       </div>

@@ -14,6 +14,7 @@ import {
 import { AlertCircle, CreditCard, RotateCcw, X } from "lucide-react"
 import { usePaymentFormState } from "./use-payment-form"
 import { PeriodPackageSelector } from "./PeriodPackageSelector"
+import { CustomSelect } from "@/components/ui/custom-inputs"
 
 interface PaymentFormModalProps {
   restaurant: Restaurant | null
@@ -258,7 +259,7 @@ export function PaymentFormModal({
               <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
                 Ödeme Yöntemi *
               </label>
-              <select
+              <CustomSelect
                 value={form.paymentMethod}
                 onChange={(e) =>
                   form.setPaymentMethod(e.target.value as SubscriptionPaymentMethod)
@@ -274,7 +275,7 @@ export function PaymentFormModal({
                     {label}
                   </option>
                 ))}
-              </select>
+              </CustomSelect>
             </div>
           </div>
 

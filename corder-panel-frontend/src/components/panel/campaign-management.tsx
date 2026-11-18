@@ -7,12 +7,8 @@ import { usePanelToast } from "./panel-toast"
 import { Plus, Pencil, Trash2, X, Megaphone, Eye, EyeOff } from "lucide-react"
 import ImageUpload from "./image-upload"
 import type { Campaign } from "@/lib/panel-types"
-import {
-  formatCurrency,
-  formatIstanbulDate,
-  getIstanbulYmd,
-  resolveAssetUrl,
-} from "@/lib/format"
+import { formatCurrency, formatIstanbulDate, getIstanbulYmd, resolveAssetUrl } from "@/lib/format"
+import { CustomDatePicker } from "@/components/ui/custom-inputs"
 
 export default function CampaignManagement() {
   const { token } = usePanelAuth()
@@ -399,8 +395,7 @@ export default function CampaignManagement() {
                 <label className="block text-[12px] font-medium text-[#86868b] mb-1.5">
                   {locale === "tr" ? "Geçerlilik Tarihi" : "Valid Until"}
                 </label>
-                <input
-                  type="date"
+                <CustomDatePicker
                   value={validUntil}
                   onChange={(e) => setValidUntil(e.target.value)}
                   className="w-full h-11 px-4 text-[14px] bg-[#f5f5f7] rounded-xl border border-transparent focus:border-[#e63462]/50 focus:outline-none transition-colors"

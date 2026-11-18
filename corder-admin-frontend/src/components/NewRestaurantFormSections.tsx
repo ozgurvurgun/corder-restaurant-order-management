@@ -5,6 +5,7 @@ import type {
 } from "@/lib/types"
 import { Building2, CreditCard, Monitor, Printer } from "lucide-react"
 import { CorderEmailInput } from "@/components/CorderEmailInput"
+import { CustomMonthPicker, CustomSelect } from "@/components/ui/custom-inputs"
 
 interface FranchiseConfigCardProps {
   branchType: RestaurantBranchType
@@ -44,7 +45,7 @@ export function FranchiseConfigCard({
           <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
             Şube Mülkiyet Modeli
           </label>
-          <select
+          <CustomSelect
             value={branchType}
             onChange={(e) => onBranchTypeChange(e.target.value as RestaurantBranchType)}
             className={inputCls}
@@ -52,7 +53,7 @@ export function FranchiseConfigCard({
             <option value="independent">Bağımsız Tekil İşletme</option>
             <option value="company_owned">Merkez / Özmal Şube (Markaya Ait)</option>
             <option value="franchise">Franchise Şubesi (Franchise Alan Yatırımcı)</option>
-          </select>
+          </CustomSelect>
         </div>
         <div>
           <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
@@ -171,8 +172,7 @@ export function InitialSubscriptionCard({
           <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
             Abonelik Başlangıç Dönemi (Ay / Yıl) *
           </label>
-          <input
-            type="month"
+          <CustomMonthPicker
             value={billingStartPeriod}
             onChange={(e) => {
               if (e.target.value) onBillingStartPeriodChange(e.target.value)
@@ -202,7 +202,7 @@ export function InitialSubscriptionCard({
               <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
                 Peşin Ödenen Süre
               </label>
-              <select
+              <CustomSelect
                 value={initialPaidMonths}
                 onChange={(e) => onInitialPaidMonthsChange(Number(e.target.value))}
                 className={inputCls}
@@ -211,13 +211,13 @@ export function InitialSubscriptionCard({
                 <option value={3}>3 Aylık ({formatMoney(feeMajor * 3)})</option>
                 <option value={6}>6 Aylık ({formatMoney(feeMajor * 6)})</option>
                 <option value={12}>12 Aylık ({formatMoney(feeMajor * 12)})</option>
-              </select>
+              </CustomSelect>
             </div>
             <div>
               <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
                 Ödeme Yöntemi
               </label>
-              <select
+              <CustomSelect
                 value={initialPaymentMethod}
                 onChange={(e) =>
                   onInitialPaymentMethodChange(
@@ -235,7 +235,7 @@ export function InitialSubscriptionCard({
                     {label}
                   </option>
                 ))}
-              </select>
+              </CustomSelect>
             </div>
           </div>
         )}

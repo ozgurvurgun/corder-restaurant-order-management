@@ -8,6 +8,7 @@ import {
   sanitizeCorderEmailLocalPartInput,
 } from "@/lib/corder-email"
 import { Building2, Crown, Plus, X } from "lucide-react"
+import { CustomSelect } from "./ui/custom-inputs"
 
 export function SubBossesSection() {
   const { branches, effectiveBranchId, showToast } = useBossStore()
@@ -201,14 +202,14 @@ export function SubBossesSection() {
             <form onSubmit={handleCreateSubBoss} className="mt-4 space-y-3">
               <div>
                 <label className="block text-[11px] font-semibold text-[#86868b] mb-1">Yetki Rolü</label>
-                <select
+                <CustomSelect
                   value={sbTier}
                   onChange={(e) => setSbTier(e.target.value as "franchise_owner" | "regional_manager")}
                   className="w-full h-9 px-3 text-[12px] bg-[#f5f5f7] rounded-xl border border-[#d1d1d6]"
                 >
                   <option value="franchise_owner">Şube / Franchise Sahibi (Şube Boss&apos;u)</option>
                   <option value="regional_manager">Bölge Yöneticisi</option>
-                </select>
+                </CustomSelect>
               </div>
               <div>
                 <label className="block text-[11px] font-semibold text-[#86868b] mb-1">Ad Soyad *</label>

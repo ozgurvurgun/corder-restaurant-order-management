@@ -1,5 +1,6 @@
 import { formatPeriodLong, formatPeriodShort } from "@/lib/money"
 import { AlertCircle, Calendar, Check, CheckCircle2 } from "lucide-react"
+import { CustomDatePicker, CustomMonthPicker } from "@/components/ui/custom-inputs"
 import type { PackagePreset } from "./use-payment-form"
 
 interface PeriodPackageSelectorProps {
@@ -78,8 +79,7 @@ export function PeriodPackageSelector({
             <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
               Başlangıç Dönemi (Ay / Yıl) *
             </label>
-            <input
-              type="month"
+            <CustomMonthPicker
               value={startPeriod}
               onChange={(e) => {
                 if (e.target.value) onStartPeriodChange(e.target.value)
@@ -92,8 +92,7 @@ export function PeriodPackageSelector({
             <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
               Tahsilatın Alındığı Tarih *
             </label>
-            <input
-              type="date"
+            <CustomDatePicker
               value={paidAtDate}
               onChange={(e) => onPaidAtDateChange(e.target.value)}
               className={inputCls}
@@ -145,8 +144,7 @@ export function PeriodPackageSelector({
             <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
               Tahsilatın Alındığı Tarih *
             </label>
-            <input
-              type="date"
+            <CustomDatePicker
               value={paidAtDate}
               onChange={(e) => onPaidAtDateChange(e.target.value)}
               className={inputCls}

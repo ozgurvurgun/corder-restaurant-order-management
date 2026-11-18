@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import type { RoleTemplateDefinition } from "@/lib/types"
 import { getRoleDisplayName } from "@/lib/permission-labels"
+import { CustomSelect } from "./ui/custom-inputs"
 import { X } from "lucide-react"
 
 interface NewRoleModalProps {
@@ -101,10 +102,10 @@ export function NewRoleModal({
               <label className="mb-1 block text-[12px] font-semibold text-[#1d1d1f]">
                 Başlangıç Yetki Şablonu
               </label>
-              <select
+              <CustomSelect
                 value={templateKey}
                 onChange={(e) => setTemplateKey(e.target.value)}
-                className="h-11 w-full rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3.5 text-[13px] font-semibold text-[#1d1d1f] outline-none focus:border-[#e63462]"
+                className="h-11 w-full rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3.5 text-[13px] font-semibold text-[#1d1d1f]"
               >
                 {templates.map((tpl) => (
                   <option key={tpl.key} value={tpl.key}>
@@ -112,7 +113,7 @@ export function NewRoleModal({
                   </option>
                 ))}
                 <option value="">Boş (Yetkileri Sıfırdan Seç)</option>
-              </select>
+              </CustomSelect>
             </div>
           )}
           <div>

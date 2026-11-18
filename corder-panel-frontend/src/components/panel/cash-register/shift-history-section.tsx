@@ -20,6 +20,7 @@ import {
   fromMinorUnits,
   toMinorUnits,
 } from "@/lib/format"
+import { CustomSelect } from "@/components/ui/custom-inputs"
 
 export interface ShiftTotalsSummary {
   totalRevenue: number
@@ -115,7 +116,7 @@ export function ZReportSection(props: {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-2">
           <span className="text-[12px] font-medium text-[#86868b]">Vardiya:</span>
-          <select
+          <CustomSelect
             value={selectedShift.id}
             onChange={(e) => onSelectShift(e.target.value)}
             className="h-[34px] px-3 text-[12px] bg-white rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
@@ -127,7 +128,7 @@ export function ZReportSection(props: {
                   : `Kapalı — ${s.openedBy} (${formatIstanbulDateTime(s.openedAt)} - ${s.closedAt ? formatIstanbulTime(s.closedAt) : "-"})`}
               </option>
             ))}
-          </select>
+          </CustomSelect>
         </div>
 
         <button

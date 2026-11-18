@@ -5,6 +5,7 @@ import type { StaffMemberDto } from "@/lib/types"
 import { getRoleDisplayName } from "@/lib/permission-labels"
 import { StaffUserModal } from "./staff-user-modal"
 import { SubBossesSection } from "./sub-bosses-section"
+import { CustomSelect } from "./ui/custom-inputs"
 import {
   Users,
   Plus,
@@ -132,18 +133,18 @@ export function StaffUsersTab() {
                 <span className="text-[11px] font-medium text-[#86868b]">
                   {selectedBranchId === "ALL" ? "Düzenlenen:" : "Şube:"}
                 </span>
-                <select
+                <CustomSelect
                   value={effectiveBranchId}
                   onChange={(e) => setSelectedBranchId(e.target.value)}
                   aria-label="Düzenlenen Şube"
-                  className="bg-transparent text-[12px] font-semibold text-[#1d1d1f] outline-none cursor-pointer"
+                  className="bg-transparent text-[12px] font-semibold text-[#1d1d1f]"
                 >
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.name}
                     </option>
                   ))}
-                </select>
+                </CustomSelect>
               </div>
             )}
             <button

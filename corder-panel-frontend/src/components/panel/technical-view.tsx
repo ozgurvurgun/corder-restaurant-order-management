@@ -3,6 +3,7 @@ import { usePanelStore } from "@/lib/panel-store"
 import { Bell, Shield, CheckCircle2, XCircle, AlertTriangle, Printer, Plus, Trash2 } from "lucide-react"
 import type { PrinterConfig } from "@/lib/panel-types"
 import { computeDateFilterBounds, formatIstanbulDateTime } from "@/lib/format"
+import { CustomDatePicker, CustomSelect } from "@/components/ui/custom-inputs"
 
 type TechnicalTab = "notifications" | "printers" | "audit"
 
@@ -248,26 +249,26 @@ export default function TechnicalView() {
                 <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4 space-y-3">
                   <div className="grid grid-cols-3 gap-3">
                     <input type="text" value={pName} onChange={(e) => setPName(e.target.value)} placeholder="Yazıcı adı (Örn: Mutfak)" className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60" />
-                    <select value={pType} onChange={(e) => setPType(e.target.value as PrinterConfig["type"]) } className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60">
+                    <CustomSelect value={pType} onChange={(e) => setPType(e.target.value as PrinterConfig["type"]) } className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60">
                       <option value="kitchen">Mutfak</option>
                       <option value="bar">Bar</option>
                       <option value="receipt">Adisyon / Kasa</option>
                       <option value="label">Etiket</option>
-                    </select>
-                    <select value={pConn} onChange={(e) => setPConn(e.target.value as PrinterConfig["connection"]) } className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60">
+                    </CustomSelect>
+                    <CustomSelect value={pConn} onChange={(e) => setPConn(e.target.value as PrinterConfig["connection"]) } className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60">
                       <option value="network">Ağ (IP/TCP)</option>
                       <option value="usb">USB</option>
                       <option value="bluetooth">Bluetooth</option>
-                    </select>
+                    </CustomSelect>
                   </div>
                   {pConn === "network" && (
                     <div className="grid grid-cols-3 gap-3">
                       <input type="text" value={pIp} onChange={(e) => setPIp(e.target.value)} placeholder="IP Adresi (Örn: 192.168.1.200)" className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60" />
                       <input type="number" value={pPort} onChange={(e) => setPPort(e.target.value)} placeholder="Port (9100)" className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60" />
-                      <select value={pPaper} onChange={(e) => setPPaper(Number(e.target.value) as 58 | 80) } className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60">
+                      <CustomSelect value={pPaper} onChange={(e) => setPPaper(Number(e.target.value) as 58 | 80) } className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60">
                         <option value={80}>80mm Kağıt</option>
                         <option value={58}>58mm Kağıt</option>
-                      </select>
+                      </CustomSelect>
                     </div>
                   )}
                   <div className="flex justify-end gap-2">
@@ -397,9 +398,9 @@ export default function TechnicalView() {
                 ))}
                 {datePreset === "custom" && (
                   <>
-                    <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="h-[28px] px-2 text-[11px] bg-white border border-[#d1d1d6]/60 rounded-lg text-[#1d1d1f]" />
+                    <CustomDatePicker value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="h-[28px] px-2.5 text-[11px] bg-white border border-[#d1d1d6]/60 rounded-lg text-[#1d1d1f]" />
                     <span className="text-[11px] text-[#86868b]">-</span>
-                    <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="h-[28px] px-2 text-[11px] bg-white border border-[#d1d1d6]/60 rounded-lg text-[#1d1d1f]" />
+                    <CustomDatePicker value={toDate} onChange={(e) => setToDate(e.target.value)} className="h-[28px] px-2.5 text-[11px] bg-white border border-[#d1d1d6]/60 rounded-lg text-[#1d1d1f]" />
                   </>
                 )}
               </div>
