@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from "react"
 import type { PanelPermissionCatalogDto, PanelRoleDefinitionDto } from "@/lib/api/system.api"
 import { getCategoryLabel, getPermissionLabel, getRoleDisplayName } from "@/lib/permission-labels"
+import {
+  buildCorderEmailDomain,
+  extractCorderEmailLocalPart,
+  formatCanonicalCorderEmail,
+  sanitizeCorderEmailLocalPartInput,
+} from "@/lib/corder-email"
+import { usePanelAuth } from "@/lib/panel-auth"
+import { usePanelStore } from "@/lib/panel-store"
 import type { PanelUser, PanelUserRole } from "@/lib/panel-types"
 import { usePanelToast } from "../panel-toast"
 import { Sliders, X } from "lucide-react"
@@ -34,6 +42,10 @@ export function StaffAccountModal({
   onUpdateUser,
 }: StaffAccountModalProps) {
   const { showToast } = usePanelToast()
+  const { currentBusiness } = usePanelAuth()
+  const { settings } = usePanelStore()
+  const mailTenant = currentBusiness?.slug || currentBusiness?.name || settings.name
+  const mailDomain = buildCorderEmailDomain(mailTenant)
 
   const [formName, setFormName] = useState("")
   const [formRole, setFormRole] = useState<PanelUserRole | string>("waiter")
@@ -69,7 +81,7 @@ export function StaffAccountModal({
     setFormName(editingUser.name)
     setFormRole(editingUser.role === "root" ? "branch_manager" : editingUser.role)
     setFormPhone(editingUser.phone || "")
-    setFormEmail(editingUser.email || "")
+    setFormEmail(extractCorderEmailLocalPart(editingUser.email))
     setFormPassword("")
     setFormPin("")
     setFormCanAccessPanel(Boolean(editingUser.canAccessPanel || editingUser.email))
@@ -139,8 +151,9 @@ export function StaffAccountModal({
       showToast("Terminal girişi için 4-8 haneli PIN girin.", "error")
       return
     }
-    if (formCanAccessPanel && (!formEmail.trim() || !formEmail.includes("@"))) {
-      showToast("Panel girişi için geçerli bir e-posta adresi girin.", "error")
+    const canonicalEmail = formatCanonicalCorderEmail(formEmail, mailTenant)
+    if (formCanAccessPanel && !canonicalEmail) {
+      showToast("Panel girişi için @ öncesi e-posta kullanıcı adını girin.", "error")
       return
     }
     if (formCanAccessPanel && !editingUser?.hasPassword && formPassword.length < 6) {
@@ -153,7 +166,7 @@ export function StaffAccountModal({
         name: formName.trim(),
         role: formRole,
         phone: formPhone.trim() || undefined,
-        email: formEmail.trim() || undefined,
+        email: canonicalEmail || undefined,
         ...(formPassword.length >= 6 ? { password: formPassword } : {}),
         ...(pin.length >= 4 ? { pin } : {}),
         canAccessPanel: formCanAccessPanel,
@@ -172,7 +185,7 @@ export function StaffAccountModal({
       role: formRole,
       phone: formPhone.trim() || undefined,
       ...(pin.length >= 4 ? { pin } : {}),
-      ...(formEmail.trim() ? { email: formEmail.trim() } : {}),
+      ...(canonicalEmail ? { email: canonicalEmail } : {}),
       ...(formPassword ? { password: formPassword } : {}),
       canAccessPanel: formCanAccessPanel,
       canAccessTerminal: formCanAccessTerminal,
@@ -308,13 +321,25 @@ export function StaffAccountModal({
               <label className="block text-[11px] font-semibold text-[#86868b] mb-1">
                 Merchant Panel Giriş E-postası *
               </label>
-              <input
-                type="email"
-                value={formEmail}
-                onChange={(e) => setFormEmail(e.target.value)}
-                placeholder="personel@restoran.com"
-                className={inputClass}
-              />
+              <div className="flex h-[38px] w-full items-stretch overflow-hidden rounded-lg border border-[#d1d1d6]/60 bg-[#f5f5f7] focus-within:border-[#e63462] focus-within:bg-white transition-all">
+                <input
+                  type="text"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  value={formEmail}
+                  onChange={(e) => setFormEmail(sanitizeCorderEmailLocalPartInput(e.target.value))}
+                  placeholder="personel"
+                  className="min-w-0 flex-1 bg-transparent px-3 text-[13px] font-medium text-[#1d1d1f] outline-none placeholder:font-normal placeholder:text-[#86868b]"
+                />
+                <span
+                  className="inline-flex items-center border-l border-[#e5e5ea] bg-[#ededf2] px-2.5 font-mono text-[11.5px] font-semibold text-[#1d1d1f] select-none whitespace-nowrap"
+                  title={`@${mailDomain}`}
+                >
+                  @{mailDomain}
+                </span>
+              </div>
             </div>
             <div>
               <label className="block text-[11px] font-semibold text-[#86868b] mb-1">

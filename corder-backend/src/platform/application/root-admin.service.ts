@@ -12,6 +12,7 @@ import { RestaurantEntity } from '../domain/restaurant.entity';
 import { CreateRootAdminDto } from '../api/dto/create-root-admin.dto';
 import { UpdateRootAdminDto } from '../api/dto/update-root-admin.dto';
 import { normalizeStorageText } from '../../common/text/text-normalizer';
+import { formatCanonicalCorderEmail } from '../../common/text/corder-email.policy';
 
 export interface BossWithRestaurantsDto {
   id: string;
@@ -245,6 +246,7 @@ export class RootAdminService {
         ...brandBranchIds,
       ]),
     );
+    let primaryBranchSlug: string | null = null;
     if (targetRestaurantIds.length > 0) {
       const found = await this.restaurantRepo.find({
         where: { id: In(targetRestaurantIds) },
@@ -252,9 +254,15 @@ export class RootAdminService {
       if (found.length !== targetRestaurantIds.length) {
         throw new NotFoundException('One or more selected restaurants were not found');
       }
+      const primaryBranch = found.find((r) => r.id === targetRestaurantIds[0]) ?? found[0];
+      primaryBranchSlug = primaryBranch?.slug ?? null;
     }
 
-    const email = dto.email.toLowerCase().trim();
+    const tenantContext =
+      bossTier === 'brand_owner' && brandName ? brandName : primaryBranchSlug;
+    const email =
+      formatCanonicalCorderEmail(dto.email, tenantContext) ??
+      dto.email.toLowerCase().trim();
     const existingGlobal = await this.findOneByEmail(email);
 
     // If Boss already exists and a restaurantId is being attached, link them to the new branch!
@@ -281,7 +289,9 @@ export class RootAdminService {
     }
 
     const primaryRestaurantId = targetRestaurantIds[0] ?? null;
-    const normalizedTerminalEmail = dto.terminalEmail?.toLowerCase().trim() || null;
+    const normalizedTerminalEmail = dto.terminalEmail
+      ? formatCanonicalCorderEmail(dto.terminalEmail, primaryBranchSlug)
+      : null;
     if (primaryRestaurantId && normalizedTerminalEmail) {
       await this.assertUniqueTerminalEmail(normalizedTerminalEmail, primaryRestaurantId);
     }
@@ -378,7 +388,18 @@ export class RootAdminService {
     if (dto.bossTier !== undefined) entity.bossTier = dto.bossTier;
     if (dto.brandName !== undefined) entity.brandName = dto.brandName?.trim() || null;
     if (dto.email !== undefined) {
-      const email = dto.email.toLowerCase().trim();
+      const targetRestId =
+        dto.restaurantIds?.[0] ?? contextRestaurantId ?? entity.restaurantId;
+      const targetRest = targetRestId
+        ? await this.restaurantRepo.findOne({ where: { id: targetRestId } })
+        : null;
+      const tenantContext =
+        entity.bossTier === 'brand_owner' && entity.brandName
+          ? entity.brandName
+          : targetRest?.slug ?? null;
+      const email =
+        formatCanonicalCorderEmail(dto.email, tenantContext) ??
+        dto.email.toLowerCase().trim();
       const existing = await this.findOneByEmail(email);
       if (existing && existing.id !== id) {
         throw new ConflictException('This email address is already in use by another Boss account');

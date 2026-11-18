@@ -11,6 +11,7 @@ import * as bcrypt from 'bcryptjs';
 import { Repository } from 'typeorm';
 import { RestaurantStaffEntity } from '../domain/restaurant-staff.entity';
 import { RestaurantRoleEntity } from '../domain/restaurant-role.entity';
+import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 import {
   EffectivePolicyLimits,
   normalizeRoleKey,
@@ -22,6 +23,7 @@ import { StaffSessionService } from './staff-session.service';
 import { CreateStaffDto } from '../api/dto/create-staff.dto';
 import { UpdateStaffDto } from '../api/dto/update-staff.dto';
 import { normalizeStorageText } from '../../common/text/text-normalizer';
+import { formatCanonicalCorderEmail } from '../../common/text/corder-email.policy';
 
 const DUMMY_PIN_HASH = bcrypt.hashSync('00000000', 10);
 
@@ -71,9 +73,29 @@ export class StaffService {
   constructor(
     @InjectRepository(RestaurantStaffEntity)
     private readonly staffRepo: Repository<RestaurantStaffEntity>,
+    @InjectRepository(RestaurantEntity)
+    private readonly restaurantRepo: Repository<RestaurantEntity>,
     private readonly staffSession: StaffSessionService,
     private readonly rolesService: RolesService,
   ) {}
+
+  private async resolveCanonicalStaffEmail(
+    restaurantId: string,
+    rawEmail: string,
+  ): Promise<string> {
+    const rest = await this.restaurantRepo.findOne({
+      where: { id: restaurantId },
+      select: ['id', 'slug', 'name'],
+    });
+    const canonical = formatCanonicalCorderEmail(
+      rawEmail,
+      rest?.slug || rest?.name,
+    );
+    if (!canonical) {
+      throw new BadRequestException('Invalid email username');
+    }
+    return canonical;
+  }
 
   private async toPublicDto(
     s: RestaurantStaffEntity,
@@ -204,7 +226,7 @@ export class StaffService {
     let email: string | null = null;
     let passwordHash: string | null = null;
     if (dto.email && dto.email.trim()) {
-      email = dto.email.toLowerCase().trim();
+      email = await this.resolveCanonicalStaffEmail(restaurantId, dto.email);
       await this.assertUniqueEmail(email);
     }
     if (dto.password && dto.password.trim()) {
@@ -289,7 +311,10 @@ export class StaffService {
     }
     if (dto.email !== undefined) {
       if (dto.email && dto.email.trim()) {
-        const nextEmail = dto.email.toLowerCase().trim();
+        const nextEmail = await this.resolveCanonicalStaffEmail(
+          restaurantId,
+          dto.email,
+        );
         await this.assertUniqueEmail(nextEmail, id);
         staff.email = nextEmail;
       } else {

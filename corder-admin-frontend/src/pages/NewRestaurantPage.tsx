@@ -16,12 +16,18 @@ import {
   FranchiseConfigCard,
   InitialSubscriptionCard,
 } from "@/components/NewRestaurantFormSections"
+import { CorderEmailInput } from "@/components/CorderEmailInput"
+import {
+  formatCanonicalCorderEmail,
+  toCorderEmailTenantSlug,
+} from "@/lib/corder-email"
 
 export function NewRestaurantPage() {
   const navigate = useNavigate()
   const { addRestaurant, restaurants, loadRestaurants } = useAdminStore()
   const [name, setName] = useState("")
   const [slug, setSlug] = useState("")
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false)
   const [address, setAddress] = useState("")
   const [phone, setPhone] = useState("")
   const [email, setEmail] = useState("")
@@ -52,37 +58,29 @@ export function NewRestaurantPage() {
     new Set(restaurants.map((r) => r.brandName?.trim()).filter(Boolean) as string[])
   )
 
-  const handleSlugFromName = () => {
-    if (!name || slug.trim()) return
-    setSlug(
-      name
-        .toLowerCase()
-        .replace(/ğ/g, "g")
-        .replace(/ü/g, "u")
-        .replace(/ş/g, "s")
-        .replace(/ı/g, "i")
-        .replace(/ö/g, "o")
-        .replace(/ç/g, "c")
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "")
-    )
+  const handleNameChange = (nextName: string) => {
+    setName(nextName)
+    if (!slugManuallyEdited) {
+      setSlug(toCorderEmailTenantSlug(nextName))
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
     if (!name.trim()) return setError("Restoran adı gerekli.")
-    const cleanSlug = slug.trim().toLowerCase()
+    const cleanSlug = toCorderEmailTenantSlug(slug || name)
     if (!cleanSlug) return setError("Slug gerekli (URL için benzersiz).")
     if (restaurants.some((r) => r.slug === cleanSlug)) {
       return setError("Bu slug zaten kullanılıyor.")
     }
-    const cleanTerminalEmail = terminalEmail.trim().toLowerCase()
+    const cleanEmail = formatCanonicalCorderEmail(email, cleanSlug)
+    const cleanTerminalEmail = formatCanonicalCorderEmail(terminalEmail, cleanSlug)
     if (cleanTerminalEmail && terminalPassword.length < 4) {
       return setError("Terminal hesabı tanımlarken en az 4 karakterli parola girilmelidir.")
     }
     if (!cleanTerminalEmail && terminalPassword.length > 0) {
-      return setError("Terminal parolası girildiğinde terminal e-posta adresi de belirtilmelidir.")
+      return setError("Terminal parolası girildiğinde terminal kullanıcı adı (@ öncesi) da belirtilmelidir.")
     }
     const cleanPrintUser = printAgentUsername.trim().toLowerCase()
     if (cleanPrintUser && cleanPrintUser.length < 3) {
@@ -102,7 +100,7 @@ export function NewRestaurantPage() {
         slug: cleanSlug,
         address: address.trim() || undefined,
         phone: phone.trim() || undefined,
-        email: email.trim() || undefined,
+        email: cleanEmail || undefined,
         status,
         brandName: brandName.trim() || null,
         branchType,
@@ -158,8 +156,7 @@ export function NewRestaurantPage() {
               <input
                 type="text"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
-                onBlur={handleSlugFromName}
+                onChange={(e) => handleNameChange(e.target.value)}
                 placeholder="Örn. Burger House Kadıköy"
                 className={inputCls}
                 required
@@ -173,7 +170,11 @@ export function NewRestaurantPage() {
               <input
                 type="text"
                 value={slug}
-                onChange={(e) => setSlug(e.target.value)}
+                onChange={(e) => {
+                  const next = toCorderEmailTenantSlug(e.target.value)
+                  setSlug(next)
+                  setSlugManuallyEdited(Boolean(next))
+                }}
                 placeholder="burger-house-kadikoy"
                 className={`${inputCls} font-mono`}
                 required
@@ -205,11 +206,11 @@ export function NewRestaurantPage() {
             </div>
             <div>
               <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">E-posta</label>
-              <input
-                type="email"
+              <CorderEmailInput
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={inputCls}
+                onChange={setEmail}
+                tenantSlugOrName={slug || name}
+                placeholder="iletisim"
                 disabled={loading}
               />
             </div>
@@ -259,6 +260,7 @@ export function NewRestaurantPage() {
         />
 
         <DeviceCredentialsCards
+          tenantSlugOrName={slug || name}
           terminalEmail={terminalEmail}
           onTerminalEmailChange={setTerminalEmail}
           terminalPassword={terminalPassword}

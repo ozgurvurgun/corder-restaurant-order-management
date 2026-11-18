@@ -2,6 +2,11 @@ import { useEffect, useState } from "react"
 import { useBossStore } from "@/lib/boss-store"
 import { bossApi } from "@/lib/api"
 import type { SubBossItemDto } from "@/lib/types"
+import {
+  buildCorderEmailDomain,
+  formatCanonicalCorderEmail,
+  sanitizeCorderEmailLocalPartInput,
+} from "@/lib/corder-email"
 import { Building2, Crown, Plus, X } from "lucide-react"
 
 export function SubBossesSection() {
@@ -27,14 +32,22 @@ export function SubBossesSection() {
       .finally(() => setLoadingList(false))
   }, [])
 
+  const targetBranch =
+    branches.find((b) => b.id === sbBranchIds[0]) ??
+    branches.find((b) => b.id === effectiveBranchId) ??
+    branches[0]
+  const subBossTenant = targetBranch?.slug || targetBranch?.name || ""
+  const subBossDomain = buildCorderEmailDomain(subBossTenant)
+
   const handleCreateSubBoss = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!sbName.trim() || !sbEmail.trim() || sbBranchIds.length === 0) {
-      showToast("Ad, e-posta ve en az bir şube seçimi zorunludur", "error")
+    const canonicalEmail = formatCanonicalCorderEmail(sbEmail, subBossTenant)
+    if (!sbName.trim() || !canonicalEmail || sbBranchIds.length === 0) {
+      showToast("Ad, e-posta kullanıcı adı (@ öncesi) ve en az bir şube seçimi zorunludur", "error")
       return
     }
     const existingAccount = subBosses.some(
-      (b) => b.email.toLowerCase() === sbEmail.trim().toLowerCase()
+      (b) => b.email.toLowerCase() === canonicalEmail.toLowerCase()
     )
     if (!existingAccount && sbPassword.trim().length < 8) {
       showToast("Yeni Şube Boss hesabı için en az 8 karakterli bir parola girin", "error")
@@ -48,7 +61,7 @@ export function SubBossesSection() {
     try {
       const updated = await bossApi.overview.createSubBoss({
         name: sbName.trim(),
-        email: sbEmail.trim(),
+        email: canonicalEmail,
         phone: sbPhone.trim() || undefined,
         password: sbPassword.trim() || undefined,
         bossTier: sbTier,
@@ -208,17 +221,29 @@ export function SubBossesSection() {
                   required
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <label className="block text-[11px] font-semibold text-[#86868b] mb-1">E-posta *</label>
-                  <input
-                    type="email"
-                    value={sbEmail}
-                    onChange={(e) => setSbEmail(e.target.value)}
-                    placeholder="sube@restoran.com"
-                    className="w-full h-9 px-3 text-[12px] bg-[#f5f5f7] rounded-xl border border-[#d1d1d6]"
-                    required
-                  />
+                  <div className="flex h-9 w-full items-stretch overflow-hidden rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] focus-within:border-[#e63462] focus-within:bg-white transition-all">
+                    <input
+                      type="text"
+                      inputMode="email"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      value={sbEmail}
+                      onChange={(e) => setSbEmail(sanitizeCorderEmailLocalPartInput(e.target.value))}
+                      placeholder="sube"
+                      className="min-w-0 flex-1 bg-transparent px-2.5 text-[12px] font-medium text-[#1d1d1f] outline-none placeholder:font-normal placeholder:text-[#86868b]"
+                      required
+                    />
+                    <span
+                      className="inline-flex items-center border-l border-[#e5e5ea] bg-[#ededf2] px-2 font-mono text-[10.5px] font-semibold text-[#1d1d1f] select-none whitespace-nowrap"
+                      title={`@${subBossDomain}`}
+                    >
+                      @{subBossDomain}
+                    </span>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-[#86868b] mb-1">Telefon</label>

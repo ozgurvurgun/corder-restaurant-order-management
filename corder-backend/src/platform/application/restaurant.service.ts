@@ -20,6 +20,10 @@ import {
 } from '../domain/subscription-billing.policy';
 import { CreateRestaurantDto } from '../api/dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from '../api/dto/update-restaurant.dto';
+import {
+  formatCanonicalCorderEmail,
+  toCorderEmailTenantSlug,
+} from '../../common/text/corder-email.policy';
 
 export function getCurrentBillingPeriod(now = new Date()): string {
   return dateToIstanbulPeriod(now);
@@ -258,13 +262,17 @@ export class RestaurantService {
   }
 
   private async resolveDeviceCredentials(params: {
+    tenantSlug: string;
     terminalEmail?: string | null;
     terminalPassword?: string;
     printAgentUsername?: string | null;
     printAgentPassword?: string;
     excludeRestaurantId?: string;
   }) {
-    const terminalEmail = params.terminalEmail?.trim().toLowerCase() || null;
+    const terminalEmail = formatCanonicalCorderEmail(
+      params.terminalEmail,
+      params.tenantSlug,
+    );
     await this.assertUniqueTerminalEmail(terminalEmail, params.excludeRestaurantId);
     const terminalPasswordHash =
       params.terminalPassword && params.terminalPassword.length > 0
@@ -292,7 +300,8 @@ export class RestaurantService {
   }
 
   async create(dto: CreateRestaurantDto, recordedBy = 'Platform Admin') {
-    const slug = dto.slug.toLowerCase().trim();
+    const slug = toCorderEmailTenantSlug(dto.slug || dto.name);
+    if (!slug) throw new ConflictException('Invalid restaurant slug');
     const existing = await this.repo.findOne({ where: { slug } });
     if (existing) throw new ConflictException('Slug already in use');
 
@@ -312,10 +321,12 @@ export class RestaurantService {
       initialPaymentMethod,
       isAccessSuspended,
       billingNotes,
+      email: rawEmail,
       ...restDto
     } = dto;
 
     const creds = await this.resolveDeviceCredentials({
+      tenantSlug: slug,
       terminalEmail: rawTerminalEmail,
       terminalPassword: rawTerminalPassword,
       printAgentUsername: rawUsername,
@@ -333,6 +344,7 @@ export class RestaurantService {
       this.repo.create({
         ...restDto,
         slug,
+        email: formatCanonicalCorderEmail(rawEmail, slug) ?? undefined,
         brandName: brandName?.trim() || null,
         branchType: branchType ?? 'independent',
         franchiseeCompanyName: franchiseeCompanyName?.trim() || null,
@@ -378,7 +390,9 @@ export class RestaurantService {
     if (dto.name !== undefined) entity.name = dto.name;
     if (dto.address !== undefined) entity.address = dto.address;
     if (dto.phone !== undefined) entity.phone = dto.phone;
-    if (dto.email !== undefined) entity.email = dto.email;
+    if (dto.email !== undefined) {
+      entity.email = formatCanonicalCorderEmail(dto.email, entity.slug) ?? (null as unknown as string);
+    }
     if (dto.status !== undefined) entity.status = dto.status;
     if (dto.brandName !== undefined) entity.brandName = dto.brandName?.trim() || null;
     if (dto.branchType !== undefined) entity.branchType = dto.branchType;
@@ -408,12 +422,18 @@ export class RestaurantService {
   async update(id: string, dto: UpdateRestaurantDto) {
     const entity = await this.findOne(id);
     if (dto.slug !== undefined) {
-      const slug = dto.slug.toLowerCase().trim();
-      if (slug !== entity.slug) {
+      const slug = toCorderEmailTenantSlug(dto.slug);
+      if (slug && slug !== entity.slug) {
         const existing = await this.repo.findOne({ where: { slug } });
         if (existing) throw new ConflictException('Slug already in use');
+        entity.slug = slug;
+        if (entity.email && dto.email === undefined) {
+          entity.email = formatCanonicalCorderEmail(entity.email, slug) ?? entity.email;
+        }
+        if (entity.terminalEmail && dto.terminalEmail === undefined) {
+          entity.terminalEmail = formatCanonicalCorderEmail(entity.terminalEmail, slug);
+        }
       }
-      entity.slug = slug;
     }
 
     this.applyMutableScalarFields(entity, dto);
@@ -427,6 +447,7 @@ export class RestaurantService {
 
     if (dto.terminalEmail !== undefined || dto.printAgentUsername !== undefined) {
       const creds = await this.resolveDeviceCredentials({
+        tenantSlug: entity.slug,
         terminalEmail:
           dto.terminalEmail !== undefined ? dto.terminalEmail : entity.terminalEmail,
         terminalPassword: dto.terminalPassword,

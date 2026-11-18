@@ -2,26 +2,15 @@ import { useState, useEffect } from "react"
 import { useParams, useNavigate, Link } from "react-router-dom"
 import { ArrowLeft, Trash2, Building2 } from "lucide-react"
 import { useAdminStore } from "@/lib/store"
-import {
-  formatMoney,
-  formatPeriodsSummary,
-  fromMinorUnits,
-  getIstanbulBillingPeriod,
-  toMinorUnits,
-} from "@/lib/money"
-import type {
-  RestaurantBranchType,
-  RestaurantPaymentRecord,
-  SubscriptionPaymentMethod,
-} from "@/lib/types"
+import { formatMoney, formatPeriodsSummary, fromMinorUnits, getIstanbulBillingPeriod, toMinorUnits } from "@/lib/money"
+import type { RestaurantBranchType, RestaurantPaymentRecord } from "@/lib/types"
 import { RootAdminsSection } from "@/components/RootAdminsSection"
 import { PrintAgentTokenSection } from "@/components/PrintAgentTokenSection"
-import {
-  RestaurantBillingBanner,
-  RestaurantBillingSection,
-} from "@/components/RestaurantBillingSection"
+import { RestaurantBillingBanner, RestaurantBillingSection } from "@/components/RestaurantBillingSection"
 import { PaymentFormModal } from "@/components/billing/PaymentFormModal"
 import { RestaurantBillingHistoryModal } from "@/components/billing/RestaurantBillingHistoryModal"
+import { CorderEmailInput } from "@/components/CorderEmailInput"
+import { formatCanonicalCorderEmail, toCorderEmailTenantSlug } from "@/lib/corder-email"
 
 export function EditRestaurantPage() {
   const { id } = useParams<{ id: string }>()
@@ -136,15 +125,16 @@ export function EditRestaurantPage() {
     e.preventDefault()
     setError("")
     setSaveMsg("")
-    const cleanSlug = slug.trim().toLowerCase()
-    if (
-      restaurants
-        .filter((r) => r.id !== id)
-        .some((r) => r.slug === cleanSlug)
-    ) {
+    const cleanSlug = toCorderEmailTenantSlug(slug || name)
+    if (!cleanSlug) {
+      setError("Geçerli bir slug girin.")
+      return
+    }
+    if (restaurants.some((r) => r.id !== id && r.slug === cleanSlug)) {
       setError("Bu slug başka bir restoranda kullanılıyor.")
       return
     }
+    const cleanEmail = formatCanonicalCorderEmail(email, cleanSlug)
     setSaveLoading(true)
     try {
       await updateRestaurant(id, {
@@ -152,7 +142,7 @@ export function EditRestaurantPage() {
         slug: cleanSlug,
         address: address.trim() || undefined,
         phone: phone.trim() || undefined,
-        email: email.trim() || undefined,
+        email: cleanEmail || undefined,
         taxId: taxId.trim() || undefined,
         workingHours: workingHours.trim() || undefined,
         status,
@@ -351,11 +341,11 @@ export function EditRestaurantPage() {
                 <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
                   E-posta
                 </label>
-                <input
-                  type="email"
+                <CorderEmailInput
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className={inputCls}
+                  onChange={setEmail}
+                  tenantSlugOrName={slug || name}
+                  placeholder="iletisim"
                   disabled={saveLoading}
                 />
               </div>
@@ -439,7 +429,8 @@ export function EditRestaurantPage() {
         <div className="space-y-4">
           <RootAdminsSection
             restaurantId={id}
-            brandName={restaurant.brandName}
+            restaurantSlug={slug || restaurant.slug}
+            brandName={brandName || restaurant.brandName}
             rootAdmins={rootAdminsForRestaurant}
             loading={rootAdminsLoading}
             error={rootAdminsError}
@@ -448,6 +439,7 @@ export function EditRestaurantPage() {
           />
           <PrintAgentTokenSection
             restaurantId={id}
+            restaurantSlug={slug || restaurant.slug}
             initialTerminalEmail={restaurant.terminalEmail}
             initialPrintAgentUsername={restaurant.printAgentUsername}
             onSaveTerminalConfig={async (config) => {
@@ -462,18 +454,9 @@ export function EditRestaurantPage() {
         initialPeriod={paymentModalOpen?.initialPeriod}
         editingPayment={paymentModalOpen?.editingPayment}
         onClose={() => setPaymentModalOpen(null)}
-        onSubmitNew={async (_r, payload: {
-          amount: number
-          periods: string[]
-          paidAt: string
-          paymentMethod: SubscriptionPaymentMethod
-          note: string | null
-          reopenAccess: boolean
-        }) => {
+        onSubmitNew={async (_r, payload) => {
           await recordRestaurantPayment(id, payload)
-          setSaveMsg(
-            `${formatPeriodsSummary(payload.periods)} (${formatMoney(payload.amount)}) tahsilatı kaydedildi.`
-          )
+          setSaveMsg(`${formatPeriodsSummary(payload.periods)} (${formatMoney(payload.amount)}) tahsilatı kaydedildi.`)
         }}
         onSubmitEdit={async (_r, paymentId, payload) => {
           await updateRestaurantPayment(id, paymentId, payload)

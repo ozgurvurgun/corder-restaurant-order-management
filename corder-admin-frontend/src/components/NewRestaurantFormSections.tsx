@@ -4,6 +4,7 @@ import type {
   SubscriptionPaymentMethod,
 } from "@/lib/types"
 import { Building2, CreditCard, Monitor, Printer } from "lucide-react"
+import { CorderEmailInput } from "@/components/CorderEmailInput"
 
 interface FranchiseConfigCardProps {
   branchType: RestaurantBranchType
@@ -257,6 +258,7 @@ export function InitialSubscriptionCard({
 }
 
 interface DeviceCredentialsCardsProps {
+  tenantSlugOrName?: string
   terminalEmail: string
   onTerminalEmailChange: (v: string) => void
   terminalPassword: string
@@ -270,6 +272,7 @@ interface DeviceCredentialsCardsProps {
 }
 
 export function DeviceCredentialsCards({
+  tenantSlugOrName,
   terminalEmail,
   onTerminalEmailChange,
   terminalPassword,
@@ -295,13 +298,11 @@ export function DeviceCredentialsCards({
             <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
               Terminal E-posta
             </label>
-            <input
-              type="email"
+            <CorderEmailInput
               value={terminalEmail}
-              onChange={(e) => onTerminalEmailChange(e.target.value)}
-              placeholder="Örn: terminal@restoran.com"
-              autoComplete="off"
-              className={inputCls}
+              onChange={onTerminalEmailChange}
+              tenantSlugOrName={tenantSlugOrName}
+              placeholder="terminal"
               disabled={disabled}
             />
           </div>

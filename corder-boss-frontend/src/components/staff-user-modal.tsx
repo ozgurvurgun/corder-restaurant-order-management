@@ -1,11 +1,18 @@
 import { useEffect, useState } from "react"
 import type { PermissionCatalogResponse, RoleDefinition, StaffMemberDto } from "@/lib/types"
 import { getRoleDisplayName } from "@/lib/permission-labels"
+import {
+  buildCorderEmailDomain,
+  extractCorderEmailLocalPart,
+  formatCanonicalCorderEmail,
+  sanitizeCorderEmailLocalPartInput,
+} from "@/lib/corder-email"
 import { StaffPermissionOverrides } from "./staff-permission-overrides"
 import { Monitor, KeyRound, AlertCircle, X } from "lucide-react"
 
 interface StaffUserModalProps {
   branchName: string
+  branchSlug?: string
   editingUser: StaffMemberDto | null
   roles: RoleDefinition[]
   catalog: PermissionCatalogResponse | null
@@ -39,6 +46,7 @@ function deriveInitialOverrides(
 
 export function StaffUserModal({
   branchName,
+  branchSlug,
   editingUser,
   roles,
   catalog,
@@ -49,6 +57,8 @@ export function StaffUserModal({
   const defaultRole = roles.find((r) => r.key === "branch_manager") ?? roles[0]
   const initialRoleKey = editingUser?.role ?? defaultRole?.key ?? "waiter"
   const initialOverrides = deriveInitialOverrides(editingUser)
+  const mailTenant = branchSlug || branchName
+  const mailDomain = buildCorderEmailDomain(mailTenant)
 
   const [name, setName] = useState(editingUser?.name ?? "")
   const [role, setRole] = useState(initialRoleKey)
@@ -59,7 +69,7 @@ export function StaffUserModal({
   const [canAccessTerminal, setCanAccessTerminal] = useState(
     editingUser ? editingUser.canAccessTerminal : (defaultRole?.canAccessTerminal ?? true)
   )
-  const [email, setEmail] = useState(editingUser?.email ?? "")
+  const [email, setEmail] = useState(extractCorderEmailLocalPart(editingUser?.email))
   const [password, setPassword] = useState("")
   const [pin, setPin] = useState("")
   const [grantedPermissions, setGrantedPermissions] = useState<string[]>(
@@ -138,7 +148,7 @@ export function StaffUserModal({
     setFormError(null)
 
     const trimmedName = name.trim()
-    const trimmedEmail = email.trim()
+    const canonicalEmail = formatCanonicalCorderEmail(email, mailTenant)
     const trimmedPassword = password.trim()
     const trimmedPin = pin.trim()
     const trimmedPhone = phone.trim()
@@ -149,9 +159,8 @@ export function StaffUserModal({
     }
 
     if (canAccessPanel) {
-      const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)
-      if (!emailValid) {
-        setFormError("Merchant Panel giriş yetkisi için geçerli bir e-posta adresi girin.")
+      if (!canonicalEmail) {
+        setFormError("Merchant Panel giriş yetkisi için @ öncesi e-posta kullanıcı adını girin.")
         return
       }
       if ((!editingUser || !editingUser.hasPassword) && trimmedPassword.length < 6) {
@@ -180,7 +189,7 @@ export function StaffUserModal({
       phone: trimmedPhone || (editingUser ? null : undefined),
       canAccessPanel,
       canAccessTerminal,
-      email: trimmedEmail || (editingUser ? null : undefined),
+      email: canonicalEmail || (editingUser ? null : undefined),
       ...(trimmedPassword ? { password: trimmedPassword } : {}),
       ...(trimmedPin ? { pin: trimmedPin } : {}),
       grantedPermissions,
@@ -275,14 +284,26 @@ export function StaffUserModal({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <div>
                   <label className="mb-1 block text-[11px] font-semibold text-[#1d1d1f]">Giriş E-postası *</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="mudur@restoran.com"
-                    className="h-10 w-full rounded-xl border border-[#d1d1d6] bg-white px-3 text-[13px] text-[#1d1d1f]"
-                    required={canAccessPanel}
-                  />
+                  <div className="flex h-10 w-full items-stretch overflow-hidden rounded-xl border border-[#d1d1d6] bg-white focus-within:border-[#e63462] transition-all">
+                    <input
+                      type="text"
+                      inputMode="email"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      value={email}
+                      onChange={(e) => setEmail(sanitizeCorderEmailLocalPartInput(e.target.value))}
+                      placeholder="sehmus"
+                      className="min-w-0 flex-1 bg-transparent px-3 text-[13px] font-medium text-[#1d1d1f] outline-none placeholder:font-normal placeholder:text-[#86868b]"
+                      required={canAccessPanel}
+                    />
+                    <span
+                      className="inline-flex items-center border-l border-[#e5e5ea] bg-[#ededf2] px-2.5 font-mono text-[11.5px] font-semibold text-[#1d1d1f] select-none whitespace-nowrap"
+                      title={`@${mailDomain}`}
+                    >
+                      @{mailDomain}
+                    </span>
+                  </div>
                 </div>
                 <div>
                   <label className="mb-1 block text-[11px] font-semibold text-[#1d1d1f]">

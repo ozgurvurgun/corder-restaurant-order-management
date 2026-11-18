@@ -39,7 +39,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
           <div className="bg-white/10 backdrop-blur-xl rounded-2xl overflow-hidden">
             <input
               type="email"
-              placeholder="E-posta"
+              placeholder="terminal@restoran.corder.app"
               autoComplete="username"
               value={email}
               onChange={(e) => setEmail(e.target.value)}

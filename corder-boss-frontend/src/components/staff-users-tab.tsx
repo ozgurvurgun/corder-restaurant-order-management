@@ -305,6 +305,7 @@ export function StaffUsersTab() {
       {showModal && (
         <StaffUserModal
           branchName={effectiveBranch?.name ?? ""}
+          branchSlug={effectiveBranch?.slug ?? ""}
           editingUser={editingUser}
           roles={roles}
           catalog={catalog}

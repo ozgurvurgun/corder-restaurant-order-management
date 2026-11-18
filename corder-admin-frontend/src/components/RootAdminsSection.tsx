@@ -2,9 +2,12 @@ import { useEffect, useState } from "react"
 import { UserPlus, Link2, Crown, Building2, Pencil, Unlink, Trash2 } from "lucide-react"
 import type { BossTier, RootAdmin } from "@/lib/types"
 import { useAdminStore } from "@/lib/store"
+import { CorderEmailInput } from "@/components/CorderEmailInput"
+import { formatCanonicalCorderEmail } from "@/lib/corder-email"
 
 interface RootAdminsSectionProps {
   restaurantId: string
+  restaurantSlug?: string
   brandName?: string | null
   rootAdmins: RootAdmin[]
   loading: boolean
@@ -25,6 +28,7 @@ interface RootAdminsSectionProps {
 
 export function RootAdminsSection({
   restaurantId,
+  restaurantSlug,
   brandName,
   rootAdmins,
   loading,
@@ -70,11 +74,17 @@ export function RootAdminsSection({
     setMode("edit")
   }
 
+  const bossTenant =
+    adminTier === "brand_owner" && brandName?.trim()
+      ? brandName.trim()
+      : restaurantSlug
+
   const handleSaveBossForm = async (e: React.FormEvent) => {
     e.preventDefault()
     setAdminError("")
-    if (!adminName.trim() || !adminEmail.trim()) {
-      setAdminError("Ad soyad ve e-posta gerekli.")
+    const canonicalEmail = formatCanonicalCorderEmail(adminEmail, bossTenant)
+    if (!adminName.trim() || !canonicalEmail) {
+      setAdminError("Ad soyad ve e-posta kullanıcı adı (@ öncesi) gerekli.")
       return
     }
     if ((mode === "create" || adminPassword.length > 0) && adminPassword.length < 8) {
@@ -87,7 +97,7 @@ export function RootAdminsSection({
       if (mode === "edit" && editingAdminId) {
         await updateRootAdmin(restaurantId, editingAdminId, {
           name: adminName.trim(),
-          email: adminEmail.trim().toLowerCase(),
+          email: canonicalEmail,
           phone: adminPhone.trim() || null,
           bossTier: adminTier,
           brandName: resolvedBrand,
@@ -97,7 +107,7 @@ export function RootAdminsSection({
       } else {
         await onAddRootAdmin(restaurantId, {
           name: adminName.trim(),
-          email: adminEmail.trim().toLowerCase(),
+          email: canonicalEmail,
           phone: adminPhone.trim() || undefined,
           bossTier: adminTier,
           brandName: resolvedBrand,
@@ -317,14 +327,13 @@ export function RootAdminsSection({
                   <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
                     E-posta (Boss giriş) *
                   </label>
-                  <input
-                    type="email"
+                  <CorderEmailInput
                     value={adminEmail}
-                    onChange={(e) => setAdminEmail(e.target.value)}
-                    placeholder="boss@restoran.com"
-                    className={fieldCls}
-                    required
+                    onChange={setAdminEmail}
+                    tenantSlugOrName={bossTenant}
+                    placeholder="boss"
                     disabled={adminSubmitLoading}
+                    required
                   />
                 </div>
                 <div>

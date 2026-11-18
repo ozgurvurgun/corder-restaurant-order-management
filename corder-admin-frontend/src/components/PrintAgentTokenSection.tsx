@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react"
 import { Monitor, Printer } from "lucide-react"
+import { CorderEmailInput } from "@/components/CorderEmailInput"
+import { formatCanonicalCorderEmail } from "@/lib/corder-email"
 
 interface PrintAgentTokenSectionProps {
   restaurantId: string
+  restaurantSlug?: string
   initialTerminalEmail?: string | null
   initialPrintAgentUsername?: string | null
   onSaveTerminalConfig: (config: {
@@ -14,6 +17,7 @@ interface PrintAgentTokenSectionProps {
 }
 
 export function PrintAgentTokenSection({
+  restaurantSlug,
   initialTerminalEmail,
   initialPrintAgentUsername,
   onSaveTerminalConfig,
@@ -41,9 +45,9 @@ export function PrintAgentTokenSection({
     e.preventDefault()
     setTerminalError("")
     setTerminalSuccess("")
-    const cleanEmail = terminalEmail.trim().toLowerCase()
+    const cleanEmail = formatCanonicalCorderEmail(terminalEmail, restaurantSlug)
     if (!cleanEmail) {
-      setTerminalError("Terminal e-posta adresi gerekli.")
+      setTerminalError("Terminal kullanıcı adı (@ öncesi) gerekli.")
       return
     }
     if (!initialTerminalEmail && terminalPassword.length < 4) {
@@ -178,13 +182,11 @@ export function PrintAgentTokenSection({
         <form onSubmit={handleSaveTerminal} className="mt-4 space-y-3.5">
           <div>
             <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Terminal E-posta</label>
-            <input
-              type="email"
+            <CorderEmailInput
               value={terminalEmail}
-              onChange={(e) => setTerminalEmail(e.target.value)}
-              placeholder="terminal@restoran.com"
-              autoComplete="off"
-              className={inputCls}
+              onChange={setTerminalEmail}
+              tenantSlugOrName={restaurantSlug}
+              placeholder="terminal"
               disabled={terminalSaveLoading}
               required
             />

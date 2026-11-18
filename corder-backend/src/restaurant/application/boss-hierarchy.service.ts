@@ -13,6 +13,7 @@ import { BossTier, RootAdminEntity } from '../../platform/domain/root-admin.enti
 import { BossRestaurantEntity } from '../../platform/domain/boss-restaurant.entity';
 import { RestaurantRoleEntity } from '../domain/restaurant-role.entity';
 import { normalizeStorageText } from '../../common/text/text-normalizer';
+import { formatCanonicalCorderEmail } from '../../common/text/corder-email.policy';
 import { RestaurantAuthService } from './restaurant-auth.service';
 import { RolesService } from './roles.service';
 
@@ -96,9 +97,12 @@ export class BossHierarchyService {
     actorBossId: string,
     ownedIds: Set<string>,
     primaryBranchId: string,
+    primaryBranchSlug: string | undefined,
     dto: CreateOrAssignSubBossInput,
   ): Promise<RootAdminEntity> {
-    const email = dto.email.toLowerCase().trim();
+    const email =
+      formatCanonicalCorderEmail(dto.email, primaryBranchSlug) ??
+      dto.email.toLowerCase().trim();
     const tier: BossTier = dto.bossTier ?? 'franchise_owner';
     const existing = await this.rootAdminRepo.findOne({ where: { email } });
 
@@ -169,10 +173,12 @@ export class BossHierarchyService {
     const tier: BossTier = dto.bossTier ?? 'franchise_owner';
     const title =
       tier === 'regional_manager' ? 'Regional Manager' : 'Franchise / Branch Owner';
+    const primaryBranch = ownedBranches.find((b) => b.id === targetIds[0]);
     const subBoss = await this.upsertSubordinateBossAccount(
       actorBossId,
       ownedIds,
       targetIds[0],
+      primaryBranch?.slug,
       dto,
     );
 

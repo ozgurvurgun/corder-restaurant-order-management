@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react"
 import type { BossTier, Restaurant, RootAdmin } from "@/lib/types"
 import { Building2, Check, X } from "lucide-react"
+import { CorderEmailInput } from "@/components/CorderEmailInput"
+import { formatCanonicalCorderEmail } from "@/lib/corder-email"
 
 interface BossFormModalProps {
   editingBoss: RootAdmin | null
@@ -84,11 +86,19 @@ export function BossFormModal({
     )
   }
 
+  const primarySelectedBranch =
+    restaurants.find((r) => r.id === selectedRestaurantIds[0]) ?? restaurants[0]
+  const bossTenant =
+    bossTier === "brand_owner" && brandName.trim()
+      ? brandName.trim()
+      : primarySelectedBranch?.slug || primarySelectedBranch?.name || ""
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
-    if (!name.trim() || !email.trim()) {
-      setError("Ad soyad ve e-posta zorunludur.")
+    const canonicalEmail = formatCanonicalCorderEmail(email, bossTenant)
+    if (!name.trim() || !canonicalEmail) {
+      setError("Ad soyad ve e-posta kullanıcı adı (@ öncesi) zorunludur.")
       return
     }
     if ((!editingBoss || password.length > 0) && password.length < 8) {
@@ -106,7 +116,7 @@ export function BossFormModal({
       if (editingBoss) {
         await onUpdateBoss(editingBoss.id, {
           name: name.trim(),
-          email: email.trim().toLowerCase(),
+          email: canonicalEmail,
           phone: phone.trim() || null,
           bossTier,
           brandName: normalizedBrand,
@@ -117,7 +127,7 @@ export function BossFormModal({
       } else {
         await onCreateBoss({
           name: name.trim(),
-          email: email.trim().toLowerCase(),
+          email: canonicalEmail,
           phone: phone.trim() || undefined,
           bossTier,
           brandName: normalizedBrand,
@@ -236,12 +246,11 @@ export function BossFormModal({
               <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
                 E-posta (Boss &amp; Panel Girişi) *
               </label>
-              <input
-                type="email"
+              <CorderEmailInput
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="patron@isletme.com"
-                className={fieldCls}
+                onChange={setEmail}
+                tenantSlugOrName={bossTenant}
+                placeholder="patron"
                 required
               />
             </div>

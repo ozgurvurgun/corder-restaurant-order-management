@@ -116,7 +116,7 @@ export default function PanelLogin() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@restaurant.com"
+              placeholder="kullanici@restoran.corder.app"
               className="w-full h-[48px] px-4 text-[15px] bg-[#f5f5f7] rounded-xl border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462] focus:ring-2 focus:ring-[#e63462]/20 transition-all"
               autoComplete="username"
             />
