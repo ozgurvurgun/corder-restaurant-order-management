@@ -11,6 +11,7 @@ import { BossRestaurantEntity } from '../domain/boss-restaurant.entity';
 import { RestaurantEntity } from '../domain/restaurant.entity';
 import { CreateRootAdminDto } from '../api/dto/create-root-admin.dto';
 import { UpdateRootAdminDto } from '../api/dto/update-root-admin.dto';
+import { normalizeStorageText } from '../../common/text/text-normalizer';
 
 export interface BossWithRestaurantsDto {
   id: string;
@@ -289,7 +290,7 @@ export class RootAdminService {
     const entity = this.rootAdminRepo.create({
       restaurantId: primaryRestaurantId,
       email,
-      name: dto.name.trim(),
+      name: normalizeStorageText(dto.name),
       phone: dto.phone?.trim() || null,
       bossTier,
       brandName,
@@ -371,7 +372,7 @@ export class RootAdminService {
       }
     }
 
-    if (dto.name !== undefined) entity.name = dto.name.trim();
+    if (dto.name !== undefined) entity.name = normalizeStorageText(dto.name);
     if (dto.phone !== undefined) entity.phone = dto.phone?.trim() || null;
     if (dto.isActive !== undefined) entity.isActive = Boolean(dto.isActive);
     if (dto.bossTier !== undefined) entity.bossTier = dto.bossTier;

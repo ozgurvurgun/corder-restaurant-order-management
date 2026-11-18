@@ -109,12 +109,6 @@ export function itemCountsTowardBill(i: { status: string }): boolean {
   return i.status !== "cancelled" && i.status !== "ledger"
 }
 
-export function itemIsLedgerLike(i: PanelOrderItem): boolean {
-  if (i.status === "ledger") return true
-  const r = (i.cancelReason ?? "").trim()
-  return i.status === "cancelled" && (r === "Assigned to ledger" || r.startsWith("Cari"))
-}
-
 import type { PanelSplitSharePayment } from "./panel-domain-types"
 
 export type PanelTableStatus = "empty" | "occupied" | "ordering" | "checkout"

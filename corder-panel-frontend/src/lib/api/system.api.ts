@@ -135,7 +135,6 @@ export const staffApi = {
       password?: string
       canAccessPanel?: boolean
       canAccessTerminal?: boolean
-      permissionsOverride?: string[] | null
       grantedPermissions?: string[]
       revokedPermissions?: string[]
       maxDiscountPercentOverride?: number | null
@@ -160,7 +159,6 @@ export const staffApi = {
       isActive?: boolean
       canAccessPanel?: boolean
       canAccessTerminal?: boolean
-      permissionsOverride?: string[] | null
       grantedPermissions?: string[]
       revokedPermissions?: string[]
       maxDiscountPercentOverride?: number | null

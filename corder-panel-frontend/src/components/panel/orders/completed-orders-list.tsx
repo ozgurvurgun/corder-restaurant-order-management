@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, CreditCard, DoorClosed, DoorOpen, MapPin, Pencil, Printer, Receipt, User } from "lucide-react"
-import { itemCountsTowardBill, itemIsLedgerLike, type ClosedTable, type LedgerCustomer, type PanelOrder, type PanelUser, type Payment } from "@/lib/panel-types"
+import { itemCountsTowardBill, type ClosedTable, type LedgerCustomer, type PanelOrder, type PanelUser, type Payment } from "@/lib/panel-types"
 import { formatCurrency, formatIstanbulDateTime, formatIstanbulTime, fromMinorUnits, toMinorUnits } from "@/lib/format"
 
 function orderWaiterLabel(
@@ -106,7 +106,7 @@ export function CompletedOrdersList(props: {
         const isExpanded = expandedId === closedTable.id
         const allItems = closedTable.orders.flatMap((order) => order.items)
         const activeItems = allItems.filter((i) => itemCountsTowardBill(i))
-        const cancelledItems = allItems.filter((i) => i.status === "cancelled" && !itemIsLedgerLike(i),); return (
+        const cancelledItems = allItems.filter((i) => i.status === "cancelled"); return (
           <div key={closedTable.id} className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden hover:shadow-sm transition-shadow">
             <div className="flex items-center justify-between px-4 py-3 bg-[#f5f5f7]/50 border-b border-[#f0f0f0] cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : closedTable.id) }>
               <div className="flex items-center gap-4">
@@ -249,9 +249,8 @@ export function CompletedOrdersList(props: {
                           </thead>
                           <tbody>
                             {order.items.map((item, idx) => {
-                              const ledgerLike = itemIsLedgerLike(item)
-                              const voidLine =
-                                item.status === "cancelled" && !ledgerLike
+                              const ledgerLike = item.status === "ledger"
+                              const voidLine = item.status === "cancelled"
                               const rowBg = voidLine
                                 ? "bg-red-50"
                                 : ledgerLike

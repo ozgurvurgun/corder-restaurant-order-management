@@ -372,7 +372,6 @@ export const bossApi = {
         pin?: string
         canAccessPanel?: boolean
         canAccessTerminal?: boolean
-        permissionsOverride?: string[] | null
         grantedPermissions?: string[]
         revokedPermissions?: string[]
         maxDiscountPercentOverride?: number | null
@@ -398,7 +397,6 @@ export const bossApi = {
         isActive?: boolean
         canAccessPanel?: boolean
         canAccessTerminal?: boolean
-        permissionsOverride?: string[] | null
         grantedPermissions?: string[]
         revokedPermissions?: string[]
         maxDiscountPercentOverride?: number | null

@@ -20,6 +20,7 @@ import {
   fromMinorUnits,
   toMinorUnits,
 } from '../../common/money/minor-units';
+import { normalizeStorageText } from '../../common/text/text-normalizer';
 import { serializeCompletedOrder } from './orders/order.mapper';
 
 export { serializeCompletedOrder };
@@ -153,6 +154,7 @@ export class CompletedOrdersService {
       const prevPaymentSnap = (row.paymentSnapshot ?? {}) as {
         ledgerCustomerId?: string;
         ledgerCustomerName?: string;
+        discount?: { appliedBy?: string };
       };
       const prevStockLines = this.extractStockLinesFromOrders(row.ordersSnapshot);
       const nextStockLines = this.extractStockLinesFromOrders(dto.orders);
@@ -170,6 +172,7 @@ export class CompletedOrdersService {
         tip: dto.payment.tip ?? null,
       });
 
+      const safeActorName = normalizeStorageText(actorName || '') || 'sistem';
       const discountChanged =
         settlement.discountMinorUnits > prevDiscountMinor ||
         JSON.stringify(dto.payment.discount ?? null) !== JSON.stringify(row.paymentDiscount ?? null);
@@ -180,6 +183,15 @@ export class CompletedOrdersService {
           dto.payment.discount ?? null,
           actor,
         );
+      }
+      if (settlement.discountSnapshot) {
+        settlement.discountSnapshot.appliedBy = discountChanged
+          ? safeActorName
+          : normalizeStorageText(
+              dto.payment.discount?.appliedBy ||
+                (prevPaymentSnap.discount as { appliedBy?: string } | undefined)?.appliedBy ||
+                safeActorName,
+            );
       }
 
       if (
@@ -193,7 +205,6 @@ export class CompletedOrdersService {
         );
       }
 
-      const safeActorName = (actorName || '').trim() || 'Manager';
       const ledgerCustomer = await this.ledgerService.reconcileCompletedOrderDebtInTransaction(
         em,
         {

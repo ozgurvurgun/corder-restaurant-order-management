@@ -49,7 +49,6 @@ export interface StaffPublicDto {
   hasPin: boolean;
   hasPassword: boolean;
   permissions: PermissionKey[];
-  permissionsOverride: PermissionKey[] | null;
   grantedPermissions: PermissionKey[];
   revokedPermissions: PermissionKey[];
   limits: EffectivePolicyLimits;
@@ -96,9 +95,6 @@ export class StaffService {
       hasPin: Boolean(s.pinHash),
       hasPassword: Boolean(s.passwordHash),
       permissions: resolved.permissions,
-      permissionsOverride: s.permissionsOverride
-        ? sanitizePermissionKeys(s.permissionsOverride)
-        : null,
       grantedPermissions: sanitizePermissionKeys(s.grantedPermissions),
       revokedPermissions: sanitizePermissionKeys(s.revokedPermissions),
       limits: resolved.limits,
@@ -151,7 +147,6 @@ export class StaffService {
   private assertActorCanGrantPolicies(
     actor: StaffMutationActor | undefined,
     params: {
-      permissionsOverride?: string[] | null;
       grantedPermissions?: string[];
       maxDiscountPercentOverride?: number | null;
       maxDiscountAmountOverride?: number | null;
@@ -164,10 +159,7 @@ export class StaffService {
     if (actorPerms.has('roles.manage')) {
       return;
     }
-    const requestedPerms = [
-      ...sanitizePermissionKeys(params.permissionsOverride),
-      ...sanitizePermissionKeys(params.grantedPermissions),
-    ];
+    const requestedPerms = sanitizePermissionKeys(params.grantedPermissions);
     for (const perm of requestedPerms) {
       if (!actorPerms.has(perm)) {
         throw new ForbiddenException(
@@ -252,10 +244,6 @@ export class StaffService {
       isActive: true,
       canAccessPanel,
       canAccessTerminal,
-      permissionsOverride:
-        dto.permissionsOverride !== undefined && dto.permissionsOverride !== null
-          ? sanitizePermissionKeys(dto.permissionsOverride)
-          : null,
       grantedPermissions: sanitizePermissionKeys(dto.grantedPermissions),
       revokedPermissions: sanitizePermissionKeys(dto.revokedPermissions),
       maxDiscountPercentOverride:
@@ -290,7 +278,6 @@ export class StaffService {
       }
       if (
         (dto.role !== undefined && normalizeRoleKey(dto.role) !== normalizeRoleKey(staff.role)) ||
-        dto.permissionsOverride !== undefined ||
         dto.grantedPermissions !== undefined ||
         dto.revokedPermissions !== undefined ||
         dto.maxDiscountPercentOverride !== undefined ||
@@ -341,12 +328,6 @@ export class StaffService {
     }
     if (dto.canAccessTerminal !== undefined) {
       staff.canAccessTerminal = Boolean(dto.canAccessTerminal);
-    }
-    if (dto.permissionsOverride !== undefined) {
-      staff.permissionsOverride =
-        dto.permissionsOverride !== null
-          ? sanitizePermissionKeys(dto.permissionsOverride)
-          : null;
     }
     if (dto.grantedPermissions !== undefined) {
       staff.grantedPermissions = sanitizePermissionKeys(dto.grantedPermissions);

@@ -297,7 +297,6 @@ export class RolesService {
     const permissions = resolveEffectivePermissions({
       isBoss: false,
       rolePermissions,
-      permissionsOverride: staff.permissionsOverride,
       grantedPermissions: staff.grantedPermissions,
       revokedPermissions: staff.revokedPermissions,
     });

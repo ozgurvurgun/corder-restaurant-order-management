@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { ClosedTable, PanelOrder, PanelPaymentMethod } from "@/lib/panel-types"
-import { itemCountsTowardBill, itemIsLedgerLike } from "@/lib/panel-types"
+import { itemCountsTowardBill } from "@/lib/panel-types"
 import type { CompletedOrderSnapshotDto, CompletedPaymentSnapshotDto } from "@/lib/api"
 import { usePanelStore } from "@/lib/panel-store"
 import { usePanelToast } from "./panel-toast"
@@ -290,8 +290,8 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
               </p>
               <div className="rounded-lg border border-[#e8e8ed] divide-y divide-[#f0f0f0]">
                 {order.items.map((item) => {
-                  const ledgerLike = itemIsLedgerLike(item)
-                  const voidLine = item.status === "cancelled" && !ledgerLike
+                  const ledgerLike = item.status === "ledger"
+                  const voidLine = item.status === "cancelled"
                   const billable = itemCountsTowardBill(item)
                   const maxQty = originalQtyByItemId.get(item.id) ?? item.quantity
                   const isCancellingThis =

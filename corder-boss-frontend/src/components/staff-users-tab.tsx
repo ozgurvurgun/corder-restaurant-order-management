@@ -55,7 +55,6 @@ export function StaffUsersTab() {
     email?: string | null
     password?: string
     pin?: string
-    permissionsOverride: null
     grantedPermissions: string[]
     revokedPermissions: string[]
     maxDiscountPercentOverride: number | null
@@ -180,7 +179,6 @@ export function StaffUsersTab() {
         ) : (
           staff.map((u) => {
             const hasOverrides =
-              (u.permissionsOverride?.length ?? 0) > 0 ||
               u.grantedPermissions.length > 0 ||
               u.revokedPermissions.length > 0 ||
               u.maxDiscountPercentOverride != null ||

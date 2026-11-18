@@ -27,6 +27,7 @@ import {
   computeIstanbulDateBoundaries,
 } from '../domain/services/boss-overview.policy';
 import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
+import { normalizeStorageText } from '../../common/text/text-normalizer';
 import { RestaurantAuthService } from './restaurant-auth.service';
 import { RolesService } from './roles.service';
 
@@ -222,7 +223,7 @@ export class BossOverviewService {
           'This boss account is linked to branches outside your authority',
         );
       }
-      if (dto.name?.trim()) subBoss.name = dto.name.trim();
+      if (dto.name?.trim()) subBoss.name = normalizeStorageText(dto.name);
       if (dto.phone !== undefined) subBoss.phone = dto.phone?.trim() || null;
       if (dto.password && dto.password.length >= 8) {
         subBoss.passwordHash = await bcrypt.hash(dto.password, 10);
@@ -237,7 +238,7 @@ export class BossOverviewService {
         this.rootAdminRepo.create({
           restaurantId: targetIds[0],
           email,
-          name: dto.name.trim(),
+          name: normalizeStorageText(dto.name),
           phone: dto.phone?.trim() || null,
           bossTier: tier,
           isActive: true,

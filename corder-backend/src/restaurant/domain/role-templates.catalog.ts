@@ -183,16 +183,11 @@ export function getDefaultRoleTemplate(roleKey: string): RoleTemplateDefinition 
 export function resolveEffectivePermissions(params: {
   isBoss?: boolean;
   rolePermissions: string[];
-  permissionsOverride?: string[] | null;
   grantedPermissions?: string[] | null;
   revokedPermissions?: string[] | null;
 }): PermissionKey[] {
   if (params.isBoss) return [...PERMISSION_KEYS];
-  const base =
-    params.permissionsOverride && Array.isArray(params.permissionsOverride)
-      ? sanitizePermissionKeys(params.permissionsOverride)
-      : sanitizePermissionKeys(params.rolePermissions);
-  const set = new Set<PermissionKey>(base);
+  const set = new Set<PermissionKey>(sanitizePermissionKeys(params.rolePermissions));
   for (const g of sanitizePermissionKeys(params.grantedPermissions)) set.add(g);
   for (const r of sanitizePermissionKeys(params.revokedPermissions)) set.delete(r);
   return Array.from(set);

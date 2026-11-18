@@ -76,7 +76,6 @@ export interface StaffMemberDto {
   hasPin: boolean
   hasPassword: boolean
   permissions: string[]
-  permissionsOverride: string[] | null
   grantedPermissions: string[]
   revokedPermissions: string[]
   limits: {
@@ -251,7 +250,6 @@ export interface LiveOrderDto {
   tableId: string
   userId?: string | null
   userName?: string | null
-  userDisplayName?: string | null
   status: string
   mergedFrom?: string | null
   createdAt: string

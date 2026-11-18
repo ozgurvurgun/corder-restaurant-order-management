@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { usePanelStore } from "@/lib/panel-store"
-import { itemCountsTowardBill, itemIsLedgerLike } from "@/lib/panel-types"
+import { itemCountsTowardBill } from "@/lib/panel-types"
 import { formatCurrency, formatIstanbulTime, fromMinorUnits, toMinorUnits } from "@/lib/format"
 import { usePanelToast } from "./panel-toast"
 import { usePanelAuth } from "@/lib/panel-auth"
@@ -275,8 +275,8 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
               </div>
               <div className="flex flex-col">
                 {activeOrder.items.map((item, idx, arr) => {
-                  const ledgerLike = itemIsLedgerLike(item)
-                  const struck = item.status === "cancelled" && !ledgerLike
+                  const ledgerLike = item.status === "ledger"
+                  const struck = item.status === "cancelled"
                   const showActions = itemCountsTowardBill(item); return (
                     <div key={item.id} className={`py-2.5 ${idx < arr.length - 1 ? "border-b border-[#f0f0f0]" : ""} ${ledgerLike ? "bg-amber-50/80 -mx-2 px-2 rounded-lg" : ""}`}>
                       <div className="flex items-start justify-between gap-2">

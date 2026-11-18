@@ -60,11 +60,6 @@ export class UpdateStaffDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  permissionsOverride?: string[] | null;
-
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
   grantedPermissions?: string[];
 
   @IsOptional()

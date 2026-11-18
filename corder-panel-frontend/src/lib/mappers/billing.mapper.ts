@@ -96,7 +96,6 @@ export function mapCompletedOrderDtoToClosedTable(
     mergedFrom: o.mergedFrom,
   }))
 
-  const rawDiscount = dto.payment.discount ?? dto.paymentDiscount
   const payment: Payment = {
     id: dto.payment.id,
     tableId: dto.payment.tableId,
@@ -105,12 +104,14 @@ export function mapCompletedOrderDtoToClosedTable(
     amount: dto.payment.amount,
     method: dto.payment.method as Payment["method"],
     splitDetails: dto.payment.splitDetails,
-    discount: rawDiscount
+    discount: dto.payment.discount
       ? {
-          type: rawDiscount.type,
-          value: rawDiscount.value,
-          reason: rawDiscount.reason,
-          appliedBy: formatTitleCase(rawDiscount.appliedBy || dto.closedBy),
+          type: dto.payment.discount.type,
+          value: dto.payment.discount.value,
+          reason: dto.payment.discount.reason,
+          ...(dto.payment.discount.appliedBy
+            ? { appliedBy: formatTitleCase(dto.payment.discount.appliedBy) }
+            : {}),
         }
       : undefined,
     tip: dto.payment.tip,

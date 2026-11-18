@@ -166,11 +166,9 @@ export function useSystemActions(params: {
       if (data.canAccessTerminal !== undefined) payload.canAccessTerminal = data.canAccessTerminal
       if (data.grantedPermissions !== undefined) {
         payload.grantedPermissions = data.grantedPermissions
-        payload.permissionsOverride = null
       }
       if (data.revokedPermissions !== undefined) {
         payload.revokedPermissions = data.revokedPermissions
-        payload.permissionsOverride = null
       }
       if (data.maxDiscountPercentOverride !== undefined) payload.maxDiscountPercentOverride = data.maxDiscountPercentOverride
       if (data.maxDiscountAmountOverride !== undefined) payload.maxDiscountAmountOverride = data.maxDiscountAmountOverride

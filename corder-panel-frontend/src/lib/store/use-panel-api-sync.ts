@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react"
 import { io, type Socket } from "socket.io-client"
 import {
   itemCountsTowardBill,
-  itemIsLedgerLike,
   type Campaign,
   type CancelledItem,
   type CashShift,
@@ -76,7 +75,7 @@ function buildHydratedCancelledItems(
   for (const o of orders) {
     const tName = tables.find((t) => t.id === o.tableId)?.name || o.tableId
     for (const it of o.items) {
-      if (it.status === "cancelled" && !itemIsLedgerLike(it) && !seenCancelIds.has(it.id)) {
+      if (it.status === "cancelled" && !seenCancelIds.has(it.id)) {
         seenCancelIds.add(it.id)
         hydratedCancelled.push({
           id: `ci-${it.id}`,
@@ -93,7 +92,7 @@ function buildHydratedCancelledItems(
   for (const ct of closed) {
     for (const o of ct.orders) {
       for (const it of o.items) {
-        if (it.status === "cancelled" && !itemIsLedgerLike(it) && !seenCancelIds.has(it.id)) {
+        if (it.status === "cancelled" && !seenCancelIds.has(it.id)) {
           seenCancelIds.add(it.id)
           hydratedCancelled.push({
             id: `ci-${it.id}`,

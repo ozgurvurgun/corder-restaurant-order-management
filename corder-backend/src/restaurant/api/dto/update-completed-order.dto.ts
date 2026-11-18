@@ -106,6 +106,10 @@ export class CompletedPaymentDiscountDto {
 
   @IsString()
   reason!: string;
+
+  @IsOptional()
+  @IsString()
+  appliedBy?: string;
 }
 
 export class CompletedPaymentDto {

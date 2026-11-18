@@ -12,6 +12,7 @@ import { CashShiftService } from '../cash-shift.service';
 import { TableService } from '../table.service';
 import { OrderQueryService } from './order-query.service';
 import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
+import { normalizeStorageText } from '../../../common/text/text-normalizer';
 
 @Injectable()
 export class CreateOrderUseCase {
@@ -63,7 +64,7 @@ export class CreateOrderUseCase {
   async execute(
     restaurantId: string,
     dto: CreateOrderDto,
-    actor?: { staffId?: string | null; displayName?: string | null },
+    actor?: { actorId?: string | null; staffId?: string | null; displayName?: string | null },
   ): Promise<Record<string, unknown>> {
     if (!dto.items?.length) {
       throw new BadRequestException('Order must contain at least one item');
@@ -94,11 +95,12 @@ export class CreateOrderUseCase {
 
       const txOrderRepo = em.getRepository(OrderEntity);
       const txItemRepo = em.getRepository(OrderItemEntity);
+      const rawName = waiter?.name?.trim() || actor?.displayName?.trim() || '';
       const order = txOrderRepo.create({
         restaurantId,
         tableId: dto.tableId,
-        userId: waiter ? waiter.id : null,
-        userDisplayName: waiter?.name?.trim() || actor?.displayName?.trim() || null,
+        userId: waiter ? waiter.id : (actor?.actorId ?? null),
+        userDisplayName: rawName ? normalizeStorageText(rawName) : null,
         status: 'active',
       });
       const saved = await txOrderRepo.save(order);

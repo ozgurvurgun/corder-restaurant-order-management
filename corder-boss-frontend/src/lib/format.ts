@@ -157,7 +157,7 @@ export function formatTitleCase(
 }
 
 export function getWaiterDisplayName(order: LiveOrderDto): string | null {
-  const name = (order.userName ?? order.userDisplayName ?? "").trim()
+  const name = (order.userName ?? "").trim()
   return name ? formatTitleCase(name) : null
 }
 

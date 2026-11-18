@@ -113,6 +113,7 @@ export class OrdersController {
       throw new ForbiddenException('You do not have permission to add notes to order items (order.add_note)');
     }
     return this.service.create(restaurantId, dto, {
+      actorId: actor.actorId,
       staffId: !actor.isBoss ? actor.actorId : null,
       displayName: actor.actorName,
     });
@@ -135,10 +136,7 @@ export class OrdersController {
     return this.service.moveItemsToTable(restaurantId, {
       fromTableId: dto.fromTableId,
       toTableId: dto.toTableId,
-      items:
-        dto.items && dto.items.length > 0
-          ? dto.items
-          : (dto.itemIds ?? []).map((itemId) => ({ itemId })),
+      items: dto.items,
       userId: !actor.isBoss ? actor.actorId : null,
       actorDisplayName: actor.actorName,
     });

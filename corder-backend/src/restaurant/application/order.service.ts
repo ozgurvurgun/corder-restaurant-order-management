@@ -43,7 +43,7 @@ export class OrderService {
   create(
     restaurantId: string,
     dto: CreateOrderDto,
-    actor?: { staffId?: string | null; displayName?: string | null },
+    actor?: { actorId?: string | null; staffId?: string | null; displayName?: string | null },
   ): Promise<Record<string, unknown>> {
     return this.createOrderUseCase.execute(restaurantId, dto, actor);
   }

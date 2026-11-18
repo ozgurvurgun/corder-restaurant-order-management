@@ -20,7 +20,6 @@ interface StaffUserModalProps {
     email?: string | null
     password?: string
     pin?: string
-    permissionsOverride: null
     grantedPermissions: string[]
     revokedPermissions: string[]
     maxDiscountPercentOverride: number | null
@@ -29,17 +28,9 @@ interface StaffUserModalProps {
 }
 
 function deriveInitialOverrides(
-  editingUser: StaffMemberDto | null,
-  roleDef: RoleDefinition | undefined
+  editingUser: StaffMemberDto | null
 ): { granted: string[]; revoked: string[] } {
   if (!editingUser) return { granted: [], revoked: [] }
-  if (editingUser.permissionsOverride && roleDef) {
-    const roleSet = new Set(roleDef.permissions)
-    const effectiveSet = new Set(editingUser.permissions)
-    const granted = editingUser.permissions.filter((k) => !roleSet.has(k))
-    const revoked = roleDef.permissions.filter((k) => !effectiveSet.has(k))
-    return { granted, revoked }
-  }
   return {
     granted: editingUser.grantedPermissions ?? [],
     revoked: editingUser.revokedPermissions ?? [],
@@ -57,8 +48,7 @@ export function StaffUserModal({
 }: StaffUserModalProps) {
   const defaultRole = roles.find((r) => r.key === "branch_manager") ?? roles[0]
   const initialRoleKey = editingUser?.role ?? defaultRole?.key ?? "waiter"
-  const initialRoleDef = roles.find((r) => r.key === initialRoleKey) ?? defaultRole
-  const initialOverrides = deriveInitialOverrides(editingUser, initialRoleDef)
+  const initialOverrides = deriveInitialOverrides(editingUser)
 
   const [name, setName] = useState(editingUser?.name ?? "")
   const [role, setRole] = useState(initialRoleKey)
@@ -193,7 +183,6 @@ export function StaffUserModal({
       email: trimmedEmail || (editingUser ? null : undefined),
       ...(trimmedPassword ? { password: trimmedPassword } : {}),
       ...(trimmedPin ? { pin: trimmedPin } : {}),
-      permissionsOverride: null,
       grantedPermissions,
       revokedPermissions,
       maxDiscountPercentOverride:
