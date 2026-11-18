@@ -33,16 +33,16 @@ export function LiveTableDetailSheet({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white p-5 shadow-2xl safe-bottom"
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-[#e5e5ea]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[#f0f0f0] pb-3">
           <div>
-            <h3 className="text-[16px] font-bold text-[#1d1d1f]">
+            <h3 className="text-[15px] font-semibold text-[#1d1d1f]">
               {table.name} — Canlı Adisyon Detayı
             </h3>
             <p className="text-[11px] text-[#86868b]">

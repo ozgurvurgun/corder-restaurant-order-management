@@ -194,21 +194,21 @@ export function StaffUserModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs"
       onClick={() => !submitting && onClose()}
     >
       <div
-        className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white p-5 shadow-2xl safe-bottom"
+        className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl border border-[#e5e5ea]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[#f0f0f0] pb-3.5">
           <div>
-            <h3 className="text-[16px] font-bold text-[#1d1d1f]">
+            <h3 className="text-[15px] font-semibold text-[#1d1d1f]">
               {editingUser ? `${editingUser.name} — Düzenle` : "Yeni Kullanıcı / Personel Oluştur"}
             </h3>
             <p className="text-[11px] text-[#86868b]">Şube: {branchName}</p>
           </div>
-          <button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f5f5f7]">
+          <button type="button" onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#f5f5f7] hover:bg-[#e8e8ed]">
             <X className="h-4 w-4 text-[#86868b]" />
           </button>
         </div>
@@ -258,7 +258,7 @@ export function StaffUserModal({
               <div className="flex items-center gap-2.5">
                 <Monitor className="h-4 w-4 text-[#e63462]" />
                 <div>
-                  <p className="text-[13px] font-bold text-[#1d1d1f]">Merchant Panel Giriş Yetkisi (Web / Kasa PC)</p>
+                  <p className="text-[13px] font-semibold text-[#1d1d1f]">Merchant Panel Giriş Yetkisi (Web / Kasa PC)</p>
                   <p className="text-[11px] text-[#86868b]">Açıldığında bu kullanıcı e-posta ve parolasıyla Merchant Paneline giriş yapabilir.</p>
                 </div>
               </div>
@@ -306,7 +306,7 @@ export function StaffUserModal({
               <div className="flex items-center gap-2.5">
                 <KeyRound className="h-4 w-4 text-[#e63462]" />
                 <div>
-                  <p className="text-[13px] font-bold text-[#1d1d1f]">El Terminali (POS) PIN Giriş Yetkisi</p>
+                  <p className="text-[13px] font-semibold text-[#1d1d1f]">El Terminali (POS) PIN Giriş Yetkisi</p>
                   <p className="text-[11px] text-[#86868b]">Garson ve saha ekranında PIN kodu ile işlem yapabilsin.</p>
                 </div>
               </div>
@@ -360,14 +360,14 @@ export function StaffUserModal({
             </div>
           )}
 
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="h-11 rounded-xl border border-[#d1d1d6] px-4 text-[13px] font-semibold text-[#86868b]">
+          <div className="flex justify-end gap-2.5 border-t border-[#f0f0f0] pt-4">
+            <button type="button" onClick={onClose} className="h-10 rounded-xl border border-[#d1d1d6] px-4 text-[13px] font-medium text-[#86868b] hover:bg-[#f5f5f7]">
               Vazgeç
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="h-11 rounded-xl bg-[#e63462] px-6 text-[13px] font-bold text-white shadow-md shadow-[#e63462]/20 hover:bg-[#d42d56] disabled:opacity-50"
+              className="h-10 rounded-xl bg-[#e63462] px-5 text-[13px] font-semibold text-white shadow-sm hover:bg-[#d42d56] disabled:opacity-50"
             >
               {submitting ? "Kaydediliyor…" : editingUser ? "Kullanıcıyı Güncelle" : "Kullanıcıyı Oluştur"}
             </button>

@@ -29,11 +29,11 @@ html {
 }
 
 .safe-top {
-  padding-top: max(env(safe-area-inset-top, 0px), 0px);
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 .safe-bottom {
-  padding-bottom: max(env(safe-area-inset-bottom, 0px), 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .no-scrollbar::-webkit-scrollbar {

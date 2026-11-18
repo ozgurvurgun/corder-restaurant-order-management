@@ -53,7 +53,7 @@ export function BranchSwitcherHeader({ activeTab = "dashboard" }: { activeTab?: 
 
   return (
     <>
-      <header className="h-[52px] flex items-center justify-between gap-4 px-4 sm:px-6 border-b border-[#e5e5ea] bg-white/80 backdrop-blur-xl flex-shrink-0 sticky top-0 z-30 safe-top">
+      <header className="h-[52px] flex items-center justify-between gap-4 px-4 sm:px-6 border-b border-[#e5e5ea] bg-white/80 backdrop-blur-xl flex-shrink-0 sticky top-0 z-30">
         {/* Left: Page Title & Context */}
         <div className="flex items-center gap-3 min-w-0">
           <h1 className="text-[16px] font-semibold text-[#1d1d1f] truncate">
@@ -111,11 +111,11 @@ export function BranchSwitcherHeader({ activeTab = "dashboard" }: { activeTab?: 
       {/* Branch Switcher Modal */}
       {openSheet && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-xs p-0 sm:p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4"
           onClick={() => setOpenSheet(false)}
         >
           <div
-            className="w-full max-w-md rounded-t-2xl sm:rounded-2xl bg-white p-5 shadow-2xl border border-[#e5e5ea] safe-bottom"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-[#e5e5ea]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-[#f0f0f0] pb-3.5">
@@ -135,7 +135,7 @@ export function BranchSwitcherHeader({ activeTab = "dashboard" }: { activeTab?: 
               </button>
             </div>
 
-            <div className="mt-3 max-h-[60vh] overflow-y-auto space-y-2">
+            <div className="mt-4 max-h-[60vh] overflow-y-auto space-y-2.5">
               {branches.length > 1 && (
                 <button
                   type="button"
@@ -225,7 +225,7 @@ export function BranchSwitcherHeader({ activeTab = "dashboard" }: { activeTab?: 
           onClick={() => setShowPwaInfo(false)}
         >
           <div
-            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl border border-[#e5e5ea]"
+            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-[#e5e5ea]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-3">

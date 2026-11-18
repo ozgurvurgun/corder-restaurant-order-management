@@ -168,15 +168,15 @@ export function SubBossesSection() {
 
       {showSubBossModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs"
           onClick={() => !sbSubmitting && setShowSubBossModal(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-[#e5e5ea]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-[#e5e5ea] pb-3">
-              <h3 className="text-[15px] font-bold text-[#1d1d1f]">Şube / Franchise Boss Ata</h3>
+            <div className="flex items-center justify-between border-b border-[#f0f0f0] pb-3">
+              <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Şube / Franchise Boss Ata</h3>
               <button
                 type="button"
                 onClick={() => setShowSubBossModal(false)}
@@ -271,18 +271,18 @@ export function SubBossesSection() {
                   })}
                 </div>
               </div>
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2.5 border-t border-[#f0f0f0] pt-4">
                 <button
                   type="button"
                   onClick={() => setShowSubBossModal(false)}
-                  className="h-9 px-4 rounded-xl border border-[#d1d1d6] text-[12px] font-semibold text-[#86868b]"
+                  className="h-9 px-4 rounded-xl border border-[#d1d1d6] text-[12px] font-medium text-[#86868b] hover:bg-[#f5f5f7]"
                 >
                   İptal
                 </button>
                 <button
                   type="submit"
                   disabled={sbSubmitting}
-                  className="h-9 px-4 rounded-xl bg-[#e63462] text-[12px] font-bold text-white"
+                  className="h-9 px-4 rounded-xl bg-[#e63462] text-[12px] font-semibold text-white hover:bg-[#d42d56]"
                 >
                   {sbSubmitting ? "Kaydediliyor…" : "Şube Boss Ata"}
                 </button>

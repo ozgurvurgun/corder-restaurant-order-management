@@ -66,7 +66,7 @@ export function BossLogin() {
     error.toLowerCase().includes("access suspended")
 
   return (
-    <div className="min-h-dvh bg-gradient-to-br from-[#f5f5f7] to-[#e8e8ed] flex items-center justify-center p-4 safe-top safe-bottom">
+    <div className="min-h-dvh bg-gradient-to-br from-[#f5f5f7] to-[#e8e8ed] flex items-center justify-center p-4">
       <div className="w-full max-w-[430px]">
         <div className="text-center mb-7">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-[#e63462] rounded-2xl mb-3.5 shadow-lg">

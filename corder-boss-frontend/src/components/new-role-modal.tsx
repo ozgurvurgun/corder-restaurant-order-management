@@ -57,15 +57,15 @@ export function NewRoleModal({
       onClick={() => !saving && onClose()}
     >
       <div
-        className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl"
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-[#e5e5ea]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[#f0f0f0] pb-3">
-          <h3 className="text-[16px] font-bold text-[#1d1d1f]">Yeni Özel Rol Oluştur</h3>
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Yeni Özel Rol Oluştur</h3>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-[#f5f5f7]"
+            className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#f5f5f7]"
           >
             <X className="h-4 w-4 text-[#86868b]" />
           </button>
@@ -126,18 +126,18 @@ export function NewRoleModal({
               className="h-10 w-20 cursor-pointer rounded-lg border border-[#d1d1d6]"
             />
           </div>
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex justify-end gap-2.5 border-t border-[#f0f0f0] pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="h-10 rounded-xl border border-[#d1d1d6] px-4 text-[13px] font-medium text-[#86868b]"
+              className="h-10 rounded-xl border border-[#d1d1d6] px-4 text-[13px] font-medium text-[#86868b] hover:bg-[#f5f5f7]"
             >
               İptal
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="h-10 rounded-xl bg-[#e63462] px-5 text-[13px] font-bold text-white"
+              className="h-10 rounded-xl bg-[#e63462] px-5 text-[13px] font-semibold text-white hover:bg-[#d42d56]"
             >
               Oluştur
             </button>
