@@ -115,22 +115,6 @@ export class StaffService {
     return Promise.all(list.map((s) => this.toPublicDto(s, roles)));
   }
 
-  private async assertUniquePinInRestaurant(
-    restaurantId: string,
-    plainPin: string,
-    excludeStaffId?: string,
-  ): Promise<void> {
-    const existingList = await this.staffRepo.find({ where: { restaurantId } });
-    for (const member of existingList) {
-      if (excludeStaffId && member.id === excludeStaffId) continue;
-      if (member.pinHash && (await bcrypt.compare(plainPin, member.pinHash))) {
-        throw new ConflictException(
-          'This PIN code is already in use by another staff member in this branch',
-        );
-      }
-    }
-  }
-
   private async assertUniqueEmail(
     email: string,
     excludeStaffId?: string,
@@ -212,7 +196,6 @@ export class StaffService {
     let pinHash: string | null = null;
     if (dto.pin && dto.pin.trim()) {
       const pin = dto.pin.trim();
-      await this.assertUniquePinInRestaurant(restaurantId, pin);
       pinHash = await bcrypt.hash(pin, 10);
     } else if (canAccessTerminal) {
       throw new BadRequestException('A 4-8 digit PIN is required for terminal users');
@@ -302,7 +285,6 @@ export class StaffService {
     }
     if (dto.pin != null && dto.pin !== '') {
       const pin = dto.pin.trim();
-      await this.assertUniquePinInRestaurant(restaurantId, pin, id);
       staff.pinHash = await bcrypt.hash(pin, 10);
     }
     if (dto.email !== undefined) {
