@@ -36,9 +36,35 @@ async function loadState(rerenderAll = false) {
         renderDiscoveredNetworkPrinters()
         renderRoutingDropdowns()
       }
+      if (!state.initialDiscoveryRun) {
+        state.initialDiscoveryRun = true
+        void scanAllPrintersSilently()
+      }
     }
   } catch (e) {
     console.error(e)
+  }
+}
+
+async function scanAllPrintersSilently() {
+  try {
+    const sysData = await apiCall("/api/discover-printers")
+    state.discoveredPrinters = sysData.printers || []
+    renderDiscoveredPrinters()
+  } catch {
+    // ignore background scan errors
+  }
+  try {
+    const netData = await apiCall("/api/discover-network-printers", {
+      method: "POST",
+      body: JSON.stringify({ port: 9100 }),
+    })
+    state.discoveredNetworkPrinters = netData.printers || []
+    state.scannedSubnets = netData.scannedSubnets || []
+    state.networkScanCompleted = true
+    renderDiscoveredNetworkPrinters()
+  } catch {
+    // ignore background scan errors
   }
 }
 
@@ -201,14 +227,13 @@ function bindPrinterManagementEvents() {
   if ($("btnDiscoverNetworkPrinters")) {
     $("btnDiscoverNetworkPrinters").addEventListener("click", async () => {
       const btn = $("btnDiscoverNetworkPrinters")
-      const port = Number($("netPrinterPort")?.value) || 9100
       btn.disabled = true
       btn.textContent = "Ağ Taranıyor..."
       try {
-        showToast(`Yerel ağdaki ${port} portlu yazıcılar taranıyor...`)
+        showToast("Yerel ağdaki termal yazıcılar taranıyor...")
         const data = await apiCall("/api/discover-network-printers", {
           method: "POST",
-          body: JSON.stringify({ port }),
+          body: JSON.stringify({ port: 9100 }),
         })
         state.discoveredNetworkPrinters = data.printers || []
         state.scannedSubnets = data.scannedSubnets || []
@@ -245,55 +270,6 @@ function bindPrinterManagementEvents() {
       }
     })
   }
-
-  $("btnTestIp").addEventListener("click", async () => {
-    const hostInput = $("netPrinterHost")
-    const host = hostInput.value.trim()
-    if (!host) {
-      showCustomFieldValidation(hostInput, "Lütfen test edilecek yazıcının IP adresini girin.")
-      return
-    }
-    const port = Number($("netPrinterPort").value) || 9100
-    const box = $("ipTestResult")
-    box.className = "inline-feedback status-warn"
-    box.textContent = `${host}:${port} bağlantısı test ediliyor...`
-    box.classList.remove("hidden")
-    try {
-      const res = await apiCall("/api/test-network", {
-        method: "POST",
-        body: JSON.stringify({ host, port }),
-      })
-      box.className = `inline-feedback ${res.ok ? "status-ok" : "status-err"}`
-      box.textContent = res.ok
-        ? `Bağlantı Başarılı! (${res.latencyMs}ms)`
-        : `Bağlantı Başarısız: ${res.error}`
-    } catch (e) {
-      box.className = "inline-feedback status-err"
-      box.textContent = `Hata: ${e.message}`
-    }
-  })
-
-  $("formAddNetworkPrinter").addEventListener("submit", async (e) => {
-    e.preventDefault()
-    const name = $("netPrinterName").value.trim()
-    const host = $("netPrinterHost").value.trim()
-    const port = Number($("netPrinterPort").value) || 9100
-    const paperWidth = Number($("netPrinterWidth").value) || 80
-    try {
-      await apiCall("/api/printers", {
-        method: "POST",
-        body: JSON.stringify({ name, mode: "network", host, port, paperWidth }),
-      })
-      e.target.reset()
-      $("netPrinterPort").value = "9100"
-      $("netPrinterWidth").value = "80"
-      upgradeAllCustomSelects()
-      showToast(`"${name}" ağ yazıcısı eklendi`)
-      await loadState(true)
-    } catch (err) {
-      showToast(err.message, true)
-    }
-  })
 }
 
 function bindRoutingAndQueueEvents() {

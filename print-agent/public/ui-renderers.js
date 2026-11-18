@@ -14,6 +14,7 @@ const state = {
   discoveredNetworkPrinters: [],
   scannedSubnets: [],
   networkScanCompleted: false,
+  initialDiscoveryRun: false,
   queue: [],
   recentPrinted: [],
   logs: [],
@@ -242,7 +243,7 @@ function renderDiscoveredNetworkPrinters() {
     container.innerHTML = `<div class="empty-hint">${
       state.networkScanCompleted
         ? `Yerel ağda açık termal yazıcı bulunamadı${subnetInfo}.`
-        : 'Yerel ağdaki (Ethernet / Wi-Fi) 9100 portlu termal yazıcıları otomatik bulmak için "Ağdaki Yazıcıları Tara" butonuna tıklayın.'
+        : 'Yerel ağdaki yazıcıları görmek için "Ağdaki Yazıcıları Tara" butonuna tıklayın.'
     }</div>`
     return
   }

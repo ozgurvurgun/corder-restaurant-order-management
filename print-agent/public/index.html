@@ -193,46 +193,20 @@
                 </div>
               </div>
 
-              <!-- Add Network (Ethernet/Wi-Fi IP) Printer Card -->
+              <!-- Discover Network (Ethernet/Wi-Fi) Printers Card -->
               <div class="card">
                 <div class="card-header">
                   <div>
-                    <h2>Ağ (IP:Port) Yazıcısı Ekle</h2>
-                    <p class="card-desc">Yerel ağdaki Ethernet / Wi-Fi termal yazıcıları otomatik tarayın veya IP ile ekleyin</p>
+                    <h2>Ağ (Ethernet / Wi-Fi) Yazıcıları</h2>
+                    <p class="card-desc">Yerel ağa bağlı Ethernet veya Wi-Fi termal yazıcıları tek tıkla ekleyin</p>
                   </div>
                   <button type="button" class="btn btn-secondary btn-sm" id="btnDiscoverNetworkPrinters">
                     Ağdaki Yazıcıları Tara
                   </button>
                 </div>
-                <div id="discoveredNetworkPrintersList" class="discovered-list" style="margin-bottom: 12px;">
-                  <div class="empty-hint">Yerel ağdaki (Ethernet / Wi-Fi) 9100 portlu termal yazıcıları otomatik bulmak için "Ağdaki Yazıcıları Tara" butonuna tıklayın.</div>
+                <div id="discoveredNetworkPrintersList" class="discovered-list">
+                  <div class="empty-hint">Yerel ağdaki yazıcıları görmek için "Ağdaki Yazıcıları Tara" butonuna tıklayın.</div>
                 </div>
-                <form id="formAddNetworkPrinter" class="form-grid">
-                  <div class="field-group full">
-                    <label for="netPrinterName">Yazıcı Adı (Örn: Mutfak, Bar, Tatlıcı)</label>
-                    <input type="text" id="netPrinterName" placeholder="Örn: Mutfak Termal" required />
-                  </div>
-                  <div class="field-group">
-                    <label for="netPrinterHost">IP Adresi</label>
-                    <input type="text" id="netPrinterHost" placeholder="192.168.1.50" required />
-                  </div>
-                  <div class="field-group">
-                    <label for="netPrinterPort">Port (Standart: 9100)</label>
-                    <input type="number" id="netPrinterPort" value="9100" required />
-                  </div>
-                  <div class="field-group">
-                    <label for="netPrinterWidth">Kağıt Genişliği</label>
-                    <select id="netPrinterWidth">
-                      <option value="80">80mm (Standart Geniş)</option>
-                      <option value="58">58mm (Dar Fiş)</option>
-                    </select>
-                  </div>
-                  <div class="field-group form-actions-inline">
-                    <button type="button" class="btn btn-secondary" id="btnTestIp">IP Bağlantı Testi</button>
-                    <button type="submit" class="btn btn-primary">+ Yazıcıyı Ekle</button>
-                  </div>
-                </form>
-                <div id="ipTestResult" class="inline-feedback hidden"></div>
               </div>
             </section>
 
