@@ -13,6 +13,7 @@ export interface TableDiscountState {
   type: 'percent' | 'amount' | 'complimentary';
   value: number;
   reason: string;
+  appliedBy?: string;
 }
 
 export interface TableSplitSharePayment {

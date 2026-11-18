@@ -124,6 +124,7 @@ export function mapApiTablesToPanel(
         value: t.discount.value,
         amount: fromMinorUnits(discountMinorUnits),
         reason: t.discount.reason,
+        ...(t.discount.appliedBy ? { appliedBy: formatTitleCase(t.discount.appliedBy) } : {}),
       }
       totalMinorUnits = Math.max(0, rawMinorUnits - discountMinorUnits)
     }

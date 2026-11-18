@@ -166,6 +166,7 @@ export class TablesController {
     @RestaurantId() restaurantId: string,
     @RestaurantUser()
     user: {
+      name?: string;
       isBoss?: boolean;
       permissions?: PermissionKey[];
       limits?: EffectivePolicyLimits;
@@ -256,6 +257,9 @@ export class TablesController {
       }
     }
 
+    if (dto.discount) {
+      dto.discount.appliedBy = dto.discount.appliedBy?.trim() || user.name?.trim() || 'Sistem';
+    }
     const updated = await this.service.update(id, restaurantId, dto);
     await this.ordersGateway.emitTableSessionPresence(restaurantId);
     this.ordersGateway.emitOrdersUpdated(restaurantId);

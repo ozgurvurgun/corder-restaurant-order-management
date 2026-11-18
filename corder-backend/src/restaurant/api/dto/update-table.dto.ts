@@ -26,6 +26,11 @@ export class TableDiscountDto {
   @IsString()
   @MaxLength(255)
   reason!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  appliedBy?: string;
 }
 
 export class TableSplitSharePaymentDto {

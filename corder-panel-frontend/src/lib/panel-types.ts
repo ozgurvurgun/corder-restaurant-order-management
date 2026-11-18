@@ -131,7 +131,7 @@ export interface PanelTable {
   totalAmount: number
   orderCount: number
   lastUpdated?: Date
-  discount?: { type: PanelDiscountType; value: number; amount: number; reason: string }
+  discount?: { type: PanelDiscountType; value: number; amount: number; reason: string; appliedBy?: string }
   splitInfo?: {
     type: "person" | "items"
     personCount?: number
@@ -156,7 +156,7 @@ export interface Payment {
   amount: number
   method: PanelPaymentMethod
   splitDetails?: { method: string; amount: number }[]
-  discount?: { type: "percent" | "amount"; value: number; reason: string }
+  discount?: { type: PanelDiscountType; value: number; reason: string; appliedBy?: string }
   tip?: number
   processedBy: string
   createdAt: Date

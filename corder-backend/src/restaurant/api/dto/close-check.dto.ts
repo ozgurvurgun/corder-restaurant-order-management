@@ -46,6 +46,11 @@ export class CloseCheckDiscountDto {
   @IsString()
   @MaxLength(255)
   reason?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  appliedBy?: string;
 }
 
 export class CloseCheckSplitDto {

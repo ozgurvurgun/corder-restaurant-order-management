@@ -87,6 +87,19 @@ export function CompletedOrdersList(props: {
     return base
   }
 
+  const formatDiscountTypeLabel = (
+    disc: ClosedTable["payment"]["discount"],
+  ) => {
+    if (!disc) return locale === "tr" ? "İndirim" : "Discount"
+    if (disc.type === "complimentary" || (disc.type === "percent" && disc.value >= 100)) {
+      return locale === "tr" ? "Tam İkram (%100)" : "Complimentary (100%)"
+    }
+    if (disc.type === "percent") {
+      return locale === "tr" ? `%${disc.value} Yüzde İndirim` : `${disc.value}% Discount`
+    }
+    return locale === "tr" ? "Tutar İndirimi" : "Amount Discount"
+  }
+
   return (
     <div className="flex flex-col gap-4 w-full">
       {paginatedTables.map((closedTable) => {
@@ -168,6 +181,24 @@ export function CompletedOrdersList(props: {
                   <span className="flex items-center gap-1.5"><CreditCard className="w-3.5 h-3.5 text-[#86868b]" /><span className="text-[#86868b]"> {locale === "tr" ? "Ödeme" : "Payment"}: </span>
                     <span className="font-semibold text-[#1d1d1f]"> {formatPaymentDisplay(closedTable.payment)} </span>
                   </span>
+                  {closedTable.discountAmount > 0 && (
+                    <span className="inline-flex flex-wrap items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200/80 text-[11px] text-amber-800">
+                      <span className="font-semibold">
+                        {formatDiscountTypeLabel(closedTable.payment.discount)} (-₺{formatCurrency(closedTable.discountAmount)})
+                      </span>
+                      {closedTable.payment.discount?.reason && (
+                        <span>
+                          • {locale === "tr" ? "Neden" : "Reason"}: <span className="font-medium">{closedTable.payment.discount.reason}</span>
+                        </span>
+                      )}
+                      <span>
+                        • {locale === "tr" ? "Uygulayan" : "Applied by"}:{" "}
+                        <span className="font-medium">
+                          {closedTable.payment.discount?.appliedBy || closedTable.payment.processedBy || closedTable.closedBy}
+                        </span>
+                      </span>
+                    </span>
+                  )}
                   {cancelledItems.length > 0 && (
                     <span className="text-[11px] text-red-600"> {locale === "tr" ? "İptal satırı" : "Cancelled lines"}:{" "} {cancelledItems.length} </span>
                   )}
@@ -310,9 +341,18 @@ export function CompletedOrdersList(props: {
                     <span className="text-[#1d1d1f]"> {"₺"} {formatCurrency(closedTable.totalAmount)} </span>
                   </div>
                   {closedTable.discountAmount > 0 && (
-                    <div className="flex justify-between text-[12px] mb-1.5 text-amber-600">
-                      <span>{locale === "tr" ? "İndirim" : "Discount"}</span>
-                      <span> -{"₺"} {formatCurrency(closedTable.discountAmount)} </span>
+                    <div className="flex justify-between items-start gap-2 text-[12px] mb-1.5 text-amber-600">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-medium">{formatDiscountTypeLabel(closedTable.payment.discount)}</span>
+                        {closedTable.payment.discount?.reason && (
+                          <span className="text-[11px] text-amber-700/90">
+                            ({locale === "tr" ? "Neden" : "Reason"}: {closedTable.payment.discount.reason}
+                            {" • "}
+                            {locale === "tr" ? "Uygulayan" : "Applied by"}: {closedTable.payment.discount.appliedBy || closedTable.payment.processedBy || closedTable.closedBy})
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-medium flex-shrink-0"> -{"₺"} {formatCurrency(closedTable.discountAmount)} </span>
                     </div>
                   )}
                   {closedTable.payment.tip && closedTable.payment.tip > 0 && (
@@ -335,7 +375,19 @@ export function CompletedOrdersList(props: {
                   <span className="flex items-center gap-1"><CreditCard className="w-3 h-3" />{" "} {formatPaymentDisplay(closedTable.payment)} </span>
                   <span className="flex items-center gap-1"><Receipt className="w-3 h-3" />{" "} {closedTable.orders.reduce( (s, o) => s + o.items.filter((i) => itemCountsTowardBill(i)).length, 0, )}{" "} {locale === "tr" ? "ürün" : "items"} </span>
                   {closedTable.discountAmount > 0 && (
-                    <span className="text-amber-600"> {locale === "tr" ? "İndirim" : "Discount"}: {"₺"} {formatCurrency(closedTable.discountAmount)} </span>
+                    <span className="inline-flex flex-wrap items-center gap-1 text-amber-600 font-medium">
+                      <span>
+                        {locale === "tr" ? "İndirim" : "Discount"}: {"₺"}
+                        {formatCurrency(closedTable.discountAmount)}
+                      </span>
+                      <span className="text-amber-700/90 font-normal">
+                        ({formatDiscountTypeLabel(closedTable.payment.discount)}
+                        {closedTable.payment.discount?.reason
+                          ? ` • ${locale === "tr" ? "Neden" : "Reason"}: ${closedTable.payment.discount.reason}`
+                          : ""}
+                        {` • ${locale === "tr" ? "Uygulayan" : "By"}: ${closedTable.payment.discount?.appliedBy || closedTable.payment.processedBy || closedTable.closedBy}`})
+                      </span>
+                    </span>
                   )}
                 </div>
                 <span> {locale === "tr" ? "Kapatan" : "Closed by"}:{" "} <span className="font-medium text-[#1d1d1f]"> {closedTable.closedBy} </span>

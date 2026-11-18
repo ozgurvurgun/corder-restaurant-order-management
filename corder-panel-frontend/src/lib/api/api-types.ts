@@ -12,7 +12,7 @@ export interface RawTableDto {
   status: string
   sessionStaffId?: string | null
   sessionStaffName?: string | null
-  discount?: { type: PanelDiscountType; value: number; reason: string } | null
+  discount?: { type: PanelDiscountType; value: number; reason: string; appliedBy?: string } | null
   splitInfo?: PanelTable["splitInfo"] | null
 }
 
@@ -153,9 +153,10 @@ export interface CompletedPaymentSplitDto {
 }
 
 export interface CompletedPaymentDiscountDto {
-  type: "percent" | "amount"
+  type: PanelDiscountType
   value: number
   reason: string
+  appliedBy?: string
 }
 
 export interface CompletedPaymentSnapshotDto {
@@ -199,7 +200,7 @@ export interface CloseCheckBody {
   lines?: { itemId: string; quantity: number }[]
   items?: { productId: string; quantity: number; note?: string }[]
   method: CloseCheckPaymentMethod
-  discount?: { type: "percent" | "amount"; value: number; reason?: string }
+  discount?: { type: PanelDiscountType; value: number; reason?: string; appliedBy?: string }
   splitDetails?: {
     method: CloseCheckSplitMethod
     amount: number

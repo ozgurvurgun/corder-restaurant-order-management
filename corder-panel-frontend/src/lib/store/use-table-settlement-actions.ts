@@ -204,8 +204,10 @@ export function useTableSettlementActions(params: {
       if (!token) return false
       const table = tables.find((t) => t.id === tableId)
       if (!table) return false
+      const appliedBy = currentUser?.name || "Sistem"
+      const discountPayload = { ...discount, appliedBy }
       try {
-        await api.tables.update(token, tableId, { discount })
+        await api.tables.update(token, tableId, { discount: discountPayload })
       } catch (err) {
         showPanelToast(err instanceof Error ? err.message : "İndirim kaydedilemedi", "error")
         return false
@@ -226,7 +228,7 @@ export function useTableSettlementActions(params: {
               : t.splitInfo
           return {
             ...t,
-            discount: { type: discount.type, value: discount.value, amount: discountAmount, reason: discount.reason },
+            discount: { type: discount.type, value: discount.value, amount: discountAmount, reason: discount.reason, appliedBy },
             totalAmount: nextTotal,
             ...(nextSplit ? { splitInfo: nextSplit } : {}),
           }

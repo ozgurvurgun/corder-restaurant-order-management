@@ -92,8 +92,18 @@ export class CloseCheckUseCase {
         ? await this.loadTableBillContext(em, restaurantId, dto.tableId!, dto.lines, actorId, actorName, now)
         : await this.buildWalkInBillContext(em, restaurantId, dto.items!, actorId, actorName, now);
 
+      const effectiveDiscount = dto.discount
+        ? {
+            ...dto.discount,
+            appliedBy:
+              dto.discount.appliedBy?.trim() ||
+              billContext.table?.discount?.appliedBy?.trim() ||
+              actorName,
+          }
+        : null;
+
       const settlement = CheckSettlementPolicy.computeSettlement({
-        rawTotalMinorUnits: billContext.rawTotalMinorUnits, method: dto.method, discount: dto.discount ?? null,
+        rawTotalMinorUnits: billContext.rawTotalMinorUnits, method: dto.method, discount: effectiveDiscount,
         splitDetails: dto.splitDetails ?? null, ledgerCustomerId: dto.ledgerCustomerId ?? null,
         ledgerDebtAmount: dto.ledgerDebtAmount ?? null, tip: dto.tip ?? null,
       });

@@ -36,6 +36,7 @@ export interface DiscountSnapshot {
   type: 'percent' | 'amount' | 'complimentary';
   value: number;
   reason: string;
+  appliedBy?: string;
 }
 
 export interface CheckSettlementResult {
@@ -229,6 +230,9 @@ export class CheckSettlementPolicy {
             reason:
               input.discount.reason?.trim() ||
               (input.discount.type === 'complimentary' ? 'Complimentary' : 'Discount'),
+            ...(input.discount.appliedBy?.trim()
+              ? { appliedBy: input.discount.appliedBy.trim() }
+              : {}),
           }
         : undefined;
 
