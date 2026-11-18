@@ -5,10 +5,7 @@ import { useAdminStore } from "@/lib/store"
 import { fromMinorUnits, toMinorUnits } from "@/lib/money"
 import type { RestaurantBillingStatus, RestaurantBranchType } from "@/lib/types"
 import { RootAdminsSection } from "@/components/RootAdminsSection"
-import {
-  PrintAgentTokenSection,
-  PrintAgentCategoriesSection,
-} from "@/components/PrintAgentTokenSection"
+import { PrintAgentTokenSection } from "@/components/PrintAgentTokenSection"
 import {
   RestaurantBillingBanner,
   RestaurantBillingSection,
@@ -432,8 +429,6 @@ export function EditRestaurantPage() {
           />
         </div>
       </div>
-
-      <PrintAgentCategoriesSection restaurantId={id} />
     </div>
   )
 }

@@ -21,7 +21,6 @@ import {
   UpdateRestaurantBillingStatusDto,
 } from './dto/platform-billing.dto';
 import { PlatformJwtGuard } from '../infrastructure/platform-jwt.guard';
-import { CategoryService } from '../../restaurant/application/category.service';
 
 function sanitizeRestaurant<
   T extends { terminalPasswordHash?: unknown; printAgentPasswordHash?: unknown },
@@ -36,20 +35,12 @@ export class RestaurantsController {
   constructor(
     private readonly service: RestaurantService,
     private readonly billingService: PlatformBillingService,
-    private readonly categoryService: CategoryService,
   ) {}
 
   @Get()
   async findAll() {
     const list = await this.service.findAll();
     return list.map(sanitizeRestaurant);
-  }
-
-  /** Product categories defined in the panel (IDs for printer mapping, etc.). */
-  @Get(':id/categories')
-  async listCategories(@Param('id', ParseUUIDPipe) id: string) {
-    await this.service.findOne(id);
-    return this.categoryService.findByRestaurant(id);
   }
 
   @Get(':id')

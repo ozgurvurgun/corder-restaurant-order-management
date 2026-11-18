@@ -223,19 +223,6 @@ export const platform = {
     async one(id: string) {
       return platformFetch<PlatformRestaurantDto>(`/platform/restaurants/${id}`)
     },
-    async categories(restaurantId: string) {
-      return platformFetch<
-        Array<{
-          id: string
-          name: string
-          slug: string
-          order: number
-          showInTerminal: boolean
-          showInMenu: boolean
-          createdAt: string
-        }>
-      >(`/platform/restaurants/${restaurantId}/categories`)
-    },
     async create(body: {
       name: string
       slug: string
