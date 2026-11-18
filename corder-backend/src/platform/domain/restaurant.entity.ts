@@ -5,18 +5,13 @@ import {
   CreateDateColumn,
   Index,
 } from 'typeorm';
+import {
+  RestaurantBillingStatus,
+  RestaurantPaymentRecord,
+} from './subscription-billing.policy';
 
 export type RestaurantBranchType = 'independent' | 'company_owned' | 'franchise';
-export type RestaurantBillingStatus = 'paid' | 'pending' | 'overdue' | 'suspended';
-
-export interface RestaurantPaymentRecord {
-  id: string;
-  period: string;
-  amount: number;
-  paidAt: string;
-  note?: string | null;
-  recordedBy?: string | null;
-}
+export type { RestaurantBillingStatus, RestaurantPaymentRecord };
 
 @Entity('restaurants')
 @Index(['terminalEmail'])
@@ -97,11 +92,11 @@ export class RestaurantEntity {
   @Column({ name: 'last_paid_period', type: 'varchar', length: 16, nullable: true })
   lastPaidPeriod: string | null;
 
+  @Column({ name: 'billing_start_period', type: 'varchar', length: 7, nullable: true })
+  billingStartPeriod: string | null;
+
   @Column({ name: 'billing_notes', type: 'text', nullable: true })
   billingNotes: string | null;
-
-  @Column({ name: 'payment_history', type: 'jsonb', default: () => "'[]'::jsonb" })
-  paymentHistory: RestaurantPaymentRecord[];
 
   @Column({ name: 'tax_id', type: 'varchar', nullable: true })
   taxId: string | null;

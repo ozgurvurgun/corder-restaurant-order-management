@@ -5,9 +5,11 @@ import {
   MinLength,
   IsEmail,
   IsNumber,
+  IsInt,
   Min,
   Max,
   IsBoolean,
+  Matches,
 } from 'class-validator';
 
 export class CreateRestaurantDto {
@@ -59,8 +61,24 @@ export class CreateRestaurantDto {
   monthlyFee?: number;
 
   @IsOptional()
-  @IsIn(['paid', 'pending', 'overdue', 'suspended'])
-  billingStatus?: 'paid' | 'pending' | 'overdue' | 'suspended';
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, {
+    message: 'billingStartPeriod must be in YYYY-MM format',
+  })
+  billingStartPeriod?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  recordInitialPayment?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(36)
+  initialPaidMonths?: number;
+
+  @IsOptional()
+  @IsIn(['bank_transfer', 'cash', 'credit_card', 'other'])
+  initialPaymentMethod?: 'bank_transfer' | 'cash' | 'credit_card' | 'other';
 
   @IsOptional()
   @IsBoolean()

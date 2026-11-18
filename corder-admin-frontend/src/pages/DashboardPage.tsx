@@ -84,7 +84,7 @@ export function DashboardPage() {
       to: "/dashboard/bosses",
     },
     {
-      label: "Aylık Tahsilat Hedefi (25-30)",
+      label: "Aylık Tahsilat Hedefi",
       value: formatMoney(totalMrr),
       sub: "Aylık abonelik toplamı",
       icon: CreditCard,
@@ -216,10 +216,13 @@ export function DashboardPage() {
                           <span className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">
                             <Ban className="h-3 w-3" /> Erişim Durduruldu
                           </span>
-                        ) : r.billingStatus === "pending" ||
-                          r.billingStatus === "overdue" ? (
+                        ) : r.billingStatus === "overdue" ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+                            <Clock className="h-3 w-3" /> Ödeme Gecikti
+                          </span>
+                        ) : r.billingStatus === "pending" ? (
                           <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                            <Clock className="h-3 w-3" /> Ödeme Bekliyor
+                            <Clock className="h-3 w-3" /> Bu Ay Bekliyor
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">

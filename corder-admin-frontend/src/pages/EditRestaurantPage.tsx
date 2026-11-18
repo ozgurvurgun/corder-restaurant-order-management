@@ -2,14 +2,26 @@ import { useState, useEffect } from "react"
 import { useParams, useNavigate, Link } from "react-router-dom"
 import { ArrowLeft, Trash2, Building2 } from "lucide-react"
 import { useAdminStore } from "@/lib/store"
-import { fromMinorUnits, toMinorUnits } from "@/lib/money"
-import type { RestaurantBillingStatus, RestaurantBranchType } from "@/lib/types"
+import {
+  formatMoney,
+  formatPeriodsSummary,
+  fromMinorUnits,
+  getIstanbulBillingPeriod,
+  toMinorUnits,
+} from "@/lib/money"
+import type {
+  RestaurantBranchType,
+  RestaurantPaymentRecord,
+  SubscriptionPaymentMethod,
+} from "@/lib/types"
 import { RootAdminsSection } from "@/components/RootAdminsSection"
 import { PrintAgentTokenSection } from "@/components/PrintAgentTokenSection"
 import {
   RestaurantBillingBanner,
   RestaurantBillingSection,
 } from "@/components/RestaurantBillingSection"
+import { PaymentFormModal } from "@/components/billing/PaymentFormModal"
+import { RestaurantBillingHistoryModal } from "@/components/billing/RestaurantBillingHistoryModal"
 
 export function EditRestaurantPage() {
   const { id } = useParams<{ id: string }>()
@@ -19,9 +31,14 @@ export function EditRestaurantPage() {
     restaurantsLoading,
     restaurantsError,
     loadRestaurants,
+    billingConfig,
+    loadBillingConfig,
     updateRestaurant,
-    markRestaurantPaid,
+    recordRestaurantPayment,
+    updateRestaurantPayment,
+    deleteRestaurantPayment,
     suspendRestaurantUnpaid,
+    unsuspendRestaurantAccess,
     deleteRestaurant,
     rootAdminsForRestaurant,
     rootAdminsLoading,
@@ -46,7 +63,7 @@ export function EditRestaurantPage() {
   const [franchiseeCompanyName, setFranchiseeCompanyName] = useState("")
   const [royaltyRate, setRoyaltyRate] = useState("0")
   const [monthlyFee, setMonthlyFee] = useState("0")
-  const [billingStatus, setBillingStatus] = useState<RestaurantBillingStatus>("paid")
+  const [billingStartPeriod, setBillingStartPeriod] = useState(getIstanbulBillingPeriod)
   const [billingNotes, setBillingNotes] = useState("")
   const [error, setError] = useState("")
   const [saveMsg, setSaveMsg] = useState("")
@@ -54,9 +71,16 @@ export function EditRestaurantPage() {
   const [billingBusy, setBillingBusy] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
+  const [paymentModalOpen, setPaymentModalOpen] = useState<{
+    initialPeriod?: string
+    editingPayment?: RestaurantPaymentRecord
+  } | null>(null)
+  const [historyModalOpen, setHistoryModalOpen] = useState(false)
+
   useEffect(() => {
     void loadRestaurants()
-  }, [loadRestaurants])
+    void loadBillingConfig()
+  }, [loadRestaurants, loadBillingConfig])
 
   useEffect(() => {
     if (id) void loadRootAdmins(id)
@@ -77,10 +101,8 @@ export function EditRestaurantPage() {
       setFranchiseeCompanyName(restaurant.franchiseeCompanyName ?? "")
       setRoyaltyRate(String(restaurant.royaltyRate ?? 0))
       setMonthlyFee(String(restaurant.monthlyFee ?? 0))
-      setBillingStatus(
-        restaurant.isAccessSuspended
-          ? "suspended"
-          : (restaurant.billingStatus ?? "paid")
+      setBillingStartPeriod(
+        restaurant.billingStartPeriod || getIstanbulBillingPeriod(new Date(restaurant.createdAt))
       )
       setBillingNotes(restaurant.billingNotes ?? "")
     }
@@ -143,8 +165,7 @@ export function EditRestaurantPage() {
             ? Math.max(0, Math.min(100, Number(royaltyRate) || 0))
             : 0,
         monthlyFee: Math.max(0, fromMinorUnits(toMinorUnits(monthlyFee))),
-        billingStatus,
-        isAccessSuspended: billingStatus === "suspended",
+        billingStartPeriod,
         billingNotes: billingNotes.trim() || null,
       })
       await loadRootAdmins(id)
@@ -156,33 +177,10 @@ export function EditRestaurantPage() {
     }
   }
 
-  const handleQuickMarkPaid = async () => {
-    setBillingBusy(true)
-    setError("")
-    setSaveMsg("")
-    try {
-      const feeNum = Math.max(0, fromMinorUnits(toMinorUnits(monthlyFee)))
-      if (toMinorUnits(feeNum) !== toMinorUnits(restaurant.monthlyFee ?? 0)) {
-        await updateRestaurant(id, { monthlyFee: feeNum })
-      }
-      await markRestaurantPaid(id, {
-        amount: feeNum,
-        note: billingNotes.trim() || undefined,
-      })
-      setSaveMsg(
-        "Ödeme alındı bilgisi işlendi ve mekanın tüm sistem erişimleri otomatik açıldı."
-      )
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "İşlem başarısız")
-    } finally {
-      setBillingBusy(false)
-    }
-  }
-
   const handleQuickSuspend = async () => {
     if (
       !confirm(
-        `${restaurant.name} mekanının ödeme alınmadığı için tüm sistemlere erişimini durdurmak istediğinize emin misiniz?`
+        `${restaurant.name} mekanının tüm sistemlere erişimini durdurmak istediğinize emin misiniz?`
       )
     ) {
       return
@@ -193,12 +191,25 @@ export function EditRestaurantPage() {
     try {
       await suspendRestaurantUnpaid(
         id,
-        billingNotes.trim() ||
-          "25-30 tahsilat döneminde ödeme alınmadığı için erişim durduruldu."
+        billingNotes.trim() || "Ödeme alınmadığı için erişim durduruldu."
       )
-      setSaveMsg("Mekanın tüm sistemlere erişimi ödeme alınmadığı için durduruldu.")
+      setSaveMsg("Mekanın tüm sistemlere erişimi durduruldu.")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erişim durdurulamadı")
+    } finally {
+      setBillingBusy(false)
+    }
+  }
+
+  const handleQuickUnsuspend = async () => {
+    setBillingBusy(true)
+    setError("")
+    setSaveMsg("")
+    try {
+      await unsuspendRestaurantAccess(id)
+      setSaveMsg("Mekanın sistem erişimi yeniden açıldı.")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erişim açılamadı")
     } finally {
       setBillingBusy(false)
     }
@@ -271,8 +282,10 @@ export function EditRestaurantPage() {
         restaurant={restaurant}
         isSuspended={isSuspended}
         billingBusy={billingBusy}
-        onQuickMarkPaid={() => void handleQuickMarkPaid()}
-        onQuickSuspend={() => void handleQuickSuspend()}
+        onOpenPaymentModal={() => setPaymentModalOpen({})}
+        onOpenHistoryModal={() => setHistoryModalOpen(true)}
+        onSuspend={() => void handleQuickSuspend()}
+        onUnsuspend={() => void handleQuickUnsuspend()}
       />
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -283,7 +296,9 @@ export function EditRestaurantPage() {
           <form onSubmit={handleSaveRestaurant} className="mt-4 space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Restoran Adı</label>
+                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
+                  Restoran Adı
+                </label>
                 <input
                   type="text"
                   value={name}
@@ -294,7 +309,9 @@ export function EditRestaurantPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Slug</label>
+                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
+                  Slug
+                </label>
                 <input
                   type="text"
                   value={slug}
@@ -306,7 +323,9 @@ export function EditRestaurantPage() {
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Adres</label>
+              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
+                Adres
+              </label>
               <input
                 type="text"
                 value={address}
@@ -317,7 +336,9 @@ export function EditRestaurantPage() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Telefon</label>
+                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
+                  Telefon
+                </label>
                 <input
                   type="tel"
                   value={phone}
@@ -327,7 +348,9 @@ export function EditRestaurantPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">E-posta</label>
+                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
+                  E-posta
+                </label>
                 <input
                   type="email"
                   value={email}
@@ -377,8 +400,8 @@ export function EditRestaurantPage() {
               onRoyaltyRateChange={setRoyaltyRate}
               monthlyFee={monthlyFee}
               onMonthlyFeeChange={setMonthlyFee}
-              billingStatus={billingStatus}
-              onBillingStatusChange={setBillingStatus}
+              billingStartPeriod={billingStartPeriod}
+              onBillingStartPeriodChange={setBillingStartPeriod}
               billingNotes={billingNotes}
               onBillingNotesChange={setBillingNotes}
               paymentHistory={restaurant.paymentHistory}
@@ -386,7 +409,9 @@ export function EditRestaurantPage() {
             />
 
             <div>
-              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Genel Durum</label>
+              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
+                Genel Durum
+              </label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as "active" | "inactive")}
@@ -398,7 +423,9 @@ export function EditRestaurantPage() {
               </select>
             </div>
             {error && <p className="text-[13px] font-medium text-red-600">{error}</p>}
-            {saveMsg && <p className="text-[13px] font-medium text-emerald-700">{saveMsg}</p>}
+            {saveMsg && (
+              <p className="text-[13px] font-medium text-emerald-700">{saveMsg}</p>
+            )}
             <button
               type="submit"
               disabled={saveLoading}
@@ -429,6 +456,42 @@ export function EditRestaurantPage() {
           />
         </div>
       </div>
+
+      <PaymentFormModal
+        restaurant={paymentModalOpen ? restaurant : null}
+        initialPeriod={paymentModalOpen?.initialPeriod}
+        editingPayment={paymentModalOpen?.editingPayment}
+        onClose={() => setPaymentModalOpen(null)}
+        onSubmitNew={async (_r, payload: {
+          amount: number
+          periods: string[]
+          paidAt: string
+          paymentMethod: SubscriptionPaymentMethod
+          note: string | null
+          reopenAccess: boolean
+        }) => {
+          await recordRestaurantPayment(id, payload)
+          setSaveMsg(
+            `${formatPeriodsSummary(payload.periods)} (${formatMoney(payload.amount)}) tahsilatı kaydedildi.`
+          )
+        }}
+        onSubmitEdit={async (_r, paymentId, payload) => {
+          await updateRestaurantPayment(id, paymentId, payload)
+          setSaveMsg("Tahsilat kaydı güncellendi.")
+        }}
+      />
+
+      <RestaurantBillingHistoryModal
+        restaurant={historyModalOpen ? restaurant : null}
+        collectionEndDay={billingConfig?.collectionEndDay ?? 30}
+        onClose={() => setHistoryModalOpen(false)}
+        onOpenNewPayment={(_r, period) => setPaymentModalOpen({ initialPeriod: period })}
+        onEditPayment={(_r, payment) => setPaymentModalOpen({ editingPayment: payment })}
+        onDeletePayment={async (_r, payment) => {
+          await deleteRestaurantPayment(id, payment.id)
+          setSaveMsg("Tahsilat kaydı silindi.")
+        }}
+      />
     </div>
   )
 }

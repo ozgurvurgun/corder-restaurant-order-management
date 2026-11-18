@@ -1,26 +1,44 @@
-import type {
-  Restaurant,
-  RestaurantBillingStatus,
-  RestaurantBranchType,
-} from "@/lib/types"
-import { formatIstanbulDate, formatIstanbulDateTime, formatMoney } from "@/lib/money"
-import { CreditCard, CheckCircle2, Ban, Clock, ReceiptText } from "lucide-react"
+import type { Restaurant, RestaurantBranchType } from "@/lib/types"
+import {
+  PAYMENT_METHOD_LABELS,
+  formatIstanbulDate,
+  formatIstanbulDateTime,
+  formatMoney,
+  formatPeriodLong,
+  formatPeriodsSummary,
+} from "@/lib/money"
+import {
+  AlertCircle,
+  Ban,
+  CalendarRange,
+  CheckCircle2,
+  Clock,
+  CreditCard,
+  ReceiptText,
+  Unlock,
+} from "lucide-react"
 
 interface RestaurantBillingBannerProps {
   restaurant: Restaurant
   isSuspended: boolean
   billingBusy: boolean
-  onQuickMarkPaid: () => void
-  onQuickSuspend: () => void
+  onOpenPaymentModal: () => void
+  onOpenHistoryModal: () => void
+  onSuspend: () => void
+  onUnsuspend: () => void
 }
 
 export function RestaurantBillingBanner({
   restaurant,
   isSuspended,
   billingBusy,
-  onQuickMarkPaid,
-  onQuickSuspend,
+  onOpenPaymentModal,
+  onOpenHistoryModal,
+  onSuspend,
+  onUnsuspend,
 }: RestaurantBillingBannerProps) {
+  const overdueCount = restaurant.overduePeriods?.length ?? 0
+
   return (
     <div
       className={`rounded-2xl border p-5 ${
@@ -33,7 +51,11 @@ export function RestaurantBillingBanner({
         <div className="flex items-start gap-3">
           <div
             className={`rounded-xl p-2.5 ${
-              isSuspended ? "bg-red-100 text-red-600" : "bg-emerald-50 text-emerald-600"
+              isSuspended
+                ? "bg-red-100 text-red-600"
+                : overdueCount > 0
+                  ? "bg-amber-100 text-amber-700"
+                  : "bg-emerald-50 text-emerald-600"
             }`}
           >
             <CreditCard className="h-5 w-5" />
@@ -41,31 +63,31 @@ export function RestaurantBillingBanner({
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
-                Aylık Abonelik Ücreti &amp; Tahsilat Durumu (Her Ayın 25 - 30&apos;u)
+                Abonelik &amp; Dönemsel Tahsilat Durumu
               </h2>
               {isSuspended ? (
                 <span className="inline-flex items-center gap-1 rounded-md bg-red-100 px-2.5 py-0.5 text-[11px] font-semibold text-red-700">
                   <Ban className="h-3.5 w-3.5" />
-                  Ödeme Alınmadı • Sistem Erişimi Durduruldu
+                  Sistem Erişimi Durduruldu
                 </span>
-              ) : restaurant.billingStatus === "pending" ||
-                restaurant.billingStatus === "overdue" ? (
-                <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">
+              ) : overdueCount > 0 ? (
+                <span className="inline-flex items-center gap-1 rounded-md bg-red-50 border border-red-200 px-2.5 py-0.5 text-[11px] font-semibold text-red-700">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  {overdueCount} Dönem Ödeme Gecikti
+                </span>
+              ) : restaurant.billingStatus === "pending" ? (
+                <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">
                   <Clock className="h-3.5 w-3.5" />
-                  {restaurant.billingStatus === "overdue"
-                    ? "Ödeme Gecikti (25-30)"
-                    : "Tahsilat Bekleniyor (25-30)"}
+                  Bu Ay Tahsilat Bekliyor
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
+                <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  Ödeme Alındı • Sistem Erişimi Açık
+                  Ödendi • Erişim Açık
                 </span>
               )}
             </div>
-            <p className="mt-1 text-[12px] text-[#86868b]">
-              Ödeme alınmadığında &ldquo;Erişimi Durdur&rdquo; ile mekanın tüm panellerini kapatabilir, ödeme yapıldığında &ldquo;Ödeme Alındı İşaretle&rdquo; ile erişimi anında otomatik açabilirsiniz.
-            </p>
+
             <div className="mt-2 flex flex-wrap items-center gap-4 text-[12px] text-[#636366]">
               <span>
                 Aylık Ücret:{" "}
@@ -73,18 +95,34 @@ export function RestaurantBillingBanner({
                   {formatMoney(restaurant.monthlyFee ?? 0)}
                 </span>
               </span>
+              <span>
+                Başlangıç:{" "}
+                <span className="font-semibold text-[#1d1d1f]">
+                  {formatPeriodLong(restaurant.billingStartPeriod)}
+                </span>
+              </span>
+              {restaurant.paidThroughPeriod && (
+                <span>
+                  Son Ödenen Dönem:{" "}
+                  <span className="font-semibold text-emerald-700">
+                    {formatPeriodLong(restaurant.paidThroughPeriod)}
+                  </span>
+                </span>
+              )}
               {restaurant.lastPaymentDate && (
                 <span>
-                  Son Ödeme:{" "}
-                  <span className="font-semibold text-emerald-700">
+                  Son Tahsilat Tarihi:{" "}
+                  <span className="font-medium text-[#1d1d1f]">
                     {formatIstanbulDate(restaurant.lastPaymentDate)}
                   </span>
-                  {restaurant.lastPaidPeriod ? ` (${restaurant.lastPaidPeriod})` : ""}
                 </span>
               )}
               {isSuspended && restaurant.suspendedAt && (
                 <span className="text-red-600">
-                  Askıya Alınma: <span className="font-semibold">{formatIstanbulDateTime(restaurant.suspendedAt)}</span>
+                  Askıya Alınma:{" "}
+                  <span className="font-semibold">
+                    {formatIstanbulDateTime(restaurant.suspendedAt)}
+                  </span>
                 </span>
               )}
             </div>
@@ -95,23 +133,42 @@ export function RestaurantBillingBanner({
           <button
             type="button"
             disabled={billingBusy}
-            onClick={onQuickMarkPaid}
+            onClick={onOpenPaymentModal}
             className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#34c759] px-4 text-[12px] font-semibold text-white hover:bg-[#2db84e] disabled:opacity-50"
           >
-            <CheckCircle2 className="h-4 w-4" />
-            {isSuspended
-              ? "Ödeme Alındı İşaretle (Erişimi Otomatik Aç)"
-              : "Ödeme Alındı İşaretle"}
+            <CreditCard className="h-4 w-4" />
+            Tahsilat İşle (1 / 3 / 6 / 12 Ay)
           </button>
-          {!isSuspended && (
+
+          <button
+            type="button"
+            disabled={billingBusy}
+            onClick={onOpenHistoryModal}
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3.5 text-[12px] font-medium text-[#1d1d1f] hover:bg-[#e8e8ed] disabled:opacity-50"
+          >
+            <CalendarRange className="h-4 w-4 text-[#e63462]" />
+            Dönem Çizelgesi &amp; Geçmiş ({restaurant.paymentHistory?.length ?? 0})
+          </button>
+
+          {isSuspended ? (
             <button
               type="button"
               disabled={billingBusy}
-              onClick={onQuickSuspend}
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-4 text-[12px] font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50"
+              onClick={onUnsuspend}
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-3.5 text-[12px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+            >
+              <Unlock className="h-4 w-4" />
+              Erişimi Aç
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={billingBusy}
+              onClick={onSuspend}
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3.5 text-[12px] font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50"
             >
               <Ban className="h-4 w-4" />
-              Ödeme Alınmadı — Tüm Erişimi Durdur
+              Erişimi Durdur
             </button>
           )}
         </div>
@@ -131,8 +188,8 @@ interface RestaurantBillingSectionProps {
   onRoyaltyRateChange: (value: string) => void
   monthlyFee: string
   onMonthlyFeeChange: (value: string) => void
-  billingStatus: RestaurantBillingStatus
-  onBillingStatusChange: (value: RestaurantBillingStatus) => void
+  billingStartPeriod: string
+  onBillingStartPeriodChange: (value: string) => void
   billingNotes: string
   onBillingNotesChange: (value: string) => void
   paymentHistory?: Restaurant["paymentHistory"]
@@ -150,8 +207,8 @@ export function RestaurantBillingSection({
   onRoyaltyRateChange,
   monthlyFee,
   onMonthlyFeeChange,
-  billingStatus,
-  onBillingStatusChange,
+  billingStartPeriod,
+  onBillingStartPeriodChange,
   billingNotes,
   onBillingNotesChange,
   paymentHistory,
@@ -168,10 +225,14 @@ export function RestaurantBillingSection({
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Şube Tipi</label>
+            <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
+              Şube Tipi
+            </label>
             <select
               value={branchType}
-              onChange={(e) => onBranchTypeChange(e.target.value as RestaurantBranchType)}
+              onChange={(e) =>
+                onBranchTypeChange(e.target.value as RestaurantBranchType)
+              }
               className={inputCls}
               disabled={disabled}
             >
@@ -202,7 +263,9 @@ export function RestaurantBillingSection({
                 <input
                   type="text"
                   value={franchiseeCompanyName}
-                  onChange={(e) => onFranchiseeCompanyNameChange(e.target.value)}
+                  onChange={(e) =>
+                    onFranchiseeCompanyNameChange(e.target.value)
+                  }
                   placeholder="Yatırımcı firma adı"
                   className={inputCls}
                   disabled={disabled}
@@ -230,7 +293,7 @@ export function RestaurantBillingSection({
 
       <div className="border-t border-[#f0f0f0] pt-4 space-y-3">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-[#86868b]">
-          Aylık Ücret &amp; Tahsilat (Her Ayın 25 - 30&apos;u)
+          Abonelik Ücreti &amp; Başlangıç Dönemi
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
@@ -249,30 +312,26 @@ export function RestaurantBillingSection({
           </div>
           <div>
             <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-              Ödeme &amp; Erişim Durumu
+              Abonelik Başlangıç Dönemi (Ay / Yıl)
             </label>
-            <select
-              value={billingStatus}
-              onChange={(e) =>
-                onBillingStatusChange(e.target.value as RestaurantBillingStatus)
-              }
+            <input
+              type="month"
+              value={billingStartPeriod}
+              onChange={(e) => onBillingStartPeriodChange(e.target.value)}
               className={inputCls}
               disabled={disabled}
-            >
-              <option value="paid">Ödeme Alındı (Erişim Açık)</option>
-              <option value="pending">Ödeme Bekleniyor (25-30 Tahsilat)</option>
-              <option value="overdue">Ödeme Gecikti</option>
-              <option value="suspended">Ödeme Alınmadı (Erişimi Durdur)</option>
-            </select>
+            />
           </div>
         </div>
         <div>
-          <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Tahsilat Notu</label>
+          <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
+            Sözleşme / Abonelik Notu
+          </label>
           <input
             type="text"
             value={billingNotes}
             onChange={(e) => onBillingNotesChange(e.target.value)}
-            placeholder="Ödeme veya sözleşme notu..."
+            placeholder="Sözleşme veya özel anlaşma notu..."
             className={inputCls}
             disabled={disabled}
           />
@@ -282,19 +341,27 @@ export function RestaurantBillingSection({
           <div className="rounded-xl border border-[#e5e5ea] bg-[#f9f9fb] p-3">
             <div className="flex items-center gap-1.5 text-[12px] font-semibold text-[#1d1d1f] mb-2">
               <ReceiptText className="h-3.5 w-3.5 text-[#34c759]" />
-              <span>Tahsilat Geçmişi ({paymentHistory.length} kayıt)</span>
+              <span>Son Tahsilat Kayıtları ({paymentHistory.length} kayıt)</span>
             </div>
-            <div className="max-h-36 overflow-y-auto divide-y divide-[#f0f0f0] text-[12px]">
+            <div className="max-h-40 overflow-y-auto divide-y divide-[#f0f0f0] text-[12px]">
               {paymentHistory.map((item) => (
-                <div key={item.id} className="py-1.5 flex items-center justify-between gap-2">
+                <div
+                  key={item.id}
+                  className="py-2 flex items-center justify-between gap-2"
+                >
                   <div>
-                    <span className="font-mono font-medium text-[#1d1d1f]">{item.period}</span>
+                    <span className="font-semibold text-[#1d1d1f]">
+                      {formatPeriodsSummary(item.periods, item.period)}
+                    </span>
                     <span className="mx-1.5 text-[#d1d1d6]">•</span>
                     <span className="text-[#86868b]">
-                      {formatIstanbulDateTime(item.paidAt)}
+                      {formatIstanbulDate(item.paidAt)} (
+                      {PAYMENT_METHOD_LABELS[item.paymentMethod] ?? "Havale / EFT"})
                     </span>
                     {item.note && (
-                      <span className="block text-[11px] text-[#636366]">{item.note}</span>
+                      <span className="block text-[11px] text-[#636366]">
+                        {item.note}
+                      </span>
                     )}
                   </div>
                   <span className="font-semibold text-emerald-700 shrink-0 tabular-nums">

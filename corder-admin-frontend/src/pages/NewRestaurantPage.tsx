@@ -1,8 +1,17 @@
 import { useEffect, useState } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { useAdminStore } from "@/lib/store"
-import { fromMinorUnits, toMinorUnits } from "@/lib/money"
-import type { RestaurantBillingStatus, RestaurantBranchType } from "@/lib/types"
+import {
+  PAYMENT_METHOD_LABELS,
+  formatMoney,
+  fromMinorUnits,
+  getIstanbulBillingPeriod,
+  toMinorUnits,
+} from "@/lib/money"
+import type {
+  RestaurantBranchType,
+  SubscriptionPaymentMethod,
+} from "@/lib/types"
 import { ArrowLeft, Building2, CreditCard, Monitor, Printer } from "lucide-react"
 
 export function NewRestaurantPage() {
@@ -19,7 +28,11 @@ export function NewRestaurantPage() {
   const [franchiseeCompanyName, setFranchiseeCompanyName] = useState("")
   const [royaltyRate, setRoyaltyRate] = useState("0")
   const [monthlyFee, setMonthlyFee] = useState("2500")
-  const [billingStatus, setBillingStatus] = useState<RestaurantBillingStatus>("paid")
+  const [billingStartPeriod, setBillingStartPeriod] = useState(getIstanbulBillingPeriod)
+  const [recordInitialPayment, setRecordInitialPayment] = useState(false)
+  const [initialPaidMonths, setInitialPaidMonths] = useState(1)
+  const [initialPaymentMethod, setInitialPaymentMethod] =
+    useState<SubscriptionPaymentMethod>("bank_transfer")
   const [billingNotes, setBillingNotes] = useState("")
   const [terminalEmail, setTerminalEmail] = useState("")
   const [terminalPassword, setTerminalPassword] = useState("")
@@ -110,8 +123,10 @@ export function NewRestaurantPage() {
             ? Math.max(0, Math.min(100, Number(royaltyRate) || 0))
             : 0,
         monthlyFee: Math.max(0, fromMinorUnits(toMinorUnits(monthlyFee))),
-        billingStatus,
-        isAccessSuspended: billingStatus === "suspended",
+        billingStartPeriod,
+        recordInitialPayment,
+        initialPaidMonths: recordInitialPayment ? initialPaidMonths : undefined,
+        initialPaymentMethod: recordInitialPayment ? initialPaymentMethod : undefined,
         billingNotes: billingNotes.trim() || null,
         ...(cleanTerminalEmail ? { terminalEmail: cleanTerminalEmail } : {}),
         ...(terminalPassword ? { terminalPassword } : {}),
@@ -126,6 +141,7 @@ export function NewRestaurantPage() {
     }
   }
 
+  const feeMajor = Math.max(0, fromMinorUnits(toMinorUnits(monthlyFee)))
   const inputCls =
     "w-full h-10 rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3.5 text-[13px] text-[#1d1d1f] outline-none focus:border-[#e63462] focus:bg-white transition-all"
 
@@ -161,7 +177,9 @@ export function NewRestaurantPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Slug (URL) *</label>
+              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
+                Slug (URL) *
+              </label>
               <input
                 type="text"
                 value={slug}
@@ -293,22 +311,22 @@ export function NewRestaurantPage() {
             )}
           </div>
           <p className="text-[12px] text-[#86868b]">
-            Bir üst marka adı girdiğinizde, o markanın &ldquo;Marka Sahibi (HQ)&rdquo; olan Boss hesabı bu şubeyi ve tüm cirosunu otomatik olarak görür; ayrıca şubeye özel &ldquo;Franchise / Şube Sahibi&rdquo; Boss atayabilirsiniz.
+            Bir üst marka adı girdiğinizde, o markanın &ldquo;Marka Sahibi (HQ)&rdquo; olan Boss hesabı bu şubeyi ve tüm cirosunu otomatik olarak görür.
           </p>
         </div>
 
-        {/* Monthly Fee & Collection Status */}
+        {/* Subscription & Period Start */}
         <div className="rounded-2xl border border-[#e5e5ea] bg-white p-5 space-y-4">
           <div className="flex items-center gap-2">
             <CreditCard className="h-4 w-4 text-[#34c759]" />
             <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
-              Aylık Abonelik Ücreti &amp; Tahsilat Durumu (25-30 Tahsilat)
+              Abonelik Ücreti &amp; Başlangıç Dönemi
             </h2>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                Bu Mekan İçin Aylık Ücret (₺) *
+                Aylık Abonelik Ücreti (₺) *
               </label>
               <input
                 type="number"
@@ -323,27 +341,87 @@ export function NewRestaurantPage() {
             </div>
             <div>
               <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                Başlangıç Ödeme Durumu
+                Abonelik Başlangıç Dönemi (Ay / Yıl) *
               </label>
-              <select
-                value={billingStatus}
-                onChange={(e) => setBillingStatus(e.target.value as RestaurantBillingStatus)}
+              <input
+                type="month"
+                value={billingStartPeriod}
+                onChange={(e) => {
+                  if (e.target.value) setBillingStartPeriod(e.target.value)
+                }}
                 className={inputCls}
-              >
-                <option value="paid">Ödeme Alındı (Erişim Açık)</option>
-                <option value="pending">Ödeme Bekleniyor (25-30 Tahsilat Dönemi)</option>
-                <option value="overdue">Ödeme Gecikti</option>
-                <option value="suspended">Ödeme Alınmadı (Erişimi Durdur)</option>
-              </select>
+                required
+              />
             </div>
           </div>
+
+          <div className="rounded-xl border border-[#e5e5ea] bg-[#f9f9fb] p-3.5 space-y-3">
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={recordInitialPayment}
+                onChange={(e) => setRecordInitialPayment(e.target.checked)}
+                className="h-4 w-4 accent-[#34c759]"
+              />
+              <span className="text-[13px] font-medium text-[#1d1d1f]">
+                Kurulum sırasında peşin tahsilat alındı (ilk ödeme kaydını otomatik oluştur)
+              </span>
+            </label>
+
+            {recordInitialPayment && (
+              <div className="grid gap-3 sm:grid-cols-2 pt-1">
+                <div>
+                  <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
+                    Peşin Ödenen Süre
+                  </label>
+                  <select
+                    value={initialPaidMonths}
+                    onChange={(e) => setInitialPaidMonths(Number(e.target.value))}
+                    className={inputCls}
+                  >
+                    <option value={1}>1 Aylık ({formatMoney(feeMajor)})</option>
+                    <option value={3}>3 Aylık ({formatMoney(feeMajor * 3)})</option>
+                    <option value={6}>6 Aylık ({formatMoney(feeMajor * 6)})</option>
+                    <option value={12}>12 Aylık ({formatMoney(feeMajor * 12)})</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
+                    Ödeme Yöntemi
+                  </label>
+                  <select
+                    value={initialPaymentMethod}
+                    onChange={(e) =>
+                      setInitialPaymentMethod(
+                        e.target.value as SubscriptionPaymentMethod
+                      )
+                    }
+                    className={inputCls}
+                  >
+                    {(
+                      Object.entries(PAYMENT_METHOD_LABELS) as Array<
+                        [SubscriptionPaymentMethod, string]
+                      >
+                    ).map(([k, label]) => (
+                      <option key={k} value={k}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div>
-            <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Tahsilat / Sözleşme Notu</label>
+            <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
+              Sözleşme / Abonelik Notu
+            </label>
             <input
               type="text"
               value={billingNotes}
               onChange={(e) => setBillingNotes(e.target.value)}
-              placeholder="İsteğe bağlı ödeme veya sözleşme notu..."
+              placeholder="İsteğe bağlı sözleşme veya ödeme notu..."
               className={inputCls}
             />
           </div>
@@ -359,7 +437,9 @@ export function NewRestaurantPage() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Terminal E-posta</label>
+                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
+                  Terminal E-posta
+                </label>
                 <input
                   type="email"
                   value={terminalEmail}
@@ -397,7 +477,9 @@ export function NewRestaurantPage() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Kullanıcı Adı</label>
+                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
+                  Kullanıcı Adı
+                </label>
                 <input
                   type="text"
                   value={printAgentUsername}

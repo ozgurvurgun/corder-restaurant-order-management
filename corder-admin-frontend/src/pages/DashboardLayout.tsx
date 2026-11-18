@@ -42,7 +42,7 @@ function resolvePageTitle(pathname: string): string {
   if (pathname === "/dashboard/restaurants/new") return "Yeni Restoran / Franchise Şubesi"
   if (pathname.startsWith("/dashboard/restaurants/")) return "Restoran & Şube Detayı"
   if (pathname.startsWith("/dashboard/restaurants")) return "Restoranlar & Franchise Ağı"
-  if (pathname.startsWith("/dashboard/billing")) return "Abonelik Ücretleri & Tahsilat (25-30)"
+  if (pathname.startsWith("/dashboard/billing")) return "Abonelik & Dönemsel Tahsilat Yönetimi"
   return "Platform Özeti"
 }
 

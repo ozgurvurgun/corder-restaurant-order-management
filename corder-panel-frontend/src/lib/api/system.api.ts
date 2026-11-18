@@ -30,7 +30,16 @@ export interface MerchantBillingInfoDto {
   brandName: string | null
   branchType: string
   monthlyFee: number
+  billingStartPeriod?: string
   billingStatus: "paid" | "pending" | "overdue" | "suspended" | string
+  currentPeriod?: string
+  isCurrentPeriodPaid?: boolean
+  paidPeriods?: string[]
+  paidThroughPeriod?: string | null
+  prepaidFuturePeriods?: string[]
+  overduePeriods?: string[]
+  duePeriods?: string[]
+  nextUnpaidPeriod?: string
   isAccessSuspended: boolean
   suspensionReason: string | null
   lastPaymentDate: string | null
@@ -39,6 +48,11 @@ export interface MerchantBillingInfoDto {
   paymentHistory: Array<{
     id: string
     period: string
+    periods?: string[]
+    periodStart?: string
+    periodEnd?: string
+    monthsCount?: number
+    paymentMethod?: "bank_transfer" | "cash" | "credit_card" | "other" | string
     amount: number
     paidAt: string
     note?: string | null

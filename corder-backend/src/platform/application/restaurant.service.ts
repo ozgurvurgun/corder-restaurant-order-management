@@ -9,20 +9,20 @@ import * as bcrypt from 'bcryptjs';
 import { RestaurantEntity } from '../domain/restaurant.entity';
 import { RootAdminEntity } from '../domain/root-admin.entity';
 import { BossRestaurantEntity } from '../domain/boss-restaurant.entity';
+import { PlatformBillingConfigEntity } from '../domain/platform-billing-config.entity';
+import { RestaurantSubscriptionPaymentEntity } from '../domain/restaurant-subscription-payment.entity';
+import {
+  buildConsecutivePeriods,
+  computeRestaurantBillingSummary,
+  dateToIstanbulPeriod,
+  isValidBillingPeriod,
+  toPaymentRecordDto,
+} from '../domain/subscription-billing.policy';
 import { CreateRestaurantDto } from '../api/dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from '../api/dto/update-restaurant.dto';
 
 export function getCurrentBillingPeriod(now = new Date()): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/Istanbul',
-    year: 'numeric',
-    month: '2-digit',
-  }).formatToParts(now);
-  const y = parts.find((p) => p.type === 'year')?.value ?? String(now.getUTCFullYear());
-  const m =
-    parts.find((p) => p.type === 'month')?.value ??
-    String(now.getUTCMonth() + 1).padStart(2, '0');
-  return `${y}-${m}`;
+  return dateToIstanbulPeriod(now);
 }
 
 @Injectable()
@@ -34,6 +34,10 @@ export class RestaurantService {
     private readonly rootAdminRepo: Repository<RootAdminEntity>,
     @InjectRepository(BossRestaurantEntity)
     private readonly bossRestaurantRepo: Repository<BossRestaurantEntity>,
+    @InjectRepository(RestaurantSubscriptionPaymentEntity)
+    private readonly paymentRepo: Repository<RestaurantSubscriptionPaymentEntity>,
+    @InjectRepository(PlatformBillingConfigEntity)
+    private readonly billingConfigRepo: Repository<PlatformBillingConfigEntity>,
   ) {}
 
   private async assertUniqueTerminalEmail(
@@ -47,14 +51,35 @@ export class RestaurantService {
     }
   }
 
+  private async getCollectionEndDay(): Promise<number> {
+    const configs = await this.billingConfigRepo.find({
+      order: { updatedAt: 'DESC' },
+      take: 1,
+    });
+    return configs[0]?.collectionEndDay ?? 30;
+  }
+
   async enrichRestaurantsWithBosses(restaurants: RestaurantEntity[]) {
     if (restaurants.length === 0) return [];
     const restIds = restaurants.map((r) => r.id);
-    const [links, allBosses] = await Promise.all([
+    const [links, allBosses, allPayments, collectionEndDay] = await Promise.all([
       this.bossRestaurantRepo.find({ where: { restaurantId: In(restIds) } }),
       this.rootAdminRepo.find(),
+      this.paymentRepo.find({
+        where: { restaurantId: In(restIds) },
+        order: { paidAt: 'DESC', createdAt: 'DESC' },
+      }),
+      this.getCollectionEndDay(),
     ]);
     const bossById = new Map(allBosses.map((b) => [b.id, b]));
+    const paymentsByRestId = new Map<string, RestaurantSubscriptionPaymentEntity[]>();
+    for (const p of allPayments) {
+      const arr = paymentsByRestId.get(p.restaurantId) ?? [];
+      arr.push(p);
+      paymentsByRestId.set(p.restaurantId, arr);
+    }
+
+    const now = new Date();
 
     return restaurants.map((r) => {
       const branchLinks = links.filter((l) => l.restaurantId === r.id);
@@ -111,14 +136,66 @@ export class RestaurantService {
         }
       }
 
+      const restPayments = paymentsByRestId.get(r.id) ?? [];
+      const summary = computeRestaurantBillingSummary({
+        status: r.status,
+        monthlyFee: r.monthlyFee,
+        billingStartPeriod: r.billingStartPeriod,
+        createdAt: r.createdAt,
+        isAccessSuspended: r.isAccessSuspended,
+        payments: restPayments,
+        collectionEndDay,
+        now,
+      });
+
       return {
         ...r,
         monthlyFee: Number(r.monthlyFee || 0),
         royaltyRate: Number(r.royaltyRate || 0),
-        paymentHistory: Array.isArray(r.paymentHistory) ? r.paymentHistory : [],
+        billingStartPeriod: summary.billingStartPeriod,
+        billingStatus: summary.billingStatus,
+        currentPeriod: summary.currentPeriod,
+        isCurrentPeriodPaid: summary.isCurrentPeriodPaid,
+        paidPeriods: summary.paidPeriods,
+        paidThroughPeriod: summary.paidThroughPeriod,
+        prepaidFuturePeriods: summary.prepaidFuturePeriods,
+        overduePeriods: summary.overduePeriods,
+        duePeriods: summary.duePeriods,
+        nextUnpaidPeriod: summary.nextUnpaidPeriod,
+        lastPaymentDate: summary.lastPaymentDate,
+        lastPaidPeriod: summary.lastPaidPeriod,
+        totalCollectedAmount: summary.totalCollectedAmount,
+        paymentHistory: restPayments.map(toPaymentRecordDto),
         bosses: Array.from(assignedMap.values()),
       };
     });
+  }
+
+  async syncPersistedBillingSummary(restaurantId: string): Promise<void> {
+    const [entity, payments, collectionEndDay] = await Promise.all([
+      this.findOne(restaurantId),
+      this.paymentRepo.find({
+        where: { restaurantId },
+        order: { paidAt: 'DESC', createdAt: 'DESC' },
+      }),
+      this.getCollectionEndDay(),
+    ]);
+
+    const summary = computeRestaurantBillingSummary({
+      status: entity.status,
+      monthlyFee: entity.monthlyFee,
+      billingStartPeriod: entity.billingStartPeriod,
+      createdAt: entity.createdAt,
+      isAccessSuspended: entity.isAccessSuspended,
+      payments,
+      collectionEndDay,
+    });
+
+    entity.billingStartPeriod = summary.billingStartPeriod;
+    entity.billingStatus = summary.billingStatus;
+    entity.lastPaymentDate = summary.lastPaymentDate;
+    entity.lastPaidPeriod = summary.lastPaidPeriod;
+    await this.repo.save(entity);
   }
 
   async findAll() {
@@ -166,7 +243,7 @@ export class RestaurantService {
     }
   }
 
-  async create(dto: CreateRestaurantDto) {
+  async create(dto: CreateRestaurantDto, recordedBy = 'Platform Admin') {
     const slug = dto.slug.toLowerCase().trim();
     const existing = await this.repo.findOne({ where: { slug } });
     if (existing) throw new ConflictException('Slug already in use');
@@ -180,7 +257,10 @@ export class RestaurantService {
       brandName,
       branchType,
       franchiseeCompanyName,
-      billingStatus,
+      billingStartPeriod: rawStartPeriod,
+      recordInitialPayment,
+      initialPaidMonths,
+      initialPaymentMethod,
       isAccessSuspended,
       billingNotes,
       ...restDto
@@ -200,10 +280,12 @@ export class RestaurantService {
     const printAgentPasswordHash =
       rawPassword && rawPassword.length > 0 ? await bcrypt.hash(rawPassword, 10) : null;
 
-    const effectiveBillingStatus =
-      isAccessSuspended === true ? 'suspended' : (billingStatus ?? 'paid');
-    const effectiveSuspended =
-      effectiveBillingStatus === 'suspended' || Boolean(isAccessSuspended);
+    const now = new Date();
+    const billingStartPeriod = isValidBillingPeriod(rawStartPeriod)
+      ? rawStartPeriod.trim()
+      : dateToIstanbulPeriod(now);
+    const effectiveSuspended = Boolean(isAccessSuspended);
+    const feeValue = monthlyFee != null ? Math.max(0, Number(monthlyFee) || 0) : 0;
 
     const entity = this.repo.create({
       ...restDto,
@@ -212,21 +294,41 @@ export class RestaurantService {
       branchType: branchType ?? 'independent',
       franchiseeCompanyName: franchiseeCompanyName?.trim() || null,
       royaltyRate: royaltyRate != null ? String(Number(royaltyRate)) : '0',
-      monthlyFee: monthlyFee != null ? String(Number(monthlyFee)) : '0',
-      billingStatus: effectiveBillingStatus,
+      monthlyFee: String(feeValue),
+      billingStartPeriod,
+      billingStatus: effectiveSuspended ? 'suspended' : 'pending',
       isAccessSuspended: effectiveSuspended,
       suspensionReason: effectiveSuspended ? 'payment_overdue' : null,
-      suspendedAt: effectiveSuspended ? new Date() : null,
-      lastPaymentDate: effectiveBillingStatus === 'paid' ? new Date() : null,
-      lastPaidPeriod: effectiveBillingStatus === 'paid' ? getCurrentBillingPeriod() : null,
+      suspendedAt: effectiveSuspended ? now : null,
+      lastPaymentDate: null,
+      lastPaidPeriod: null,
       billingNotes: billingNotes?.trim() || null,
-      paymentHistory: [],
       terminalEmail,
       terminalPasswordHash,
       printAgentUsername,
       printAgentPasswordHash,
     });
     const saved = await this.repo.save(entity);
+
+    if (recordInitialPayment && feeValue >= 0) {
+      const months = Math.max(1, Math.min(36, initialPaidMonths ?? 1));
+      const coveredPeriods = buildConsecutivePeriods(billingStartPeriod, months);
+      const initialPayment = this.paymentRepo.create({
+        restaurantId: saved.id,
+        paidAt: now,
+        amount: String(Number((feeValue * months).toFixed(2))),
+        periods: coveredPeriods,
+        periodStart: coveredPeriods[0],
+        periodEnd: coveredPeriods[coveredPeriods.length - 1],
+        monthsCount: coveredPeriods.length,
+        paymentMethod: initialPaymentMethod ?? 'bank_transfer',
+        note: billingNotes?.trim() || 'Başlangıç abonelik tahsilatı',
+        recordedBy,
+      });
+      await this.paymentRepo.save(initialPayment);
+    }
+
+    await this.syncPersistedBillingSummary(saved.id);
     await this.autoLinkBrandOwners(saved);
     return this.findOneEnriched(saved.id);
   }
@@ -257,27 +359,17 @@ export class RestaurantService {
     if (dto.monthlyFee !== undefined) {
       entity.monthlyFee = String(Math.max(0, Number(dto.monthlyFee) || 0));
     }
+    if (dto.billingStartPeriod !== undefined && isValidBillingPeriod(dto.billingStartPeriod)) {
+      entity.billingStartPeriod = dto.billingStartPeriod.trim();
+    }
     if (dto.billingNotes !== undefined) {
       entity.billingNotes = dto.billingNotes?.trim() || null;
     }
 
-    if (dto.billingStatus !== undefined || dto.isAccessSuspended !== undefined) {
-      const nextStatus =
-        dto.isAccessSuspended === true
-          ? 'suspended'
-          : (dto.billingStatus ?? entity.billingStatus);
-      entity.billingStatus = nextStatus;
-
-      if (nextStatus === 'paid') {
-        entity.isAccessSuspended = false;
-        entity.suspensionReason = null;
-        entity.suspendedAt = null;
-        entity.status = 'active';
-        entity.lastPaymentDate = new Date();
-        entity.lastPaidPeriod = getCurrentBillingPeriod();
-      } else if (nextStatus === 'suspended' || dto.isAccessSuspended === true) {
-        entity.billingStatus = 'suspended';
+    if (dto.isAccessSuspended !== undefined) {
+      if (dto.isAccessSuspended) {
         entity.isAccessSuspended = true;
+        entity.billingStatus = 'suspended';
         entity.suspensionReason = 'payment_overdue';
         entity.suspendedAt = entity.suspendedAt ?? new Date();
       } else {
@@ -315,6 +407,7 @@ export class RestaurantService {
       entity.printAgentPasswordHash = await bcrypt.hash(dto.printAgentPassword, 10);
     }
     const saved = await this.repo.save(entity);
+    await this.syncPersistedBillingSummary(saved.id);
     await this.autoLinkBrandOwners(saved);
     return this.findOneEnriched(saved.id);
   }

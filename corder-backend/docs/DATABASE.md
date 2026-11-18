@@ -28,6 +28,8 @@ This document summarizes the schema design, migration strategy, indexing, and op
    - Aligns all timestamp columns to `TIMESTAMPTZ`.
    - Adds `ON DELETE SET NULL` foreign keys on `restaurants.root_admin_id`, `tables.session_staff_id`, `stock_materials.supplier_id`, `ledger_entries.table_id`, and `ledger_entries.completed_order_id`.
    - Adds partial unique index `UQ_restaurants_terminal_email` and composite tenant indexes for hot POS and reporting queries.
+5. `1760000004000-SubscriptionPeriodLedgerSchema.ts`:
+   - Adds `restaurants.billing_start_period` (`YYYY-MM`) and creates normalized `restaurant_subscription_payments` table supporting single/multi-month (`periods text[]`), payment date (`paid_at`), payment method, edit/delete ledger operations, and drops legacy `restaurants.payment_history` JSONB column.
 
 ## Key Constraints & Indexes
 

@@ -3,8 +3,8 @@ import type {
   BossTier,
   PlatformBillingConfig,
   Restaurant,
-  RestaurantBillingStatus,
   RootAdmin,
+  SubscriptionPaymentMethod,
 } from "./types"
 import {
   platform,
@@ -12,6 +12,8 @@ import {
   PLATFORM_UNAUTHORIZED_EVENT,
   type BossDto,
   type PlatformRestaurantDto,
+  type RecordPaymentPayload,
+  type UpdatePaymentPayload,
 } from "./api"
 import { toMinorUnits, fromMinorUnits } from "./money"
 
@@ -35,7 +37,17 @@ function toRestaurant(r: PlatformRestaurantDto): Restaurant {
     franchiseeCompanyName: r.franchiseeCompanyName ?? null,
     royaltyRate: Number(r.royaltyRate ?? 0),
     monthlyFee: fromMinorUnits(toMinorUnits(r.monthlyFee ?? 0)),
-    billingStatus: r.billingStatus ?? "paid",
+    billingStartPeriod: r.billingStartPeriod,
+    billingStatus: r.billingStatus ?? "pending",
+    currentPeriod: r.currentPeriod,
+    isCurrentPeriodPaid: Boolean(r.isCurrentPeriodPaid),
+    paidPeriods: r.paidPeriods ?? [],
+    paidThroughPeriod: r.paidThroughPeriod ?? null,
+    prepaidFuturePeriods: r.prepaidFuturePeriods ?? [],
+    overduePeriods: r.overduePeriods ?? [],
+    duePeriods: r.duePeriods ?? [],
+    nextUnpaidPeriod: r.nextUnpaidPeriod,
+    totalCollectedAmount: fromMinorUnits(toMinorUnits(r.totalCollectedAmount ?? 0)),
     isAccessSuspended: Boolean(r.isAccessSuspended),
     suspensionReason: r.suspensionReason ?? null,
     suspendedAt: r.suspendedAt ?? null,
@@ -44,6 +56,11 @@ function toRestaurant(r: PlatformRestaurantDto): Restaurant {
     billingNotes: r.billingNotes ?? null,
     paymentHistory: (r.paymentHistory ?? []).map((p) => ({
       ...p,
+      periods: Array.isArray(p.periods) && p.periods.length > 0 ? p.periods : [p.period],
+      periodStart: p.periodStart || p.period,
+      periodEnd: p.periodEnd || p.period,
+      monthsCount: p.monthsCount || p.periods?.length || 1,
+      paymentMethod: p.paymentMethod || "bank_transfer",
       amount: fromMinorUnits(toMinorUnits(p.amount)),
     })),
     bosses: r.bosses ?? [],
@@ -87,31 +104,49 @@ type StoreContextType = {
   loadRestaurants: () => Promise<void>
   addRestaurant: (
     r: Omit<Restaurant, "id" | "createdAt" | "rootAdminId"> & {
+      recordInitialPayment?: boolean
+      initialPaidMonths?: number
+      initialPaymentMethod?: SubscriptionPaymentMethod
       terminalPassword?: string
       printAgentPassword?: string
     }
   ) => Promise<void>
-  updateRestaurant: (id: string, r: Partial<Restaurant> & { terminalPassword?: string; printAgentPassword?: string }) => Promise<void>
-  updateRestaurantBilling: (
+  updateRestaurant: (
     id: string,
-    body: { billingStatus: RestaurantBillingStatus; monthlyFee?: number; period?: string; note?: string | null }
+    r: Partial<Restaurant> & { terminalPassword?: string; printAgentPassword?: string }
   ) => Promise<void>
-  markRestaurantPaid: (id: string, body?: { amount?: number; period?: string; note?: string }) => Promise<void>
+  recordRestaurantPayment: (id: string, body: RecordPaymentPayload) => Promise<void>
+  updateRestaurantPayment: (
+    id: string,
+    paymentId: string,
+    body: UpdatePaymentPayload
+  ) => Promise<void>
+  deleteRestaurantPayment: (id: string, paymentId: string) => Promise<void>
   suspendRestaurantUnpaid: (id: string, note?: string) => Promise<void>
+  unsuspendRestaurantAccess: (id: string, note?: string) => Promise<void>
   deleteRestaurant: (id: string) => Promise<void>
   billingConfig: PlatformBillingConfig | null
   billingConfigError: string | null
   loadBillingConfig: () => Promise<void>
   updateBillingConfig: (body: Partial<PlatformBillingConfig>) => Promise<void>
-  startMonthlyCollectionCycle: (period?: string) => Promise<{ period: string; updatedCount: number }>
-  suspendAllUnpaidRestaurants: () => Promise<{ suspendedCount: number }>
+  suspendAllUnpaidRestaurants: () => Promise<{
+    suspendedCount: number
+    deferredOpenShiftCount?: number
+  }>
   rootAdminsForRestaurant: RootAdmin[]
   rootAdminsLoading: boolean
   rootAdminsError: string | null
   loadRootAdmins: (restaurantId: string) => Promise<void>
   addRootAdmin: (
     restaurantId: string,
-    r: { name: string; email: string; phone?: string; bossTier?: BossTier; brandName?: string | null; password: string }
+    r: {
+      name: string
+      email: string
+      phone?: string
+      bossTier?: BossTier
+      brandName?: string | null
+      password: string
+    }
   ) => Promise<void>
   linkExistingBoss: (restaurantId: string, bossId: string) => Promise<void>
   unlinkBossFromRestaurant: (restaurantId: string, bossId: string) => Promise<void>
@@ -217,6 +252,9 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
   const addRestaurant = useCallback(
     async (
       r: Omit<Restaurant, "id" | "createdAt" | "rootAdminId"> & {
+        recordInitialPayment?: boolean
+        initialPaidMonths?: number
+        initialPaymentMethod?: SubscriptionPaymentMethod
         terminalPassword?: string
         printAgentPassword?: string
       }
@@ -232,8 +270,14 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
         branchType: r.branchType,
         franchiseeCompanyName: r.franchiseeCompanyName,
         royaltyRate: r.royaltyRate,
-        monthlyFee: r.monthlyFee !== undefined ? fromMinorUnits(toMinorUnits(r.monthlyFee)) : undefined,
-        billingStatus: r.billingStatus,
+        monthlyFee:
+          r.monthlyFee !== undefined
+            ? fromMinorUnits(toMinorUnits(r.monthlyFee))
+            : undefined,
+        billingStartPeriod: r.billingStartPeriod,
+        recordInitialPayment: r.recordInitialPayment,
+        initialPaidMonths: r.initialPaidMonths,
+        initialPaymentMethod: r.initialPaymentMethod,
         isAccessSuspended: r.isAccessSuspended,
         billingNotes: r.billingNotes,
         terminalEmail: r.terminalEmail ?? undefined,
@@ -247,7 +291,10 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
   )
 
   const updateRestaurant = useCallback(
-    async (id: string, r: Partial<Restaurant> & { terminalPassword?: string; printAgentPassword?: string }) => {
+    async (
+      id: string,
+      r: Partial<Restaurant> & { terminalPassword?: string; printAgentPassword?: string }
+    ) => {
       await platform.restaurants.update(id, {
         name: r.name,
         slug: r.slug,
@@ -265,8 +312,11 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
         branchType: r.branchType,
         franchiseeCompanyName: r.franchiseeCompanyName,
         royaltyRate: r.royaltyRate,
-        monthlyFee: r.monthlyFee !== undefined ? fromMinorUnits(toMinorUnits(r.monthlyFee)) : undefined,
-        billingStatus: r.billingStatus,
+        monthlyFee:
+          r.monthlyFee !== undefined
+            ? fromMinorUnits(toMinorUnits(r.monthlyFee))
+            : undefined,
+        billingStartPeriod: r.billingStartPeriod,
         isAccessSuspended: r.isAccessSuspended,
         billingNotes: r.billingNotes,
         terminalEmail: r.terminalEmail,
@@ -279,26 +329,37 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
     [loadRestaurants, loadAllBosses]
   )
 
-  const updateRestaurantBilling = useCallback(
-    async (
-      id: string,
-      body: { billingStatus: RestaurantBillingStatus; monthlyFee?: number; period?: string; note?: string | null }
-    ) => {
-      await platform.restaurants.updateBilling(id, {
+  const recordRestaurantPayment = useCallback(
+    async (id: string, body: RecordPaymentPayload) => {
+      await platform.restaurants.recordPayment(id, {
         ...body,
-        monthlyFee: body.monthlyFee !== undefined ? fromMinorUnits(toMinorUnits(body.monthlyFee)) : undefined,
+        amount:
+          body.amount !== undefined
+            ? fromMinorUnits(toMinorUnits(body.amount))
+            : undefined,
       })
       await loadRestaurants()
     },
     [loadRestaurants]
   )
 
-  const markRestaurantPaid = useCallback(
-    async (id: string, body?: { amount?: number; period?: string; note?: string }) => {
-      await platform.restaurants.markPaid(
-        id,
-        body ? { ...body, amount: body.amount !== undefined ? fromMinorUnits(toMinorUnits(body.amount)) : undefined } : undefined
-      )
+  const updateRestaurantPayment = useCallback(
+    async (id: string, paymentId: string, body: UpdatePaymentPayload) => {
+      await platform.restaurants.updatePayment(id, paymentId, {
+        ...body,
+        amount:
+          body.amount !== undefined
+            ? fromMinorUnits(toMinorUnits(body.amount))
+            : undefined,
+      })
+      await loadRestaurants()
+    },
+    [loadRestaurants]
+  )
+
+  const deleteRestaurantPayment = useCallback(
+    async (id: string, paymentId: string) => {
+      await platform.restaurants.deletePayment(id, paymentId)
       await loadRestaurants()
     },
     [loadRestaurants]
@@ -312,11 +373,10 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
     [loadRestaurants]
   )
 
-  const startMonthlyCollectionCycle = useCallback(
-    async (period?: string) => {
-      const res = await platform.billing.startCollectionCycle(period)
+  const unsuspendRestaurantAccess = useCallback(
+    async (id: string, note?: string) => {
+      await platform.restaurants.unsuspendAccess(id, { note })
       await loadRestaurants()
-      return res
     },
     [loadRestaurants]
   )
@@ -341,7 +401,10 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
       setRootAdminsLoading(true)
       setRootAdminsError(null)
       try {
-        const [list] = await Promise.all([platform.rootAdmins.list(restaurantId), loadAllBosses()])
+        const [list] = await Promise.all([
+          platform.rootAdmins.list(restaurantId),
+          loadAllBosses(),
+        ])
         setRootAdminsForRestaurant(list.map(toRootAdmin))
       } catch (e) {
         setRootAdminsError(e instanceof Error ? e.message : "Boss listesi yüklenemedi")
@@ -355,7 +418,14 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
   const addRootAdmin = useCallback(
     async (
       restaurantId: string,
-      r: { name: string; email: string; phone?: string; bossTier?: BossTier; brandName?: string | null; password: string }
+      r: {
+        name: string
+        email: string
+        phone?: string
+        bossTier?: BossTier
+        brandName?: string | null
+        password: string
+      }
     ) => {
       await platform.rootAdmins.create(restaurantId, r)
       await Promise.all([loadRootAdmins(restaurantId), loadRestaurants()])
@@ -436,15 +506,16 @@ export function AdminStoreProvider({ children }: { children: ReactNode }) {
         loadRestaurants,
         addRestaurant,
         updateRestaurant,
-        updateRestaurantBilling,
-        markRestaurantPaid,
+        recordRestaurantPayment,
+        updateRestaurantPayment,
+        deleteRestaurantPayment,
         suspendRestaurantUnpaid,
+        unsuspendRestaurantAccess,
         deleteRestaurant,
         billingConfig,
         billingConfigError,
         loadBillingConfig,
         updateBillingConfig,
-        startMonthlyCollectionCycle,
         suspendAllUnpaidRestaurants,
         rootAdminsForRestaurant,
         rootAdminsLoading,

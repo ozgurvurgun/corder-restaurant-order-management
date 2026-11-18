@@ -20,6 +20,41 @@ import {
 
 const billingInfoCache = new Map<string, MerchantBillingInfoDto>()
 
+const TURKISH_MONTHS = [
+  "Ocak",
+  "Şubat",
+  "Mart",
+  "Nisan",
+  "Mayıs",
+  "Haziran",
+  "Temmuz",
+  "Ağustos",
+  "Eylül",
+  "Ekim",
+  "Kasım",
+  "Aralık",
+]
+
+const METHOD_LABELS: Record<string, string> = {
+  bank_transfer: "Havale / EFT",
+  cash: "Nakit",
+  credit_card: "Kredi Kartı",
+  other: "Diğer",
+}
+
+function formatPeriodTr(period?: string | null): string {
+  if (!period || !/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) return period || "—"
+  const [y, m] = period.split("-")
+  return `${TURKISH_MONTHS[Number(m) - 1] ?? m} ${y}`
+}
+
+function formatCoveredPeriods(periods?: string[], fallback?: string): string {
+  const valid = (periods ?? []).filter((p) => /^\d{4}-(0[1-9]|1[0-2])$/.test(p)).sort()
+  if (valid.length === 0) return formatPeriodTr(fallback)
+  if (valid.length === 1) return formatPeriodTr(valid[0])
+  return `${valid.length} Ay (${formatPeriodTr(valid[0])} – ${formatPeriodTr(valid[valid.length - 1])})`
+}
+
 export function prefetchBillingInfo(token: string | null, branchId?: string | null) {
   if (!token) return
   const cacheKey = branchId || "default"
@@ -74,12 +109,24 @@ export default function BillingView() {
   const endDay = info?.paymentAccount.collectionEndDay ?? 30
   const isCollectionWindow = dayOfMonth >= startDay && dayOfMonth <= endDay
 
+  const isPaidForCurrent =
+    info?.isCurrentPeriodPaid ?? info?.billingStatus === "paid"
+  const overduePeriods = info?.overduePeriods ?? []
+  const duePeriods = info?.duePeriods ?? []
+  const showUnpaidWarning =
+    Boolean(info) &&
+    (!isPaidForCurrent || overduePeriods.length > 0) &&
+    (isCollectionWindow || overduePeriods.length > 0 || info?.billingStatus === "overdue")
+
   const receiverName = info?.paymentAccount.receiverName || "Corder Yazılım ve Teknoloji A.Ş."
   const iban = info?.paymentAccount.iban || "TR33 0006 1005 1978 6457 8413 26"
   const bankName = info?.paymentAccount.bankName || "Garanti BBVA"
   const suggestedNote =
     info?.paymentAccount.suggestedTransferNote ||
-    `${currentBusiness?.name || "İşletme"} - Aylık Sistem Kullanım Ücreti`
+    `${currentBusiness?.name || "İşletme"} - Abonelik Ücreti`
+
+  const dueMultiplier = Math.max(1, duePeriods.length)
+  const payableAmount = (info?.monthlyFee ?? 0) * dueMultiplier
 
   return (
     <div className="h-full flex flex-col">
@@ -87,26 +134,50 @@ export default function BillingView() {
         <div className="flex items-center gap-2 text-[12px] text-[#86868b]">
           <CalendarClock className="w-3.5 h-3.5 text-[#e63462]" />
           <span>
-            Tahsilat Dönemi: <span className="font-medium text-[#1d1d1f]">Her Ayın {startDay} – {endDay}&apos;u Arası</span>
+            Tahsilat Dönemi:{" "}
+            <span className="font-medium text-[#1d1d1f]">
+              Her Ayın {startDay} – {endDay}&apos;u Arası
+            </span>
           </span>
         </div>
       </div>
 
       <div className="flex-1 overflow-auto p-5">
         <div className="w-full flex flex-col gap-4">
-          {/* Collection Window Warning Banner */}
-          {(isCollectionWindow ||
-            info?.billingStatus === "pending" ||
-            info?.billingStatus === "overdue") && (
-            <div className="rounded-xl border border-amber-300/80 bg-amber-50/80 p-4 flex items-start gap-3">
-              <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-              <div className="text-[13px] text-amber-900">
+          {/* Unpaid / Collection Window Warning Banner (only shown when actually unpaid!) */}
+          {showUnpaidWarning && (
+            <div
+              className={`rounded-xl border p-4 flex items-start gap-3 ${
+                overduePeriods.length > 0
+                  ? "border-red-300/80 bg-red-50/80"
+                  : "border-amber-300/80 bg-amber-50/80"
+              }`}
+            >
+              <AlertTriangle
+                className={`w-4 h-4 flex-shrink-0 mt-0.5 ${
+                  overduePeriods.length > 0 ? "text-red-600" : "text-amber-600"
+                }`}
+              />
+              <div
+                className={`text-[13px] ${
+                  overduePeriods.length > 0 ? "text-red-900" : "text-amber-900"
+                }`}
+              >
                 <p className="font-semibold">
-                  Aylık Tahsilat Dönemi Hatırlatması (Her Ayın {startDay} – {endDay}&apos;u Arası)
+                  {overduePeriods.length > 0
+                    ? `Gecikmiş Abonelik Ödemesi (${overduePeriods.map((p) => formatPeriodTr(p)).join(", ")})`
+                    : `Aylık Tahsilat Dönemi Hatırlatması (Her Ayın ${startDay} – ${endDay}'u Arası)`}
                 </p>
-                <p className="mt-0.5 text-[12px] text-amber-800">
-                  Sistem erişiminizin kesintisiz devam etmesi için lütfen aylık abonelik ödemenizi her ayın{" "}
-                  <span className="font-medium">{startDay}&apos;i ile {endDay}&apos;u arasında</span> aşağıdaki IBAN hesabına gerçekleştiriniz. Ödeme yapılmaması durumunda sistem erişimi otomatik olarak durdurulmaktadır.
+                <p
+                  className={`mt-0.5 text-[12px] ${
+                    overduePeriods.length > 0 ? "text-red-800" : "text-amber-800"
+                  }`}
+                >
+                  Sistem erişiminizin kesintisiz devam etmesi için lütfen{" "}
+                  {duePeriods.length > 0
+                    ? `${duePeriods.map((p) => formatPeriodTr(p)).join(", ")} dönemine ait ₺${formatCurrency(payableAmount)} tutarındaki`
+                    : "aylık abonelik"}{" "}
+                  ödemenizi aşağıdaki IBAN hesabına gerçekleştiriniz.
                 </p>
               </div>
             </div>
@@ -130,13 +201,18 @@ export default function BillingView() {
 
             <div className="rounded-xl border border-[#d1d1d6]/60 bg-white p-4">
               <p className="text-[11px] font-medium text-[#86868b]">
-                Güncel Ödeme Durumu
+                Güncel Dönem &amp; Erişim Durumu
               </p>
               <div className="mt-2">
-                {info?.billingStatus === "pending" || info?.billingStatus === "overdue" ? (
+                {overduePeriods.length > 0 ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 border border-red-200/80 px-2.5 py-1 text-[12px] font-medium text-red-700">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    Ödeme Gecikti ({overduePeriods.length} Dönem)
+                  </span>
+                ) : !isPaidForCurrent ? (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200/80 px-2.5 py-1 text-[12px] font-medium text-amber-700">
                     <Clock className="w-3.5 h-3.5" />
-                    Ödeme Bekleniyor ({startDay}-{endDay} Tahsilat)
+                    {formatPeriodTr(info?.currentPeriod)} Bekleniyor
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 text-[12px] font-medium text-emerald-700">
@@ -146,13 +222,15 @@ export default function BillingView() {
                 )}
               </div>
               <p className="mt-2 text-[11px] text-[#86868b]">
-                Tahsilat Günü: Her ayın {startDay} - {endDay}&apos;u arası
+                {info?.paidThroughPeriod && isPaidForCurrent
+                  ? `${formatPeriodTr(info.paidThroughPeriod)} sonuna kadar abonelik açık`
+                  : `Tahsilat Günü: Her ayın ${startDay} - ${endDay}'u arası`}
               </p>
             </div>
 
             <div className="rounded-xl border border-[#d1d1d6]/60 bg-white p-4">
               <p className="text-[11px] font-medium text-[#86868b]">
-                Son Ödeme Kaydı
+                Son Tahsilat Kaydı
               </p>
               <p className="mt-1.5 text-[18px] font-bold text-[#1d1d1f]">
                 {info?.lastPaymentDate
@@ -160,9 +238,9 @@ export default function BillingView() {
                   : "Henüz Kayıt Yok"}
               </p>
               <p className="mt-1.5 text-[11px] text-[#86868b]">
-                {info?.lastPaidPeriod
-                  ? `Son Ödenen Dönem: ${info.lastPaidPeriod}`
-                  : "Ödeme yapıldığında otomatik işlenir"}
+                {info?.paidThroughPeriod
+                  ? `Kapsanan Son Dönem: ${formatPeriodTr(info.paidThroughPeriod)}`
+                  : "Ödeme işlendiğinde burada görüntülenir"}
               </p>
             </div>
           </div>
@@ -179,7 +257,7 @@ export default function BillingView() {
                     Havale / EFT Ödeme Hesap Bilgileri
                   </h3>
                   <p className="text-[12px] text-[#86868b]">
-                    Aylık kullanım ücretinizi yatıracağınız İsim Soyisim ve IBAN bilgilerini tek tıkla kopyalayabilirsiniz.
+                    Kullanım ücretinizi yatıracağınız İsim Soyisim ve IBAN bilgilerini tek tıkla kopyalayabilirsiniz.
                   </p>
                 </div>
               </div>
@@ -187,7 +265,7 @@ export default function BillingView() {
                 type="button"
                 onClick={() =>
                   void copyToClipboard(
-                    `Alıcı: ${receiverName}\nBanka: ${bankName}\nIBAN: ${iban}\nTutar: ₺${formatCurrency(info?.monthlyFee ?? 0)}\nAçıklama: ${suggestedNote}`,
+                    `Alıcı: ${receiverName}\nBanka: ${bankName}\nIBAN: ${iban}\nTutar: ₺${formatCurrency(payableAmount)}\nAçıklama: ${suggestedNote}`,
                     "all",
                     "Tüm ödeme bilgileri"
                   )
@@ -342,7 +420,7 @@ export default function BillingView() {
           <div className="rounded-xl border border-[#d1d1d6]/60 bg-white overflow-hidden">
             <div className="px-4 py-3 border-b border-[#f0f0f0] flex items-center justify-between">
               <h3 className="text-[14px] font-semibold text-[#1d1d1f]">
-                Geçmiş Aylık Ödeme Kayıtları
+                Geçmiş Tahsilat &amp; Dönem Kayıtları
               </h3>
               <span className="text-[11px] text-[#86868b]">
                 {info?.paymentHistory?.length ?? 0} kayıt
@@ -353,45 +431,55 @@ export default function BillingView() {
                 Henüz işlenmiş ödeme geçmişi bulunmuyor.
               </div>
             ) : (
-              <table className="w-full text-left text-[13px]">
-                <thead>
-                  <tr className="border-b border-[#f0f0f0] bg-[#f9f9f9] text-[11px] font-semibold text-[#86868b]">
-                    <th className="px-4 py-2.5">Dönem</th>
-                    <th className="px-4 py-2.5">Ödeme Tarihi</th>
-                    <th className="px-4 py-2.5">Tutar</th>
-                    <th className="px-4 py-2.5">Açıklama / Durum</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {info.paymentHistory.map((item) => (
-                    <tr key={item.id} className="border-b border-[#f0f0f0] last:border-0 hover:bg-[#f5f5f7]/40">
-                      <td className="px-4 py-3 font-medium text-[#1d1d1f]">
-                        {item.period}
-                      </td>
-                      <td className="px-4 py-3 text-[#86868b]">
-                        {new Date(item.paidAt).toLocaleDateString("tr-TR", {
-                          day: "2-digit",
-                          month: "long",
-                          year: "numeric",
-                        })}
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-emerald-600">
-                        ₺{formatCurrency(item.amount)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700">
-                          <CheckCircle2 className="w-3 h-3" /> Ödeme Alındı
-                        </span>
-                        {item.note && (
-                          <span className="ml-2 text-[12px] text-[#86868b]">
-                            ({item.note})
-                          </span>
-                        )}
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-[13px]">
+                  <thead>
+                    <tr className="border-b border-[#f0f0f0] bg-[#f9f9f9] text-[11px] font-semibold text-[#86868b]">
+                      <th className="px-4 py-2.5">Tahsilat Tarihi</th>
+                      <th className="px-4 py-2.5">Kapsanan Dönem(ler)</th>
+                      <th className="px-4 py-2.5">Ödeme Yöntemi</th>
+                      <th className="px-4 py-2.5">Tutar</th>
+                      <th className="px-4 py-2.5">Durum / Açıklama</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {info.paymentHistory.map((item) => (
+                      <tr
+                        key={item.id}
+                        className="border-b border-[#f0f0f0] last:border-0 hover:bg-[#f5f5f7]/40"
+                      >
+                        <td className="px-4 py-3 text-[#1d1d1f] font-medium whitespace-nowrap">
+                          {new Date(item.paidAt).toLocaleDateString("tr-TR", {
+                            day: "2-digit",
+                            month: "long",
+                            year: "numeric",
+                          })}
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-[#1d1d1f]">
+                          {formatCoveredPeriods(item.periods, item.period)}
+                        </td>
+                        <td className="px-4 py-3 text-[#636366]">
+                          {METHOD_LABELS[item.paymentMethod || "bank_transfer"] ??
+                            "Havale / EFT"}
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-emerald-600 tabular-nums whitespace-nowrap">
+                          ₺{formatCurrency(item.amount)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700">
+                            <CheckCircle2 className="w-3 h-3" /> Ödeme Alındı
+                          </span>
+                          {item.note && (
+                            <span className="ml-2 text-[12px] text-[#86868b]">
+                              ({item.note})
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>

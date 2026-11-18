@@ -8,6 +8,7 @@ import { RestaurantEntity } from './domain/restaurant.entity';
 import { RootAdminEntity } from './domain/root-admin.entity';
 import { BossRestaurantEntity } from './domain/boss-restaurant.entity';
 import { PlatformBillingConfigEntity } from './domain/platform-billing-config.entity';
+import { RestaurantSubscriptionPaymentEntity } from './domain/restaurant-subscription-payment.entity';
 import { PlatformAuthService } from './application/platform-auth.service';
 import { RestaurantService } from './application/restaurant.service';
 import { PlatformBillingService } from './application/platform-billing.service';
@@ -38,6 +39,7 @@ import {
       RootAdminEntity,
       BossRestaurantEntity,
       PlatformBillingConfigEntity,
+      RestaurantSubscriptionPaymentEntity,
     ]),
     PassportModule.register({ defaultStrategy: 'platform-jwt' }),
     JwtModule.registerAsync({

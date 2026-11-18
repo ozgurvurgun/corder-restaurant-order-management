@@ -1,4 +1,8 @@
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsNumber,
@@ -55,27 +59,68 @@ export class RecordRestaurantPaymentDto {
   @Min(0)
   amount?: number;
 
+  /** Explicit list of YYYY-MM periods covered by this payment (e.g. ['2026-11', '2026-12', '2027-01']). */
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(36)
+  @IsString({ each: true })
+  periods?: string[];
+
+  /** Alternative shorthand: starting YYYY-MM period + consecutive monthsCount. */
+  @IsOptional()
+  @IsString()
+  startPeriod?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(36)
+  monthsCount?: number;
+
+  /** Single-period shorthand ('YYYY-MM'). */
   @IsOptional()
   @IsString()
   period?: string;
 
+  /** Actual date/time payment was received (YYYY-MM-DD or ISO string). */
   @IsOptional()
   @IsString()
-  note?: string;
+  paidAt?: string;
+
+  @IsOptional()
+  @IsIn(['bank_transfer', 'cash', 'credit_card', 'other'])
+  paymentMethod?: 'bank_transfer' | 'cash' | 'credit_card' | 'other';
+
+  @IsOptional()
+  @IsString()
+  note?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  reopenAccess?: boolean;
 }
 
-export class UpdateRestaurantBillingStatusDto {
-  @IsIn(['paid', 'pending', 'overdue', 'suspended'])
-  billingStatus: 'paid' | 'pending' | 'overdue' | 'suspended';
-
+export class UpdateRestaurantPaymentDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
-  monthlyFee?: number;
+  amount?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(36)
+  @IsString({ each: true })
+  periods?: string[];
 
   @IsOptional()
   @IsString()
-  period?: string;
+  paidAt?: string;
+
+  @IsOptional()
+  @IsIn(['bank_transfer', 'cash', 'credit_card', 'other'])
+  paymentMethod?: 'bank_transfer' | 'cash' | 'credit_card' | 'other';
 
   @IsOptional()
   @IsString()
@@ -86,10 +131,4 @@ export class SuspendRestaurantBillingDto {
   @IsOptional()
   @IsString()
   note?: string;
-}
-
-export class StartCollectionCycleDto {
-  @IsOptional()
-  @IsString()
-  period?: string;
 }

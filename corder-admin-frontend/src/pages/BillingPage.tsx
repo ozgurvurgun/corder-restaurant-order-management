@@ -1,14 +1,31 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useAdminStore } from "@/lib/store"
-import type { Restaurant } from "@/lib/types"
+import type {
+  Restaurant,
+  RestaurantPaymentRecord,
+  SubscriptionPaymentMethod,
+} from "@/lib/types"
 import {
+  addMonthsToPeriod,
+  evaluateRestaurantPeriod,
   formatMoney,
+  formatPeriodLong,
+  formatPeriodsSummary,
   fromMinorUnits,
+  getIstanbulBillingPeriod,
   getIstanbulDayOfMonth,
   sumMoneyMajor,
   toMinorUnits,
 } from "@/lib/money"
-import { CreditCard, CalendarClock } from "lucide-react"
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Landmark,
+  ListChecks,
+  ReceiptText,
+  Settings2,
+} from "lucide-react"
 import {
   BillingConfigModal,
   BillingKpiCards,
@@ -17,6 +34,12 @@ import {
   RecordPaymentModal,
   type BillingStatusFilter,
 } from "@/components/billing/RecordPaymentModal"
+import { BillingMatrixView } from "@/components/billing/BillingMatrixView"
+import { BillingLedgerView } from "@/components/billing/BillingLedgerView"
+import { PaymentFormModal } from "@/components/billing/PaymentFormModal"
+import { RestaurantBillingHistoryModal } from "@/components/billing/RestaurantBillingHistoryModal"
+
+type BillingTabMode = "period" | "matrix" | "ledger"
 
 export function BillingPage() {
   const {
@@ -27,12 +50,21 @@ export function BillingPage() {
     loadBillingConfig,
     updateBillingConfig,
     updateRestaurant,
-    updateRestaurantBilling,
-    markRestaurantPaid,
+    recordRestaurantPayment,
+    updateRestaurantPayment,
+    deleteRestaurantPayment,
     suspendRestaurantUnpaid,
-    startMonthlyCollectionCycle,
+    unsuspendRestaurantAccess,
     suspendAllUnpaidRestaurants,
   } = useAdminStore()
+
+  const currentPeriod = getIstanbulBillingPeriod()
+  const currentYear = Number(currentPeriod.split("-")[0]) || new Date().getFullYear()
+
+  const [activeTab, setActiveTab] = useState<BillingTabMode>("period")
+  const [selectedPeriod, setSelectedPeriod] = useState(currentPeriod)
+  const [matrixYear, setMatrixYear] = useState(currentYear)
+  const [configOpen, setConfigOpen] = useState(false)
 
   const [feeDrafts, setFeeDrafts] = useState<Record<string, string>>({})
   const [busyRestId, setBusyRestId] = useState<string | null>(null)
@@ -42,6 +74,14 @@ export function BillingPage() {
   const [feedback, setFeedback] = useState<{ type: "ok" | "err"; text: string } | null>(
     null
   )
+
+  // Modal states
+  const [paymentModalState, setPaymentModalState] = useState<{
+    restaurantId: string
+    initialPeriod?: string
+    editingPayment?: RestaurantPaymentRecord
+  } | null>(null)
+  const [historyModalRestId, setHistoryModalRestId] = useState<string | null>(null)
 
   useEffect(() => {
     void loadRestaurants()
@@ -60,8 +100,12 @@ export function BillingPage() {
     setFeedback({ type, text })
     window.setTimeout(() => {
       setFeedback((cur) => (cur?.text === text ? null : cur))
-    }, 4000)
+    }, 4500)
   }
+
+  const collectionStartDay = billingConfig?.collectionStartDay ?? 25
+  const collectionEndDay = billingConfig?.collectionEndDay ?? 30
+  const dayOfMonth = getIstanbulDayOfMonth()
 
   const handleSaveMonthlyFee = async (r: Restaurant) => {
     const raw = feeDrafts[r.id]
@@ -80,60 +124,52 @@ export function BillingPage() {
     }
   }
 
-  const handleMarkPaid = async (
+  const handleCreatePayment = async (
     r: Restaurant,
-    details?: { amount?: number; period?: string; note?: string }
-  ) => {
-    setBusyRestId(r.id)
-    try {
-      const draftFee =
-        details?.amount !== undefined
-          ? fromMinorUnits(toMinorUnits(details.amount))
-          : feeDrafts[r.id] !== undefined
-            ? fromMinorUnits(toMinorUnits(feeDrafts[r.id]))
-            : (r.monthlyFee ?? 0)
-      if (
-        details?.amount === undefined &&
-        toMinorUnits(draftFee) !== toMinorUnits(r.monthlyFee ?? 0)
-      ) {
-        await updateRestaurant(r.id, { monthlyFee: Math.max(0, draftFee) })
-      }
-      await markRestaurantPaid(r.id, {
-        amount: Math.max(0, draftFee),
-        period: details?.period,
-        note: details?.note,
-      })
-      showNotice(
-        `${r.name} için ödeme alındı olarak işaretlendi ve tüm sistem erişimleri otomatik açıldı.`
-      )
-    } catch (err) {
-      showNotice(err instanceof Error ? err.message : "İşlem başarısız", "err")
-    } finally {
-      setBusyRestId(null)
+    payload: {
+      amount: number
+      periods: string[]
+      paidAt: string
+      paymentMethod: SubscriptionPaymentMethod
+      note: string | null
+      reopenAccess: boolean
     }
+  ) => {
+    await recordRestaurantPayment(r.id, payload)
+    showNotice(
+      `${r.name} için ${formatPeriodsSummary(payload.periods)} (${formatMoney(payload.amount)}) tahsilatı kaydedildi.`
+    )
   }
 
-  const handleMarkPending = async (r: Restaurant) => {
-    setBusyRestId(r.id)
-    try {
-      await updateRestaurantBilling(r.id, {
-        billingStatus: "pending",
-        monthlyFee: fromMinorUnits(toMinorUnits(feeDrafts[r.id] ?? r.monthlyFee ?? 0)),
-      })
-      showNotice(
-        `${r.name} ödeme durumu 'Ödeme Bekleniyor (25-30 Tahsilat)' olarak güncellendi.`
-      )
-    } catch (err) {
-      showNotice(err instanceof Error ? err.message : "İşlem başarısız", "err")
-    } finally {
-      setBusyRestId(null)
+  const handleEditPayment = async (
+    r: Restaurant,
+    paymentId: string,
+    payload: {
+      amount: number
+      periods: string[]
+      paidAt: string
+      paymentMethod: SubscriptionPaymentMethod
+      note: string | null
     }
+  ) => {
+    await updateRestaurantPayment(r.id, paymentId, payload)
+    showNotice(`${r.name} tahsilat kaydı güncellendi.`)
+  }
+
+  const handleDeletePayment = async (
+    r: Restaurant,
+    payment: RestaurantPaymentRecord
+  ) => {
+    await deleteRestaurantPayment(r.id, payment.id)
+    showNotice(
+      `${r.name} — ${formatPeriodsSummary(payment.periods, payment.period)} tahsilat kaydı silindi.`
+    )
   }
 
   const handleSuspendUnpaid = async (r: Restaurant) => {
     if (
       !confirm(
-        `${r.name} işletmesinin aylık ödemesi alınmadığı için tüm sistemlere (Merchant Panel, Boss Panel, El Terminali, Print Agent) erişimini durdurmak istediğinize emin misiniz?`
+        `${r.name} işletmesinin tüm sistemlere (Merchant Panel, Boss Panel, El Terminali, Print Agent) erişimini durdurmak istediğinize emin misiniz?`
       )
     ) {
       return
@@ -142,9 +178,9 @@ export function BillingPage() {
     try {
       await suspendRestaurantUnpaid(
         r.id,
-        "25-30 tahsilat döneminde ödeme alınmadığı için sistem erişimi durduruldu."
+        "Ödeme alınmadığı için sistem erişimi durduruldu."
       )
-      showNotice(`${r.name} işletmesinin tüm sistem erişimleri durduruldu.`)
+      showNotice(`${r.name} işletmesinin sistem erişimi durduruldu.`)
     } catch (err) {
       showNotice(
         err instanceof Error ? err.message : "Erişim durdurulamadı",
@@ -155,31 +191,22 @@ export function BillingPage() {
     }
   }
 
-  const handleStartCycle = async () => {
-    if (
-      !confirm(
-        "Bu ay için henüz ödeme kaydı olmayan aktif mekanları 'Ödeme Bekleniyor (25-30 Tahsilat)' durumuna geçirmek istiyor musunuz?"
-      )
-    ) {
-      return
-    }
-    setBulkBusy(true)
+  const handleUnsuspendAccess = async (r: Restaurant) => {
+    setBusyRestId(r.id)
     try {
-      const res = await startMonthlyCollectionCycle()
-      showNotice(
-        `${res.period} dönemi tahsilat süreci başlatıldı (${res.updatedCount} mekan ödeme bekliyor).`
-      )
+      await unsuspendRestaurantAccess(r.id)
+      showNotice(`${r.name} işletmesinin sistem erişimi yeniden açıldı.`)
     } catch (err) {
-      showNotice(err instanceof Error ? err.message : "İşlem başarısız", "err")
+      showNotice(err instanceof Error ? err.message : "Erişim açılamadı", "err")
     } finally {
-      setBulkBusy(false)
+      setBusyRestId(null)
     }
   }
 
   const handleBulkSuspendUnpaid = async () => {
     if (
       !confirm(
-        "Ödeme durumu 'Bekliyor' veya 'Gecikmiş' olan TÜM mekanların sistem erişimlerini durdurmak istediğinize emin misiniz?"
+        "Bu dönem veya geçmiş dönem ödemesi tamamlanmamış aktif mekanların sistem erişimlerini durdurmak istediğinize emin misiniz? (Açık kasa vardiyası olan mekanlar vardiya kapanana kadar korunur.)"
       )
     ) {
       return
@@ -187,8 +214,12 @@ export function BillingPage() {
     setBulkBusy(true)
     try {
       const res = await suspendAllUnpaidRestaurants()
+      const shiftNote =
+        res.deferredOpenShiftCount && res.deferredOpenShiftCount > 0
+          ? ` (${res.deferredOpenShiftCount} mekanda açık kasa vardiyası olduğu için ertelendi)`
+          : ""
       showNotice(
-        `Ödeme yapmayan ${res.suspendedCount} mekanın sistem erişimi durduruldu.`
+        `Ödemesi eksik olan ${res.suspendedCount} mekanın sistem erişimi durduruldu.${shiftNote}`
       )
     } catch (err) {
       showNotice(err instanceof Error ? err.message : "İşlem başarısız", "err")
@@ -197,85 +228,252 @@ export function BillingPage() {
     }
   }
 
-  const dayOfMonth = getIstanbulDayOfMonth()
-  const isCollectionWindow =
-    dayOfMonth >= (billingConfig?.collectionStartDay ?? 25) &&
-    dayOfMonth <= (billingConfig?.collectionEndDay ?? 30)
+  // Metrics for selectedPeriod
+  const metrics = useMemo(() => {
+    const activeForSelected = restaurants.filter((r) => {
+      const cell = evaluateRestaurantPeriod(
+        r,
+        selectedPeriod,
+        currentPeriod,
+        collectionEndDay,
+        dayOfMonth
+      )
+      return cell.state !== "before_start" && cell.state !== "exempt"
+    })
 
-  const billableRestaurants = restaurants.filter((r) => r.status !== "inactive")
-  const totalMrr = sumMoneyMajor(billableRestaurants.map((r) => r.monthlyFee ?? 0))
-  const paidRestaurants = restaurants.filter(
-    (r) => !r.isAccessSuspended && r.billingStatus === "paid"
-  )
-  const pendingRestaurants = restaurants.filter(
-    (r) =>
-      !r.isAccessSuspended &&
-      (r.billingStatus === "pending" || r.billingStatus === "overdue")
-  )
-  const suspendedRestaurants = restaurants.filter(
-    (r) => r.isAccessSuspended || r.billingStatus === "suspended"
-  )
-
-  const collectedTotal = sumMoneyMajor(
-    paidRestaurants.map((r) => r.monthlyFee ?? 0)
-  )
-  const pendingTotal = sumMoneyMajor(
-    pendingRestaurants.map((r) => r.monthlyFee ?? 0)
-  )
-
-  const filteredRestaurants = restaurants.filter((r) => {
-    const isSusp = Boolean(
-      r.isAccessSuspended || r.billingStatus === "suspended"
+    const periodTargetTotal = sumMoneyMajor(
+      activeForSelected.map((r) => r.monthlyFee ?? 0)
     )
-    if (statusFilter === "paid" && (isSusp || r.billingStatus !== "paid"))
-      return false
-    if (
-      statusFilter === "pending" &&
-      (isSusp || (r.billingStatus !== "pending" && r.billingStatus !== "overdue"))
-    ) {
-      return false
+
+    const paidInSelected = activeForSelected.filter((r) => {
+      const cell = evaluateRestaurantPeriod(
+        r,
+        selectedPeriod,
+        currentPeriod,
+        collectionEndDay,
+        dayOfMonth
+      )
+      return cell.state === "paid" || cell.state === "prepaid"
+    })
+
+    const unpaidInSelected = activeForSelected.filter((r) => {
+      const cell = evaluateRestaurantPeriod(
+        r,
+        selectedPeriod,
+        currentPeriod,
+        collectionEndDay,
+        dayOfMonth
+      )
+      return (
+        cell.state === "pending" ||
+        cell.state === "overdue" ||
+        cell.state === "future"
+      )
+    })
+
+    const periodPaidFeeTotal = sumMoneyMajor(
+      paidInSelected.map((r) => r.monthlyFee ?? 0)
+    )
+
+    // Cash actually collected during selectedPeriod calendar month (by paidAt)
+    const cashPaymentsInSelectedMonth: number[] = []
+    for (const r of restaurants) {
+      for (const p of r.paymentHistory ?? []) {
+        const paidMonth = getIstanbulBillingPeriod(new Date(p.paidAt))
+        if (paidMonth === selectedPeriod) {
+          cashPaymentsInSelectedMonth.push(p.amount)
+        }
+      }
     }
-    if (statusFilter === "suspended" && !isSusp) return false
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim()
-      const matchName = r.name.toLowerCase().includes(q)
-      const matchBrand = (r.brandName ?? "").toLowerCase().includes(q)
-      const matchSlug = r.slug.toLowerCase().includes(q)
-      return matchName || matchBrand || matchSlug
+    const periodCashCollected = sumMoneyMajor(cashPaymentsInSelectedMonth)
+
+    // Overall unpaid balance across all duePeriods (retroactive + current)
+    let unpaidMinor = 0
+    let unpaidVenuesCount = 0
+    let overdueVenuesCount = 0
+    let overduePeriodsCount = 0
+    for (const r of restaurants) {
+      const dueCount = r.duePeriods?.length ?? 0
+      const ovCount = r.overduePeriods?.length ?? 0
+      if (dueCount > 0) {
+        unpaidVenuesCount += 1
+        unpaidMinor += toMinorUnits(r.monthlyFee ?? 0) * dueCount
+      }
+      if (ovCount > 0) {
+        overdueVenuesCount += 1
+        overduePeriodsCount += ovCount
+      }
     }
-    return true
-  })
+
+    const suspendedCount = restaurants.filter(
+      (r) => r.isAccessSuspended || r.billingStatus === "suspended"
+    ).length
+
+    return {
+      billableCount: activeForSelected.length,
+      periodTargetTotal,
+      periodPaidCount: paidInSelected.length,
+      unpaidSelectedCount: unpaidInSelected.length,
+      periodPaidFeeTotal,
+      periodCashCollected,
+      unpaidBalanceTotal: fromMinorUnits(unpaidMinor),
+      unpaidVenuesCount,
+      overdueVenuesCount,
+      overduePeriodsCount,
+      suspendedCount,
+    }
+  }, [restaurants, selectedPeriod, currentPeriod, collectionEndDay, dayOfMonth])
+
+  const filteredRestaurants = useMemo(() => {
+    return restaurants.filter((r) => {
+      const isSusp = Boolean(
+        r.isAccessSuspended || r.billingStatus === "suspended"
+      )
+      const cell = evaluateRestaurantPeriod(
+        r,
+        selectedPeriod,
+        currentPeriod,
+        collectionEndDay,
+        dayOfMonth
+      )
+      if (
+        statusFilter === "paid" &&
+        cell.state !== "paid" &&
+        cell.state !== "prepaid"
+      ) {
+        return false
+      }
+      if (
+        statusFilter === "unpaid" &&
+        cell.state !== "pending" &&
+        cell.state !== "overdue" &&
+        cell.state !== "future"
+      ) {
+        return false
+      }
+      if (statusFilter === "overdue" && (r.overduePeriods?.length ?? 0) === 0) {
+        return false
+      }
+      if (statusFilter === "suspended" && !isSusp) return false
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim()
+        return (
+          r.name.toLowerCase().includes(q) ||
+          (r.brandName ?? "").toLowerCase().includes(q) ||
+          r.slug.toLowerCase().includes(q)
+        )
+      }
+      return true
+    })
+  }, [
+    restaurants,
+    selectedPeriod,
+    currentPeriod,
+    collectionEndDay,
+    dayOfMonth,
+    statusFilter,
+    searchQuery,
+  ])
+
+  const activePaymentRestaurant = paymentModalState
+    ? restaurants.find((r) => r.id === paymentModalState.restaurantId) ?? null
+    : null
+  const activeHistoryRestaurant = historyModalRestId
+    ? restaurants.find((r) => r.id === historyModalRestId) ?? null
+    : null
 
   return (
     <div className="space-y-4">
+      {/* Top Control & Period Bar */}
       <div className="rounded-2xl border border-[#e5e5ea] bg-white p-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5 text-[#e63462]" />
-            <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
-              Abonelik Ücretleri &amp; Tahsilat Yönetimi
-            </h2>
-          </div>
-          <p className="mt-0.5 text-[12px] text-[#86868b]">
-            Her mekan için ayrı aylık ücret belirleyin, her ayın{" "}
-            <span className="font-semibold text-[#1d1d1f]">
-              {billingConfig?.collectionStartDay ?? 25} –{" "}
-              {billingConfig?.collectionEndDay ?? 30}
-            </span>{" "}
-            arası tahsilat durumlarını yönetin ve ödeme yapmayan mekanların erişimini tek tıkla durdurun veya açın.
-          </p>
+        {/* View Mode Tabs */}
+        <div className="inline-flex flex-wrap items-center gap-1 rounded-xl bg-[#f5f5f7] p-1">
+          <button
+            type="button"
+            onClick={() => setActiveTab("period")}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition-all ${activeTab === "period"
+                ? "bg-white text-[#1d1d1f] shadow-2xs"
+                : "text-[#636366] hover:text-[#1d1d1f]"
+              }`}
+          >
+            <ListChecks className="h-3.5 w-3.5 text-[#e63462]" />
+            Dönem Tahsilat Tablosu
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("matrix")}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition-all ${activeTab === "matrix"
+                ? "bg-white text-[#1d1d1f] shadow-2xs"
+                : "text-[#636366] hover:text-[#1d1d1f]"
+              }`}
+          >
+            <CalendarDays className="h-3.5 w-3.5 text-[#e63462]" />
+            Ay-Ay Yıllık Çizelge
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("ledger")}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition-all ${activeTab === "ledger"
+                ? "bg-white text-[#1d1d1f] shadow-2xs"
+                : "text-[#636366] hover:text-[#1d1d1f]"
+              }`}
+          >
+            <ReceiptText className="h-3.5 w-3.5 text-[#e63462]" />
+            Tahsilat Defteri (Tarih Sıralı)
+          </button>
         </div>
 
-        <div className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2 text-[12px] text-amber-800">
-          <CalendarClock className="h-4 w-4 text-amber-600 flex-shrink-0" />
-          <span>
-            Tahsilat Günü:{" "}
-            <span className="font-semibold">
-              Her Ayın {billingConfig?.collectionStartDay ?? 25} -{" "}
-              {billingConfig?.collectionEndDay ?? 30}&apos;u Arası
+        {/* Period Switcher + Bank/IBAN Config Button */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex items-center gap-1 rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] p-1">
+            <button
+              type="button"
+              onClick={() => setSelectedPeriod((p) => addMonthsToPeriod(p, -1))}
+              className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-[#1d1d1f] shadow-2xs hover:bg-[#ebebf0]"
+              title="Önceki Ay"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <input
+              type="month"
+              value={selectedPeriod}
+              onChange={(e) => {
+                if (e.target.value) setSelectedPeriod(e.target.value)
+              }}
+              className="h-7 bg-transparent px-2 text-[12px] font-semibold text-[#1d1d1f] outline-none cursor-pointer"
+            />
+            <button
+              type="button"
+              onClick={() => setSelectedPeriod((p) => addMonthsToPeriod(p, 1))}
+              className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-[#1d1d1f] shadow-2xs hover:bg-[#ebebf0]"
+              title="Sonraki Ay"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+            {selectedPeriod !== currentPeriod && (
+              <button
+                type="button"
+                onClick={() => setSelectedPeriod(currentPeriod)}
+                className="rounded-lg bg-[#e63462] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#d42d56]"
+              >
+                Bu Ay
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setConfigOpen(true)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#d1d1d6] bg-white px-3 text-[12px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7]"
+          >
+            <Landmark className="h-3.5 w-3.5 text-[#e63462]" />
+            <span>
+              {billingConfig?.bankName || "Banka"} • Ayın {collectionStartDay}-
+              {collectionEndDay}&apos;u
             </span>
-            {isCollectionWindow ? " • (Tahsilat Dönemindeyiz)" : ""}
-          </span>
+            <Settings2 className="h-3.5 w-3.5 text-[#86868b]" />
+          </button>
         </div>
       </div>
 
@@ -287,54 +485,114 @@ export function BillingPage() {
 
       {feedback && (
         <div
-          className={`rounded-xl border px-4 py-3 text-[13px] font-medium ${
-            feedback.type === "err"
+          className={`rounded-xl border px-4 py-3 text-[13px] font-medium ${feedback.type === "err"
               ? "border-red-200 bg-red-50 text-red-700"
               : "border-emerald-200 bg-emerald-50 text-emerald-800"
-          }`}
+            }`}
         >
           {feedback.text}
         </div>
       )}
 
       <BillingKpiCards
-        totalMrr={totalMrr}
-        restaurantsCount={billableRestaurants.length}
-        collectedTotal={collectedTotal}
-        paidCount={paidRestaurants.length}
-        pendingTotal={pendingTotal}
-        pendingCount={pendingRestaurants.length}
-        suspendedCount={suspendedRestaurants.length}
+        selectedPeriodLabel={formatPeriodLong(selectedPeriod)}
+        periodTargetTotal={metrics.periodTargetTotal}
+        billableCount={metrics.billableCount}
+        periodPaidFeeTotal={metrics.periodPaidFeeTotal}
+        periodPaidCount={metrics.periodPaidCount}
+        periodCashCollected={metrics.periodCashCollected}
+        unpaidBalanceTotal={metrics.unpaidBalanceTotal}
+        unpaidVenuesCount={metrics.unpaidVenuesCount}
+        overduePeriodsCount={metrics.overduePeriodsCount}
+        suspendedCount={metrics.suspendedCount}
       />
 
+      {activeTab === "period" && (
+        <RecordPaymentModal
+          selectedPeriod={selectedPeriod}
+          currentPeriod={currentPeriod}
+          collectionEndDay={collectionEndDay}
+          allCount={restaurants.length}
+          paidCount={metrics.periodPaidCount}
+          unpaidCount={metrics.unpaidSelectedCount}
+          overdueCount={metrics.overdueVenuesCount}
+          suspendedCount={metrics.suspendedCount}
+          filteredRestaurants={filteredRestaurants}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
+          feeDrafts={feeDrafts}
+          onFeeDraftChange={(id, value) =>
+            setFeeDrafts((prev) => ({ ...prev, [id]: value }))
+          }
+          busyRestId={busyRestId}
+          bulkBusy={bulkBusy}
+          onSaveMonthlyFee={(r) => void handleSaveMonthlyFee(r)}
+          onOpenNewPayment={(r, period) =>
+            setPaymentModalState({ restaurantId: r.id, initialPeriod: period })
+          }
+          onOpenHistory={(r) => setHistoryModalRestId(r.id)}
+          onSuspendUnpaid={(r) => void handleSuspendUnpaid(r)}
+          onUnsuspendAccess={(r) => void handleUnsuspendAccess(r)}
+          onBulkSuspendUnpaid={() => void handleBulkSuspendUnpaid()}
+        />
+      )}
+
+      {activeTab === "matrix" && (
+        <BillingMatrixView
+          restaurants={restaurants}
+          selectedYear={matrixYear}
+          onYearChange={setMatrixYear}
+          currentPeriod={currentPeriod}
+          collectionEndDay={collectionEndDay}
+          searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
+          onOpenNewPayment={(r, period) =>
+            setPaymentModalState({ restaurantId: r.id, initialPeriod: period })
+          }
+          onOpenHistory={(r) => setHistoryModalRestId(r.id)}
+        />
+      )}
+
+      {activeTab === "ledger" && (
+        <BillingLedgerView
+          restaurants={restaurants}
+          onEditPayment={(r, payment) =>
+            setPaymentModalState({ restaurantId: r.id, editingPayment: payment })
+          }
+          onDeletePayment={handleDeletePayment}
+        />
+      )}
+
       <BillingConfigModal
+        open={configOpen}
+        onClose={() => setConfigOpen(false)}
         billingConfig={billingConfig}
         onUpdateConfig={updateBillingConfig}
         onNotice={showNotice}
       />
 
-      <RecordPaymentModal
-        restaurantsCount={restaurants.length}
-        paidCount={paidRestaurants.length}
-        pendingCount={pendingRestaurants.length}
-        suspendedCount={suspendedRestaurants.length}
-        filteredRestaurants={filteredRestaurants}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
-        searchQuery={searchQuery}
-        onSearchQueryChange={setSearchQuery}
-        feeDrafts={feeDrafts}
-        onFeeDraftChange={(id, value) =>
-          setFeeDrafts((prev) => ({ ...prev, [id]: value }))
+      <PaymentFormModal
+        restaurant={activePaymentRestaurant}
+        initialPeriod={paymentModalState?.initialPeriod}
+        editingPayment={paymentModalState?.editingPayment}
+        onClose={() => setPaymentModalState(null)}
+        onSubmitNew={handleCreatePayment}
+        onSubmitEdit={handleEditPayment}
+      />
+
+      <RestaurantBillingHistoryModal
+        restaurant={activeHistoryRestaurant}
+        collectionEndDay={collectionEndDay}
+        onClose={() => setHistoryModalRestId(null)}
+        onOpenNewPayment={(r, period) =>
+          setPaymentModalState({ restaurantId: r.id, initialPeriod: period })
         }
-        busyRestId={busyRestId}
-        bulkBusy={bulkBusy}
-        onSaveMonthlyFee={(r) => void handleSaveMonthlyFee(r)}
-        onMarkPaid={(r, details) => void handleMarkPaid(r, details)}
-        onMarkPending={(r) => void handleMarkPending(r)}
-        onSuspendUnpaid={(r) => void handleSuspendUnpaid(r)}
-        onStartCycle={() => void handleStartCycle()}
-        onBulkSuspendUnpaid={() => void handleBulkSuspendUnpaid()}
+        onEditPayment={(r, payment) =>
+          setPaymentModalState({ restaurantId: r.id, editingPayment: payment })
+        }
+        onDeletePayment={handleDeletePayment}
       />
     </div>
   )

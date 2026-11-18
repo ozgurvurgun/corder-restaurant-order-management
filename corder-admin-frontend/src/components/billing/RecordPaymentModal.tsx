@@ -1,31 +1,36 @@
-import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import type { Restaurant } from "@/lib/types"
 import {
+  PAYMENT_METHOD_LABELS,
+  evaluateRestaurantPeriod,
   formatIstanbulDate,
-  formatIstanbulDateTime,
   formatMoney,
-  fromMinorUnits,
-  getIstanbulBillingPeriod,
-  toMinorUnits,
+  formatPeriodLong,
+  formatPeriodShort,
 } from "@/lib/money"
 import {
-  CheckCircle2,
+  AlertCircle,
   Ban,
+  Building2,
+  CalendarRange,
+  CheckCircle2,
   Clock,
+  CreditCard,
   Search,
   ShieldAlert,
-  Building2,
-  ReceiptText,
-  X,
+  Unlock,
 } from "lucide-react"
 
-export type BillingStatusFilter = "ALL" | "paid" | "pending" | "suspended"
+export type BillingStatusFilter = "ALL" | "paid" | "unpaid" | "overdue" | "suspended"
 
-interface RecordPaymentModalProps {
-  restaurantsCount: number
+interface PeriodRestaurantsTableProps {
+  selectedPeriod: string
+  currentPeriod: string
+  collectionEndDay: number
+  allCount: number
   paidCount: number
-  pendingCount: number
+  unpaidCount: number
+  overdueCount: number
   suspendedCount: number
   filteredRestaurants: Restaurant[]
   statusFilter: BillingStatusFilter
@@ -37,20 +42,21 @@ interface RecordPaymentModalProps {
   busyRestId: string | null
   bulkBusy: boolean
   onSaveMonthlyFee: (restaurant: Restaurant) => void
-  onMarkPaid: (
-    restaurant: Restaurant,
-    details?: { amount?: number; period?: string; note?: string }
-  ) => void
-  onMarkPending: (restaurant: Restaurant) => void
+  onOpenNewPayment: (restaurant: Restaurant, period?: string) => void
+  onOpenHistory: (restaurant: Restaurant) => void
   onSuspendUnpaid: (restaurant: Restaurant) => void
-  onStartCycle: () => void
+  onUnsuspendAccess: (restaurant: Restaurant) => void
   onBulkSuspendUnpaid: () => void
 }
 
 export function RecordPaymentModal({
-  restaurantsCount,
+  selectedPeriod,
+  currentPeriod,
+  collectionEndDay,
+  allCount,
   paidCount,
-  pendingCount,
+  unpaidCount,
+  overdueCount,
   suspendedCount,
   filteredRestaurants,
   statusFilter,
@@ -62,42 +68,23 @@ export function RecordPaymentModal({
   busyRestId,
   bulkBusy,
   onSaveMonthlyFee,
-  onMarkPaid,
-  onMarkPending,
+  onOpenNewPayment,
+  onOpenHistory,
   onSuspendUnpaid,
-  onStartCycle,
+  onUnsuspendAccess,
   onBulkSuspendUnpaid,
-}: RecordPaymentModalProps) {
-  const [detailRestaurantId, setDetailRestaurantId] = useState<string | null>(null)
-  const [payAmount, setPayAmount] = useState("")
-  const [payPeriod, setPayPeriod] = useState(getIstanbulBillingPeriod)
-  const [payNote, setPayNote] = useState("")
-
-  const detailRestaurant = detailRestaurantId
-    ? filteredRestaurants.find((r) => r.id === detailRestaurantId) ?? null
-    : null
-
-  useEffect(() => {
-    if (!detailRestaurantId) return
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setDetailRestaurantId(null)
-    }
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [detailRestaurantId])
-
-  const openPaymentDialog = (r: Restaurant) => {
-    setDetailRestaurantId(r.id)
-    setPayAmount(feeDrafts[r.id] ?? String(r.monthlyFee ?? 0))
-    setPayPeriod(getIstanbulBillingPeriod())
-    setPayNote("")
-  }
+}: PeriodRestaurantsTableProps) {
+  const selectedLabel = formatPeriodLong(selectedPeriod)
 
   const filterTabs: { id: BillingStatusFilter; label: string }[] = [
-    { id: "ALL", label: `Tüm Mekanlar (${restaurantsCount})` },
-    { id: "paid", label: `Ödeme Alındı (${paidCount})` },
-    { id: "pending", label: `Tahsilat Bekleyen (${pendingCount})` },
-    { id: "suspended", label: `Erişimi Durdurulan (${suspendedCount})` },
+    { id: "ALL", label: `Tümü (${allCount})` },
+    { id: "paid", label: `${formatPeriodShort(selectedPeriod)} Ödendi (${paidCount})` },
+    {
+      id: "unpaid",
+      label: `${formatPeriodShort(selectedPeriod)} Bekleyen (${unpaidCount})`,
+    },
+    { id: "overdue", label: `Geçmiş Borçlu (${overdueCount})` },
+    { id: "suspended", label: `Erişimi Askıda (${suspendedCount})` },
   ]
 
   return (
@@ -133,15 +120,6 @@ export function RecordPaymentModal({
           </div>
           <button
             type="button"
-            onClick={onStartCycle}
-            disabled={bulkBusy}
-            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 text-[12px] font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
-          >
-            <Clock className="h-3.5 w-3.5" />
-            25-30 Tahsilat Dönemi Başlat
-          </button>
-          <button
-            type="button"
             onClick={onBulkSuspendUnpaid}
             disabled={bulkBusy}
             className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 text-[12px] font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50"
@@ -157,11 +135,10 @@ export function RecordPaymentModal({
           <thead>
             <tr className="border-b border-[#f0f0f0] bg-[#fafafa] text-[11px] font-semibold uppercase tracking-wider text-[#86868b]">
               <th className="px-4 py-3">Mekan / Şube</th>
-              <th className="px-4 py-3">Marka / Model</th>
               <th className="px-4 py-3">Aylık Ücret (₺)</th>
-              <th className="px-4 py-3">Tahsilat &amp; Erişim Durumu</th>
-              <th className="px-4 py-3">Son Ödeme</th>
-              <th className="px-4 py-3 text-right">Ödeme &amp; Erişim Kontrolü</th>
+              <th className="px-4 py-3">{selectedLabel} Durumu</th>
+              <th className="px-4 py-3">Kapsam &amp; Geriye Dönük Bakiye</th>
+              <th className="px-4 py-3 text-right">Tahsilat &amp; Erişim İşlemleri</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#f0f0f0]">
@@ -170,39 +147,54 @@ export function RecordPaymentModal({
                 r.isAccessSuspended || r.billingStatus === "suspended"
               )
               const isBusy = busyRestId === r.id
+              const periodCell = evaluateRestaurantPeriod(
+                r,
+                selectedPeriod,
+                currentPeriod,
+                collectionEndDay
+              )
+              const overduePeriods = r.overduePeriods ?? []
+              const hasPrepaidFuture = (r.prepaidFuturePeriods?.length ?? 0) > 0
+
+              const preferredTargetPeriod =
+                periodCell.state === "overdue" ||
+                periodCell.state === "pending" ||
+                periodCell.state === "future"
+                  ? selectedPeriod
+                  : undefined
+
               return (
                 <tr
                   key={r.id}
                   className={`transition-colors ${
-                    isSusp ? "bg-red-50/50" : "hover:bg-[#f9f9fb]"
+                    isSusp ? "bg-red-50/40" : "hover:bg-[#f9f9fb]"
                   }`}
                 >
                   <td className="px-4 py-3">
-                    <Link
-                      to={`/dashboard/restaurants/${r.id}`}
-                      className="font-semibold text-[#1d1d1f] hover:text-[#e63462] block"
-                    >
-                      {r.name}
-                    </Link>
-                    <span className="text-[11px] font-mono text-[#86868b]">{r.slug}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {r.brandName ? (
-                      <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#1d1d1f] block">
-                        <Building2 className="h-3 w-3 text-[#e63462]" />
-                        {r.brandName}
-                      </span>
-                    ) : (
-                      <span className="text-[12px] text-[#86868b]">Bağımsız Mekan</span>
-                    )}
-                    <span className="text-[11px] text-[#86868b]">
+                    <div className="flex items-center gap-1.5">
+                      <Link
+                        to={`/dashboard/restaurants/${r.id}`}
+                        className="font-semibold text-[#1d1d1f] hover:text-[#e63462]"
+                      >
+                        {r.name}
+                      </Link>
+                      {r.brandName && (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-[#e63462]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#e63462]">
+                          <Building2 className="h-2.5 w-2.5" />
+                          {r.brandName}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-[#86868b] block">
+                      Başlangıç: {formatPeriodLong(r.billingStartPeriod)} •{" "}
                       {r.branchType === "franchise"
-                        ? "Franchise Şubesi"
+                        ? "Franchise"
                         : r.branchType === "company_owned"
-                          ? "Merkez / Özmal Şube"
-                          : "Tekil İşletme"}
+                          ? "Merkez Şube"
+                          : "Bağımsız"}
                     </span>
                   </td>
+
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
                       <input
@@ -211,87 +203,149 @@ export function RecordPaymentModal({
                         step="0.01"
                         value={feeDrafts[r.id] ?? String(r.monthlyFee ?? 0)}
                         onChange={(e) => onFeeDraftChange(r.id, e.target.value)}
-                        className="h-8 w-28 rounded-lg border border-[#d1d1d6] bg-[#f5f5f7] px-2.5 text-[12px] font-semibold text-[#1d1d1f] outline-none focus:border-[#e63462]"
+                        className="h-8 w-24 rounded-lg border border-[#d1d1d6] bg-[#f5f5f7] px-2.5 text-[12px] font-semibold text-[#1d1d1f] outline-none focus:border-[#e63462] tabular-nums"
                       />
                       <button
                         type="button"
                         disabled={isBusy}
                         onClick={() => onSaveMonthlyFee(r)}
                         className="h-8 rounded-lg border border-[#d1d1d6] bg-white px-2.5 text-[11px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] disabled:opacity-50"
-                        title="Aylık Ücreti Kaydet"
                       >
                         Kaydet
                       </button>
                     </div>
                   </td>
+
                   <td className="px-4 py-3">
-                    {isSusp ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-md bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-600">
-                        <Ban className="h-3.5 w-3.5" />
-                        Ödeme Alınmadı • Erişim Durduruldu
-                      </span>
-                    ) : r.billingStatus === "pending" || r.billingStatus === "overdue" ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
-                        <Clock className="h-3.5 w-3.5" />
-                        {r.billingStatus === "overdue"
-                          ? "Ödeme Gecikti"
-                          : "Ödeme Bekleniyor (25-30)"}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        Ödeme Alındı • Erişim Açık
-                      </span>
-                    )}
+                    <div className="flex flex-col items-start gap-1">
+                      {(periodCell.state === "paid" || periodCell.state === "prepaid") && (
+                        <>
+                          <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            {periodCell.state === "prepaid"
+                              ? "Peşin Ödendi"
+                              : "Ödendi"}
+                          </span>
+                          {periodCell.payment && (
+                            <span className="text-[11px] text-[#636366]">
+                              Tarih: {formatIstanbulDate(periodCell.payment.paidAt)} •{" "}
+                              {PAYMENT_METHOD_LABELS[periodCell.payment.paymentMethod] ??
+                                "Havale / EFT"}
+                            </span>
+                          )}
+                        </>
+                      )}
+
+                      {periodCell.state === "overdue" && (
+                        <span className="inline-flex items-center gap-1.5 rounded-md bg-red-50 border border-red-200 px-2.5 py-1 text-[11px] font-semibold text-red-700">
+                          <AlertCircle className="h-3.5 w-3.5" />
+                          Ödeme Gecikti ({formatPeriodShort(selectedPeriod)})
+                        </span>
+                      )}
+
+                      {periodCell.state === "pending" && (
+                        <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1 text-[11px] font-semibold text-amber-800">
+                          <Clock className="h-3.5 w-3.5" />
+                          Tahsilat Bekliyor ({formatPeriodShort(selectedPeriod)})
+                        </span>
+                      )}
+
+                      {periodCell.state === "future" && (
+                        <span className="inline-flex items-center gap-1.5 rounded-md bg-[#f5f5f7] px-2.5 py-1 text-[11px] font-medium text-[#636366]">
+                          <Clock className="h-3.5 w-3.5" />
+                          Gelecek Dönem (Henüz Ödenmedi)
+                        </span>
+                      )}
+
+                      {(periodCell.state === "before_start" ||
+                        periodCell.state === "exempt") && (
+                        <span className="inline-flex items-center rounded-md bg-[#f5f5f7] px-2.5 py-1 text-[11px] text-[#86868b]">
+                          {periodCell.state === "exempt"
+                            ? "Ücretsiz / Pasif"
+                            : "Abonelik Öncesi"}
+                        </span>
+                      )}
+
+                      {isSusp && (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                          <Ban className="h-3 w-3" />
+                          Sistem Erişimi Durduruldu
+                        </span>
+                      )}
+                    </div>
                   </td>
-                  <td className="px-4 py-3 text-[12px] text-[#636366]">
-                    {r.lastPaymentDate ? (
-                      <div>
-                        <p className="text-[#1d1d1f] font-medium">
-                          {formatIstanbulDate(r.lastPaymentDate)}
+
+                  <td className="px-4 py-3 text-[12px]">
+                    {overduePeriods.length > 0 ? (
+                      <div className="text-red-700">
+                        <p className="font-semibold">
+                          {overduePeriods.length} Geçmiş Dönem Ödenmedi
                         </p>
-                        {r.lastPaidPeriod && (
-                          <p className="text-[11px] text-[#86868b]">
-                            Dönem: {r.lastPaidPeriod}
-                          </p>
-                        )}
+                        <p className="text-[11px] text-red-600">
+                          {overduePeriods.map(formatPeriodShort).join(", ")}
+                        </p>
+                      </div>
+                    ) : r.paidThroughPeriod && r.paidThroughPeriod >= currentPeriod ? (
+                      <div>
+                        <p className="font-semibold text-emerald-700">
+                          {formatPeriodLong(r.paidThroughPeriod)} sonuna kadar ödendi
+                        </p>
+                        <p className="text-[11px] text-[#86868b]">
+                          {hasPrepaidFuture
+                            ? `+${r.prepaidFuturePeriods?.length} ileri ay peşin kapandı`
+                            : `Son tahsilat: ${formatIstanbulDate(r.lastPaymentDate)}`}
+                        </p>
+                      </div>
+                    ) : r.lastPaymentDate ? (
+                      <div>
+                        <p className="font-medium text-[#1d1d1f]">
+                          Son Ödenen: {formatPeriodLong(r.paidThroughPeriod)}
+                        </p>
+                        <p className="text-[11px] text-[#86868b]">
+                          Son tahsilat: {formatIstanbulDate(r.lastPaymentDate)}
+                        </p>
                       </div>
                     ) : (
-                      "—"
+                      <span className="text-[12px] text-[#86868b]">
+                        Henüz tahsilat kaydı yok
+                      </span>
                     )}
                   </td>
+
                   <td className="px-4 py-3 text-right">
                     <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
                       <button
                         type="button"
                         disabled={isBusy}
-                        onClick={() => onMarkPaid(r)}
-                        className="inline-flex items-center gap-1 rounded-lg bg-[#34c759] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-[#2db84e] disabled:opacity-50"
+                        onClick={() => onOpenNewPayment(r, preferredTargetPeriod)}
+                        className="inline-flex items-center gap-1 rounded-lg bg-[#34c759] px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-[#2db84e] disabled:opacity-50"
                       >
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        {isSusp ? "Ödeme Alındı (Erişimi Aç)" : "Ödeme Alındı"}
+                        <CreditCard className="h-3.5 w-3.5" />
+                        Tahsilat Al
                       </button>
+
                       <button
                         type="button"
                         disabled={isBusy}
-                        onClick={() => openPaymentDialog(r)}
+                        onClick={() => onOpenHistory(r)}
                         className="inline-flex items-center gap-1 rounded-lg border border-[#d1d1d6] bg-[#f5f5f7] px-2.5 py-1.5 text-[11px] font-medium text-[#1d1d1f] hover:bg-[#e8e8ed] disabled:opacity-50"
-                        title="Detaylı Tahsilat Kaydı & Geçmiş"
+                        title="Ay-Ay Çizelge & Geçmiş Tahsilatlar"
                       >
-                        <ReceiptText className="h-3.5 w-3.5 text-[#34c759]" />
-                        Geçmiş ({r.paymentHistory?.length ?? 0})
+                        <CalendarRange className="h-3.5 w-3.5 text-[#e63462]" />
+                        Dönemler ({r.paymentHistory?.length ?? 0})
                       </button>
-                      {!isSusp && r.billingStatus !== "pending" && (
+
+                      {isSusp ? (
                         <button
                           type="button"
                           disabled={isBusy}
-                          onClick={() => onMarkPending(r)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                          onClick={() => onUnsuspendAccess(r)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
                         >
-                          Bekliyor
+                          <Unlock className="h-3.5 w-3.5" />
+                          Erişimi Aç
                         </button>
-                      )}
-                      {!isSusp && (
+                      ) : (
                         <button
                           type="button"
                           disabled={isBusy}
@@ -299,7 +353,7 @@ export function RecordPaymentModal({
                           className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50"
                         >
                           <Ban className="h-3.5 w-3.5" />
-                          Erişimi Durdur
+                          Durdur
                         </button>
                       )}
                     </div>
@@ -307,152 +361,17 @@ export function RecordPaymentModal({
                 </tr>
               )
             })}
+
             {filteredRestaurants.length === 0 && (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-[13px] text-[#86868b]">
-                  Kriterlere uygun mekan bulunamadı.
+                <td colSpan={5} className="p-8 text-center text-[13px] text-[#86868b]">
+                  Seçilen filtreye uygun mekan bulunamadı.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
-
-      {detailRestaurant && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs"
-          onClick={() => setDetailRestaurantId(null)}
-        >
-          <div
-            className="w-full max-w-lg rounded-2xl border border-[#e5e5ea] bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-[#f0f0f0] pb-3.5">
-              <div>
-                <h3 className="text-[15px] font-semibold text-[#1d1d1f]">
-                  {detailRestaurant.name} — Tahsilat Kaydı &amp; Geçmiş
-                </h3>
-                <p className="text-[12px] text-[#86868b]">
-                  Aylık Ücret: {formatMoney(detailRestaurant.monthlyFee ?? 0)}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setDetailRestaurantId(null)}
-                className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#f5f5f7] hover:bg-[#e8e8ed]"
-              >
-                <X className="h-4 w-4 text-[#86868b]" />
-              </button>
-            </div>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                const amt = Math.max(0, fromMinorUnits(toMinorUnits(payAmount)))
-                onMarkPaid(detailRestaurant, {
-                  amount: amt,
-                  period: payPeriod.trim() || undefined,
-                  note: payNote.trim() || undefined,
-                })
-                setDetailRestaurantId(null)
-              }}
-              className="mt-4 space-y-3 border-b border-[#f0f0f0] pb-4"
-            >
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-[#86868b]">
-                Yeni Tahsilat İşle
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                    Tahsilat Tutarı (₺) *
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={payAmount}
-                    onChange={(e) => setPayAmount(e.target.value)}
-                    className="h-10 w-full rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3 text-[13px] font-semibold text-[#1d1d1f] outline-none focus:border-[#e63462]"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                    Dönem (YYYY-AA) *
-                  </label>
-                  <input
-                    type="text"
-                    value={payPeriod}
-                    onChange={(e) => setPayPeriod(e.target.value)}
-                    placeholder="2026-11"
-                    className="h-10 w-full rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3 font-mono text-[13px] text-[#1d1d1f] outline-none focus:border-[#e63462]"
-                    required
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                  Dekont / Açıklama Notu
-                </label>
-                <input
-                  type="text"
-                  value={payNote}
-                  onChange={(e) => setPayNote(e.target.value)}
-                  placeholder="Örn: Havale / EFT dekontu onaylandı"
-                  className="h-10 w-full rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3 text-[13px] text-[#1d1d1f] outline-none focus:border-[#e63462]"
-                />
-              </div>
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={busyRestId === detailRestaurant.id}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#34c759] px-4 text-[12px] font-semibold text-white hover:bg-[#2db84e] disabled:opacity-50"
-                >
-                  <CheckCircle2 className="h-4 w-4" />
-                  Ödemeyi Kaydet &amp; Erişimi Aç
-                </button>
-              </div>
-            </form>
-
-            <div className="mt-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-[#86868b] mb-2">
-                Tahsilat Geçmişi ({detailRestaurant.paymentHistory?.length ?? 0})
-              </p>
-              {!detailRestaurant.paymentHistory ||
-              detailRestaurant.paymentHistory.length === 0 ? (
-                <p className="py-4 text-center text-[12px] text-[#86868b]">
-                  Henüz kayıtlı tahsilat geçmişi bulunmuyor.
-                </p>
-              ) : (
-                <div className="max-h-56 overflow-y-auto divide-y divide-[#f0f0f0] rounded-xl border border-[#e5e5ea] bg-[#f9f9fb] px-3">
-                  {detailRestaurant.paymentHistory.map((item) => (
-                    <div
-                      key={item.id}
-                      className="py-2.5 flex items-center justify-between gap-3 text-[12px]"
-                    >
-                      <div>
-                        <p className="font-semibold text-[#1d1d1f]">
-                          Dönem: <span className="font-mono">{item.period}</span>
-                        </p>
-                        <p className="text-[11px] text-[#86868b]">
-                          {formatIstanbulDateTime(item.paidAt)}
-                          {item.recordedBy ? ` • ${item.recordedBy}` : ""}
-                        </p>
-                        {item.note && (
-                          <p className="text-[11px] text-[#636366] mt-0.5">{item.note}</p>
-                        )}
-                      </div>
-                      <span className="font-semibold text-emerald-700 shrink-0 tabular-nums">
-                        {formatMoney(item.amount, true)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

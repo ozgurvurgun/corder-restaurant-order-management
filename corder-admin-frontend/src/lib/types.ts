@@ -7,15 +7,27 @@ export interface PlatformAdmin {
 
 export type RestaurantBranchType = "independent" | "company_owned" | "franchise"
 export type RestaurantBillingStatus = "paid" | "pending" | "overdue" | "suspended"
+export type SubscriptionPaymentMethod =
+  | "bank_transfer"
+  | "cash"
+  | "credit_card"
+  | "other"
 export type BossTier = "brand_owner" | "franchise_owner" | "regional_manager"
 
 export interface RestaurantPaymentRecord {
   id: string
+  restaurantId?: string
   period: string
+  periods: string[]
+  periodStart: string
+  periodEnd: string
+  monthsCount: number
   amount: number
   paidAt: string
+  paymentMethod: SubscriptionPaymentMethod
   note?: string | null
   recordedBy?: string | null
+  createdAt?: string
 }
 
 export interface RestaurantBossSummary {
@@ -46,7 +58,17 @@ export interface Restaurant {
   franchiseeCompanyName?: string | null
   royaltyRate?: number
   monthlyFee?: number
+  billingStartPeriod?: string
   billingStatus?: RestaurantBillingStatus
+  currentPeriod?: string
+  isCurrentPeriodPaid?: boolean
+  paidPeriods?: string[]
+  paidThroughPeriod?: string | null
+  prepaidFuturePeriods?: string[]
+  overduePeriods?: string[]
+  duePeriods?: string[]
+  nextUnpaidPeriod?: string
+  totalCollectedAmount?: number
   isAccessSuspended?: boolean
   suspensionReason?: string | null
   suspendedAt?: string | null

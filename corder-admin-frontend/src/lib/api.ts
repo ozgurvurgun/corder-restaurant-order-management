@@ -5,6 +5,7 @@ import type {
   RestaurantBossSummary,
   RestaurantBranchType,
   RestaurantPaymentRecord,
+  SubscriptionPaymentMethod,
 } from "./types"
 
 const RAW_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:4000"
@@ -178,7 +179,17 @@ export interface PlatformRestaurantDto {
   franchiseeCompanyName?: string | null
   royaltyRate?: number
   monthlyFee?: number
+  billingStartPeriod?: string
   billingStatus?: RestaurantBillingStatus
+  currentPeriod?: string
+  isCurrentPeriodPaid?: boolean
+  paidPeriods?: string[]
+  paidThroughPeriod?: string | null
+  prepaidFuturePeriods?: string[]
+  overduePeriods?: string[]
+  duePeriods?: string[]
+  nextUnpaidPeriod?: string
+  totalCollectedAmount?: number
   isAccessSuspended?: boolean
   suspensionReason?: string | null
   suspendedAt?: string | null
@@ -191,6 +202,26 @@ export interface PlatformRestaurantDto {
   terminalEmail?: string | null
   printAgentUsername?: string | null
   createdAt: string
+}
+
+export interface RecordPaymentPayload {
+  amount?: number
+  periods?: string[]
+  startPeriod?: string
+  monthsCount?: number
+  period?: string
+  paidAt?: string
+  paymentMethod?: SubscriptionPaymentMethod
+  note?: string | null
+  reopenAccess?: boolean
+}
+
+export interface UpdatePaymentPayload {
+  amount?: number
+  periods?: string[]
+  paidAt?: string
+  paymentMethod?: SubscriptionPaymentMethod
+  note?: string | null
 }
 
 export const platform = {
@@ -235,7 +266,10 @@ export const platform = {
       franchiseeCompanyName?: string | null
       royaltyRate?: number
       monthlyFee?: number
-      billingStatus?: RestaurantBillingStatus
+      billingStartPeriod?: string
+      recordInitialPayment?: boolean
+      initialPaidMonths?: number
+      initialPaymentMethod?: SubscriptionPaymentMethod
       isAccessSuspended?: boolean
       billingNotes?: string | null
       terminalEmail?: string
@@ -268,7 +302,7 @@ export const platform = {
         franchiseeCompanyName?: string | null
         royaltyRate?: number
         monthlyFee?: number
-        billingStatus?: RestaurantBillingStatus
+        billingStartPeriod?: string
         isAccessSuspended?: boolean
         billingNotes?: string | null
         terminalEmail?: string | null
@@ -282,32 +316,33 @@ export const platform = {
         body: JSON.stringify(body),
       })
     },
-    async updateBilling(
-      id: string,
-      body: {
-        billingStatus: RestaurantBillingStatus
-        monthlyFee?: number
-        period?: string
-        note?: string | null
-      }
-    ) {
+    async recordPayment(id: string, body: RecordPaymentPayload) {
       return platformFetch<PlatformRestaurantDto>(
-        `/platform/restaurants/${id}/billing`,
+        `/platform/restaurants/${id}/billing/payments`,
+        { method: "POST", body: JSON.stringify(body) }
+      )
+    },
+    async updatePayment(id: string, paymentId: string, body: UpdatePaymentPayload) {
+      return platformFetch<PlatformRestaurantDto>(
+        `/platform/restaurants/${id}/billing/payments/${paymentId}`,
         { method: "PUT", body: JSON.stringify(body) }
       )
     },
-    async markPaid(
-      id: string,
-      body?: { amount?: number; period?: string; note?: string }
-    ) {
+    async deletePayment(id: string, paymentId: string) {
       return platformFetch<PlatformRestaurantDto>(
-        `/platform/restaurants/${id}/billing/mark-paid`,
-        { method: "POST", body: JSON.stringify(body ?? {}) }
+        `/platform/restaurants/${id}/billing/payments/${paymentId}`,
+        { method: "DELETE" }
       )
     },
     async suspendUnpaid(id: string, body?: { note?: string }) {
       return platformFetch<PlatformRestaurantDto>(
         `/platform/restaurants/${id}/billing/suspend-unpaid`,
+        { method: "POST", body: JSON.stringify(body ?? {}) }
+      )
+    },
+    async unsuspendAccess(id: string, body?: { note?: string }) {
+      return platformFetch<PlatformRestaurantDto>(
+        `/platform/restaurants/${id}/billing/unsuspend`,
         { method: "POST", body: JSON.stringify(body ?? {}) }
       )
     },
@@ -325,14 +360,8 @@ export const platform = {
         body: JSON.stringify(body),
       })
     },
-    async startCollectionCycle(period?: string) {
-      return platformFetch<{ period: string; updatedCount: number }>(
-        "/platform/billing/start-collection-cycle",
-        { method: "POST", body: JSON.stringify({ ...(period ? { period } : {}) }) }
-      )
-    },
     async suspendAllUnpaid() {
-      return platformFetch<{ suspendedCount: number }>(
+      return platformFetch<{ suspendedCount: number; deferredOpenShiftCount?: number }>(
         "/platform/billing/suspend-all-unpaid",
         { method: "POST", body: JSON.stringify({}) }
       )

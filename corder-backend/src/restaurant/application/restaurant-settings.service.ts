@@ -6,6 +6,11 @@ import {
   RestaurantPaymentRecord,
 } from '../../platform/domain/restaurant.entity';
 import { PlatformBillingConfigEntity } from '../../platform/domain/platform-billing-config.entity';
+import { RestaurantSubscriptionPaymentEntity } from '../../platform/domain/restaurant-subscription-payment.entity';
+import {
+  computeRestaurantBillingSummary,
+  toPaymentRecordDto,
+} from '../../platform/domain/subscription-billing.policy';
 
 export interface RestaurantSettingsDto {
   name: string;
@@ -26,7 +31,16 @@ export interface MerchantBillingInfoDto {
   brandName: string | null;
   branchType: string;
   monthlyFee: number;
+  billingStartPeriod: string;
   billingStatus: string;
+  currentPeriod: string;
+  isCurrentPeriodPaid: boolean;
+  paidPeriods: string[];
+  paidThroughPeriod: string | null;
+  prepaidFuturePeriods: string[];
+  overduePeriods: string[];
+  duePeriods: string[];
+  nextUnpaidPeriod: string;
   isAccessSuspended: boolean;
   suspensionReason: string | null;
   lastPaymentDate: string | null;
@@ -46,6 +60,17 @@ export interface MerchantBillingInfoDto {
   };
 }
 
+function formatTurkishPeriodLabel(period: string): string {
+  const [y, m] = period.split('-');
+  const d = new Date(Date.UTC(Number(y), Number(m) - 1, 15));
+  if (Number.isNaN(d.getTime())) return period;
+  return new Intl.DateTimeFormat('tr-TR', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(d);
+}
+
 @Injectable()
 export class RestaurantSettingsService {
   constructor(
@@ -53,6 +78,8 @@ export class RestaurantSettingsService {
     private readonly repo: Repository<RestaurantEntity>,
     @InjectRepository(PlatformBillingConfigEntity)
     private readonly billingConfigRepo: Repository<PlatformBillingConfigEntity>,
+    @InjectRepository(RestaurantSubscriptionPaymentEntity)
+    private readonly paymentRepo: Repository<RestaurantSubscriptionPaymentEntity>,
   ) {}
 
   async get(restaurantId: string): Promise<RestaurantSettingsDto> {
@@ -74,14 +101,20 @@ export class RestaurantSettingsService {
   }
 
   async getBillingInfo(restaurantId: string): Promise<MerchantBillingInfoDto> {
-    const r = await this.repo.findOne({ where: { id: restaurantId } });
+    const [r, configs, payments] = await Promise.all([
+      this.repo.findOne({ where: { id: restaurantId } }),
+      this.billingConfigRepo.find({
+        order: { updatedAt: 'DESC' },
+        take: 1,
+      }),
+      this.paymentRepo.find({
+        where: { restaurantId },
+        order: { paidAt: 'DESC', createdAt: 'DESC' },
+      }),
+    ]);
     if (!r) {
       throw new NotFoundException('Restaurant not found');
     }
-    const configs = await this.billingConfigRepo.find({
-      order: { updatedAt: 'DESC' },
-      take: 1,
-    });
     const cfg = configs[0] ?? {
       receiverName: 'Corder Software and Technology Inc.',
       iban: 'TR33 0006 1005 1978 6457 8413 26',
@@ -91,18 +124,24 @@ export class RestaurantSettingsService {
       supportPhone: '0850 300 00 00',
       supportEmail: 'finance@corder.com',
       paymentInstructions:
-        'Monthly subscription payments are collected between the 25th and 30th of each month. Please include your business name in the wire transfer note.',
+        'Aylık abonelik ödemeleri her ayın 25 ile 30\'u arasında tahsil edilir. Havale açıklamasına işletme adını ekleyiniz.',
     };
 
-    const parts = new Intl.DateTimeFormat('en-GB', {
-      timeZone: 'Europe/Istanbul',
-      month: '2-digit',
-      year: 'numeric',
-    }).formatToParts(new Date());
-    const month = parts.find((p) => p.type === 'month')?.value ?? '01';
-    const year = parts.find((p) => p.type === 'year')?.value ?? '2026';
-    const periodLabel = `${month}/${year}`;
-    const suggestedTransferNote = `${r.name} - ${periodLabel} Monthly Subscription Fee`;
+    const summary = computeRestaurantBillingSummary({
+      status: r.status,
+      monthlyFee: r.monthlyFee,
+      billingStartPeriod: r.billingStartPeriod,
+      createdAt: r.createdAt,
+      isAccessSuspended: r.isAccessSuspended,
+      payments,
+      collectionEndDay: cfg.collectionEndDay ?? 30,
+    });
+
+    const targetPeriodText =
+      summary.duePeriods.length > 1
+        ? `${formatTurkishPeriodLabel(summary.duePeriods[0])} - ${formatTurkishPeriodLabel(summary.duePeriods[summary.duePeriods.length - 1])}`
+        : formatTurkishPeriodLabel(summary.nextUnpaidPeriod);
+    const suggestedTransferNote = `${r.name} - ${targetPeriodText} Abonelik Ücreti`;
 
     return {
       restaurantId: r.id,
@@ -111,13 +150,24 @@ export class RestaurantSettingsService {
       brandName: r.brandName ?? null,
       branchType: r.branchType || 'independent',
       monthlyFee: Number(r.monthlyFee || 0),
-      billingStatus: r.billingStatus || 'paid',
+      billingStartPeriod: summary.billingStartPeriod,
+      billingStatus: summary.billingStatus,
+      currentPeriod: summary.currentPeriod,
+      isCurrentPeriodPaid: summary.isCurrentPeriodPaid,
+      paidPeriods: summary.paidPeriods,
+      paidThroughPeriod: summary.paidThroughPeriod,
+      prepaidFuturePeriods: summary.prepaidFuturePeriods,
+      overduePeriods: summary.overduePeriods,
+      duePeriods: summary.duePeriods,
+      nextUnpaidPeriod: summary.nextUnpaidPeriod,
       isAccessSuspended: Boolean(r.isAccessSuspended),
       suspensionReason: r.suspensionReason ?? null,
-      lastPaymentDate: r.lastPaymentDate ? r.lastPaymentDate.toISOString() : null,
-      lastPaidPeriod: r.lastPaidPeriod ?? null,
+      lastPaymentDate: summary.lastPaymentDate
+        ? summary.lastPaymentDate.toISOString()
+        : null,
+      lastPaidPeriod: summary.lastPaidPeriod,
       billingNotes: r.billingNotes ?? null,
-      paymentHistory: Array.isArray(r.paymentHistory) ? r.paymentHistory : [],
+      paymentHistory: payments.map(toPaymentRecordDto),
       paymentAccount: {
         receiverName: cfg.receiverName,
         iban: cfg.iban,

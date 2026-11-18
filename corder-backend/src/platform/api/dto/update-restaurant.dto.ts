@@ -8,6 +8,7 @@ import {
   Min,
   Max,
   IsBoolean,
+  Matches,
 } from 'class-validator';
 
 export class UpdateRestaurantDto {
@@ -85,8 +86,10 @@ export class UpdateRestaurantDto {
   monthlyFee?: number;
 
   @IsOptional()
-  @IsIn(['paid', 'pending', 'overdue', 'suspended'])
-  billingStatus?: 'paid' | 'pending' | 'overdue' | 'suspended';
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, {
+    message: 'billingStartPeriod must be in YYYY-MM format',
+  })
+  billingStartPeriod?: string;
 
   @IsOptional()
   @IsBoolean()

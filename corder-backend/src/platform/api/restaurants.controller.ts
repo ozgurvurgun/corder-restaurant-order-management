@@ -7,18 +7,19 @@ import {
   ParseUUIDPipe,
   Post,
   Put,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { RestaurantService } from '../application/restaurant.service';
 import { PlatformBillingService } from '../application/platform-billing.service';
+import { PlatformAdminEntity } from '../domain/platform-admin.entity';
 import { CreateRestaurantDto } from './dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto';
 import {
   RecordRestaurantPaymentDto,
-  StartCollectionCycleDto,
   SuspendRestaurantBillingDto,
   UpdatePlatformBillingConfigDto,
-  UpdateRestaurantBillingStatusDto,
+  UpdateRestaurantPaymentDto,
 } from './dto/platform-billing.dto';
 import { PlatformJwtGuard } from '../infrastructure/platform-jwt.guard';
 
@@ -27,6 +28,10 @@ function sanitizeRestaurant<
 >(r: T) {
   const { terminalPasswordHash, printAgentPasswordHash, ...rest } = r;
   return rest;
+}
+
+function resolveActorName(req?: { user?: Partial<PlatformAdminEntity> }): string {
+  return req?.user?.name?.trim() || req?.user?.email?.trim() || 'Platform Admin';
 }
 
 @Controller('platform/restaurants')
@@ -50,8 +55,11 @@ export class RestaurantsController {
   }
 
   @Post()
-  async create(@Body() dto: CreateRestaurantDto) {
-    const created = await this.service.create(dto);
+  async create(
+    @Body() dto: CreateRestaurantDto,
+    @Req() req: { user?: Partial<PlatformAdminEntity> },
+  ) {
+    const created = await this.service.create(dto, resolveActorName(req));
     return sanitizeRestaurant(created);
   }
 
@@ -64,12 +72,17 @@ export class RestaurantsController {
     return sanitizeRestaurant(updated);
   }
 
-  @Put(':id/billing')
-  async updateBillingStatus(
+  @Post(':id/billing/payments')
+  async recordPayment(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: UpdateRestaurantBillingStatusDto,
+    @Body() dto: RecordRestaurantPaymentDto,
+    @Req() req: { user?: Partial<PlatformAdminEntity> },
   ) {
-    const updated = await this.billingService.updateBillingStatus(id, dto);
+    const updated = await this.billingService.recordPaymentReceived(
+      id,
+      dto,
+      resolveActorName(req),
+    );
     return sanitizeRestaurant(updated);
   }
 
@@ -77,8 +90,38 @@ export class RestaurantsController {
   async markPaid(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: RecordRestaurantPaymentDto,
+    @Req() req: { user?: Partial<PlatformAdminEntity> },
   ) {
-    const updated = await this.billingService.recordPaymentReceived(id, dto);
+    const updated = await this.billingService.recordPaymentReceived(
+      id,
+      dto,
+      resolveActorName(req),
+    );
+    return sanitizeRestaurant(updated);
+  }
+
+  @Put(':id/billing/payments/:paymentId')
+  async updatePayment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('paymentId', ParseUUIDPipe) paymentId: string,
+    @Body() dto: UpdateRestaurantPaymentDto,
+    @Req() req: { user?: Partial<PlatformAdminEntity> },
+  ) {
+    const updated = await this.billingService.updatePaymentRecord(
+      id,
+      paymentId,
+      dto,
+      resolveActorName(req),
+    );
+    return sanitizeRestaurant(updated);
+  }
+
+  @Delete(':id/billing/payments/:paymentId')
+  async deletePayment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('paymentId', ParseUUIDPipe) paymentId: string,
+  ) {
+    const updated = await this.billingService.deletePaymentRecord(id, paymentId);
     return sanitizeRestaurant(updated);
   }
 
@@ -88,6 +131,15 @@ export class RestaurantsController {
     @Body() dto: SuspendRestaurantBillingDto,
   ) {
     const updated = await this.billingService.suspendForNonPayment(id, dto?.note);
+    return sanitizeRestaurant(updated);
+  }
+
+  @Post(':id/billing/unsuspend')
+  async unsuspendAccess(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SuspendRestaurantBillingDto,
+  ) {
+    const updated = await this.billingService.unsuspendAccess(id, dto?.note);
     return sanitizeRestaurant(updated);
   }
 
@@ -110,11 +162,6 @@ export class PlatformBillingController {
   @Put('config')
   updateConfig(@Body() dto: UpdatePlatformBillingConfigDto) {
     return this.billingService.updateBillingConfig(dto);
-  }
-
-  @Post('start-collection-cycle')
-  startCollectionCycle(@Body() dto: StartCollectionCycleDto) {
-    return this.billingService.startMonthlyCollectionCycle(dto?.period);
   }
 
   @Post('suspend-all-unpaid')

@@ -1,18 +1,26 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { useAdminStore } from "@/lib/store"
-import { formatMoney } from "@/lib/money"
+import type { Restaurant, SubscriptionPaymentMethod } from "@/lib/types"
 import {
-  Plus,
-  Pencil,
-  CheckCircle2,
+  formatMoney,
+  formatPeriodLong,
+  formatPeriodsSummary,
+} from "@/lib/money"
+import {
+  AlertCircle,
   Ban,
-  Clock,
   Building2,
+  CheckCircle2,
+  Clock,
   CreditCard,
-  Search,
+  Pencil,
+  Plus,
   RefreshCw,
+  Search,
+  Unlock,
 } from "lucide-react"
+import { PaymentFormModal } from "@/components/billing/PaymentFormModal"
 
 export function RestaurantsPage() {
   const {
@@ -20,12 +28,14 @@ export function RestaurantsPage() {
     restaurantsLoading,
     restaurantsError,
     loadRestaurants,
-    markRestaurantPaid,
+    recordRestaurantPayment,
     suspendRestaurantUnpaid,
+    unsuspendRestaurantAccess,
   } = useAdminStore()
 
   const [searchQuery, setSearchQuery] = useState("")
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [payModalRestId, setPayModalRestId] = useState<string | null>(null)
   const [notice, setNotice] = useState<{ type: "ok" | "err"; text: string } | null>(
     null
   )
@@ -41,23 +51,9 @@ export function RestaurantsPage() {
     }, 4000)
   }
 
-  const handleQuickMarkPaid = async (id: string, name: string) => {
-    setBusyId(id)
-    try {
-      await markRestaurantPaid(id)
-      showNotice(`${name} için ödeme alındı işaretlendi ve erişim açıldı.`)
-    } catch (err) {
-      showNotice(err instanceof Error ? err.message : "İşlem başarısız", "err")
-    } finally {
-      setBusyId(null)
-    }
-  }
-
   const handleQuickSuspend = async (id: string, name: string) => {
     if (
-      !confirm(
-        `${name} mekanının ödeme alınmadığı için erişimini durdurmak istiyor musunuz?`
-      )
+      !confirm(`${name} mekanının sistem erişimini durdurmak istiyor musunuz?`)
     ) {
       return
     }
@@ -67,6 +63,18 @@ export function RestaurantsPage() {
       showNotice(`${name} mekanının sistem erişimi durduruldu.`)
     } catch (err) {
       showNotice(err instanceof Error ? err.message : "Erişim durdurulamadı", "err")
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const handleQuickUnsuspend = async (id: string, name: string) => {
+    setBusyId(id)
+    try {
+      await unsuspendRestaurantAccess(id)
+      showNotice(`${name} mekanının sistem erişimi yeniden açıldı.`)
+    } catch (err) {
+      showNotice(err instanceof Error ? err.message : "Erişim açılamadı", "err")
     } finally {
       setBusyId(null)
     }
@@ -101,6 +109,10 @@ export function RestaurantsPage() {
     )
   })
 
+  const payModalRestaurant: Restaurant | null = payModalRestId
+    ? restaurants.find((r) => r.id === payModalRestId) ?? null
+    : null
+
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-[#e5e5ea] bg-white p-4 flex flex-wrap items-center justify-between gap-3">
@@ -109,7 +121,7 @@ export function RestaurantsPage() {
             Restoranlar, Şubeler &amp; Franchise Ağı ({filtered.length})
           </h2>
           <p className="text-[12px] text-[#86868b] mt-0.5">
-            Şube/franchise yapılarını, üst marka ve şube Boss atamalarını, aylık abonelik ücretlerini ve erişim durumlarını yönetin.
+            Şube/franchise yapılarını, Boss atamalarını, abonelik dönemlerini ve erişim durumlarını yönetin.
           </p>
         </div>
 
@@ -129,7 +141,7 @@ export function RestaurantsPage() {
             className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3.5 text-[12px] font-medium text-[#1d1d1f] hover:bg-[#e8e8ed]"
           >
             <CreditCard className="h-3.5 w-3.5 text-[#e63462]" />
-            Tahsilat &amp; Ücretler (25-30)
+            Dönemsel Tahsilat &amp; Çizelge
           </Link>
           <Link
             to="/dashboard/restaurants/new"
@@ -176,7 +188,7 @@ export function RestaurantsPage() {
                   <th className="px-4 py-3">Marka / Model</th>
                   <th className="px-4 py-3">Boss Hiyerarşisi</th>
                   <th className="px-4 py-3">Aylık Ücret</th>
-                  <th className="px-4 py-3">Ödeme &amp; Erişim (25-30)</th>
+                  <th className="px-4 py-3">Abonelik &amp; Kapsam</th>
                   <th className="px-4 py-3 text-right">Hızlı İşlem</th>
                 </tr>
               </thead>
@@ -185,6 +197,7 @@ export function RestaurantsPage() {
                   const isSusp = Boolean(
                     r.isAccessSuspended || r.billingStatus === "suspended"
                   )
+                  const overdueCount = r.overduePeriods?.length ?? 0
                   const isBusy = busyId === r.id
                   return (
                     <tr
@@ -264,30 +277,49 @@ export function RestaurantsPage() {
                             <Ban className="h-3 w-3" />
                             Erişim Durduruldu
                           </span>
-                        ) : r.billingStatus === "pending" ||
-                          r.billingStatus === "overdue" ? (
+                        ) : overdueCount > 0 ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700">
+                            <AlertCircle className="h-3 w-3" />
+                            {overdueCount} Dönem Gecikti
+                          </span>
+                        ) : r.billingStatus === "pending" ? (
                           <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
                             <Clock className="h-3 w-3" />
-                            Ödeme Bekliyor
+                            Bu Ay Bekliyor
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
-                            <CheckCircle2 className="h-3 w-3" />
-                            Ödendi • Aktif
-                          </span>
+                          <div>
+                            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
+                              <CheckCircle2 className="h-3 w-3" />
+                              Ödendi • Aktif
+                            </span>
+                            {r.paidThroughPeriod && (
+                              <span className="block text-[10px] text-[#86868b] mt-0.5">
+                                {formatPeriodLong(r.paidThroughPeriod)} sonuna kadar
+                              </span>
+                            )}
+                          </div>
                         )}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="inline-flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={() => setPayModalRestId(r.id)}
+                            className="rounded-lg bg-[#34c759] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-[#2db84e] disabled:opacity-50"
+                          >
+                            Tahsilat Al
+                          </button>
                           {isSusp ? (
                             <button
                               type="button"
                               disabled={isBusy}
-                              onClick={() => void handleQuickMarkPaid(r.id, r.name)}
-                              className="rounded-lg bg-[#34c759] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-[#2db84e] disabled:opacity-50"
-                              title="Ödeme Alındı İşaretle ve Erişimi Aç"
+                              onClick={() => void handleQuickUnsuspend(r.id, r.name)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
                             >
-                              Ödeme Alındı (Aç)
+                              <Unlock className="h-3 w-3" />
+                              Aç
                             </button>
                           ) : (
                             <button
@@ -295,9 +327,8 @@ export function RestaurantsPage() {
                               disabled={isBusy}
                               onClick={() => void handleQuickSuspend(r.id, r.name)}
                               className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
-                              title="Ödeme Alınmadı — Erişimi Durdur"
                             >
-                              Erişimi Durdur
+                              Durdur
                             </button>
                           )}
                           <Link
@@ -324,6 +355,27 @@ export function RestaurantsPage() {
           </div>
         )}
       </div>
+
+      <PaymentFormModal
+        restaurant={payModalRestaurant}
+        onClose={() => setPayModalRestId(null)}
+        onSubmitNew={async (
+          rest,
+          payload: {
+            amount: number
+            periods: string[]
+            paidAt: string
+            paymentMethod: SubscriptionPaymentMethod
+            note: string | null
+            reopenAccess: boolean
+          }
+        ) => {
+          await recordRestaurantPayment(rest.id, payload)
+          showNotice(
+            `${rest.name} için ${formatPeriodsSummary(payload.periods)} (${formatMoney(payload.amount)}) tahsilatı kaydedildi.`
+          )
+        }}
+      />
     </div>
   )
 }
