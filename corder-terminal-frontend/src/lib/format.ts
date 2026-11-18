@@ -89,7 +89,7 @@ export function translateApiError(raw: unknown, fallback = "İşlem gerçekleşt
   }
   if (lower.includes("currently being served by")) {
     const match = trimmed.match(/served by\s+(.+)$/i)
-    const holder = match?.[1]?.trim() || "başka bir garson"
+    const holder = formatTitleCase(match?.[1]?.trim()) || "başka bir garson"
     return `Masa şu anda ${holder} tarafından kullanılıyor.`
   }
   if (lower.includes("out of stock") || lower.includes("not in stock") || lower.includes("stokta yok")) {

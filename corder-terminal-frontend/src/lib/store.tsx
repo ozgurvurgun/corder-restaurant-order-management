@@ -307,7 +307,13 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     }
     try {
       const res = await api.tables.sessionLock(token, tableId, force)
-      if (!res.ok) return { ok: false, holderName: res.holderName, canForceUnlock: res.canForceUnlock }
+      if (!res.ok) {
+        return {
+          ok: false,
+          holderName: res.holderName ? formatTitleCase(res.holderName) : undefined,
+          canForceUnlock: res.canForceUnlock,
+        }
+      }
       lockedTableIdRef.current = tableId
       pendingUnlockTableIdRef.current = tableId
       sessionStorage.setItem(LOCKED_TABLE_STORAGE_KEY, tableId)
