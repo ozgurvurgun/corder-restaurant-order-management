@@ -39,24 +39,10 @@ export class StandardizeCorderAppEmails1760000005000
       WHERE pa."id" = ranked."id"
     `);
 
-    // 2. Restaurants (email & terminal_email) -> <local>@<slug>.corder.app
+    // 2. Restaurants (terminal_email only) -> <local>@<slug>.corder.app
     await queryRunner.query(`
       UPDATE "restaurants" r
       SET
-        "email" = CASE
-          WHEN r."email" IS NOT NULL AND btrim(r."email") <> '' THEN
-            COALESCE(
-              NULLIF(
-                trim(both '.' from regexp_replace(
-                  translate(lower(split_part(r."email", '@', 1)), 'çğıöşüİI', 'cgiosuii'),
-                  '[^a-z0-9._+-]+', '', 'g'
-                )),
-                ''
-              ),
-              'info'
-            ) || '@' || r."slug" || '.corder.app'
-          ELSE r."email"
-        END,
         "terminal_email" = CASE
           WHEN r."terminal_email" IS NOT NULL AND btrim(r."terminal_email") <> '' THEN
             COALESCE(
@@ -190,3 +176,4 @@ export class StandardizeCorderAppEmails1760000005000
     await queryRunner.query(`SELECT 1`);
   }
 }
+

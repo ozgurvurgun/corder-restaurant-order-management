@@ -66,3 +66,4 @@ export function formatCanonicalCorderEmail(
   const domain = buildCorderEmailDomain(tenantSlugOrName)
   return `${localPart}@${domain}`
 }
+

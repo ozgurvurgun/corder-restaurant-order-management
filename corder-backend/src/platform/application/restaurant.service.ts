@@ -344,7 +344,7 @@ export class RestaurantService {
       this.repo.create({
         ...restDto,
         slug,
-        email: formatCanonicalCorderEmail(rawEmail, slug) ?? undefined,
+        email: rawEmail?.trim().toLowerCase() || undefined,
         brandName: brandName?.trim() || null,
         branchType: branchType ?? 'independent',
         franchiseeCompanyName: franchiseeCompanyName?.trim() || null,
@@ -391,7 +391,7 @@ export class RestaurantService {
     if (dto.address !== undefined) entity.address = dto.address;
     if (dto.phone !== undefined) entity.phone = dto.phone;
     if (dto.email !== undefined) {
-      entity.email = formatCanonicalCorderEmail(dto.email, entity.slug) ?? (null as unknown as string);
+      entity.email = dto.email?.trim().toLowerCase() || (null as unknown as string);
     }
     if (dto.status !== undefined) entity.status = dto.status;
     if (dto.brandName !== undefined) entity.brandName = dto.brandName?.trim() || null;
@@ -427,9 +427,6 @@ export class RestaurantService {
         const existing = await this.repo.findOne({ where: { slug } });
         if (existing) throw new ConflictException('Slug already in use');
         entity.slug = slug;
-        if (entity.email && dto.email === undefined) {
-          entity.email = formatCanonicalCorderEmail(entity.email, slug) ?? entity.email;
-        }
         if (entity.terminalEmail && dto.terminalEmail === undefined) {
           entity.terminalEmail = formatCanonicalCorderEmail(entity.terminalEmail, slug);
         }

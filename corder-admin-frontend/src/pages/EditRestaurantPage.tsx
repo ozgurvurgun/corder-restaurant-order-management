@@ -9,8 +9,7 @@ import { PrintAgentTokenSection } from "@/components/PrintAgentTokenSection"
 import { RestaurantBillingBanner, RestaurantBillingSection } from "@/components/RestaurantBillingSection"
 import { PaymentFormModal } from "@/components/billing/PaymentFormModal"
 import { RestaurantBillingHistoryModal } from "@/components/billing/RestaurantBillingHistoryModal"
-import { CorderEmailInput } from "@/components/CorderEmailInput"
-import { formatCanonicalCorderEmail, toCorderEmailTenantSlug } from "@/lib/corder-email"
+import { toCorderEmailTenantSlug } from "@/lib/corder-email"
 
 export function EditRestaurantPage() {
   const { id } = useParams<{ id: string }>()
@@ -134,7 +133,7 @@ export function EditRestaurantPage() {
       setError("Bu slug başka bir restoranda kullanılıyor.")
       return
     }
-    const cleanEmail = formatCanonicalCorderEmail(email, cleanSlug)
+    const cleanEmail = email.trim().toLowerCase()
     setSaveLoading(true)
     try {
       await updateRestaurant(id, {
@@ -339,13 +338,14 @@ export function EditRestaurantPage() {
               </div>
               <div>
                 <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                  E-posta
+                  Müşteri İletişim E-postası
                 </label>
-                <CorderEmailInput
+                <input
+                  type="email"
                   value={email}
-                  onChange={setEmail}
-                  tenantSlugOrName={slug || name}
-                  placeholder="iletisim"
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Örn: isletme@gmail.com"
+                  className={inputCls}
                   disabled={saveLoading}
                 />
               </div>

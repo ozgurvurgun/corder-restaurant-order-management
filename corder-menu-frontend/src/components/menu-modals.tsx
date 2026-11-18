@@ -7,7 +7,6 @@ import {
   Instagram,
   MessageCircle,
   Globe,
-  Mail,
 } from "lucide-react"
 import type { MenuProduct, MenuResponse } from "@/lib/api"
 
@@ -46,7 +45,6 @@ export function ContactPopover(props: {
       instagramHandle ||
       business.facebook ||
       business.website ||
-      business.email ||
       business.address
   )
 
@@ -135,20 +133,6 @@ export function ContactPopover(props: {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-stone-900">Web Sitesi</p>
                   <p className="text-xs text-stone-500 truncate">{business.website}</p>
-                </div>
-              </a>
-            )}
-            {business.email && (
-              <a
-                href={`mailto:${business.email}`}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-stone-50 transition-colors group"
-              >
-                <div className="w-9 h-9 rounded-full bg-amber-500 flex items-center justify-center shadow-md flex-shrink-0">
-                  <Mail className="w-4 h-4 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-stone-900">E-posta</p>
-                  <p className="text-xs text-stone-500 truncate">{business.email}</p>
                 </div>
               </a>
             )}

@@ -16,7 +16,6 @@ import {
   FranchiseConfigCard,
   InitialSubscriptionCard,
 } from "@/components/NewRestaurantFormSections"
-import { CorderEmailInput } from "@/components/CorderEmailInput"
 import {
   formatCanonicalCorderEmail,
   toCorderEmailTenantSlug,
@@ -74,7 +73,7 @@ export function NewRestaurantPage() {
     if (restaurants.some((r) => r.slug === cleanSlug)) {
       return setError("Bu slug zaten kullanılıyor.")
     }
-    const cleanEmail = formatCanonicalCorderEmail(email, cleanSlug)
+    const cleanEmail = email.trim().toLowerCase()
     const cleanTerminalEmail = formatCanonicalCorderEmail(terminalEmail, cleanSlug)
     if (cleanTerminalEmail && terminalPassword.length < 4) {
       return setError("Terminal hesabı tanımlarken en az 4 karakterli parola girilmelidir.")
@@ -205,12 +204,15 @@ export function NewRestaurantPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">E-posta</label>
-              <CorderEmailInput
+              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
+                Müşteri İletişim E-postası
+              </label>
+              <input
+                type="email"
                 value={email}
-                onChange={setEmail}
-                tenantSlugOrName={slug || name}
-                placeholder="iletisim"
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Örn: isletme@gmail.com"
+                className={inputCls}
                 disabled={loading}
               />
             </div>

@@ -31,7 +31,7 @@ This document summarizes the schema design, migration strategy, indexing, and op
 5. `1760000004000-SubscriptionPeriodLedgerSchema.ts`:
    - Adds `restaurants.billing_start_period` (`YYYY-MM`) and creates normalized `restaurant_subscription_payments` table supporting single/multi-month (`periods text[]`), payment date (`paid_at`), payment method, edit/delete ledger operations, and drops legacy `restaurants.payment_history` JSONB column.
 6. `1760000005000-StandardizeCorderAppEmails.ts`:
-   - Standardizes all existing `platform_admins.email` (`<local>@corder.app`), `restaurants.email` & `restaurants.terminal_email` (`<local>@<slug>.corder.app`), `restaurant_staff.email` (`<local>@<restaurant-slug>.corder.app`), and `root_admins.email` (`<local>@<brand-or-branch-slug>.corder.app`).
+   - Standardizes all existing `platform_admins.email` (`<local>@corder.app`), `restaurants.terminal_email` (`<local>@<slug>.corder.app`), `restaurant_staff.email` (`<local>@<restaurant-slug>.corder.app`), and `root_admins.email` (`<local>@<brand-or-branch-slug>.corder.app`).
 
 ## Key Constraints & Indexes
 

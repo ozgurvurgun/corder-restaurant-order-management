@@ -57,3 +57,4 @@ describe('corder-email.policy', () => {
     assert.equal(formatCanonicalCorderEmail('   ', 'moscow'), null);
   });
 });
+
