@@ -292,8 +292,14 @@ export function BillingConfigModal({
               type="number"
               min={1}
               max={31}
-              value={collectionStartDay}
-              onChange={(e) => setCollectionStartDay(Number(e.target.value))}
+              value={collectionStartDay || ""}
+              onChange={(e) => {
+                const v = e.target.value === "" ? 0 : Math.min(31, Math.max(1, Number(e.target.value)))
+                setCollectionStartDay(v)
+              }}
+              onBlur={() => {
+                if (!collectionStartDay) setCollectionStartDay(25)
+              }}
               className={inputCls}
             />
           </div>
@@ -305,8 +311,14 @@ export function BillingConfigModal({
               type="number"
               min={1}
               max={31}
-              value={collectionEndDay}
-              onChange={(e) => setCollectionEndDay(Number(e.target.value))}
+              value={collectionEndDay || ""}
+              onChange={(e) => {
+                const v = e.target.value === "" ? 0 : Math.min(31, Math.max(1, Number(e.target.value)))
+                setCollectionEndDay(v)
+              }}
+              onBlur={() => {
+                if (!collectionEndDay) setCollectionEndDay(30)
+              }}
               className={inputCls}
             />
           </div>

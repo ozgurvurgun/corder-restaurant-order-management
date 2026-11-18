@@ -124,15 +124,11 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
     itemId: string
   } | null>(null)
   const [cancelReasonInput, setCancelReasonInput] = useState("")
+  const [qtyDrafts, setQtyDrafts] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
 
-  const originalQtyByItemId = useMemo(() => {
-    const map = new Map<string, number>(); for (const o of closedTable.orders) {
-      for (const i of o.items) {map.set(i.id, i.quantity)}
-    }
-    return map
-  }, [closedTable.orders]); useEffect(() => {
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !saving && !savingRef.current) {
         if (cancellingTarget) {
@@ -182,10 +178,13 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
   const isLedgerValid =
     (method !== "ledger" && !splitHasLedger) || Boolean(ledgerCustomerId)
 
-  const setQty = (orderId: string, itemId: string, qty: number) => {
-    if (!Number.isFinite(qty) || qty < 1) return
-    const maxQty = originalQtyByItemId.get(itemId) ?? qty
-    const q = Math.min(maxQty, Math.max(1, Math.floor(qty))); setDraftOrders((prev) =>
+  const handleQtyChange = (orderId: string, itemId: string, raw: string) => {
+    const cleaned = raw.replace(/[^\d]/g, "")
+    setQtyDrafts((prev) => ({ ...prev, [itemId]: cleaned }))
+    const parsed = parseInt(cleaned, 10)
+    if (!Number.isFinite(parsed) || parsed < 1) return
+    const q = Math.min(9999, Math.max(1, parsed))
+    setDraftOrders((prev) =>
       prev.map((o) =>
         o.id !== orderId
           ? o
@@ -197,6 +196,10 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
             },
       ),
     )
+  }
+
+  const handleQtyBlur = (itemId: string, currentQty: number) => {
+    setQtyDrafts((prev) => ({ ...prev, [itemId]: String(currentQty) }))
   }
 
   const confirmCancelLine = () => {
@@ -280,8 +283,8 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-3 text-[13px]">
           <p className="text-[11px] text-[#86868b] mb-3">
-            {closedTable.tableName} — miktar azaltabilir, satır iptal edebilir
-            veya ödeme yöntemini değiştirebilirsiniz. Toplamlar sunucuda
+            {closedTable.tableName} — ürün adedini değiştirebilir, satır iptal edebilir
+            veya ödeme yöntemini güncelleyebilirsiniz. Toplamlar sunucuda
             doğrulanır.
           </p>
           {draftOrders.map((order, oi) => (
@@ -294,7 +297,6 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
                   const ledgerLike = item.status === "ledger"
                   const voidLine = item.status === "cancelled"
                   const billable = itemCountsTowardBill(item)
-                  const maxQty = originalQtyByItemId.get(item.id) ?? item.quantity
                   const isCancellingThis =
                     cancellingTarget?.orderId === order.id &&
                     cancellingTarget?.itemId === item.id
@@ -318,7 +320,7 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
                           <>
                             <label className="flex items-center gap-1 text-[11px] text-[#86868b]">
                               Adet
-                              <input type="number" min={1} max={maxQty} disabled={saving} className="w-14 h-8 px-2 rounded-md border border-[#d1d1d6] text-right" value={item.quantity} onChange={(e) => setQty( order.id, item.id, Number(e.target.value), ) } />
+                              <input type="text" inputMode="numeric" disabled={saving} className="w-14 h-8 px-2 rounded-md border border-[#d1d1d6] text-right font-medium text-[#1d1d1f] focus:outline-none focus:border-[#e63462]" value={qtyDrafts[item.id] ?? String(item.quantity)} onFocus={(e) => e.currentTarget.select()} onChange={(e) => handleQtyChange(order.id, item.id, e.target.value)} onBlur={() => handleQtyBlur(item.id, item.quantity)} />
                             </label>
                             <button type="button" disabled={saving} onClick={() => { setCancellingTarget({ orderId: order.id, itemId: item.id, }); setCancelReasonInput("") }} className="text-[11px] font-medium text-red-600 hover:underline disabled:opacity-50">
                               İptal

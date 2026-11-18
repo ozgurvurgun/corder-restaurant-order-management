@@ -35,12 +35,14 @@ export function TableLedgerModal(props: {
     onError,
   } = props
   const [assignQty, setAssignQty] = useState(target.maxQty)
+  const [qtyInput, setQtyInput] = useState(String(target.maxQty))
   const [assignCustomerId, setAssignCustomerId] = useState("")
   const [assignLoading, setAssignLoading] = useState(false)
   const submittingRef = useRef(false)
 
   useEffect(() => {
     setAssignQty(target.maxQty)
+    setQtyInput(String(target.maxQty))
   }, [target.maxQty])
 
   useEffect(() => {
@@ -104,16 +106,20 @@ export function TableLedgerModal(props: {
             </label>
             <div className="flex items-center gap-3">
               <input
-                type="number"
-                min={1}
-                max={target.maxQty}
+                type="text"
+                inputMode="numeric"
                 disabled={assignLoading}
-                value={safeQty}
+                value={qtyInput}
+                onFocus={(e) => e.currentTarget.select()}
                 onChange={(e) => {
-                  const v = Math.floor(Number(e.target.value))
+                  const raw = e.target.value.replace(/[^\d]/g, "")
+                  setQtyInput(raw)
+                  const v = parseInt(raw, 10)
                   if (!Number.isFinite(v) || v < 1) return
-                  setAssignQty(Math.min(target.maxQty, Math.max(1, v)))
+                  const clamped = Math.min(target.maxQty, Math.max(1, v))
+                  setAssignQty(clamped)
                 }}
+                onBlur={() => setQtyInput(String(safeQty))}
                 className="w-24 h-[42px] px-3 text-[13px] bg-[#f5f5f7] rounded-xl border border-[#d1d1d6]/60 focus:outline-none focus:ring-2 focus:ring-[#e63462]/30"
               />
               <span className="text-[12px] text-[#86868b]">
