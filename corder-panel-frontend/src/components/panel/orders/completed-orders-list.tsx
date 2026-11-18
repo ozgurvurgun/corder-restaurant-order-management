@@ -194,7 +194,7 @@ export function CompletedOrdersList(props: {
                       <span>
                         • {locale === "tr" ? "Uygulayan" : "Applied by"}:{" "}
                         <span className="font-medium">
-                          {closedTable.payment.discount?.appliedBy || closedTable.payment.processedBy || closedTable.closedBy}
+                          {closedTable.payment.discount?.appliedBy || closedTable.closedBy}
                         </span>
                       </span>
                     </span>
@@ -348,7 +348,7 @@ export function CompletedOrdersList(props: {
                           <span className="text-[11px] text-amber-700/90">
                             ({locale === "tr" ? "Neden" : "Reason"}: {closedTable.payment.discount.reason}
                             {" • "}
-                            {locale === "tr" ? "Uygulayan" : "Applied by"}: {closedTable.payment.discount.appliedBy || closedTable.payment.processedBy || closedTable.closedBy})
+                            {locale === "tr" ? "Uygulayan" : "Applied by"}: {closedTable.payment.discount.appliedBy || closedTable.closedBy})
                           </span>
                         )}
                       </div>
@@ -385,7 +385,7 @@ export function CompletedOrdersList(props: {
                         {closedTable.payment.discount?.reason
                           ? ` • ${locale === "tr" ? "Neden" : "Reason"}: ${closedTable.payment.discount.reason}`
                           : ""}
-                        {` • ${locale === "tr" ? "Uygulayan" : "By"}: ${closedTable.payment.discount?.appliedBy || closedTable.payment.processedBy || closedTable.closedBy}`})
+                        {` • ${locale === "tr" ? "Uygulayan" : "By"}: ${closedTable.payment.discount?.appliedBy || closedTable.closedBy}`})
                       </span>
                     </span>
                   )}

@@ -413,7 +413,7 @@ export class CloseCheckUseCase {
   ): Promise<CompletedOrderEntity> {
     const paymentSnapshot = buildCompletedPaymentSnapshot({
       tableId: ctx.table ? ctx.table.id : 'quick-sale', tableName: ctx.tableName, orderIds: ctx.orderIdsToClose,
-      method, settlement, processedBy: actorId, createdAt: now, ledgerCustomer,
+      method, settlement, processedBy: actorName, createdAt: now, ledgerCustomer,
     });
     const entity = em.create(CompletedOrderEntity, {
       restaurantId, tableName: ctx.tableName, section: ctx.section, waiter: ctx.waiterName,
