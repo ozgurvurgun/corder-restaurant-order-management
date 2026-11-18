@@ -237,32 +237,28 @@ export default function StockView() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-shrink-0 h-[52px] border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl flex items-center justify-between px-5">
-        <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
-          Stok Yönetimi
-        </h2>
+      <div className="flex-shrink-0 bg-white/50 border-b border-[#d1d1d6]/40 px-5 py-2.5 flex items-center justify-between gap-3 overflow-x-auto">
+        <div className="flex gap-1.5">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-3.5 py-[5px] rounded-lg text-[12px] font-medium transition-colors flex-shrink-0 ${
+                activeTab === tab.id
+                  ? "bg-[#e63462] text-white"
+                  : "text-[#86868b] hover:bg-black/[0.04]"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
         {lowStockItems.length > 0 && (
-          <div className="flex items-center gap-1.5 text-[11px] text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full font-medium">
+          <div className="flex items-center gap-1.5 text-[11px] text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full font-medium flex-shrink-0">
             <AlertTriangle className="w-3 h-3" /> {lowStockItems.length} ürün
             kritik seviyede
           </div>
         )}
-      </div>
-
-      <div className="flex-shrink-0 bg-white/50 border-b border-[#d1d1d6]/40 px-5 py-2.5 flex gap-1.5 overflow-x-auto">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`px-3.5 py-[5px] rounded-lg text-[12px] font-medium transition-colors flex-shrink-0 ${
-              activeTab === tab.id
-                ? "bg-[#e63462] text-white"
-                : "text-[#86868b] hover:bg-black/[0.04]"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
       </div>
 
       <div className="flex-1 overflow-auto p-5">

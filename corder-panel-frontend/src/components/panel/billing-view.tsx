@@ -83,13 +83,7 @@ export default function BillingView() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-shrink-0 h-[52px] border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl flex items-center justify-between px-5">
-        <div className="flex items-center gap-2.5">
-          <CreditCard className="w-4 h-4 text-[#e63462]" />
-          <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
-            Abonelik &amp; Ödeme Bilgileri
-          </h2>
-        </div>
+      <div className="flex-shrink-0 border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl flex items-center justify-end px-5 py-2.5">
         <div className="flex items-center gap-2 text-[12px] text-[#86868b]">
           <CalendarClock className="w-3.5 h-3.5 text-[#e63462]" />
           <span>

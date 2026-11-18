@@ -103,10 +103,6 @@ export default function SettingsView() {
     }
   }, [TABS, activeTab]); return (
     <div className="h-full flex flex-col">
-      <div className="flex-shrink-0 h-[52px] border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl flex items-center px-5">
-        <h2 className="text-[15px] font-semibold text-[#1d1d1f]">Ayarlar</h2>
-      </div>
-
       <div className="flex-shrink-0 bg-white border-b border-[#d1d1d6]/40 px-5 py-3">
         <div className="flex items-center gap-2">
           {TABS.map((tab) => (

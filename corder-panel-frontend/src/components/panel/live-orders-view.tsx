@@ -138,24 +138,7 @@ export default function CompletedOrdersView() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-shrink-0 border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl px-5 py-3">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
-            {locale === "tr" ? "Tamamlanan Siparişler" : "Completed Orders"}
-          </h2>
-          <div className="flex items-center gap-2 text-[12px] text-[#86868b]">
-            <span className="font-medium">
-              {filteredTables.length}{" "}
-              {locale === "tr" ? "sipariş" : "orders"}
-            </span>
-            {canViewFinancial && (
-              <span className="text-[#e63462] font-semibold">
-                {"₺"}
-                {formatCurrency(totalRevenue)}
-              </span>
-            )}
-          </div>
-        </div>
+      <div className="flex-shrink-0 border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl px-5 py-3 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5 text-[11px] text-[#86868b]">
             <Filter className="w-3 h-3" />
@@ -230,6 +213,18 @@ export default function CompletedOrdersView() {
               </option>
             ))}
           </select>
+        </div>
+        <div className="flex items-center gap-2 text-[12px] text-[#86868b]">
+          <span className="font-medium">
+            {filteredTables.length}{" "}
+            {locale === "tr" ? "sipariş" : "orders"}
+          </span>
+          {canViewFinancial && (
+            <span className="text-[#e63462] font-semibold">
+              {"₺"}
+              {formatCurrency(totalRevenue)}
+            </span>
+          )}
         </div>
       </div>
 

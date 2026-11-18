@@ -133,7 +133,7 @@ export function AuthenticatedShell() {
                 onNavigate={setActiveView}
               />
               <div className="flex-1 flex flex-col overflow-hidden">
-                <HeaderBar />
+                <HeaderBar activeView={activeView} />
                 <main className="flex-1 overflow-hidden">
                   {renderScreen(activeView, setActiveView)}
                 </main>

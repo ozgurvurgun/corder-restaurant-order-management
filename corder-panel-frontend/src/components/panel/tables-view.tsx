@@ -37,9 +37,23 @@ export default function TablesView() {
       {/* Left: Table Grid */}
       <div className="flex-1 flex flex-col h-full min-w-0">
         {/* Toolbar */}
-        <div className="flex-shrink-0 h-[52px] border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl flex items-center justify-between px-5">
-          <h2 className="text-[15px] font-semibold text-[#1d1d1f]">Masalar</h2>
-          <div className="flex items-center gap-3">
+        <div className="flex-shrink-0 bg-white/50 border-b border-[#d1d1d6]/40 px-5 py-2.5 flex items-center justify-between gap-3">
+          <div className="flex gap-1.5 overflow-x-auto">
+            {allSections.map((s) => (
+              <button
+                key={s}
+                onClick={() => setActiveSection(s)}
+                className={`px-3.5 py-[5px] rounded-lg text-[12px] font-medium transition-colors whitespace-nowrap ${
+                  activeSection === s
+                    ? "bg-[#e63462] text-white"
+                    : "text-[#86868b] hover:bg-black/[0.04]"
+                }`}
+              >
+                {s === "Tumu" ? "Tümü" : s}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-3 flex-shrink-0">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#86868b]" />
               <input
@@ -57,23 +71,6 @@ export default function TablesView() {
               Boş: {emptyCount}
             </div>
           </div>
-        </div>
-
-        {/* Section tabs */}
-        <div className="flex-shrink-0 bg-white/50 border-b border-[#d1d1d6]/40 px-5 py-2.5 flex gap-1.5 overflow-x-auto">
-          {allSections.map((s) => (
-            <button
-              key={s}
-              onClick={() => setActiveSection(s)}
-              className={`px-3.5 py-[5px] rounded-lg text-[12px] font-medium transition-colors whitespace-nowrap ${
-                activeSection === s
-                  ? "bg-[#e63462] text-white"
-                  : "text-[#86868b] hover:bg-black/[0.04]"
-              }`}
-            >
-              {s === "Tumu" ? "Tümü" : s}
-            </button>
-          ))}
         </div>
 
         {/* Grid */}

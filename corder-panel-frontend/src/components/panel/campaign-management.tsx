@@ -141,18 +141,13 @@ export default function CampaignManagement() {
 
   return (
     <div className="h-full flex flex-col bg-[#f5f5f7]">
-      <header className="flex-shrink-0 px-6 py-4 border-b border-[#d1d1d6]/60 bg-white/80 backdrop-blur-xl">
+      <header className="flex-shrink-0 px-6 py-3 border-b border-[#d1d1d6]/60 bg-white/80 backdrop-blur-xl">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-[22px] font-bold text-[#1d1d1f]">
-              {locale === "tr" ? "Kampanya Yönetimi" : "Campaign Management"}
-            </h1>
-            <p className="text-[13px] text-[#86868b] mt-0.5">
-              {locale === "tr"
-                ? "Menü açılışında gösterilecek kampanyalar"
-                : "Campaigns shown on menu open"}
-            </p>
-          </div>
+          <p className="text-[13px] text-[#86868b]">
+            {locale === "tr"
+              ? "Menü açılışında gösterilecek kampanyalar"
+              : "Campaigns shown on menu open"}
+          </p>
           {canManageCampaigns && (
             <button
               onClick={() => {

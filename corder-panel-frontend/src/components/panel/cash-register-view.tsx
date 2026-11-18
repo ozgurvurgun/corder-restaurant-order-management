@@ -321,31 +321,8 @@ export default function CashRegisterView() {
     [filteredClosedTables],
   ); return (
     <div className="h-full flex flex-col">
-      <div className="flex-shrink-0 border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl px-5 py-3">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-[15px] font-semibold text-[#1d1d1f]">Kasa</h2>
-          <div className="flex items-center gap-3">
-            {currentShift ? (
-              <>
-                <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-green-50 text-green-600">
-                  Kasa Açık - {currentShift.openedBy}
-                </span>
-                {canCloseShift && (
-                  <button onClick={() => { setShiftError(""); setShowCloseShift(true) }} className="h-[30px] px-3 flex items-center gap-1.5 bg-red-500 text-white rounded-lg text-[12px] font-medium hover:bg-red-600 transition-colors">
-                    Kasa Kapat
-                  </button>
-                )}
-              </>
-            ) : (
-              canOpenShift && (
-                <button onClick={() => { setShiftError(""); setShowOpenShift(true) }} className="h-[30px] px-3 flex items-center gap-1.5 bg-[#34c759] text-white rounded-lg text-[12px] font-medium hover:bg-[#2db84e] transition-colors">
-                  <Plus className="w-3.5 h-3.5" /> Kasa Aç
-                </button>
-              )
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
+      <div className="flex-shrink-0 border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl px-5 py-2.5 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap">
           <Filter className="w-3.5 h-3.5 text-[#86868b]" />
           <select
             value={filterDate}
@@ -385,6 +362,26 @@ export default function CashRegisterView() {
             {filteredClosedTables.length} sipariş
             {canViewCashTotals ? ` | \u20BA${formatCurrency(filteredNetTotal)}` : ""}
           </span>
+        </div>
+        <div className="flex items-center gap-3">
+          {currentShift ? (
+            <>
+              <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-green-50 text-green-600">
+                Kasa Açık - {currentShift.openedBy}
+              </span>
+              {canCloseShift && (
+                <button onClick={() => { setShiftError(""); setShowCloseShift(true) }} className="h-[30px] px-3 flex items-center gap-1.5 bg-red-500 text-white rounded-lg text-[12px] font-medium hover:bg-red-600 transition-colors">
+                  Kasa Kapat
+                </button>
+              )}
+            </>
+          ) : (
+            canOpenShift && (
+              <button onClick={() => { setShiftError(""); setShowOpenShift(true) }} className="h-[30px] px-3 flex items-center gap-1.5 bg-[#34c759] text-white rounded-lg text-[12px] font-medium hover:bg-[#2db84e] transition-colors">
+                <Plus className="w-3.5 h-3.5" /> Kasa Aç
+              </button>
+            )
+          )}
         </div>
       </div>
 

@@ -179,37 +179,6 @@ export default function DashboardView(_props: DashboardViewProps) {
   return (
     <div className="h-full overflow-auto">
       <div className="p-6 w-full">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-[22px] font-bold text-[var(--panel-text)]">
-              {t("dashboard")}
-            </h1>
-            <p className="text-[13px] text-[var(--panel-text-secondary)] mt-0.5">
-              {mounted
-                ? new Date().toLocaleDateString("tr-TR", {
-                    timeZone: ISTANBUL_TZ,
-                    weekday: "long",
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })
-                : ""}
-              {currentShift && (
-                <span className="ml-2 text-[#34c759] font-medium">
-                  -- {t("shiftOpen")}
-                </span>
-              )}
-            </p>
-          </div>
-          {unreadNotifications.length > 0 && (
-            <div className="px-3 py-1.5 bg-[#e63462]/10 rounded-lg">
-              <span className="text-[12px] font-semibold text-[#e63462]">
-                {unreadNotifications.length} {t("unreadNotification")}
-              </span>
-            </div>
-          )}
-        </div>
-
         <div
           className={`grid gap-4 mb-6 ${stats.length === 4 ? "grid-cols-4" : "grid-cols-3"}`}
         >

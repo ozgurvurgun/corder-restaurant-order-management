@@ -91,9 +91,6 @@ export default function UserManagement() {
     <div className="h-full flex flex-col">
       <div className="flex-shrink-0 h-[52px] border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl flex items-center justify-between px-5">
         <div className="flex items-center gap-3">
-          <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
-            Şube Personel, Kullanıcı &amp; Yetki Yönetimi
-          </h2>
           <div className="flex items-center rounded-lg bg-[#f5f5f7] p-0.5 border border-[#d1d1d6]/60">
             {canViewStaff && (
               <button

@@ -293,29 +293,8 @@ export default function ReportsView() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-shrink-0 border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl px-5 py-3">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-[15px] font-semibold text-[#1d1d1f]">Raporlar</h2>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-[12px] text-[#86868b]">
-              <Clock className="w-3.5 h-3.5" />
-              {new Date().toLocaleDateString("tr-TR", {
-                timeZone: ISTANBUL_TZ,
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}
-            </div>
-            <div className="h-4 w-px bg-[#d1d1d6]/60" />
-            <button onClick={handleExportCsv} className="h-[28px] px-2.5 flex items-center gap-1.5 text-[11px] font-medium text-[#86868b] hover:bg-black/[0.04] rounded-md transition-colors">
-              <Download className="w-3 h-3" /> CSV (Excel)
-            </button>
-            <button onClick={handlePrintPdf} className="h-[28px] px-2.5 flex items-center gap-1.5 text-[11px] font-medium text-[#86868b] hover:bg-black/[0.04] rounded-md transition-colors">
-              <Printer className="w-3 h-3" /> Yazdır / PDF
-            </button>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
+      <div className="flex-shrink-0 border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl px-5 py-2.5 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap">
           <Filter className="w-3.5 h-3.5 text-[#86868b]" />
           <select
             value={filterDate}
@@ -357,6 +336,24 @@ export default function ReportsView() {
               ? ` | \u20BA${formatCurrency(filteredReport.totalRevenue)}`
               : ""}
           </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-[12px] text-[#86868b]">
+            <Clock className="w-3.5 h-3.5" />
+            {new Date().toLocaleDateString("tr-TR", {
+              timeZone: ISTANBUL_TZ,
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            })}
+          </div>
+          <div className="h-4 w-px bg-[#d1d1d6]/60" />
+          <button onClick={handleExportCsv} className="h-[28px] px-2.5 flex items-center gap-1.5 text-[11px] font-medium text-[#86868b] hover:bg-black/[0.04] rounded-md transition-colors">
+            <Download className="w-3 h-3" /> CSV (Excel)
+          </button>
+          <button onClick={handlePrintPdf} className="h-[28px] px-2.5 flex items-center gap-1.5 text-[11px] font-medium text-[#86868b] hover:bg-black/[0.04] rounded-md transition-colors">
+            <Printer className="w-3 h-3" /> Yazdır / PDF
+          </button>
         </div>
       </div>
 

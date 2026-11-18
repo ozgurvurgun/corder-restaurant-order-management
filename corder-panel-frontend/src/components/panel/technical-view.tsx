@@ -150,10 +150,6 @@ export default function TechnicalView() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-shrink-0 h-[52px] border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl flex items-center justify-between px-5">
-        <h2 className="text-[15px] font-semibold text-[#1d1d1f]">Teknik Yönetim</h2>
-      </div>
-
       <div className="flex-shrink-0 bg-white/50 border-b border-[#d1d1d6]/40 px-5 py-2.5 flex gap-1.5 overflow-x-auto">
         {TABS.map((tab) => (
           <button
