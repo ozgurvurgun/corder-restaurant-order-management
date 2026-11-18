@@ -198,7 +198,12 @@ function bindPrinterManagementEvents() {
   })
 
   $("btnTestIp").addEventListener("click", async () => {
-    const host = $("netPrinterHost").value.trim()
+    const hostInput = $("netPrinterHost")
+    const host = hostInput.value.trim()
+    if (!host) {
+      showCustomFieldValidation(hostInput, "Lütfen test edilecek yazıcının IP adresini girin.")
+      return
+    }
     const port = Number($("netPrinterPort").value) || 9100
     const box = $("ipTestResult")
     box.className = "inline-feedback status-warn"
@@ -327,7 +332,94 @@ function bindRoutingAndQueueEvents() {
   })
 }
 
+let activeInvalidEl = null
+let activeValidationTimer = null
+
+function clearCustomFieldValidation() {
+  if (activeValidationTimer) {
+    clearTimeout(activeValidationTimer)
+    activeValidationTimer = null
+  }
+  if (activeInvalidEl) {
+    activeInvalidEl.classList.remove("c-field-invalid")
+    activeInvalidEl = null
+  }
+  const pop = document.getElementById("corder-validation-popover")
+  if (pop) pop.remove()
+}
+
+function getTurkishValidationMessage(el) {
+  const v = el.validity
+  if (!v) return "Lütfen bu alanı kontrol edin."
+  if (v.valueMissing) {
+    if (el.type === "checkbox" || el.type === "radio") {
+      return "Lütfen devam etmek için bu seçeneği işaretleyin."
+    }
+    return "Lütfen bu alanı doldurun."
+  }
+  if (v.typeMismatch) {
+    if (el.type === "email") return "Lütfen geçerli bir e-posta adresi girin."
+    if (el.type === "url") return "Lütfen geçerli bir bağlantı (URL) girin."
+    return "Lütfen geçerli bir değer girin."
+  }
+  if (v.tooShort) return `Lütfen en az ${el.minLength} karakter girin.`
+  if (v.tooLong) return `Lütfen en fazla ${el.maxLength} karakter girin.`
+  if (v.rangeUnderflow) return `Değer en az ${el.min} olmalıdır.`
+  if (v.rangeOverflow) return `Değer en fazla ${el.max} olmalıdır.`
+  if (v.stepMismatch || v.badInput) return "Lütfen geçerli bir sayı girin."
+  if (v.patternMismatch) return el.getAttribute("title") || "Lütfen istenen formatta girin."
+  return el.validationMessage || "Lütfen bu alanı kontrol edin."
+}
+
+function showCustomFieldValidation(el, message) {
+  if (!el) return
+  clearCustomFieldValidation()
+  activeInvalidEl = el
+  el.classList.add("c-field-invalid")
+  if (typeof el.focus === "function") el.focus({ preventScroll: true })
+
+  const pop = document.createElement("div")
+  pop.id = "corder-validation-popover"
+  pop.className = "c-val-popover"
+  pop.innerHTML = `<span class="c-val-icon">!</span><span>${escapeHtml(message)}</span>`
+  document.body.appendChild(pop)
+
+  const rect = el.getBoundingClientRect()
+  const popRect = pop.getBoundingClientRect()
+  const placeAbove = window.innerHeight - rect.bottom < popRect.height + 16 && rect.top > popRect.height + 16
+  if (placeAbove) pop.classList.add("above")
+  const top = placeAbove ? Math.max(8, rect.top - popRect.height - 8) : Math.min(window.innerHeight - popRect.height - 8, rect.bottom + 8)
+  const left = Math.max(8, Math.min(rect.left, window.innerWidth - popRect.width - 8))
+  pop.style.top = `${top}px`
+  pop.style.left = `${left}px`
+
+  activeValidationTimer = setTimeout(() => clearCustomFieldValidation(), 4200)
+}
+
+function installCustomFormValidation() {
+  let queuedInvalidEl = null
+  document.addEventListener(
+    "invalid",
+    (e) => {
+      e.preventDefault()
+      if (!queuedInvalidEl) {
+        queuedInvalidEl = e.target
+        queueMicrotask(() => {
+          const target = queuedInvalidEl
+          queuedInvalidEl = null
+          if (target) showCustomFieldValidation(target, getTurkishValidationMessage(target))
+        })
+      }
+    },
+    true,
+  )
+  document.addEventListener("input", () => clearCustomFieldValidation(), true)
+  document.addEventListener("change", () => clearCustomFieldValidation(), true)
+  document.addEventListener("mousedown", () => clearCustomFieldValidation(), true)
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  installCustomFormValidation()
   document
     .querySelectorAll(".tab-btn")
     .forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)))
@@ -336,10 +428,23 @@ document.addEventListener("DOMContentLoaded", () => {
       closeAllCustomSelects()
     }
   })
-  window.addEventListener("resize", () => closeAllCustomSelects())
-  window.addEventListener("scroll", () => closeAllCustomSelects(), true)
+  window.addEventListener("resize", () => {
+    closeAllCustomSelects()
+    clearCustomFieldValidation()
+  })
+  window.addEventListener(
+    "scroll",
+    () => {
+      closeAllCustomSelects()
+      clearCustomFieldValidation()
+    },
+    true,
+  )
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeAllCustomSelects()
+    if (e.key === "Escape") {
+      closeAllCustomSelects()
+      clearCustomFieldValidation()
+    }
   })
   upgradeAllCustomSelects()
   bindModalEvents()

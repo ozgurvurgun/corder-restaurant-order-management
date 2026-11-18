@@ -1,7 +1,10 @@
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import App from "./App"
+import { installCustomFormValidation } from "./lib/custom-form-validation"
 import "./index.css"
+
+installCustomFormValidation()
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

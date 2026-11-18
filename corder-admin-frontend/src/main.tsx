@@ -5,7 +5,10 @@ import { ClientOnlyShell } from "@/components/ClientOnlyShell"
 import { PlatformAuthProvider } from "@/lib/auth-context"
 import { AdminStoreProvider } from "@/lib/store"
 import App from "./App"
+import { installCustomFormValidation } from "./lib/custom-form-validation"
 import "./index.css"
+
+installCustomFormValidation()
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

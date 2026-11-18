@@ -4,7 +4,10 @@ import { ClientOnlyShell } from "@/components/ClientOnlyShell"
 import { PanelAuthProvider } from "@/lib/panel-auth"
 import { AuthGate } from "@/components/panel/AuthGate"
 import PanelLogin from "@/components/panel/panel-login"
+import { installCustomFormValidation } from "@/lib/custom-form-validation"
 import "./index.css"
+
+installCustomFormValidation()
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

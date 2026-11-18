@@ -4,7 +4,10 @@ import { ClientOnlyShell } from "@/components/ClientOnlyShell"
 import { AppProvider } from "@/lib/store"
 import { IOSToastProvider } from "@/components/ios-toast"
 import App from "./App"
+import { installCustomFormValidation } from "./lib/custom-form-validation"
 import "./index.css"
+
+installCustomFormValidation()
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

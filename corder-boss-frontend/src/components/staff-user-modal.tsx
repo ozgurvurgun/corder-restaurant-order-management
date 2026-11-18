@@ -223,7 +223,7 @@ export function StaffUserModal({
           </button>
         </div>
 
-        <form onSubmit={handleFormSubmit} noValidate className="mt-4 space-y-4">
+        <form onSubmit={handleFormSubmit} className="mt-4 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-[12px] font-semibold text-[#1d1d1f]">Ad Soyad *</label>
