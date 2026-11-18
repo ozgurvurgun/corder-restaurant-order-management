@@ -11,6 +11,9 @@ const state = {
     autoStartOnBoot: true,
   },
   discoveredPrinters: [],
+  discoveredNetworkPrinters: [],
+  scannedSubnets: [],
+  networkScanCompleted: false,
   queue: [],
   recentPrinted: [],
   logs: [],
@@ -219,6 +222,48 @@ function renderDiscoveredPrinters() {
           <div class="printer-sub">${escapeHtml(dp.driverName || "Sistem Yazıcısı")} (${escapeHtml(dp.portName || "USB")})</div>
         </div>
         ${added ? '<span class="tag">Eklendi</span>' : `<button class="btn btn-primary btn-sm" data-action="use-system-printer" data-name="${escapeHtml(dp.name)}">+ Kullan</button>`}
+      </div>`
+    })
+    .join("")
+}
+
+function renderDiscoveredNetworkPrinters() {
+  const container = $("discoveredNetworkPrintersList")
+  if (!container) return
+  const existing = new Set(
+    (state.settings.printers || [])
+      .filter((p) => p.mode === "network")
+      .map((p) => `${p.host}:${Number(p.port) || 9100}`),
+  )
+  if (!state.discoveredNetworkPrinters.length) {
+    const subnetInfo = state.scannedSubnets.length
+      ? ` (${escapeHtml(state.scannedSubnets.join(", "))} ağında 9100 portu açık cihaz bulunamadı)`
+      : ""
+    container.innerHTML = `<div class="empty-hint">${
+      state.networkScanCompleted
+        ? `Yerel ağda açık termal yazıcı bulunamadı${subnetInfo}.`
+        : 'Yerel ağdaki (Ethernet / Wi-Fi) 9100 portlu termal yazıcıları otomatik bulmak için "Ağdaki Yazıcıları Tara" butonuna tıklayın.'
+    }</div>`
+    return
+  }
+  container.innerHTML = state.discoveredNetworkPrinters
+    .map((np) => {
+      const key = `${np.host}:${Number(np.port) || 9100}`
+      const added = existing.has(key)
+      const macInfo = np.mac ? ` · MAC: ${escapeHtml(np.mac)}` : ""
+      return `<div class="discovered-item">
+        <div class="printer-meta">
+          <div class="printer-title">
+            <span>${escapeHtml(np.host)}:${escapeHtml(np.port || 9100)}</span>
+            <span class="tag tag-net">${escapeHtml(np.latencyMs ?? 1)}ms</span>
+          </div>
+          <div class="printer-sub">Ağ Termal Yazıcı (${escapeHtml(np.subnet || "LAN")}${macInfo})</div>
+        </div>
+        ${
+          added
+            ? '<span class="tag">Eklendi</span>'
+            : `<button class="btn btn-primary btn-sm" data-action="use-network-printer" data-host="${escapeHtml(np.host)}" data-port="${escapeHtml(np.port || 9100)}">+ Kullan</button>`
+        }
       </div>`
     })
     .join("")

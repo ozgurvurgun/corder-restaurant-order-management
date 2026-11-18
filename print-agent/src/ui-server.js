@@ -11,7 +11,11 @@ const {
   mergePrintersWithBackend,
   seedDepartmentCategoryRoutes,
 } = require("./settings-store")
-const { discoverSystemPrinters, testTcpPrinterConnection } = require("./printer-discovery")
+const {
+  discoverSystemPrinters,
+  discoverNetworkPrinters,
+  testTcpPrinterConnection,
+} = require("./printer-discovery")
 const { loginPrintAgent, fetchAgentContext } = require("./http-sync")
 const { applyAutoStartSetting } = require("./autostart")
 const { buildTestTicket } = require("./escpos")
@@ -209,6 +213,11 @@ function createUiServer({ store, agent }) {
             : []
         const printers = await discoverSystemPrinters(extra)
         return { statusCode: 200, payload: { ok: true, printers } }
+      }
+
+      if ((method === "GET" || method === "POST") && pathname === "/api/discover-network-printers") {
+        const result = await discoverNetworkPrinters({ port: Number(body?.port) || 9100 })
+        return { statusCode: 200, payload: { ok: true, ...result } }
       }
 
       if (method === "POST" && pathname === "/api/login") {

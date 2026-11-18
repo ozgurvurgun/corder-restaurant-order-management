@@ -198,8 +198,14 @@
                 <div class="card-header">
                   <div>
                     <h2>Ağ (IP:Port) Yazıcısı Ekle</h2>
-                    <p class="card-desc">Yerel ağdaki Ethernet / Wi-Fi termal yazıcıyı doğrudan IP ile bağlayın</p>
+                    <p class="card-desc">Yerel ağdaki Ethernet / Wi-Fi termal yazıcıları otomatik tarayın veya IP ile ekleyin</p>
                   </div>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btnDiscoverNetworkPrinters">
+                    Ağdaki Yazıcıları Tara
+                  </button>
+                </div>
+                <div id="discoveredNetworkPrintersList" class="discovered-list" style="margin-bottom: 12px;">
+                  <div class="empty-hint">Yerel ağdaki (Ethernet / Wi-Fi) 9100 portlu termal yazıcıları otomatik bulmak için "Ağdaki Yazıcıları Tara" butonuna tıklayın.</div>
                 </div>
                 <form id="formAddNetworkPrinter" class="form-grid">
                   <div class="field-group full">

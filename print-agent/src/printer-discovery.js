@@ -1,8 +1,10 @@
 const fs = require("fs")
 const net = require("net")
+const os = require("os")
 const { execFile } = require("child_process")
 
 const SAFE_HOST_RE = /^[a-zA-Z0-9.-]{1,253}$/
+const VIRTUAL_IFACE_RE = /^(lo|docker|br-|veth|virbr|tun|tap|wg|tailscale|zt|vmnet|vboxnet)/i
 
 function execFileText(binary, args, timeoutMs = 6000) {
   return new Promise((resolve) => {
@@ -179,7 +181,136 @@ function testTcpPrinterConnection(host, port = 9100, timeoutMs = 2500) {
   })
 }
 
+function isPrivateIpv4(ip) {
+  const parts = String(ip || "").split(".").map(Number)
+  if (parts.length !== 4 || parts.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) {
+    return false
+  }
+  if (parts[0] === 10) return true
+  if (parts[0] === 192 && parts[1] === 168) return true
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true
+  return false
+}
+
+function getLocalPrivateSubnets() {
+  const ifaces = os.networkInterfaces()
+  const subnets = []
+  const seenPrefixes = new Set()
+
+  for (const [ifaceName, addrs] of Object.entries(ifaces || {})) {
+    if (VIRTUAL_IFACE_RE.test(ifaceName)) continue
+    for (const addr of addrs || []) {
+      const family = String(addr.family || "")
+      if ((family !== "IPv4" && family !== "4") || addr.internal) continue
+      if (!isPrivateIpv4(addr.address)) continue
+      const octets = addr.address.split(".")
+      const prefix = `${octets[0]}.${octets[1]}.${octets[2]}`
+      if (seenPrefixes.has(prefix)) continue
+      seenPrefixes.add(prefix)
+      subnets.push({
+        prefix,
+        subnet: `${prefix}.0/24`,
+        selfIp: addr.address,
+        interfaceName: ifaceName,
+      })
+    }
+  }
+  return subnets.slice(0, 3)
+}
+
+async function readArpMacMap() {
+  const macMap = new Map()
+  try {
+    if (process.platform === "linux" && fs.existsSync("/proc/net/arp")) {
+      const raw = fs.readFileSync("/proc/net/arp", "utf8")
+      for (const line of raw.split(/\r?\n/).slice(1)) {
+        const cols = line.trim().split(/\s+/)
+        if (cols.length >= 4 && cols[3] && cols[3] !== "00:00:00:00:00:00") {
+          macMap.set(cols[0], cols[3].toUpperCase())
+        }
+      }
+      return macMap
+    }
+    const arpOut = await execFileText("arp", ["-a"], 2500)
+    for (const line of arpOut.split(/\r?\n/)) {
+      const ipMatch = line.match(/\b(\d{1,3}(?:\.\d{1,3}){3})\b/)
+      const macMatch = line.match(/\b([0-9a-f]{1,2}[:-]){5}[0-9a-f]{1,2}\b/i)
+      if (ipMatch && macMatch && !/^00[:-]00[:-]00/i.test(macMatch[0])) {
+        macMap.set(ipMatch[1], macMatch[0].replace(/-/g, ":").toUpperCase())
+      }
+    }
+  } catch {
+    // ignore ARP read errors
+  }
+  return macMap
+}
+
+async function discoverNetworkPrinters(opts = {}) {
+  const cleanPort = Number(opts.port) > 0 && Number(opts.port) <= 65535 ? Number(opts.port) : 9100
+  const timeoutMs = Number(opts.timeoutMs) > 100 ? Number(opts.timeoutMs) : 360
+  const subnets = getLocalPrivateSubnets()
+  if (!subnets.length) {
+    return { printers: [], scannedSubnets: [], port: cleanPort }
+  }
+
+  const arpMap = await readArpMacMap()
+  const candidates = []
+  for (const sub of subnets) {
+    for (let hostNum = 1; hostNum <= 254; hostNum++) {
+      const ip = `${sub.prefix}.${hostNum}`
+      if (ip === sub.selfIp) continue
+      candidates.push({
+        ip,
+        subnet: sub.subnet,
+        interfaceName: sub.interfaceName,
+        inArp: arpMap.has(ip),
+      })
+    }
+  }
+
+  candidates.sort((a, b) => Number(b.inArp) - Number(a.inArp))
+
+  const found = []
+  const concurrency = 64
+  let cursor = 0
+
+  const workers = Array.from({ length: Math.min(concurrency, candidates.length) }, async () => {
+    while (cursor < candidates.length) {
+      const item = candidates[cursor++]
+      const res = await testTcpPrinterConnection(item.ip, cleanPort, timeoutMs)
+      if (res.ok) {
+        found.push({
+          host: item.ip,
+          port: cleanPort,
+          latencyMs: res.latencyMs,
+          mac: arpMap.get(item.ip) || "",
+          subnet: item.subnet,
+          interfaceName: item.interfaceName,
+        })
+      }
+    }
+  })
+
+  await Promise.all(workers)
+
+  found.sort((a, b) => {
+    const pa = a.host.split(".").map(Number)
+    const pb = b.host.split(".").map(Number)
+    for (let i = 0; i < 4; i++) {
+      if (pa[i] !== pb[i]) return pa[i] - pb[i]
+    }
+    return 0
+  })
+
+  return {
+    printers: found,
+    scannedSubnets: subnets.map((s) => `${s.subnet} (${s.interfaceName})`),
+    port: cleanPort,
+  }
+}
+
 module.exports = {
   discoverSystemPrinters,
+  discoverNetworkPrinters,
   testTcpPrinterConnection,
 }

@@ -33,6 +33,7 @@ async function loadState(rerenderAll = false) {
       if (changed) {
         renderPrinters()
         renderDiscoveredPrinters()
+        renderDiscoveredNetworkPrinters()
         renderRoutingDropdowns()
       }
     }
@@ -196,6 +197,54 @@ function bindPrinterManagementEvents() {
       showToast(e.message, true)
     }
   })
+
+  if ($("btnDiscoverNetworkPrinters")) {
+    $("btnDiscoverNetworkPrinters").addEventListener("click", async () => {
+      const btn = $("btnDiscoverNetworkPrinters")
+      const port = Number($("netPrinterPort")?.value) || 9100
+      btn.disabled = true
+      btn.textContent = "Ağ Taranıyor..."
+      try {
+        showToast(`Yerel ağdaki ${port} portlu yazıcılar taranıyor...`)
+        const data = await apiCall("/api/discover-network-printers", {
+          method: "POST",
+          body: JSON.stringify({ port }),
+        })
+        state.discoveredNetworkPrinters = data.printers || []
+        state.scannedSubnets = data.scannedSubnets || []
+        state.networkScanCompleted = true
+        renderDiscoveredNetworkPrinters()
+        showToast(`${state.discoveredNetworkPrinters.length} ağ yazıcısı bulundu`)
+      } catch (e) {
+        showToast(e.message, true)
+      } finally {
+        btn.disabled = false
+        btn.textContent = "Ağdaki Yazıcıları Tara"
+      }
+    })
+  }
+
+  if ($("discoveredNetworkPrintersList")) {
+    $("discoveredNetworkPrintersList").addEventListener("click", async (e) => {
+      const btn = e.target.closest('button[data-action="use-network-printer"]')
+      if (!btn) return
+      const host = btn.dataset.host
+      const port = Number(btn.dataset.port) || 9100
+      const nickRaw = await askNicknameModal(`Ağ Yazıcısı Ekle (${host}:${port})`, `Mutfak (${host})`)
+      if (nickRaw == null) return
+      const name = String(nickRaw).trim() || `Yazıcı (${host})`
+      try {
+        await apiCall("/api/printers", {
+          method: "POST",
+          body: JSON.stringify({ name, mode: "network", host, port, paperWidth: 80 }),
+        })
+        showToast(`"${name}" ağ yazıcısı eklendi (${host}:${port})`)
+        await loadState(true)
+      } catch (err) {
+        showToast(err.message, true)
+      }
+    })
+  }
 
   $("btnTestIp").addEventListener("click", async () => {
     const hostInput = $("netPrinterHost")
@@ -398,21 +447,17 @@ function showCustomFieldValidation(el, message) {
 
 function installCustomFormValidation() {
   let queuedInvalidEl = null
-  document.addEventListener(
-    "invalid",
-    (e) => {
-      e.preventDefault()
-      if (!queuedInvalidEl) {
-        queuedInvalidEl = e.target
-        queueMicrotask(() => {
-          const target = queuedInvalidEl
-          queuedInvalidEl = null
-          if (target) showCustomFieldValidation(target, getTurkishValidationMessage(target))
-        })
-      }
-    },
-    true,
-  )
+  document.addEventListener("invalid", (e) => {
+    e.preventDefault()
+    if (!queuedInvalidEl) {
+      queuedInvalidEl = e.target
+      queueMicrotask(() => {
+        const target = queuedInvalidEl
+        queuedInvalidEl = null
+        if (target) showCustomFieldValidation(target, getTurkishValidationMessage(target))
+      })
+    }
+  }, true)
   document.addEventListener("input", () => clearCustomFieldValidation(), true)
   document.addEventListener("change", () => clearCustomFieldValidation(), true)
   document.addEventListener("mousedown", () => clearCustomFieldValidation(), true)
@@ -420,32 +465,14 @@ function installCustomFormValidation() {
 
 document.addEventListener("DOMContentLoaded", () => {
   installCustomFormValidation()
-  document
-    .querySelectorAll(".tab-btn")
-    .forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)))
+  document.querySelectorAll(".tab-btn").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)))
   document.addEventListener("click", (e) => {
-    if (!e.target.closest(".c-select") && !e.target.closest(".c-select-menu")) {
-      closeAllCustomSelects()
-    }
+    if (!e.target.closest(".c-select") && !e.target.closest(".c-select-menu")) closeAllCustomSelects()
   })
-  window.addEventListener("resize", () => {
-    closeAllCustomSelects()
-    clearCustomFieldValidation()
-  })
-  window.addEventListener(
-    "scroll",
-    () => {
-      closeAllCustomSelects()
-      clearCustomFieldValidation()
-    },
-    true,
-  )
-  window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      closeAllCustomSelects()
-      clearCustomFieldValidation()
-    }
-  })
+  const dismissPopovers = () => { closeAllCustomSelects(); clearCustomFieldValidation() }
+  window.addEventListener("resize", dismissPopovers)
+  window.addEventListener("scroll", dismissPopovers, true)
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape") dismissPopovers() })
   upgradeAllCustomSelects()
   bindModalEvents()
   bindAuthEvents()
