@@ -69,16 +69,6 @@ export function mapShiftDtoToPanel(dto: ShiftDto): CashShift {
   }
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-function resolveHumanName(primary?: string | null, fallback?: string | null): string {
-  const p = (primary ?? "").trim()
-  if (p && !UUID_RE.test(p)) return formatTitleCase(p)
-  const f = (fallback ?? "").trim()
-  if (f && !UUID_RE.test(f)) return formatTitleCase(f)
-  return formatTitleCase(p || f)
-}
-
 export function mapCompletedOrderDtoToClosedTable(
   dto: CompletedOrderDto,
 ): ClosedTable {
@@ -120,11 +110,11 @@ export function mapCompletedOrderDtoToClosedTable(
           type: rawDiscount.type,
           value: rawDiscount.value,
           reason: rawDiscount.reason,
-          appliedBy: resolveHumanName(rawDiscount.appliedBy, dto.closedBy),
+          appliedBy: formatTitleCase(rawDiscount.appliedBy || dto.closedBy),
         }
       : undefined,
     tip: dto.payment.tip,
-    processedBy: resolveHumanName(dto.payment.processedBy, dto.closedBy),
+    processedBy: formatTitleCase(dto.payment.processedBy),
     createdAt: new Date(dto.payment.createdAt),
     ...(dto.payment.ledgerCustomerId || dto.payment.ledgerCustomerName
       ? {
