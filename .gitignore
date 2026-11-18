@@ -1,5 +1,7 @@
 node_modules/
 dist/
+dist-test/
+.vite-cache/
 .env
 .env.local
 .env.*.local

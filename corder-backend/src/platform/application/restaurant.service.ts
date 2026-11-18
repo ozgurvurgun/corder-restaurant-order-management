@@ -25,6 +25,14 @@ export function getCurrentBillingPeriod(now = new Date()): string {
   return dateToIstanbulPeriod(now);
 }
 
+export interface AssignedBossDto {
+  id: string;
+  name: string;
+  email: string;
+  bossTier: string;
+  title: string;
+}
+
 @Injectable()
 export class RestaurantService {
   constructor(
@@ -59,6 +67,66 @@ export class RestaurantService {
     return configs[0]?.collectionEndDay ?? 30;
   }
 
+  private resolveAssignedBossesForRestaurant(
+    r: RestaurantEntity,
+    links: BossRestaurantEntity[],
+    allBosses: RootAdminEntity[],
+    bossById: Map<string, RootAdminEntity>,
+  ): AssignedBossDto[] {
+    const assignedMap = new Map<string, AssignedBossDto>();
+
+    for (const link of links) {
+      if (link.restaurantId !== r.id) continue;
+      const b = bossById.get(link.bossId);
+      if (b) {
+        assignedMap.set(b.id, {
+          id: b.id,
+          name: b.name,
+          email: b.email,
+          bossTier: b.bossTier || 'franchise_owner',
+          title:
+            link.title ||
+            (b.bossTier === 'brand_owner' ? 'Brand Owner (HQ)' : 'Franchise / Branch Owner'),
+        });
+      }
+    }
+
+    if (r.rootAdminId && !assignedMap.has(r.rootAdminId)) {
+      const b = bossById.get(r.rootAdminId);
+      if (b) {
+        assignedMap.set(b.id, {
+          id: b.id,
+          name: b.name,
+          email: b.email,
+          bossTier: b.bossTier || 'franchise_owner',
+          title: b.bossTier === 'brand_owner' ? 'Brand Owner (HQ)' : 'Franchise / Branch Owner',
+        });
+      }
+    }
+
+    if (r.brandName) {
+      const normalizedBrand = r.brandName.trim().toLowerCase();
+      for (const b of allBosses) {
+        if (
+          b.bossTier === 'brand_owner' &&
+          b.brandName &&
+          b.brandName.trim().toLowerCase() === normalizedBrand &&
+          !assignedMap.has(b.id)
+        ) {
+          assignedMap.set(b.id, {
+            id: b.id,
+            name: b.name,
+            email: b.email,
+            bossTier: 'brand_owner',
+            title: 'Brand Owner (HQ)',
+          });
+        }
+      }
+    }
+
+    return Array.from(assignedMap.values());
+  }
+
   async enrichRestaurantsWithBosses(restaurants: RestaurantEntity[]) {
     if (restaurants.length === 0) return [];
     const restIds = restaurants.map((r) => r.id);
@@ -82,60 +150,6 @@ export class RestaurantService {
     const now = new Date();
 
     return restaurants.map((r) => {
-      const branchLinks = links.filter((l) => l.restaurantId === r.id);
-      const assignedMap = new Map<
-        string,
-        { id: string; name: string; email: string; bossTier: string; title: string }
-      >();
-
-      for (const link of branchLinks) {
-        const b = bossById.get(link.bossId);
-        if (b) {
-          assignedMap.set(b.id, {
-            id: b.id,
-            name: b.name,
-            email: b.email,
-            bossTier: b.bossTier || 'franchise_owner',
-            title:
-              link.title ||
-              (b.bossTier === 'brand_owner' ? 'Brand Owner (HQ)' : 'Franchise / Branch Owner'),
-          });
-        }
-      }
-
-      if (r.rootAdminId && !assignedMap.has(r.rootAdminId)) {
-        const b = bossById.get(r.rootAdminId);
-        if (b) {
-          assignedMap.set(b.id, {
-            id: b.id,
-            name: b.name,
-            email: b.email,
-            bossTier: b.bossTier || 'franchise_owner',
-            title: b.bossTier === 'brand_owner' ? 'Brand Owner (HQ)' : 'Franchise / Branch Owner',
-          });
-        }
-      }
-
-      if (r.brandName) {
-        const normalizedBrand = r.brandName.trim().toLowerCase();
-        for (const b of allBosses) {
-          if (
-            b.bossTier === 'brand_owner' &&
-            b.brandName &&
-            b.brandName.trim().toLowerCase() === normalizedBrand &&
-            !assignedMap.has(b.id)
-          ) {
-            assignedMap.set(b.id, {
-              id: b.id,
-              name: b.name,
-              email: b.email,
-              bossTier: 'brand_owner',
-              title: 'Brand Owner (HQ)',
-            });
-          }
-        }
-      }
-
       const restPayments = paymentsByRestId.get(r.id) ?? [];
       const summary = computeRestaurantBillingSummary({
         status: r.status,
@@ -166,7 +180,7 @@ export class RestaurantService {
         lastPaidPeriod: summary.lastPaidPeriod,
         totalCollectedAmount: summary.totalCollectedAmount,
         paymentHistory: restPayments.map(toPaymentRecordDto),
-        bosses: Array.from(assignedMap.values()),
+        bosses: this.resolveAssignedBossesForRestaurant(r, links, allBosses, bossById),
       };
     });
   }
@@ -243,10 +257,45 @@ export class RestaurantService {
     }
   }
 
+  private async resolveDeviceCredentials(params: {
+    terminalEmail?: string | null;
+    terminalPassword?: string;
+    printAgentUsername?: string | null;
+    printAgentPassword?: string;
+    excludeRestaurantId?: string;
+  }) {
+    const terminalEmail = params.terminalEmail?.trim().toLowerCase() || null;
+    await this.assertUniqueTerminalEmail(terminalEmail, params.excludeRestaurantId);
+    const terminalPasswordHash =
+      params.terminalPassword && params.terminalPassword.length > 0
+        ? await bcrypt.hash(params.terminalPassword, 10)
+        : null;
+
+    const printAgentUsername = params.printAgentUsername?.trim().toLowerCase() || null;
+    if (printAgentUsername) {
+      const owner = await this.repo.findOne({ where: { printAgentUsername } });
+      if (owner && owner.id !== params.excludeRestaurantId) {
+        throw new ConflictException('Print agent username already in use');
+      }
+    }
+    const printAgentPasswordHash =
+      params.printAgentPassword && params.printAgentPassword.length > 0
+        ? await bcrypt.hash(params.printAgentPassword, 10)
+        : null;
+
+    return {
+      terminalEmail,
+      terminalPasswordHash,
+      printAgentUsername,
+      printAgentPasswordHash,
+    };
+  }
+
   async create(dto: CreateRestaurantDto, recordedBy = 'Platform Admin') {
     const slug = dto.slug.toLowerCase().trim();
     const existing = await this.repo.findOne({ where: { slug } });
     if (existing) throw new ConflictException('Slug already in use');
+
     const {
       terminalEmail: rawTerminalEmail,
       terminalPassword: rawTerminalPassword,
@@ -265,20 +314,13 @@ export class RestaurantService {
       billingNotes,
       ...restDto
     } = dto;
-    const terminalEmail = rawTerminalEmail?.trim().toLowerCase() || null;
-    await this.assertUniqueTerminalEmail(terminalEmail);
-    const terminalPasswordHash =
-      rawTerminalPassword && rawTerminalPassword.length > 0
-        ? await bcrypt.hash(rawTerminalPassword, 10)
-        : null;
 
-    const printAgentUsername = rawUsername?.trim().toLowerCase() || null;
-    if (printAgentUsername) {
-      const owner = await this.repo.findOne({ where: { printAgentUsername } });
-      if (owner) throw new ConflictException('Print agent username already in use');
-    }
-    const printAgentPasswordHash =
-      rawPassword && rawPassword.length > 0 ? await bcrypt.hash(rawPassword, 10) : null;
+    const creds = await this.resolveDeviceCredentials({
+      terminalEmail: rawTerminalEmail,
+      terminalPassword: rawTerminalPassword,
+      printAgentUsername: rawUsername,
+      printAgentPassword: rawPassword,
+    });
 
     const now = new Date();
     const billingStartPeriod = isValidBillingPeriod(rawStartPeriod)
@@ -287,45 +329,44 @@ export class RestaurantService {
     const effectiveSuspended = Boolean(isAccessSuspended);
     const feeValue = monthlyFee != null ? Math.max(0, Number(monthlyFee) || 0) : 0;
 
-    const entity = this.repo.create({
-      ...restDto,
-      slug,
-      brandName: brandName?.trim() || null,
-      branchType: branchType ?? 'independent',
-      franchiseeCompanyName: franchiseeCompanyName?.trim() || null,
-      royaltyRate: royaltyRate != null ? String(Number(royaltyRate)) : '0',
-      monthlyFee: String(feeValue),
-      billingStartPeriod,
-      billingStatus: effectiveSuspended ? 'suspended' : 'pending',
-      isAccessSuspended: effectiveSuspended,
-      suspensionReason: effectiveSuspended ? 'payment_overdue' : null,
-      suspendedAt: effectiveSuspended ? now : null,
-      lastPaymentDate: null,
-      lastPaidPeriod: null,
-      billingNotes: billingNotes?.trim() || null,
-      terminalEmail,
-      terminalPasswordHash,
-      printAgentUsername,
-      printAgentPasswordHash,
-    });
-    const saved = await this.repo.save(entity);
+    const saved = await this.repo.save(
+      this.repo.create({
+        ...restDto,
+        slug,
+        brandName: brandName?.trim() || null,
+        branchType: branchType ?? 'independent',
+        franchiseeCompanyName: franchiseeCompanyName?.trim() || null,
+        royaltyRate: royaltyRate != null ? String(Number(royaltyRate)) : '0',
+        monthlyFee: String(feeValue),
+        billingStartPeriod,
+        billingStatus: effectiveSuspended ? 'suspended' : 'pending',
+        isAccessSuspended: effectiveSuspended,
+        suspensionReason: effectiveSuspended ? 'payment_overdue' : null,
+        suspendedAt: effectiveSuspended ? now : null,
+        lastPaymentDate: null,
+        lastPaidPeriod: null,
+        billingNotes: billingNotes?.trim() || null,
+        ...creds,
+      }),
+    );
 
     if (recordInitialPayment && feeValue >= 0) {
       const months = Math.max(1, Math.min(36, initialPaidMonths ?? 1));
       const coveredPeriods = buildConsecutivePeriods(billingStartPeriod, months);
-      const initialPayment = this.paymentRepo.create({
-        restaurantId: saved.id,
-        paidAt: now,
-        amount: String(Number((feeValue * months).toFixed(2))),
-        periods: coveredPeriods,
-        periodStart: coveredPeriods[0],
-        periodEnd: coveredPeriods[coveredPeriods.length - 1],
-        monthsCount: coveredPeriods.length,
-        paymentMethod: initialPaymentMethod ?? 'bank_transfer',
-        note: billingNotes?.trim() || 'Başlangıç abonelik tahsilatı',
-        recordedBy,
-      });
-      await this.paymentRepo.save(initialPayment);
+      await this.paymentRepo.save(
+        this.paymentRepo.create({
+          restaurantId: saved.id,
+          paidAt: now,
+          amount: String(Number((feeValue * months).toFixed(2))),
+          periods: coveredPeriods,
+          periodStart: coveredPeriods[0],
+          periodEnd: coveredPeriods[coveredPeriods.length - 1],
+          monthsCount: coveredPeriods.length,
+          paymentMethod: initialPaymentMethod ?? 'bank_transfer',
+          note: billingNotes?.trim() || 'Başlangıç abonelik tahsilatı',
+          recordedBy,
+        }),
+      );
     }
 
     await this.syncPersistedBillingSummary(saved.id);
@@ -333,16 +374,7 @@ export class RestaurantService {
     return this.findOneEnriched(saved.id);
   }
 
-  async update(id: string, dto: UpdateRestaurantDto) {
-    const entity = await this.findOne(id);
-    if (dto.slug !== undefined) {
-      const slug = dto.slug.toLowerCase().trim();
-      if (slug !== entity.slug) {
-        const existing = await this.repo.findOne({ where: { slug } });
-        if (existing) throw new ConflictException('Slug already in use');
-      }
-      entity.slug = slug;
-    }
+  private applyMutableScalarFields(entity: RestaurantEntity, dto: UpdateRestaurantDto): void {
     if (dto.name !== undefined) entity.name = dto.name;
     if (dto.address !== undefined) entity.address = dto.address;
     if (dto.phone !== undefined) entity.phone = dto.phone;
@@ -365,47 +397,63 @@ export class RestaurantService {
     if (dto.billingNotes !== undefined) {
       entity.billingNotes = dto.billingNotes?.trim() || null;
     }
-
-    if (dto.isAccessSuspended !== undefined) {
-      if (dto.isAccessSuspended) {
-        entity.isAccessSuspended = true;
-        entity.billingStatus = 'suspended';
-        entity.suspensionReason = 'payment_overdue';
-        entity.suspendedAt = entity.suspendedAt ?? new Date();
-      } else {
-        entity.isAccessSuspended = false;
-        entity.suspensionReason = null;
-        entity.suspendedAt = null;
-      }
-    }
-
     if (dto.taxId !== undefined) entity.taxId = dto.taxId ?? null;
     if (dto.whatsapp !== undefined) entity.whatsapp = dto.whatsapp ?? null;
     if (dto.instagram !== undefined) entity.instagram = dto.instagram ?? null;
     if (dto.facebook !== undefined) entity.facebook = dto.facebook ?? null;
     if (dto.website !== undefined) entity.website = dto.website ?? null;
     if (dto.workingHours !== undefined) entity.workingHours = dto.workingHours ?? null;
-    if (dto.terminalEmail !== undefined) {
-      const nextTerminalEmail = dto.terminalEmail?.trim().toLowerCase() || null;
-      await this.assertUniqueTerminalEmail(nextTerminalEmail, entity.id);
-      entity.terminalEmail = nextTerminalEmail;
-    }
-    if (dto.terminalPassword !== undefined && dto.terminalPassword.length > 0) {
-      entity.terminalPasswordHash = await bcrypt.hash(dto.terminalPassword, 10);
-    }
-    if (dto.printAgentUsername !== undefined) {
-      const nextUsername = dto.printAgentUsername?.trim().toLowerCase() || null;
-      if (nextUsername && nextUsername !== entity.printAgentUsername) {
-        const owner = await this.repo.findOne({ where: { printAgentUsername: nextUsername } });
-        if (owner && owner.id !== entity.id) {
-          throw new ConflictException('Print agent username already in use');
-        }
+  }
+
+  async update(id: string, dto: UpdateRestaurantDto) {
+    const entity = await this.findOne(id);
+    if (dto.slug !== undefined) {
+      const slug = dto.slug.toLowerCase().trim();
+      if (slug !== entity.slug) {
+        const existing = await this.repo.findOne({ where: { slug } });
+        if (existing) throw new ConflictException('Slug already in use');
       }
-      entity.printAgentUsername = nextUsername;
+      entity.slug = slug;
     }
-    if (dto.printAgentPassword !== undefined && dto.printAgentPassword.length > 0) {
-      entity.printAgentPasswordHash = await bcrypt.hash(dto.printAgentPassword, 10);
+
+    this.applyMutableScalarFields(entity, dto);
+
+    if (dto.isAccessSuspended !== undefined) {
+      entity.isAccessSuspended = dto.isAccessSuspended;
+      entity.billingStatus = dto.isAccessSuspended ? 'suspended' : entity.billingStatus;
+      entity.suspensionReason = dto.isAccessSuspended ? 'payment_overdue' : null;
+      entity.suspendedAt = dto.isAccessSuspended ? (entity.suspendedAt ?? new Date()) : null;
     }
+
+    if (dto.terminalEmail !== undefined || dto.printAgentUsername !== undefined) {
+      const creds = await this.resolveDeviceCredentials({
+        terminalEmail:
+          dto.terminalEmail !== undefined ? dto.terminalEmail : entity.terminalEmail,
+        terminalPassword: dto.terminalPassword,
+        printAgentUsername:
+          dto.printAgentUsername !== undefined
+            ? dto.printAgentUsername
+            : entity.printAgentUsername,
+        printAgentPassword: dto.printAgentPassword,
+        excludeRestaurantId: entity.id,
+      });
+      if (dto.terminalEmail !== undefined) entity.terminalEmail = creds.terminalEmail;
+      if (creds.terminalPasswordHash) entity.terminalPasswordHash = creds.terminalPasswordHash;
+      if (dto.printAgentUsername !== undefined) {
+        entity.printAgentUsername = creds.printAgentUsername;
+      }
+      if (creds.printAgentPasswordHash) {
+        entity.printAgentPasswordHash = creds.printAgentPasswordHash;
+      }
+    } else {
+      if (dto.terminalPassword && dto.terminalPassword.length > 0) {
+        entity.terminalPasswordHash = await bcrypt.hash(dto.terminalPassword, 10);
+      }
+      if (dto.printAgentPassword && dto.printAgentPassword.length > 0) {
+        entity.printAgentPasswordHash = await bcrypt.hash(dto.printAgentPassword, 10);
+      }
+    }
+
     const saved = await this.repo.save(entity);
     await this.syncPersistedBillingSummary(saved.id);
     await this.autoLinkBrandOwners(saved);

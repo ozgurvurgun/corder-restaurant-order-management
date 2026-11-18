@@ -13,26 +13,16 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-export const PAYMENT_METHODS = [
-  'cash',
-  'credit-card',
-  'meal-card',
-  'multinet',
-  'split',
-  'ledger',
-] as const;
+import {
+  PAYMENT_METHODS,
+  SPLIT_PAYMENT_METHODS,
+  SettlementPaymentMethod,
+  SettlementSplitMethod,
+} from '../../domain/services/check-settlement.policy';
 
-export type CloseCheckMethod = (typeof PAYMENT_METHODS)[number];
-
-export const SPLIT_PAYMENT_METHODS = [
-  'cash',
-  'credit-card',
-  'meal-card',
-  'multinet',
-  'ledger',
-] as const;
-
-export type CloseCheckSplitMethod = (typeof SPLIT_PAYMENT_METHODS)[number];
+export { PAYMENT_METHODS, SPLIT_PAYMENT_METHODS };
+export type CloseCheckMethod = SettlementPaymentMethod;
+export type CloseCheckSplitMethod = SettlementSplitMethod;
 
 export class CloseCheckDiscountDto {
   @IsIn(['percent', 'amount', 'complimentary'])

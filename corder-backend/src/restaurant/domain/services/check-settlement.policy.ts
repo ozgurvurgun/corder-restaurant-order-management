@@ -4,12 +4,40 @@ import {
   fromMinorUnits,
   toMinorUnits,
 } from '../../../common/money/minor-units';
-import {
-  CloseCheckDiscountDto,
-  CloseCheckMethod,
-  CloseCheckSplitDto,
-} from '../../api/dto/close-check.dto';
 import { EffectivePolicyLimits, PermissionKey } from '../permissions.catalog';
+
+export const PAYMENT_METHODS = [
+  'cash',
+  'credit-card',
+  'meal-card',
+  'multinet',
+  'split',
+  'ledger',
+] as const;
+
+export type SettlementPaymentMethod = (typeof PAYMENT_METHODS)[number];
+
+export const SPLIT_PAYMENT_METHODS = [
+  'cash',
+  'credit-card',
+  'meal-card',
+  'multinet',
+  'ledger',
+] as const;
+
+export type SettlementSplitMethod = (typeof SPLIT_PAYMENT_METHODS)[number];
+
+export interface SettlementDiscountInput {
+  type: 'percent' | 'amount' | 'complimentary';
+  value: number;
+  reason?: string;
+  appliedBy?: string;
+}
+
+export interface SettlementSplitInput {
+  method: SettlementSplitMethod;
+  amount: number;
+}
 
 export interface SettlementActorPolicy {
   isBoss?: boolean;
@@ -19,9 +47,9 @@ export interface SettlementActorPolicy {
 
 export interface CheckSettlementInput {
   rawTotalMinorUnits: number;
-  method: CloseCheckMethod;
-  discount?: CloseCheckDiscountDto | null;
-  splitDetails?: CloseCheckSplitDto[] | null;
+  method: SettlementPaymentMethod;
+  discount?: SettlementDiscountInput | null;
+  splitDetails?: SettlementSplitInput[] | null;
   ledgerCustomerId?: string | null;
   ledgerDebtAmount?: number | null;
   tip?: number | null;
@@ -39,20 +67,6 @@ export interface DiscountSnapshot {
   appliedBy?: string;
 }
 
-export interface CheckSettlementResult {
-  rawTotalMinorUnits: number;
-  discountMinorUnits: number;
-  netMinorUnits: number;
-  tipMinorUnits: number;
-  cashMinorUnits: number;
-  cardMinorUnits: number;
-  mealCardMinorUnits: number;
-  multinetMinorUnits: number;
-  ledgerMinorUnits: number;
-  normalizedSplits?: NormalizedPaymentSplit[];
-  discountSnapshot?: DiscountSnapshot;
-}
-
 export interface MethodBreakdownMinorUnits {
   cashMinorUnits: number;
   cardMinorUnits: number;
@@ -61,11 +75,52 @@ export interface MethodBreakdownMinorUnits {
   ledgerMinorUnits: number;
 }
 
+export interface CheckSettlementResult extends MethodBreakdownMinorUnits {
+  rawTotalMinorUnits: number;
+  discountMinorUnits: number;
+  netMinorUnits: number;
+  tipMinorUnits: number;
+  normalizedSplits?: NormalizedPaymentSplit[];
+  discountSnapshot?: DiscountSnapshot;
+}
+
+function emptyBreakdown(): MethodBreakdownMinorUnits {
+  return {
+    cashMinorUnits: 0,
+    cardMinorUnits: 0,
+    mealCardMinorUnits: 0,
+    multinetMinorUnits: 0,
+    ledgerMinorUnits: 0,
+  };
+}
+
+function addTenderPart(
+  target: MethodBreakdownMinorUnits,
+  method: string,
+  amountMinorUnits: number,
+): void {
+  if (method === 'cash') target.cashMinorUnits += amountMinorUnits;
+  else if (method === 'credit-card') target.cardMinorUnits += amountMinorUnits;
+  else if (method === 'meal-card') target.mealCardMinorUnits += amountMinorUnits;
+  else if (method === 'multinet') target.multinetMinorUnits += amountMinorUnits;
+  else if (method === 'ledger') target.ledgerMinorUnits += amountMinorUnits;
+}
+
+function sumBreakdown(b: MethodBreakdownMinorUnits): number {
+  return (
+    b.cashMinorUnits +
+    b.cardMinorUnits +
+    b.mealCardMinorUnits +
+    b.multinetMinorUnits +
+    b.ledgerMinorUnits
+  );
+}
+
 export class CheckSettlementPolicy {
   static assertDiscountAllowedForActor(
     rawTotalMinorUnits: number,
     discountMinorUnits: number,
-    discountDto: CloseCheckDiscountDto | null | undefined,
+    discountDto: SettlementDiscountInput | null | undefined,
     actor?: SettlementActorPolicy,
   ): void {
     if (discountMinorUnits <= 0 || !actor || actor.isBoss) {
@@ -116,32 +171,12 @@ export class CheckSettlementPolicy {
     }
   }
 
-  static computeSettlement(input: CheckSettlementInput): CheckSettlementResult {
-    const rawTotalMinorUnits = Math.max(0, input.rawTotalMinorUnits);
-    const discountMinorUnits = computeDiscountMinorUnits(
-      rawTotalMinorUnits,
-      input.discount ?? null,
-    );
-    const netMinorUnits = Math.max(0, rawTotalMinorUnits - discountMinorUnits);
-    const tipMinorUnits =
-      input.tip != null ? Math.max(0, toMinorUnits(input.tip)) : 0;
-
-    let cashMinorUnits = 0;
-    let cardMinorUnits = 0;
-    let mealCardMinorUnits = 0;
-    let multinetMinorUnits = 0;
-    let ledgerMinorUnits = 0;
-    let normalizedSplits: NormalizedPaymentSplit[] | undefined;
-
-    if (input.method === 'cash') {
-      cashMinorUnits = netMinorUnits;
-    } else if (input.method === 'credit-card') {
-      cardMinorUnits = netMinorUnits;
-    } else if (input.method === 'meal-card') {
-      mealCardMinorUnits = netMinorUnits;
-    } else if (input.method === 'multinet') {
-      multinetMinorUnits = netMinorUnits;
-    } else if (input.method === 'ledger') {
+  private static computeSingleTender(
+    input: CheckSettlementInput,
+    netMinorUnits: number,
+  ): MethodBreakdownMinorUnits {
+    const breakdown = emptyBreakdown();
+    if (input.method === 'ledger') {
       if (!input.ledgerCustomerId) {
         throw new BadRequestException(
           'A ledger customer must be selected for ledger settlement',
@@ -155,99 +190,119 @@ export class CheckSettlementPolicy {
           );
         }
       }
-      ledgerMinorUnits = netMinorUnits;
-    } else if (input.method === 'split') {
-      if (netMinorUnits > 0 && (!input.splitDetails || input.splitDetails.length === 0)) {
-        throw new BadRequestException('Split payment breakdown is required');
+    }
+    addTenderPart(breakdown, input.method, netMinorUnits);
+    return breakdown;
+  }
+
+  private static computeSplitTender(
+    input: CheckSettlementInput,
+    netMinorUnits: number,
+  ): {
+    breakdown: MethodBreakdownMinorUnits;
+    normalizedSplits: NormalizedPaymentSplit[];
+  } {
+    if (netMinorUnits > 0 && (!input.splitDetails || input.splitDetails.length === 0)) {
+      throw new BadRequestException('Split payment breakdown is required');
+    }
+    const breakdown = emptyBreakdown();
+    const normalizedSplits: NormalizedPaymentSplit[] = [];
+
+    for (const split of input.splitDetails ?? []) {
+      const partMinorUnits = toMinorUnits(split.amount);
+      if (partMinorUnits < 0) {
+        throw new BadRequestException('Split payment amount cannot be negative');
       }
-      normalizedSplits = [];
-      for (const split of input.splitDetails ?? []) {
-        const partMinorUnits = toMinorUnits(split.amount);
-        if (partMinorUnits < 0) {
-          throw new BadRequestException('Split payment amount cannot be negative');
-        }
-        if (partMinorUnits === 0) continue;
-        if (split.method === 'cash') cashMinorUnits += partMinorUnits;
-        else if (split.method === 'credit-card') cardMinorUnits += partMinorUnits;
-        else if (split.method === 'meal-card') mealCardMinorUnits += partMinorUnits;
-        else if (split.method === 'multinet') multinetMinorUnits += partMinorUnits;
-        else if (split.method === 'ledger') ledgerMinorUnits += partMinorUnits;
+      if (partMinorUnits === 0) continue;
+      addTenderPart(breakdown, split.method, partMinorUnits);
+      normalizedSplits.push({
+        method: split.method,
+        amount: fromMinorUnits(partMinorUnits),
+      });
+    }
+
+    if (
+      breakdown.ledgerMinorUnits === 0 &&
+      input.ledgerCustomerId &&
+      input.ledgerDebtAmount != null
+    ) {
+      const extraLedgerMinorUnits = Math.max(0, toMinorUnits(input.ledgerDebtAmount));
+      if (extraLedgerMinorUnits > 0) {
+        breakdown.ledgerMinorUnits += extraLedgerMinorUnits;
         normalizedSplits.push({
-          method: split.method,
-          amount: fromMinorUnits(partMinorUnits),
+          method: 'ledger',
+          amount: fromMinorUnits(extraLedgerMinorUnits),
         });
-      }
-      if (
-        ledgerMinorUnits === 0 &&
-        input.ledgerCustomerId &&
-        input.ledgerDebtAmount != null
-      ) {
-        const extraLedgerMinorUnits = Math.max(0, toMinorUnits(input.ledgerDebtAmount));
-        if (extraLedgerMinorUnits > 0) {
-          ledgerMinorUnits += extraLedgerMinorUnits;
-          normalizedSplits.push({
-            method: 'ledger',
-            amount: fromMinorUnits(extraLedgerMinorUnits),
-          });
-        }
-      }
-      const splitSumMinorUnits =
-        cashMinorUnits +
-        cardMinorUnits +
-        mealCardMinorUnits +
-        multinetMinorUnits +
-        ledgerMinorUnits;
-      if (splitSumMinorUnits !== netMinorUnits) {
-        throw new BadRequestException(
-          'Split payment total must equal the net check amount',
-        );
       }
     }
 
-    const totalSettledMinorUnits =
-      cashMinorUnits +
-      cardMinorUnits +
-      mealCardMinorUnits +
-      multinetMinorUnits +
-      ledgerMinorUnits;
-    if (totalSettledMinorUnits !== netMinorUnits) {
+    if (sumBreakdown(breakdown) !== netMinorUnits) {
+      throw new BadRequestException(
+        'Split payment total must equal the net check amount',
+      );
+    }
+
+    return { breakdown, normalizedSplits };
+  }
+
+  private static buildDiscountSnapshot(
+    discount: SettlementDiscountInput | null | undefined,
+    discountMinorUnits: number,
+  ): DiscountSnapshot | undefined {
+    if (!discount || discountMinorUnits <= 0) return undefined;
+    return {
+      type: discount.type,
+      value: discount.type === 'complimentary' ? 100 : discount.value,
+      reason:
+        discount.reason?.trim() ||
+        (discount.type === 'complimentary' ? 'Complimentary' : 'Discount'),
+      ...(discount.appliedBy?.trim()
+        ? { appliedBy: discount.appliedBy.trim() }
+        : {}),
+    };
+  }
+
+  static computeSettlement(input: CheckSettlementInput): CheckSettlementResult {
+    const rawTotalMinorUnits = Math.max(0, input.rawTotalMinorUnits);
+    const discountMinorUnits = computeDiscountMinorUnits(
+      rawTotalMinorUnits,
+      input.discount ?? null,
+    );
+    const netMinorUnits = Math.max(0, rawTotalMinorUnits - discountMinorUnits);
+    const tipMinorUnits =
+      input.tip != null ? Math.max(0, toMinorUnits(input.tip)) : 0;
+
+    const splitOutcome =
+      input.method === 'split'
+        ? this.computeSplitTender(input, netMinorUnits)
+        : null;
+    const breakdown = splitOutcome
+      ? splitOutcome.breakdown
+      : this.computeSingleTender(input, netMinorUnits);
+
+    if (sumBreakdown(breakdown) !== netMinorUnits) {
       throw new BadRequestException(
         'Payment settlement total must equal the net check amount',
       );
     }
 
-    if ((ledgerMinorUnits > 0 || input.method === 'ledger') && !input.ledgerCustomerId) {
+    if (
+      (breakdown.ledgerMinorUnits > 0 || input.method === 'ledger') &&
+      !input.ledgerCustomerId
+    ) {
       throw new BadRequestException(
         'ledgerCustomerId is required when recording a ledger debt',
       );
     }
-
-    const discountSnapshot: DiscountSnapshot | undefined =
-      input.discount && discountMinorUnits > 0
-        ? {
-            type: input.discount.type,
-            value: input.discount.type === 'complimentary' ? 100 : input.discount.value,
-            reason:
-              input.discount.reason?.trim() ||
-              (input.discount.type === 'complimentary' ? 'Complimentary' : 'Discount'),
-            ...(input.discount.appliedBy?.trim()
-              ? { appliedBy: input.discount.appliedBy.trim() }
-              : {}),
-          }
-        : undefined;
 
     return {
       rawTotalMinorUnits,
       discountMinorUnits,
       netMinorUnits,
       tipMinorUnits,
-      cashMinorUnits,
-      cardMinorUnits,
-      mealCardMinorUnits,
-      multinetMinorUnits,
-      ledgerMinorUnits,
-      normalizedSplits,
-      discountSnapshot,
+      ...breakdown,
+      normalizedSplits: splitOutcome?.normalizedSplits,
+      discountSnapshot: this.buildDiscountSnapshot(input.discount, discountMinorUnits),
     };
   }
 
@@ -256,34 +311,14 @@ export class CheckSettlementPolicy {
     netMinorUnits: number,
     splitDetails?: Array<{ method: string; amount: number }> | null,
   ): MethodBreakdownMinorUnits {
-    let cashMinorUnits = 0;
-    let cardMinorUnits = 0;
-    let mealCardMinorUnits = 0;
-    let multinetMinorUnits = 0;
-    let ledgerMinorUnits = 0;
-
-    if (method === 'cash') cashMinorUnits = netMinorUnits;
-    else if (method === 'credit-card') cardMinorUnits = netMinorUnits;
-    else if (method === 'meal-card') mealCardMinorUnits = netMinorUnits;
-    else if (method === 'multinet') multinetMinorUnits = netMinorUnits;
-    else if (method === 'ledger') ledgerMinorUnits = netMinorUnits;
-    else if (method === 'split' && Array.isArray(splitDetails)) {
+    const breakdown = emptyBreakdown();
+    if (method === 'split' && Array.isArray(splitDetails)) {
       for (const s of splitDetails) {
-        const part = Math.max(0, toMinorUnits(s.amount));
-        if (s.method === 'cash') cashMinorUnits += part;
-        else if (s.method === 'credit-card') cardMinorUnits += part;
-        else if (s.method === 'meal-card') mealCardMinorUnits += part;
-        else if (s.method === 'multinet') multinetMinorUnits += part;
-        else if (s.method === 'ledger') ledgerMinorUnits += part;
+        addTenderPart(breakdown, s.method, Math.max(0, toMinorUnits(s.amount)));
       }
+      return breakdown;
     }
-
-    return {
-      cashMinorUnits,
-      cardMinorUnits,
-      mealCardMinorUnits,
-      multinetMinorUnits,
-      ledgerMinorUnits,
-    };
+    addTenderPart(breakdown, method, netMinorUnits);
+    return breakdown;
   }
 }

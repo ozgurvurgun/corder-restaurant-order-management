@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { useAdminStore } from "@/lib/store"
 import type {
   Restaurant,
@@ -7,14 +7,12 @@ import type {
 } from "@/lib/types"
 import {
   addMonthsToPeriod,
-  evaluateRestaurantPeriod,
   formatMoney,
   formatPeriodLong,
   formatPeriodsSummary,
   fromMinorUnits,
   getIstanbulBillingPeriod,
   getIstanbulDayOfMonth,
-  sumMoneyMajor,
   toMinorUnits,
 } from "@/lib/money"
 import {
@@ -38,6 +36,7 @@ import { BillingMatrixView } from "@/components/billing/BillingMatrixView"
 import { BillingLedgerView } from "@/components/billing/BillingLedgerView"
 import { PaymentFormModal } from "@/components/billing/PaymentFormModal"
 import { RestaurantBillingHistoryModal } from "@/components/billing/RestaurantBillingHistoryModal"
+import { useBillingPeriodMetrics } from "@/components/billing/use-billing-metrics"
 
 type BillingTabMode = "period" | "matrix" | "ledger"
 
@@ -75,7 +74,6 @@ export function BillingPage() {
     null
   )
 
-  // Modal states
   const [paymentModalState, setPaymentModalState] = useState<{
     restaurantId: string
     initialPeriod?: string
@@ -107,18 +105,24 @@ export function BillingPage() {
   const collectionEndDay = billingConfig?.collectionEndDay ?? 30
   const dayOfMonth = getIstanbulDayOfMonth()
 
+  const { metrics, filteredRestaurants } = useBillingPeriodMetrics({
+    restaurants,
+    selectedPeriod,
+    currentPeriod,
+    collectionEndDay,
+    dayOfMonth,
+    statusFilter,
+    searchQuery,
+  })
+
   const handleSaveMonthlyFee = async (r: Restaurant) => {
-    const raw = feeDrafts[r.id]
-    const parsed = Math.max(0, fromMinorUnits(toMinorUnits(raw)))
+    const parsed = Math.max(0, fromMinorUnits(toMinorUnits(feeDrafts[r.id])))
     setBusyRestId(r.id)
     try {
       await updateRestaurant(r.id, { monthlyFee: parsed })
       showNotice(`${r.name} aylık ücreti ${formatMoney(parsed)} olarak kaydedildi.`)
     } catch (err) {
-      showNotice(
-        err instanceof Error ? err.message : "Ücret güncellenemedi",
-        "err"
-      )
+      showNotice(err instanceof Error ? err.message : "Ücret güncellenemedi", "err")
     } finally {
       setBusyRestId(null)
     }
@@ -156,10 +160,7 @@ export function BillingPage() {
     showNotice(`${r.name} tahsilat kaydı güncellendi.`)
   }
 
-  const handleDeletePayment = async (
-    r: Restaurant,
-    payment: RestaurantPaymentRecord
-  ) => {
+  const handleDeletePayment = async (r: Restaurant, payment: RestaurantPaymentRecord) => {
     await deleteRestaurantPayment(r.id, payment.id)
     showNotice(
       `${r.name} — ${formatPeriodsSummary(payment.periods, payment.period)} tahsilat kaydı silindi.`
@@ -176,16 +177,10 @@ export function BillingPage() {
     }
     setBusyRestId(r.id)
     try {
-      await suspendRestaurantUnpaid(
-        r.id,
-        "Ödeme alınmadığı için sistem erişimi durduruldu."
-      )
+      await suspendRestaurantUnpaid(r.id, "Ödeme alınmadığı için sistem erişimi durduruldu.")
       showNotice(`${r.name} işletmesinin sistem erişimi durduruldu.`)
     } catch (err) {
-      showNotice(
-        err instanceof Error ? err.message : "Erişim durdurulamadı",
-        "err"
-      )
+      showNotice(err instanceof Error ? err.message : "Erişim durdurulamadı", "err")
     } finally {
       setBusyRestId(null)
     }
@@ -228,154 +223,6 @@ export function BillingPage() {
     }
   }
 
-  // Metrics for selectedPeriod
-  const metrics = useMemo(() => {
-    const activeForSelected = restaurants.filter((r) => {
-      const cell = evaluateRestaurantPeriod(
-        r,
-        selectedPeriod,
-        currentPeriod,
-        collectionEndDay,
-        dayOfMonth
-      )
-      return cell.state !== "before_start" && cell.state !== "exempt"
-    })
-
-    const periodTargetTotal = sumMoneyMajor(
-      activeForSelected.map((r) => r.monthlyFee ?? 0)
-    )
-
-    const paidInSelected = activeForSelected.filter((r) => {
-      const cell = evaluateRestaurantPeriod(
-        r,
-        selectedPeriod,
-        currentPeriod,
-        collectionEndDay,
-        dayOfMonth
-      )
-      return cell.state === "paid" || cell.state === "prepaid"
-    })
-
-    const unpaidInSelected = activeForSelected.filter((r) => {
-      const cell = evaluateRestaurantPeriod(
-        r,
-        selectedPeriod,
-        currentPeriod,
-        collectionEndDay,
-        dayOfMonth
-      )
-      return (
-        cell.state === "pending" ||
-        cell.state === "overdue" ||
-        cell.state === "future"
-      )
-    })
-
-    const periodPaidFeeTotal = sumMoneyMajor(
-      paidInSelected.map((r) => r.monthlyFee ?? 0)
-    )
-
-    // Cash actually collected during selectedPeriod calendar month (by paidAt)
-    const cashPaymentsInSelectedMonth: number[] = []
-    for (const r of restaurants) {
-      for (const p of r.paymentHistory ?? []) {
-        const paidMonth = getIstanbulBillingPeriod(new Date(p.paidAt))
-        if (paidMonth === selectedPeriod) {
-          cashPaymentsInSelectedMonth.push(p.amount)
-        }
-      }
-    }
-    const periodCashCollected = sumMoneyMajor(cashPaymentsInSelectedMonth)
-
-    // Overall unpaid balance across all duePeriods (retroactive + current)
-    let unpaidMinor = 0
-    let unpaidVenuesCount = 0
-    let overdueVenuesCount = 0
-    let overduePeriodsCount = 0
-    for (const r of restaurants) {
-      const dueCount = r.duePeriods?.length ?? 0
-      const ovCount = r.overduePeriods?.length ?? 0
-      if (dueCount > 0) {
-        unpaidVenuesCount += 1
-        unpaidMinor += toMinorUnits(r.monthlyFee ?? 0) * dueCount
-      }
-      if (ovCount > 0) {
-        overdueVenuesCount += 1
-        overduePeriodsCount += ovCount
-      }
-    }
-
-    const suspendedCount = restaurants.filter(
-      (r) => r.isAccessSuspended || r.billingStatus === "suspended"
-    ).length
-
-    return {
-      billableCount: activeForSelected.length,
-      periodTargetTotal,
-      periodPaidCount: paidInSelected.length,
-      unpaidSelectedCount: unpaidInSelected.length,
-      periodPaidFeeTotal,
-      periodCashCollected,
-      unpaidBalanceTotal: fromMinorUnits(unpaidMinor),
-      unpaidVenuesCount,
-      overdueVenuesCount,
-      overduePeriodsCount,
-      suspendedCount,
-    }
-  }, [restaurants, selectedPeriod, currentPeriod, collectionEndDay, dayOfMonth])
-
-  const filteredRestaurants = useMemo(() => {
-    return restaurants.filter((r) => {
-      const isSusp = Boolean(
-        r.isAccessSuspended || r.billingStatus === "suspended"
-      )
-      const cell = evaluateRestaurantPeriod(
-        r,
-        selectedPeriod,
-        currentPeriod,
-        collectionEndDay,
-        dayOfMonth
-      )
-      if (
-        statusFilter === "paid" &&
-        cell.state !== "paid" &&
-        cell.state !== "prepaid"
-      ) {
-        return false
-      }
-      if (
-        statusFilter === "unpaid" &&
-        cell.state !== "pending" &&
-        cell.state !== "overdue" &&
-        cell.state !== "future"
-      ) {
-        return false
-      }
-      if (statusFilter === "overdue" && (r.overduePeriods?.length ?? 0) === 0) {
-        return false
-      }
-      if (statusFilter === "suspended" && !isSusp) return false
-
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim()
-        return (
-          r.name.toLowerCase().includes(q) ||
-          (r.brandName ?? "").toLowerCase().includes(q) ||
-          r.slug.toLowerCase().includes(q)
-        )
-      }
-      return true
-    })
-  }, [
-    restaurants,
-    selectedPeriod,
-    currentPeriod,
-    collectionEndDay,
-    dayOfMonth,
-    statusFilter,
-    searchQuery,
-  ])
-
   const activePaymentRestaurant = paymentModalState
     ? restaurants.find((r) => r.id === paymentModalState.restaurantId) ?? null
     : null
@@ -385,46 +232,31 @@ export function BillingPage() {
 
   return (
     <div className="space-y-4">
-      {/* Top Control & Period Bar */}
       <div className="rounded-2xl border border-[#e5e5ea] bg-white p-4 flex flex-wrap items-center justify-between gap-3">
-        {/* View Mode Tabs */}
         <div className="inline-flex flex-wrap items-center gap-1 rounded-xl bg-[#f5f5f7] p-1">
-          <button
-            type="button"
-            onClick={() => setActiveTab("period")}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition-all ${activeTab === "period"
-                ? "bg-white text-[#1d1d1f] shadow-2xs"
-                : "text-[#636366] hover:text-[#1d1d1f]"
+          {(
+            [
+              { id: "period", label: "Dönem Tahsilat Tablosu", icon: ListChecks },
+              { id: "matrix", label: "Ay-Ay Yıllık Çizelge", icon: CalendarDays },
+              { id: "ledger", label: "Tahsilat Defteri (Tarih Sıralı)", icon: ReceiptText },
+            ] as const
+          ).map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition-all ${
+                activeTab === id
+                  ? "bg-white text-[#1d1d1f] shadow-2xs"
+                  : "text-[#636366] hover:text-[#1d1d1f]"
               }`}
-          >
-            <ListChecks className="h-3.5 w-3.5 text-[#e63462]" />
-            Dönem Tahsilat Tablosu
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("matrix")}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition-all ${activeTab === "matrix"
-                ? "bg-white text-[#1d1d1f] shadow-2xs"
-                : "text-[#636366] hover:text-[#1d1d1f]"
-              }`}
-          >
-            <CalendarDays className="h-3.5 w-3.5 text-[#e63462]" />
-            Ay-Ay Yıllık Çizelge
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("ledger")}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition-all ${activeTab === "ledger"
-                ? "bg-white text-[#1d1d1f] shadow-2xs"
-                : "text-[#636366] hover:text-[#1d1d1f]"
-              }`}
-          >
-            <ReceiptText className="h-3.5 w-3.5 text-[#e63462]" />
-            Tahsilat Defteri (Tarih Sıralı)
-          </button>
+            >
+              <Icon className="h-3.5 w-3.5 text-[#e63462]" />
+              {label}
+            </button>
+          ))}
         </div>
 
-        {/* Period Switcher + Bank/IBAN Config Button */}
         <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex items-center gap-1 rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] p-1">
             <button
@@ -485,10 +317,11 @@ export function BillingPage() {
 
       {feedback && (
         <div
-          className={`rounded-xl border px-4 py-3 text-[13px] font-medium ${feedback.type === "err"
+          className={`rounded-xl border px-4 py-3 text-[13px] font-medium ${
+            feedback.type === "err"
               ? "border-red-200 bg-red-50 text-red-700"
               : "border-emerald-200 bg-emerald-50 text-emerald-800"
-            }`}
+          }`}
         >
           {feedback.text}
         </div>

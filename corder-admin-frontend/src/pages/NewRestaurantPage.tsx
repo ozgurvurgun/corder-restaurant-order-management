@@ -2,8 +2,6 @@ import { useEffect, useState } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { useAdminStore } from "@/lib/store"
 import {
-  PAYMENT_METHOD_LABELS,
-  formatMoney,
   fromMinorUnits,
   getIstanbulBillingPeriod,
   toMinorUnits,
@@ -12,7 +10,12 @@ import type {
   RestaurantBranchType,
   SubscriptionPaymentMethod,
 } from "@/lib/types"
-import { ArrowLeft, Building2, CreditCard, Monitor, Printer } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
+import {
+  DeviceCredentialsCards,
+  FranchiseConfigCard,
+  InitialSubscriptionCard,
+} from "@/components/NewRestaurantFormSections"
 
 export function NewRestaurantPage() {
   const navigate = useNavigate()
@@ -68,41 +71,28 @@ export function NewRestaurantPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
-    if (!name.trim()) {
-      setError("Restoran adı gerekli.")
-      return
-    }
+    if (!name.trim()) return setError("Restoran adı gerekli.")
     const cleanSlug = slug.trim().toLowerCase()
-    if (!cleanSlug) {
-      setError("Slug gerekli (URL için benzersiz).")
-      return
-    }
-    const slugExists = restaurants.some((r) => r.slug === cleanSlug)
-    if (slugExists) {
-      setError("Bu slug zaten kullanılıyor.")
-      return
+    if (!cleanSlug) return setError("Slug gerekli (URL için benzersiz).")
+    if (restaurants.some((r) => r.slug === cleanSlug)) {
+      return setError("Bu slug zaten kullanılıyor.")
     }
     const cleanTerminalEmail = terminalEmail.trim().toLowerCase()
     if (cleanTerminalEmail && terminalPassword.length < 4) {
-      setError("Terminal hesabı tanımlarken en az 4 karakterli parola girilmelidir.")
-      return
+      return setError("Terminal hesabı tanımlarken en az 4 karakterli parola girilmelidir.")
     }
     if (!cleanTerminalEmail && terminalPassword.length > 0) {
-      setError("Terminal parolası girildiğinde terminal e-posta adresi de belirtilmelidir.")
-      return
+      return setError("Terminal parolası girildiğinde terminal e-posta adresi de belirtilmelidir.")
     }
     const cleanPrintUser = printAgentUsername.trim().toLowerCase()
     if (cleanPrintUser && cleanPrintUser.length < 3) {
-      setError("Print Agent kullanıcı adı en az 3 karakter olmalıdır.")
-      return
+      return setError("Print Agent kullanıcı adı en az 3 karakter olmalıdır.")
     }
     if (cleanPrintUser && printAgentPassword.length < 6) {
-      setError("Print Agent kullanıcısı tanımlarken en az 6 karakterli parola girilmelidir.")
-      return
+      return setError("Print Agent kullanıcısı tanımlarken en az 6 karakterli parola girilmelidir.")
     }
     if (!cleanPrintUser && printAgentPassword.length > 0) {
-      setError("Print Agent parolası girildiğinde kullanıcı adı da belirtilmelidir.")
-      return
+      return setError("Print Agent parolası girildiğinde kullanıcı adı da belirtilmelidir.")
     }
 
     setLoading(true)
@@ -238,275 +228,48 @@ export function NewRestaurantPage() {
           </div>
         </div>
 
-        {/* Franchise & Brand Hierarchy Section */}
-        <div className="rounded-2xl border border-[#e5e5ea] bg-white p-5 space-y-4">
-          <div className="flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-[#e63462]" />
-            <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
-              Marka &amp; Franchise Yapılandırması
-            </h2>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                Şube Mülkiyet Modeli
-              </label>
-              <select
-                value={branchType}
-                onChange={(e) => setBranchType(e.target.value as RestaurantBranchType)}
-                className={inputCls}
-              >
-                <option value="independent">Bağımsız Tekil İşletme</option>
-                <option value="company_owned">Merkez / Özmal Şube (Markaya Ait)</option>
-                <option value="franchise">Franchise Şubesi (Franchise Alan Yatırımcı)</option>
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                Üst Marka / Zincir Adı (Varsa)
-              </label>
-              <input
-                type="text"
-                list="existing-brands-list"
-                value={brandName}
-                onChange={(e) => setBrandName(e.target.value)}
-                placeholder="Örn: Burger House Türkiye"
-                className={inputCls}
-              />
-              <datalist id="existing-brands-list">
-                {existingBrands.map((b) => (
-                  <option key={b} value={b} />
-                ))}
-              </datalist>
-            </div>
-            {branchType === "franchise" && (
-              <>
-                <div>
-                  <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                    Franchise İşletmeci Firma / Yatırımcı Ünvanı
-                  </label>
-                  <input
-                    type="text"
-                    value={franchiseeCompanyName}
-                    onChange={(e) => setFranchiseeCompanyName(e.target.value)}
-                    placeholder="Örn: Yılmaz Gıda Turizm Ltd. Şti."
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                    Marka Royalty / Ciro Payı Oranı (%)
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step="0.5"
-                    value={royaltyRate}
-                    onChange={(e) => setRoyaltyRate(e.target.value)}
-                    className={inputCls}
-                  />
-                </div>
-              </>
-            )}
-          </div>
-          <p className="text-[12px] text-[#86868b]">
-            Bir üst marka adı girdiğinizde, o markanın &ldquo;Marka Sahibi (HQ)&rdquo; olan Boss hesabı bu şubeyi ve tüm cirosunu otomatik olarak görür.
-          </p>
-        </div>
+        <FranchiseConfigCard
+          branchType={branchType}
+          onBranchTypeChange={setBranchType}
+          brandName={brandName}
+          onBrandNameChange={setBrandName}
+          existingBrands={existingBrands}
+          franchiseeCompanyName={franchiseeCompanyName}
+          onFranchiseeCompanyNameChange={setFranchiseeCompanyName}
+          royaltyRate={royaltyRate}
+          onRoyaltyRateChange={setRoyaltyRate}
+          inputCls={inputCls}
+        />
 
-        {/* Subscription & Period Start */}
-        <div className="rounded-2xl border border-[#e5e5ea] bg-white p-5 space-y-4">
-          <div className="flex items-center gap-2">
-            <CreditCard className="h-4 w-4 text-[#34c759]" />
-            <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
-              Abonelik Ücreti &amp; Başlangıç Dönemi
-            </h2>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                Aylık Abonelik Ücreti (₺) *
-              </label>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={monthlyFee}
-                onChange={(e) => setMonthlyFee(e.target.value)}
-                placeholder="2500"
-                className={`${inputCls} font-semibold`}
-                required
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                Abonelik Başlangıç Dönemi (Ay / Yıl) *
-              </label>
-              <input
-                type="month"
-                value={billingStartPeriod}
-                onChange={(e) => {
-                  if (e.target.value) setBillingStartPeriod(e.target.value)
-                }}
-                className={inputCls}
-                required
-              />
-            </div>
-          </div>
+        <InitialSubscriptionCard
+          monthlyFee={monthlyFee}
+          onMonthlyFeeChange={setMonthlyFee}
+          feeMajor={feeMajor}
+          billingStartPeriod={billingStartPeriod}
+          onBillingStartPeriodChange={setBillingStartPeriod}
+          recordInitialPayment={recordInitialPayment}
+          onRecordInitialPaymentChange={setRecordInitialPayment}
+          initialPaidMonths={initialPaidMonths}
+          onInitialPaidMonthsChange={setInitialPaidMonths}
+          initialPaymentMethod={initialPaymentMethod}
+          onInitialPaymentMethodChange={setInitialPaymentMethod}
+          billingNotes={billingNotes}
+          onBillingNotesChange={setBillingNotes}
+          inputCls={inputCls}
+        />
 
-          <div className="rounded-xl border border-[#e5e5ea] bg-[#f9f9fb] p-3.5 space-y-3">
-            <label className="flex items-center gap-2.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={recordInitialPayment}
-                onChange={(e) => setRecordInitialPayment(e.target.checked)}
-                className="h-4 w-4 accent-[#34c759]"
-              />
-              <span className="text-[13px] font-medium text-[#1d1d1f]">
-                Kurulum sırasında peşin tahsilat alındı (ilk ödeme kaydını otomatik oluştur)
-              </span>
-            </label>
-
-            {recordInitialPayment && (
-              <div className="grid gap-3 sm:grid-cols-2 pt-1">
-                <div>
-                  <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                    Peşin Ödenen Süre
-                  </label>
-                  <select
-                    value={initialPaidMonths}
-                    onChange={(e) => setInitialPaidMonths(Number(e.target.value))}
-                    className={inputCls}
-                  >
-                    <option value={1}>1 Aylık ({formatMoney(feeMajor)})</option>
-                    <option value={3}>3 Aylık ({formatMoney(feeMajor * 3)})</option>
-                    <option value={6}>6 Aylık ({formatMoney(feeMajor * 6)})</option>
-                    <option value={12}>12 Aylık ({formatMoney(feeMajor * 12)})</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                    Ödeme Yöntemi
-                  </label>
-                  <select
-                    value={initialPaymentMethod}
-                    onChange={(e) =>
-                      setInitialPaymentMethod(
-                        e.target.value as SubscriptionPaymentMethod
-                      )
-                    }
-                    className={inputCls}
-                  >
-                    {(
-                      Object.entries(PAYMENT_METHOD_LABELS) as Array<
-                        [SubscriptionPaymentMethod, string]
-                      >
-                    ).map(([k, label]) => (
-                      <option key={k} value={k}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-              Sözleşme / Abonelik Notu
-            </label>
-            <input
-              type="text"
-              value={billingNotes}
-              onChange={(e) => setBillingNotes(e.target.value)}
-              placeholder="İsteğe bağlı sözleşme veya ödeme notu..."
-              className={inputCls}
-            />
-          </div>
-        </div>
-
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-2xl border border-[#e5e5ea] bg-white p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <Monitor className="h-4 w-4 text-[#007aff]" />
-              <p className="text-[14px] font-semibold text-[#1d1d1f]">
-                Terminal (Garson / Kasa Ekranı) Giriş Bilgileri (İsteğe Bağlı)
-              </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                  Terminal E-posta
-                </label>
-                <input
-                  type="email"
-                  value={terminalEmail}
-                  onChange={(e) => setTerminalEmail(e.target.value)}
-                  placeholder="Örn: terminal@restoran.com"
-                  autoComplete="off"
-                  className={inputCls}
-                  disabled={loading}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                  Terminal Parola (en az 4 krk)
-                </label>
-                <input
-                  type="password"
-                  value={terminalPassword}
-                  onChange={(e) => setTerminalPassword(e.target.value)}
-                  placeholder="••••••••"
-                  minLength={4}
-                  autoComplete="new-password"
-                  className={inputCls}
-                  disabled={loading}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-[#e5e5ea] bg-white p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <Printer className="h-4 w-4 text-[#e63462]" />
-              <p className="text-[14px] font-semibold text-[#1d1d1f]">
-                Print Agent (Masaüstü Yazıcı Uygulaması) Kullanıcısı (İsteğe Bağlı)
-              </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                  Kullanıcı Adı
-                </label>
-                <input
-                  type="text"
-                  value={printAgentUsername}
-                  onChange={(e) => setPrintAgentUsername(e.target.value)}
-                  placeholder="Örn: merkez-yazici"
-                  minLength={3}
-                  className={`${inputCls} font-mono`}
-                  disabled={loading}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                  Parola (en az 6 krk)
-                </label>
-                <input
-                  type="password"
-                  value={printAgentPassword}
-                  onChange={(e) => setPrintAgentPassword(e.target.value)}
-                  placeholder="••••••••"
-                  minLength={6}
-                  className={inputCls}
-                  disabled={loading}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
+        <DeviceCredentialsCards
+          terminalEmail={terminalEmail}
+          onTerminalEmailChange={setTerminalEmail}
+          terminalPassword={terminalPassword}
+          onTerminalPasswordChange={setTerminalPassword}
+          printAgentUsername={printAgentUsername}
+          onPrintAgentUsernameChange={setPrintAgentUsername}
+          printAgentPassword={printAgentPassword}
+          onPrintAgentPasswordChange={setPrintAgentPassword}
+          disabled={loading}
+          inputCls={inputCls}
+        />
 
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] font-medium text-red-700">

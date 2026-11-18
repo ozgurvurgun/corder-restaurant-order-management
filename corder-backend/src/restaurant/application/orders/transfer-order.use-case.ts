@@ -18,6 +18,14 @@ export interface MoveItemsToTableInput {
   actorDisplayName?: string | null;
 }
 
+interface MovedItemSnapshot {
+  productId: string;
+  productName: string;
+  price: number;
+  quantity: number;
+  note?: string;
+}
+
 @Injectable()
 export class TransferOrderUseCase {
   constructor(
@@ -50,6 +58,32 @@ export class TransferOrderUseCase {
       fromTable: lockedById.get(fromTableId)!,
       toTable: lockedById.get(toTableId)!,
     };
+  }
+
+  private applyTargetTableStateOnFullMove(
+    fromTable: TableEntity,
+    toTable: TableEntity,
+    isMergeIntoOccupied: boolean,
+  ): boolean {
+    let changed = false;
+    if (fromTable.discount && !toTable.discount) {
+      toTable.discount = fromTable.discount;
+      changed = true;
+    }
+    if (isMergeIntoOccupied) {
+      if (toTable.splitInfo && !toTable.splitInfo.paidShares?.length) {
+        toTable.splitInfo = null;
+        changed = true;
+      }
+    } else if (fromTable.splitInfo && !toTable.splitInfo) {
+      toTable.splitInfo = fromTable.splitInfo;
+      changed = true;
+    }
+    if (toTable.status === 'empty') {
+      toTable.status = 'occupied';
+      changed = true;
+    }
+    return changed;
   }
 
   async moveTable(
@@ -86,34 +120,14 @@ export class TransferOrderUseCase {
       const existingTargetOrders = await em.count(OrderEntity, {
         where: { restaurantId, tableId: toTableId, status: 'active' },
       });
-      const isMergeIntoOccupied = existingTargetOrders > 0;
 
-      const now = new Date();
       await em.update(
         OrderEntity,
         { id: In(activeOrders.map((o) => o.id)), restaurantId },
-        { tableId: toTableId, updatedAt: now },
+        { tableId: toTableId, updatedAt: new Date() },
       );
 
-      let toTableChanged = false;
-      if (fromTable.discount && !toTable.discount) {
-        toTable.discount = fromTable.discount;
-        toTableChanged = true;
-      }
-      if (isMergeIntoOccupied) {
-        if (toTable.splitInfo && !toTable.splitInfo.paidShares?.length) {
-          toTable.splitInfo = null;
-          toTableChanged = true;
-        }
-      } else if (fromTable.splitInfo && !toTable.splitInfo) {
-        toTable.splitInfo = fromTable.splitInfo;
-        toTableChanged = true;
-      }
-      if (toTable.status === 'empty') {
-        toTable.status = 'occupied';
-        toTableChanged = true;
-      }
-      if (toTableChanged) {
+      if (this.applyTargetTableStateOnFullMove(fromTable, toTable, existingTargetOrders > 0)) {
         await em.save(TableEntity, toTable);
       }
 
@@ -128,6 +142,81 @@ export class TransferOrderUseCase {
       this.ordersGateway.emitOrdersUpdated(restaurantId);
     }
     return { moved };
+  }
+
+  private async takeSelectedQuantitiesAndPruneSourceOrders(
+    em: EntityManager,
+    restaurantId: string,
+    uniqueIds: string[],
+    itemById: Map<string, OrderItemEntity>,
+    qtyByItemId: Map<string, number | undefined>,
+    affectedOrderIds: string[],
+    now: Date,
+  ): Promise<MovedItemSnapshot[]> {
+    const snapshots: MovedItemSnapshot[] = [];
+    for (const id of uniqueIds) {
+      const src = itemById.get(id)!;
+      const taken = src.takeQuantity(qtyByItemId.get(id));
+      snapshots.push({
+        productId: src.productId,
+        productName: src.productName,
+        price: Number(src.price),
+        quantity: taken.quantity,
+        note: src.note ?? undefined,
+      });
+      if (taken.full) {
+        await em.delete(OrderItemEntity, { id });
+      } else {
+        await em.save(OrderItemEntity, src);
+      }
+    }
+
+    for (const oid of affectedOrderIds) {
+      const remainingItems = await em.find(OrderItemEntity, { where: { orderId: oid } });
+      if (remainingItems.length === 0) {
+        await em.delete(OrderEntity, { id: oid, restaurantId });
+      } else {
+        const nextStatus = OrderStatusPolicy.resolveOrderStatus(remainingItems);
+        await em.update(
+          OrderEntity,
+          { id: oid, restaurantId },
+          { status: nextStatus, updatedAt: now },
+        );
+      }
+    }
+    return snapshots;
+  }
+
+  private async reconcileTablesAfterItemTransfer(
+    em: EntityManager,
+    restaurantId: string,
+    fromTable: TableEntity,
+    toTable: TableEntity,
+  ): Promise<boolean> {
+    const remainingSourceOrders = await em.count(OrderEntity, {
+      where: { restaurantId, tableId: fromTable.id, status: 'active' },
+    });
+    let fromTableEmptied = false;
+    if (remainingSourceOrders === 0) {
+      fromTable.markEmpty();
+      await em.save(TableEntity, fromTable);
+      fromTableEmptied = true;
+    } else if (fromTable.splitInfo && !fromTable.splitInfo.paidShares?.length) {
+      fromTable.splitInfo = null;
+      await em.save(TableEntity, fromTable);
+    }
+
+    if (
+      toTable.status === 'empty' ||
+      (toTable.splitInfo && !toTable.splitInfo.paidShares?.length)
+    ) {
+      if (toTable.status === 'empty') toTable.status = 'occupied';
+      if (toTable.splitInfo && !toTable.splitInfo.paidShares?.length) {
+        toTable.splitInfo = null;
+      }
+      await em.save(TableEntity, toTable);
+    }
+    return fromTableEmptied;
   }
 
   async moveItemsToTable(
@@ -164,125 +253,77 @@ export class TransferOrderUseCase {
         throw new BadRequestException('No active orders found on source table');
       }
       const sourceOrderById = new Map(sourceOrders.map((o) => [o.id, o]));
-      const sourceOrderIds = sourceOrders.map((o) => o.id);
 
       const items = await em.find(OrderItemEntity, {
-        where: { id: In(uniqueIds), orderId: In(sourceOrderIds) },
+        where: { id: In(uniqueIds), orderId: In(sourceOrders.map((o) => o.id)) },
         order: { id: 'ASC' },
         lock: { mode: 'pessimistic_write' },
       });
       if (items.length !== uniqueIds.length) {
         throw new BadRequestException('One or more order items were not found on this table');
       }
-      const itemById = new Map(items.map((i) => [i.id, i]));
-      const qtyByItemId = new Map(selection.map((s) => [s.itemId, s.quantity]));
-
-      const affectedOrderIds = [...new Set(items.map((i) => i.orderId))].sort();
-      const orders = affectedOrderIds.map((oid) => sourceOrderById.get(oid)!);
 
       for (const item of items) {
         item.order = sourceOrderById.get(item.orderId)!;
         OrderStatusPolicy.assertItemTransferable(item, restaurantId, fromTableId);
       }
 
-      const fromTableLabel = (fromTable.name ?? '').trim() || fromTableId;
-      const firstOrderUserId = items[0].order?.userId ?? null;
-      const newUserId = (dto.userId ?? firstOrderUserId)?.trim() || null;
-      const moverName =
-        (dto.actorDisplayName ?? '').trim() ||
-        (newUserId
-          ? (
-              await em.findOne(RestaurantStaffEntity, {
-                where: { id: newUserId, restaurantId },
-              })
-            )?.name?.trim() || null
-          : null);
+      const affectedOrderIds = [...new Set(items.map((i) => i.orderId))].sort();
+      const affectedOrders = affectedOrderIds.map((oid) => sourceOrderById.get(oid)!);
+      const newUserId = (dto.userId ?? items[0].order?.userId ?? null)?.trim() || null;
+      const moverName = await this.resolveMoverDisplayName(
+        em,
+        restaurantId,
+        newUserId,
+        dto.actorDisplayName,
+      );
 
       const now = new Date();
-      const movedSnapshots: Array<{
-        productId: string;
-        productName: string;
-        price: number;
-        quantity: number;
-        note?: string;
-      }> = [];
-
-      for (const id of uniqueIds) {
-        const src = itemById.get(id)!;
-        const taken = src.takeQuantity(qtyByItemId.get(id));
-        movedSnapshots.push({
-          productId: src.productId,
-          productName: src.productName,
-          price: Number(src.price),
-          quantity: taken.quantity,
-          note: src.note ?? undefined,
-        });
-        if (taken.full) {
-          await em.delete(OrderItemEntity, { id });
-        } else {
-          await em.save(OrderItemEntity, src);
-        }
-      }
-      for (const oid of affectedOrderIds) {
-        const remainingItems = await em.find(OrderItemEntity, { where: { orderId: oid } });
-        if (remainingItems.length === 0) {
-          await em.delete(OrderEntity, { id: oid, restaurantId });
-        } else {
-          const nextStatus = OrderStatusPolicy.resolveOrderStatus(remainingItems);
-          await em.update(
-            OrderEntity,
-            { id: oid, restaurantId },
-            { status: nextStatus, updatedAt: now },
-          );
-        }
-      }
-
-      const remainingSourceOrders = await em.find(OrderEntity, {
-        where: { restaurantId, tableId: fromTableId, status: 'active' },
-      });
-      let isFromTableEmpty = false;
-      if (remainingSourceOrders.length === 0) {
-        fromTable.markEmpty();
-        await em.save(TableEntity, fromTable);
-        isFromTableEmpty = true;
-      } else if (fromTable.splitInfo && !fromTable.splitInfo.paidShares?.length) {
-        fromTable.splitInfo = null;
-        await em.save(TableEntity, fromTable);
-      }
-
-      if (toTable.status === 'empty' || (toTable.splitInfo && !toTable.splitInfo.paidShares?.length)) {
-        if (toTable.status === 'empty') {
-          toTable.status = 'occupied';
-        }
-        if (toTable.splitInfo && !toTable.splitInfo.paidShares?.length) {
-          toTable.splitInfo = null;
-        }
-        await em.save(TableEntity, toTable);
-      }
-
-      const allSourcesPrinted = orders.every((o) => o.kitchenTicketPrintedAt != null);
-      const order = em.create(OrderEntity, {
+      const movedSnapshots = await this.takeSelectedQuantitiesAndPruneSourceOrders(
+        em,
         restaurantId,
-        tableId: toTableId,
-        userId: newUserId,
-        userDisplayName: moverName,
-        status: 'active',
-        mergedFrom: fromTableLabel,
-        kitchenTicketPrintedAt: allSourcesPrinted ? now : null,
-      });
-      const savedOrder = await em.save(OrderEntity, order);
-      const newRows = movedSnapshots.map((src) =>
-        em.create(OrderItemEntity, {
-          orderId: savedOrder.id,
-          productId: src.productId,
-          productName: src.productName,
-          price: src.price,
-          quantity: src.quantity,
-          note: src.note,
-          status: 'sent',
+        uniqueIds,
+        new Map(items.map((i) => [i.id, i])),
+        new Map(selection.map((s) => [s.itemId, s.quantity])),
+        affectedOrderIds,
+        now,
+      );
+
+      const isFromTableEmpty = await this.reconcileTablesAfterItemTransfer(
+        em,
+        restaurantId,
+        fromTable,
+        toTable,
+      );
+
+      const savedOrder = await em.save(
+        OrderEntity,
+        em.create(OrderEntity, {
+          restaurantId,
+          tableId: toTableId,
+          userId: newUserId,
+          userDisplayName: moverName,
+          status: 'active',
+          mergedFrom: (fromTable.name ?? '').trim() || fromTableId,
+          kitchenTicketPrintedAt: affectedOrders.every((o) => o.kitchenTicketPrintedAt != null)
+            ? now
+            : null,
         }),
       );
-      await em.save(OrderItemEntity, newRows);
+      await em.save(
+        OrderItemEntity,
+        movedSnapshots.map((src) =>
+          em.create(OrderItemEntity, {
+            orderId: savedOrder.id,
+            productId: src.productId,
+            productName: src.productName,
+            price: src.price,
+            quantity: src.quantity,
+            note: src.note,
+            status: 'sent',
+          }),
+        ),
+      );
       return { newOrderId: savedOrder.id, fromTableEmptied: isFromTableEmpty };
     });
 
@@ -292,6 +333,21 @@ export class TransferOrderUseCase {
     const serialized = await this.orderQuery.serializeOrderEntityById(newOrderId, restaurantId);
     this.ordersGateway.emitOrdersUpdated(restaurantId);
     return serialized;
+  }
+
+  private async resolveMoverDisplayName(
+    em: EntityManager,
+    restaurantId: string,
+    userId: string | null,
+    actorDisplayName?: string | null,
+  ): Promise<string | null> {
+    const explicit = (actorDisplayName ?? '').trim();
+    if (explicit) return explicit;
+    if (!userId) return null;
+    const staff = await em.findOne(RestaurantStaffEntity, {
+      where: { id: userId, restaurantId },
+    });
+    return staff?.name?.trim() || null;
   }
 
   private normalizeMoveSelection(

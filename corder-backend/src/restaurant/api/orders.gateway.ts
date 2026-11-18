@@ -9,17 +9,11 @@ import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { RestaurantTokenPayload } from '../domain/services/billing-suspension.policy';
 import {
-  computeSecretFingerprint,
-  isRestaurantPaymentSuspended,
-  RestaurantAuthService,
-  RestaurantTokenPayload,
-} from '../application/restaurant-auth.service';
-import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
-import { RestaurantStaffEntity } from '../domain/restaurant-staff.entity';
-import { RolesService } from '../application/roles.service';
+  RestaurantSessionValidatorService,
+  VerifiedSocketPrincipal,
+} from '../application/restaurant-session-validator.service';
 import { TableService } from '../application/table.service';
 import { buildCorsOptions } from '../../common/security/cors.config';
 import { requireConfigSecret } from '../../common/security/env.validation';
@@ -41,7 +35,6 @@ export interface PrintJobSocketPayload {
   printType: 'receipt' | 'kitchen_cancel';
   createdAt: string;
   receiptMode?: 'consolidated' | 'split';
-  /** false on consolidated register summary (line merge, no notes); true on single check / split. */
   includeLineNotes?: boolean;
   isReprint?: boolean;
   openCashDrawer?: boolean;
@@ -56,7 +49,6 @@ export interface PrintJobSocketPayload {
     discountAmount?: number;
     discountLabel?: string;
     tipAmount?: number;
-    /** Printed on `kitchen_cancel` tickets. */
     cancelledBy?: string;
     cancelReason?: string;
     items: {
@@ -69,13 +61,6 @@ export interface PrintJobSocketPayload {
     }[];
     total: number;
   };
-}
-
-interface VerifiedSocketAuth {
-  restaurantId: string;
-  role: RestaurantTokenPayload['role'];
-  authType: 'print-agent-jwt' | 'jwt';
-  expMs: number | null;
 }
 
 @WebSocketGateway({
@@ -92,13 +77,8 @@ export class OrdersGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   constructor(
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
-    private readonly authService: RestaurantAuthService,
-    private readonly rolesService: RolesService,
+    private readonly sessionValidator: RestaurantSessionValidatorService,
     private readonly tableService: TableService,
-    @InjectRepository(RestaurantEntity)
-    private readonly restaurantRepo: Repository<RestaurantEntity>,
-    @InjectRepository(RestaurantStaffEntity)
-    private readonly staffRepo: Repository<RestaurantStaffEntity>,
   ) {}
 
   afterInit(server: Server): void {
@@ -117,115 +97,29 @@ export class OrdersGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     });
   }
 
-  private async verifyClientHandshake(client: Socket): Promise<VerifiedSocketAuth | null> {
+  private async verifyClientHandshake(
+    client: Socket,
+  ): Promise<VerifiedSocketPrincipal | null> {
     const rawHeader = client.handshake.headers?.authorization;
     const headerToken =
       typeof rawHeader === 'string' ? rawHeader.replace(/^Bearer\s+/i, '').trim() : '';
     const authToken =
-      typeof client.handshake.auth?.token === 'string' ? client.handshake.auth.token.trim() : '';
+      typeof client.handshake.auth?.token === 'string'
+        ? client.handshake.auth.token.trim()
+        : '';
     const token = authToken || headerToken;
     if (!token) return null;
 
     const secret = requireConfigSecret(this.config, 'JWT_SECRET');
-    const payload = this.jwt.verify<RestaurantTokenPayload & { exp?: number }>(token, { secret });
-    if (
-      payload.type !== 'restaurant' ||
-      !payload.restaurantId ||
-      (payload.role !== 'root' &&
-        payload.role !== 'staff' &&
-        payload.role !== 'terminal' &&
-        payload.role !== 'print_agent')
-    ) {
-      return null;
-    }
-
-    const expMs = typeof payload.exp === 'number' ? payload.exp * 1000 : null;
-    if (expMs !== null && expMs <= Date.now()) {
-      return null;
-    }
-
-    const requestedRestId =
-      payload.role === 'root' && typeof client.handshake.auth?.restaurantId === 'string'
-        ? client.handshake.auth.restaurantId.trim()
-        : '';
-    const targetRestId = requestedRestId || payload.restaurantId;
-
-    if (payload.role === 'root') {
-      await this.authService.assertBossOwnsRestaurant(payload.sub, targetRestId);
-    }
-
-    const activeRestaurant = await this.restaurantRepo.findOne({
-      where: { id: targetRestId },
-      select: {
-        id: true,
-        status: true,
-        terminalEmail: true,
-        terminalPasswordHash: true,
-        printAgentUsername: true,
-        printAgentPasswordHash: true,
-        isAccessSuspended: true,
-        billingStatus: true,
-      },
+    const payload = this.jwt.verify<RestaurantTokenPayload & { exp?: number }>(token, {
+      secret,
     });
-    if (!activeRestaurant || activeRestaurant.status !== 'active') {
-      return null;
-    }
-    if (
-      isRestaurantPaymentSuspended(activeRestaurant) &&
-      !(await this.authService.hasOpenCashShift(targetRestId))
-    ) {
-      return null;
-    }
+    const requestedRestId =
+      typeof client.handshake.auth?.restaurantId === 'string'
+        ? client.handshake.auth.restaurantId
+        : undefined;
 
-    if (payload.role === 'print_agent') {
-      if (
-        !activeRestaurant.printAgentUsername ||
-        !activeRestaurant.printAgentPasswordHash ||
-        activeRestaurant.printAgentUsername !== payload.email
-      ) {
-        return null;
-      }
-      const expectedFp = computeSecretFingerprint(activeRestaurant.printAgentPasswordHash);
-      if (payload.pwdFp && payload.pwdFp !== expectedFp) {
-        return null;
-      }
-    } else if (payload.role === 'terminal') {
-      if (
-        !activeRestaurant.terminalEmail ||
-        !activeRestaurant.terminalPasswordHash ||
-        activeRestaurant.terminalEmail.toLowerCase().trim() !==
-          (payload.email || '').toLowerCase().trim()
-      ) {
-        return null;
-      }
-      if (
-        payload.pwdFp &&
-        payload.pwdFp !== computeSecretFingerprint(activeRestaurant.terminalPasswordHash)
-      ) {
-        return null;
-      }
-    } else if (payload.role === 'staff') {
-      const staff = await this.staffRepo.findOne({
-        where: { id: payload.sub, restaurantId: targetRestId, isActive: true },
-      });
-      if (!staff || !staff.passwordHash) {
-        return null;
-      }
-      if (payload.pwdFp && payload.pwdFp !== computeSecretFingerprint(staff.passwordHash)) {
-        return null;
-      }
-      const resolved = await this.rolesService.resolveForStaff(staff);
-      if (!resolved.canAccessPanel && !resolved.canAccessTerminal) {
-        return null;
-      }
-    }
-
-    return {
-      restaurantId: targetRestId,
-      role: payload.role,
-      authType: payload.role === 'print_agent' ? 'print-agent-jwt' : 'jwt',
-      expMs,
-    };
+    return this.sessionValidator.validateSocketTokenPayload(payload, requestedRestId);
   }
 
   private scheduleSocketExpiry(client: Socket, expMs: number): void {
@@ -262,8 +156,8 @@ export class OrdersGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 
   async handleConnection(client: Socket) {
     try {
-      const verified: VerifiedSocketAuth | null =
-        (client.data.verifiedAuth as VerifiedSocketAuth | undefined) ??
+      const verified: VerifiedSocketPrincipal | null =
+        (client.data.verifiedAuth as VerifiedSocketPrincipal | undefined) ??
         (await this.verifyClientHandshake(client));
       if (!verified) {
         client.disconnect(true);
@@ -309,19 +203,15 @@ export class OrdersGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     this.server.to(getRestaurantRoom(restaurantId)).emit('orders:moved', payload);
   }
 
-  /** General order update (close check, move, cancel, etc.) – all clients refetch */
   emitOrdersUpdated(restaurantId: string) {
     this.server.to(getRestaurantRoom(restaurantId)).emit('orders:updated');
   }
 
-  /** Notify panel and print-agent when printer configurations change */
   emitPrintersUpdated(restaurantId: string) {
     this.server.to(getRestaurantRoom(restaurantId)).emit('printers:updated');
   }
 
-  /** Receipt / check / cancel print – print-agent listens on `order.print_job` */
   emitPrintJob(restaurantId: string, payload: PrintJobSocketPayload) {
     this.server.to(getPrintAgentRoom(restaurantId)).emit('order.print_job', payload);
   }
 }
-

@@ -33,8 +33,10 @@ import { PrinterConfigEntity } from './domain/printer-config.entity';
 import { AuditLogEntity } from './domain/audit-log.entity';
 import { PrintJobEntity } from './domain/print-job.entity';
 import { RestaurantAuthService } from './application/restaurant-auth.service';
+import { RestaurantSessionValidatorService } from './application/restaurant-session-validator.service';
 import { RolesService } from './application/roles.service';
 import { BossOverviewService } from './application/boss-overview.service';
+import { BossHierarchyService } from './application/boss-hierarchy.service';
 import { CashShiftService } from './application/cash-shift.service';
 import { CashTransactionsService } from './application/cash-transactions.service';
 import { OpenAccountsService } from './application/open-accounts.service';
@@ -171,7 +173,9 @@ import {
   ],
   providers: [
     RestaurantAuthService,
+    RestaurantSessionValidatorService,
     RolesService,
+    BossHierarchyService,
     BossOverviewService,
     StaffService,
     StaffSessionService,

@@ -1,49 +1,42 @@
 import { useEffect, useRef } from "react"
-import { io, type Socket } from "socket.io-client"
-import {
-  itemCountsTowardBill,
-  type Campaign,
-  type CancelledItem,
-  type CashShift,
-  type CashTransaction,
-  type ClosedTable,
-  type InventoryCount,
-  type LedgerCustomer,
-  type OpenAccount,
-  type PanelCategory,
-  type PanelNotification,
-  type PanelOrder,
-  type PanelProduct,
-  type PanelSection,
-  type PanelTable,
-  type PanelUser,
-  type PurchaseOrder,
-  type StockMaterial,
-  type StockMovement,
-  type Supplier,
+import type {
+  Campaign,
+  CancelledItem,
+  CashShift,
+  CashTransaction,
+  ClosedTable,
+  InventoryCount,
+  LedgerCustomer,
+  OpenAccount,
+  PanelCategory,
+  PanelNotification,
+  PanelOrder,
+  PanelProduct,
+  PanelSection,
+  PanelTable,
+  PanelUser,
+  PurchaseOrder,
+  StockMaterial,
+  StockMovement,
+  Supplier,
 } from "../panel-types"
 import {
   api,
-  clearToken,
-  getBase,
   type CampaignDto,
   type CashTransactionDto,
   type InventoryCountDto,
   type LedgerCustomerDto,
   type OpenAccountDto,
-  type OrderDto,
   type PurchaseOrderDto,
   type StockMaterialDto,
   type StockMovementDto,
   type SupplierDto,
 } from "../api"
-import { computeDiscountMinorUnits, fromMinorUnits, toMinorUnits } from "../format"
 import {
   deriveSectionsFromTables,
   mapApiOrdersToPanel,
   mapApiStaffToPanelUser,
   mapApiTablesToPanel,
-  mapOrder,
   mergeTablesPreserveClientFields,
 } from "../mappers/orders-tables.mapper"
 import {
@@ -64,6 +57,7 @@ import {
   mapSupplierDtoToPanel,
 } from "../mappers/catalog-inventory.mapper"
 import { getReadNotifIds } from "./panel-local-storage"
+import { usePanelSocket } from "./use-panel-socket"
 
 function buildHydratedCancelledItems(
   orders: PanelOrder[],
@@ -107,7 +101,37 @@ function buildHydratedCancelledItems(
       }
     }
   }
-  return hydratedCancelled.sort((a, b) => new Date(b.cancelledAt).getTime() - new Date(a.cancelledAt).getTime())
+  return hydratedCancelled.sort(
+    (a, b) => new Date(b.cancelledAt).getTime() - new Date(a.cancelledAt).getTime(),
+  )
+}
+
+function buildDerivedNotifications(
+  mats: StockMaterial[],
+  cancelledList: CancelledItem[],
+): PanelNotification[] {
+  const readIds = getReadNotifIds()
+  const lowStockNotifs: PanelNotification[] = mats
+    .filter((m) => m.currentStock <= m.minStock)
+    .map((m) => ({
+      id: `notif-stock-${m.id}`,
+      type: "stock-low",
+      title: "Kritik Stok Uyarısı",
+      message: `${m.name} kritik seviyede (${m.currentStock} ${m.unit} / Min: ${m.minStock} ${m.unit})`,
+      read: readIds.has(`notif-stock-${m.id}`),
+      createdAt: m.lastUpdated,
+    }))
+  const cancelNotifs: PanelNotification[] = cancelledList.slice(0, 20).map((ci) => ({
+    id: `notif-cancel-${ci.id}`,
+    type: "kitchen-alert",
+    title: "Sipariş İptali",
+    message: `${ci.tableName} — ${ci.orderItem.productName} iptal edildi (${ci.reason})`,
+    read: readIds.has(`notif-cancel-${ci.id}`),
+    createdAt: ci.cancelledAt,
+  }))
+  return [...lowStockNotifs, ...cancelNotifs].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  )
 }
 
 export function usePanelApiSync(
@@ -133,7 +157,6 @@ export function usePanelApiSync(
   setNotifications?: (v: PanelNotification[] | ((prev: PanelNotification[]) => PanelNotification[])) => void,
   restaurantId?: string | null,
 ) {
-  const socketRef = useRef<Socket | null>(null)
   const loadRef = useRef<() => Promise<void>>(null!)
   const refreshPosRef = useRef<() => Promise<void>>(null!)
   const usersCacheRef = useRef<PanelUser[]>([])
@@ -145,34 +168,6 @@ export function usePanelApiSync(
   useEffect(() => {
     if (!token) return
     let cancelled = false
-
-    const updateDerivedNotifications = (mats: StockMaterial[], cancelledList: CancelledItem[]) => {
-      if (!setNotifications) return
-      const readIds = getReadNotifIds()
-      const lowStockNotifs: PanelNotification[] = mats
-        .filter((m) => m.currentStock <= m.minStock)
-        .map((m) => ({
-          id: `notif-stock-${m.id}`,
-          type: "stock-low",
-          title: "Kritik Stok Uyarısı",
-          message: `${m.name} kritik seviyede (${m.currentStock} ${m.unit} / Min: ${m.minStock} ${m.unit})`,
-          read: readIds.has(`notif-stock-${m.id}`),
-          createdAt: m.lastUpdated,
-        }))
-      const cancelNotifs: PanelNotification[] = cancelledList.slice(0, 20).map((ci) => ({
-        id: `notif-cancel-${ci.id}`,
-        type: "kitchen-alert",
-        title: "Sipariş İptali",
-        message: `${ci.tableName} — ${ci.orderItem.productName} iptal edildi (${ci.reason})`,
-        read: readIds.has(`notif-cancel-${ci.id}`),
-        createdAt: ci.cancelledAt,
-      }))
-      setNotifications(
-        [...lowStockNotifs, ...cancelNotifs].sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-        ),
-      )
-    }
 
     const refreshPos = async () => {
       if (inFlightPosRef.current) {
@@ -205,7 +200,7 @@ export function usePanelApiSync(
             setClosedTables(closed)
             const hydratedCancelled = buildHydratedCancelledItems(nextOrders, mappedTables, closed)
             setCancelledItems?.(hydratedCancelled)
-            updateDerivedNotifications(materialsCacheRef.current, hydratedCancelled)
+            setNotifications?.(buildDerivedNotifications(materialsCacheRef.current, hydratedCancelled))
           }
         }
 
@@ -240,22 +235,10 @@ export function usePanelApiSync(
       inFlightFullRef.current = true
       try {
         const [
-          apiTables,
-          ordersRes,
-          categoriesRes,
-          productsRes,
-          staffRes,
-          currentShiftRes,
-          shiftsListRes,
-          completedOrdersRes,
-          openAccountsRes,
-          ledgerCustomersRes,
-          campaignsRes,
-          materialsRes,
-          suppliersRes,
-          movementsRes,
-          purchaseOrdersRes,
-          inventoryCountsRes,
+          apiTables, ordersRes, categoriesRes, productsRes, staffRes,
+          currentShiftRes, shiftsListRes, completedOrdersRes, openAccountsRes,
+          ledgerCustomersRes, campaignsRes, materialsRes, suppliersRes,
+          movementsRes, purchaseOrdersRes, inventoryCountsRes,
         ] = await Promise.all([
           api.tables.list(token).catch(() => []),
           api.orders.list(token).catch(() => []),
@@ -278,22 +261,19 @@ export function usePanelApiSync(
         const orders = mapApiOrdersToPanel(ordersRes)
         const users = staffRes.map(mapApiStaffToPanelUser)
         usersCacheRef.current = users
-        const categories = mapApiCategoriesToPanel(categoriesRes)
         const mats = (materialsRes as StockMaterialDto[]).map(mapStockMaterialDtoToPanel)
         materialsCacheRef.current = mats
-        const products = mapApiProductsToPanel(productsRes, mats)
         const tables = mapApiTablesToPanel(apiTables, orders, users)
-        const sections = deriveSectionsFromTables(apiTables, restaurantId)
         const shifts = currentShiftRes
           ? [mapShiftDtoToPanel(currentShiftRes), ...shiftsListRes.filter((s) => s.id !== currentShiftRes.id).map(mapShiftDtoToPanel)]
           : shiftsListRes.map(mapShiftDtoToPanel)
         const closed = completedOrdersRes.map(mapCompletedOrderDtoToClosedTable)
 
         setOrders(orders)
-        setCategories(categories)
-        setProducts(products)
+        setCategories(mapApiCategoriesToPanel(categoriesRes))
+        setProducts(mapApiProductsToPanel(productsRes, mats))
         setTables((prev) => mergeTablesPreserveClientFields(prev, tables))
-        setSections(sections)
+        setSections(deriveSectionsFromTables(apiTables, restaurantId))
         setUsers(users)
         setCashShifts(shifts)
         setClosedTables(closed)
@@ -308,14 +288,12 @@ export function usePanelApiSync(
 
         const hydratedCancelled = buildHydratedCancelledItems(orders, tables, closed)
         setCancelledItems?.(hydratedCancelled)
-        updateDerivedNotifications(mats, hydratedCancelled)
+        setNotifications?.(buildDerivedNotifications(mats, hydratedCancelled))
 
         if (setCashTransactions && currentShiftRes?.id) {
-          try {
-            const cashTxRes = await api.cashTransactions.list(token, currentShiftRes.id)
-            if (!cancelled) setCashTransactions((cashTxRes as CashTransactionDto[]).map(mapCashTransactionDtoToPanel))
-          } catch (e) {
-            console.error("Load cash transactions error:", e)
+          const cashTxRes = await api.cashTransactions.list(token, currentShiftRes.id).catch(() => null)
+          if (!cancelled && cashTxRes) {
+            setCashTransactions((cashTxRes as CashTransactionDto[]).map(mapCashTransactionDtoToPanel))
           }
         } else if (setCashTransactions && !currentShiftRes) {
           setCashTransactions([])
@@ -334,27 +312,11 @@ export function usePanelApiSync(
       cancelled = true
     }
   }, [
-    token,
-    restaurantId,
-    setTables,
-    setOrders,
-    setCategories,
-    setProducts,
-    setSections,
-    setUsers,
-    setCashShifts,
-    setClosedTables,
-    setOpenAccounts,
-    setLedgerCustomers,
-    setStockMaterials,
-    setSuppliers,
-    setStockMovements,
-    setPurchaseOrders,
-    setInventoryCounts,
-    setCashTransactions,
-    setCampaigns,
-    setCancelledItems,
-    setNotifications,
+    token, restaurantId, setTables, setOrders, setCategories, setProducts,
+    setSections, setUsers, setCashShifts, setClosedTables, setOpenAccounts,
+    setLedgerCustomers, setStockMaterials, setSuppliers, setStockMovements,
+    setPurchaseOrders, setInventoryCounts, setCashTransactions, setCampaigns,
+    setCancelledItems, setNotifications,
   ])
 
   useEffect(() => {
@@ -371,87 +333,5 @@ export function usePanelApiSync(
     }
   }, [token, restaurantId])
 
-  useEffect(() => {
-    if (!token) {
-      socketRef.current?.disconnect()
-      socketRef.current = null
-      return
-    }
-    const baseUrl = getBase()
-    const socket = io(baseUrl || undefined, {
-      path: "/ws",
-      auth: { token, ...(restaurantId ? { restaurantId } : {}) },
-      transports: ["websocket", "polling"],
-      reconnectionAttempts: Infinity,
-      reconnectionDelayMax: 10000,
-      timeout: 20000,
-    })
-    socketRef.current = socket
-    let connectedOnce = false
-
-    const handleConnect = () => {
-      if (connectedOnce) void refreshPosRef.current?.()
-      connectedOnce = true
-    }
-    const handleReconnect = () => void refreshPosRef.current?.()
-
-    const handleOrderCreated = (payload: OrderDto) => {
-      const mapped = mapOrder(payload)
-      const lineMinorUnits = mapped.items.filter(itemCountsTowardBill).reduce((s, i) => s + toMinorUnits(i.price) * i.quantity, 0)
-      setOrders((prev) => (prev.some((o) => o.id === mapped.id) ? prev : [mapped, ...prev]))
-      setTables((pt) =>
-        pt.map((t) => {
-          if (t.id !== mapped.tableId || t.activeOrderId === mapped.id) return t
-          const rawMinorUnits = toMinorUnits(t.totalAmount || 0) + toMinorUnits(t.discount?.amount || 0) + lineMinorUnits
-          const discountMinorUnits = computeDiscountMinorUnits(rawMinorUnits, t.discount)
-          const nextTotal = fromMinorUnits(Math.max(0, rawMinorUnits - discountMinorUnits))
-          return {
-            ...t,
-            status: t.status === "checkout" ? "checkout" : "occupied",
-            totalAmount: nextTotal,
-            ...(t.discount ? { discount: { ...t.discount, amount: fromMinorUnits(discountMinorUnits) } } : {}),
-            orderCount: t.orderCount + 1,
-            lastUpdated: mapped.updatedAt,
-            activeOrderId: mapped.id,
-            waiter: mapped.userName || t.waiter,
-          }
-        }),
-      )
-      void refreshPosRef.current?.()
-    }
-
-    const handleOrdersMoved = () => void refreshPosRef.current?.()
-    const handleOrdersUpdated = () => void refreshPosRef.current?.()
-    const handleTablesPresence = (presenceMap: Record<string, { staffId: string; staffName: string }>) => {
-      if (!presenceMap || typeof presenceMap !== "object") return
-      setTables((prev) =>
-        prev.map((t) => {
-          const hit = presenceMap[t.id]
-          return { ...t, lockedByStaffId: hit?.staffId, lockedByStaffName: hit?.staffName }
-        }),
-      )
-    }
-
-    const handleAuthExpired = () => clearToken()
-
-    socket.on("connect", handleConnect)
-    socket.io.on("reconnect", handleReconnect)
-    socket.on("auth:expired", handleAuthExpired)
-    socket.on("order:created", handleOrderCreated)
-    socket.on("orders:moved", handleOrdersMoved)
-    socket.on("orders:updated", handleOrdersUpdated)
-    socket.on("tables:presence", handleTablesPresence)
-
-    return () => {
-      socket.off("connect", handleConnect)
-      socket.io.off("reconnect", handleReconnect)
-      socket.off("auth:expired", handleAuthExpired)
-      socket.off("order:created", handleOrderCreated)
-      socket.off("orders:moved", handleOrdersMoved)
-      socket.off("orders:updated", handleOrdersUpdated)
-      socket.off("tables:presence", handleTablesPresence)
-      socket.disconnect()
-      socketRef.current = null
-    }
-  }, [token, restaurantId, setOrders, setTables])
+  usePanelSocket({ token, restaurantId, refreshPosRef, setOrders, setTables })
 }
