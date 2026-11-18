@@ -32,6 +32,8 @@ This document summarizes the schema design, migration strategy, indexing, and op
    - Adds `restaurants.billing_start_period` (`YYYY-MM`) and creates normalized `restaurant_subscription_payments` table supporting single/multi-month (`periods text[]`), payment date (`paid_at`), payment method, edit/delete ledger operations, and drops legacy `restaurants.payment_history` JSONB column.
 6. `1760000005000-StandardizeCorderAppEmails.ts`:
    - Standardizes all existing `platform_admins.email` (`<local>@corder.app`), `restaurants.terminal_email` (`<local>@<slug>.corder.app`), `restaurant_staff.email` (`<local>@<restaurant-slug>.corder.app`), and `root_admins.email` (`<local>@<brand-or-branch-slug>.corder.app`).
+7. `1760000006000-SeparateMerchantMenuContactFields.ts`:
+   - Adds `restaurants.menu_phone` and `restaurants.menu_address` so customer-facing QR menu and receipt contact fields managed in the Merchant Panel are completely isolated from Platform Admin's internal B2B customer `phone` and `address` records.
 
 ## Key Constraints & Indexes
 

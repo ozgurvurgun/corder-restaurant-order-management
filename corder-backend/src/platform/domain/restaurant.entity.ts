@@ -116,6 +116,13 @@ export class RestaurantEntity {
   @Column({ name: 'working_hours', type: 'varchar', nullable: true })
   workingHours: string | null;
 
+  /** Public customer-facing contact fields configured by the merchant in Merchant Panel -> Settings (shown on QR Menu & receipts). */
+  @Column({ name: 'menu_phone', type: 'varchar', nullable: true })
+  menuPhone: string | null;
+
+  @Column({ name: 'menu_address', type: 'varchar', nullable: true })
+  menuAddress: string | null;
+
   @Column({ name: 'root_admin_id', type: 'uuid', nullable: true })
   rootAdminId: string | null;
 

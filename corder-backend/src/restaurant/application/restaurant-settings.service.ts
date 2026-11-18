@@ -89,8 +89,8 @@ export class RestaurantSettingsService {
     }
     return {
       name: r.name,
-      address: r.address,
-      phone: r.phone,
+      address: r.menuAddress ?? null,
+      phone: r.menuPhone ?? null,
       taxId: r.taxId,
       whatsapp: r.whatsapp,
       instagram: r.instagram,
@@ -195,8 +195,8 @@ export class RestaurantSettingsService {
       if (!name) throw new BadRequestException('Restaurant name cannot be empty');
       r.name = name;
     }
-    if (dto.address !== undefined) r.address = (dto.address?.trim() || null) as string;
-    if (dto.phone !== undefined) r.phone = (dto.phone?.trim() || null) as string;
+    if (dto.address !== undefined) r.menuAddress = dto.address?.trim() || null;
+    if (dto.phone !== undefined) r.menuPhone = dto.phone?.trim() || null;
     if (dto.taxId !== undefined) r.taxId = dto.taxId?.trim() || null;
     if (dto.whatsapp !== undefined) r.whatsapp = dto.whatsapp?.trim() || null;
     if (dto.instagram !== undefined) r.instagram = dto.instagram?.trim() || null;

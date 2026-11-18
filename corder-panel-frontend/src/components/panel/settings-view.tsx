@@ -136,12 +136,12 @@ export default function SettingsView() {
                   <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
                 </div>
                 <div>
-                  <label className="text-[11px] text-[#86868b] font-medium mb-1 block">Telefon</label>
-                  <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
+                  <label className="text-[11px] text-[#86868b] font-medium mb-1 block">Telefon (Menü &amp; Fiş)</label>
+                  <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Örn: 0232 000 00 00" className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
                 </div>
                 <div className="col-span-2">
-                  <label className="text-[11px] text-[#86868b] font-medium mb-1 block">Adres</label>
-                  <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
+                  <label className="text-[11px] text-[#86868b] font-medium mb-1 block">Açık Adres / Konum (Menü &amp; Fiş)</label>
+                  <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Müşterilerin QR menüde ve adisyon fişinde göreceği adres" className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
                 </div>
                 <div>
                   <label className="text-[11px] text-[#86868b] font-medium mb-1 block">Vergi No</label>
@@ -397,9 +397,33 @@ export default function SettingsView() {
             <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-5">
               <div className="flex items-center gap-2 mb-4">
                 <Globe className="w-4 h-4 text-[#e63462]" />
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Sosyal Medya &amp; İletişim</h3>
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">QR Menü İletişim &amp; Sosyal Medya</h3>
               </div>
               <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] text-[#86868b] font-medium mb-1 flex items-center gap-1">
+                    Telefon (Menüde Gösterilir)
+                  </label>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="Örn: 0232 000 00 00"
+                    className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-[#86868b] font-medium mb-1 flex items-center gap-1">
+                    <MapPin className="w-3 h-3" /> Açık Adres / Konum (Menüde Gösterilir)
+                  </label>
+                  <input
+                    type="text"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Örn: Bornova Küçükpark, İzmir"
+                    className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
+                  />
+                </div>
                 <div>
                   <label className="text-[11px] text-[#86868b] font-medium mb-1 flex items-center gap-1">
                     <MessageCircle className="w-3 h-3" /> WhatsApp
