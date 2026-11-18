@@ -201,7 +201,7 @@ export function RolesPermissionsTab() {
   }
 
   return (
-    <div className="space-y-4 pb-8">
+    <div className="space-y-4">
       <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -317,7 +317,7 @@ export function RolesPermissionsTab() {
             onToggleCategoryAll={toggleCategoryAll}
           />
 
-          <div className="sticky bottom-[72px] md:bottom-4 z-20 flex items-center justify-between rounded-2xl border border-[#e63462]/30 bg-white/95 p-3 shadow-lg backdrop-blur-md">
+          <div className="sticky bottom-0 z-20 flex items-center justify-between rounded-2xl border border-[#e63462]/30 bg-white/95 p-3 shadow-lg backdrop-blur-md">
             <div>
               <div className="flex items-center gap-2">
                 <p className="text-[12px] font-semibold text-[#1d1d1f]">

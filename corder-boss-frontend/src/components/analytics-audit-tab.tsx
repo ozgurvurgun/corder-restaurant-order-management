@@ -88,7 +88,7 @@ export function AnalyticsAuditTab() {
   }, [selectedBranchId, branchAudits, effectiveBranch?.name, overview?.recentAudits, auditCategory])
 
   return (
-    <div className="space-y-4 pb-8">
+    <div className="space-y-4">
       {/* Hourly Sales Chart */}
       <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-4">
         <div className="flex items-center gap-2 mb-3">

@@ -107,7 +107,7 @@ export function StaffUsersTab() {
   }
 
   return (
-    <div className="space-y-4 pb-8">
+    <div className="space-y-4">
       <SubBossesSection />
 
       {/* Branch Staff & Merchant Panel Users */}

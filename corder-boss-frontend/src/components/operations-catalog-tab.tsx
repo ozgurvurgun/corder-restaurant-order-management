@@ -101,7 +101,7 @@ export function OperationsCatalogTab() {
   })
 
   return (
-    <div className="space-y-4 pb-8">
+    <div className="space-y-4">
       {/* Sub-navigation & Branch Selector */}
       <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-3.5 flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-1.5">

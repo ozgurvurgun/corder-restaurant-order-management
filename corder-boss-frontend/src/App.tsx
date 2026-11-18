@@ -204,7 +204,7 @@ function BossShell() {
         )}
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto w-full p-4 sm:p-6 pb-24 md:pb-6">
+        <main className="flex-1 overflow-y-auto w-full p-4 sm:p-6">
           {error && (
             <div
               role="alert"
@@ -236,7 +236,7 @@ function BossShell() {
         {/* Mobile Bottom Tab Navigation Bar */}
         <nav
           aria-label="Alt Gezinme Menüsü"
-          className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-[#d1d1d6]/70 bg-white/90 backdrop-blur-2xl safe-bottom"
+          className="md:hidden flex-shrink-0 border-t border-[#d1d1d6]/70 bg-white/95 backdrop-blur-2xl safe-bottom"
         >
           <div className="mx-auto flex h-[58px] max-w-xl items-center justify-around px-2">
             {FLAT_TABS.map((tab) => {
