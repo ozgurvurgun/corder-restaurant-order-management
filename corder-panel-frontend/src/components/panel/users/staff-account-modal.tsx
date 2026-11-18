@@ -11,6 +11,7 @@ import { usePanelAuth } from "@/lib/panel-auth"
 import { usePanelStore } from "@/lib/panel-store"
 import type { PanelUser, PanelUserRole } from "@/lib/panel-types"
 import { CustomSelect } from "@/components/ui/custom-inputs"
+import { PasswordInputWithGenerator } from "@/components/ui/password-input"
 import { usePanelToast } from "../panel-toast"
 import { Sliders, X } from "lucide-react"
 
@@ -346,10 +347,10 @@ export function StaffAccountModal({
               <label className="block text-[11px] font-semibold text-[#86868b] mb-1">
                 Merchant Panel Parolası *
               </label>
-              <input
-                type="password"
+              <PasswordInputWithGenerator
                 value={formPassword}
                 onChange={(e) => setFormPassword(e.target.value)}
+                minLength={6}
                 placeholder={
                   editingUser ? "Yeni parola (değiştirmek istemiyorsanız boş bırakın)" : "En az 6 karakter"
                 }

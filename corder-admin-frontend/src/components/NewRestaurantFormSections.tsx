@@ -6,6 +6,7 @@ import type {
 import { Building2, CreditCard, Monitor, Printer } from "lucide-react"
 import { CorderEmailInput } from "@/components/CorderEmailInput"
 import { CustomMonthPicker, CustomSelect } from "@/components/ui/custom-inputs"
+import { PasswordInputWithGenerator } from "@/components/ui/password-input"
 
 interface FranchiseConfigCardProps {
   branchType: RestaurantBranchType
@@ -310,8 +311,7 @@ export function DeviceCredentialsCards({
             <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
               Terminal Parola (en az 4 krk)
             </label>
-            <input
-              type="password"
+            <PasswordInputWithGenerator
               value={terminalPassword}
               onChange={(e) => onTerminalPasswordChange(e.target.value)}
               placeholder="••••••••"
@@ -350,8 +350,7 @@ export function DeviceCredentialsCards({
             <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
               Parola (en az 6 krk)
             </label>
-            <input
-              type="password"
+            <PasswordInputWithGenerator
               value={printAgentPassword}
               onChange={(e) => onPrintAgentPasswordChange(e.target.value)}
               placeholder="••••••••"

@@ -9,6 +9,7 @@ import {
 } from "@/lib/corder-email"
 import { StaffPermissionOverrides } from "./staff-permission-overrides"
 import { CustomSelect } from "./ui/custom-inputs"
+import { PasswordInputWithGenerator } from "./ui/password-input"
 import { Monitor, KeyRound, AlertCircle, X } from "lucide-react"
 
 interface StaffUserModalProps {
@@ -310,11 +311,11 @@ export function StaffUserModal({
                   <label className="mb-1 block text-[11px] font-semibold text-[#1d1d1f]">
                     {editingUser?.hasPassword ? "Yeni Parola (boş = değişmez)" : "Giriş Parolası (en az 6 krk) *"}
                   </label>
-                  <input
-                    type="password"
+                  <PasswordInputWithGenerator
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
+                    minLength={6}
                     className="h-10 w-full rounded-xl border border-[#d1d1d6] bg-white px-3 text-[13px] text-[#1d1d1f]"
                     required={canAccessPanel && !editingUser?.hasPassword}
                   />

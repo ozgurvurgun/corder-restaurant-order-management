@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { Monitor, Printer } from "lucide-react"
 import { CorderEmailInput } from "@/components/CorderEmailInput"
+import { PasswordInputWithGenerator } from "@/components/ui/password-input"
 import { formatCanonicalCorderEmail } from "@/lib/corder-email"
 
 interface PrintAgentTokenSectionProps {
@@ -144,8 +145,7 @@ export function PrintAgentTokenSection({
                 ? "(değiştirmek için doldurun; boş bırakılırsa mevcut parola korunur)"
                 : "(en az 6 karakter) *"}
             </label>
-            <input
-              type="password"
+            <PasswordInputWithGenerator
               value={printAgentPassword}
               onChange={(e) => setPrintAgentPassword(e.target.value)}
               placeholder="••••••••"
@@ -198,8 +198,7 @@ export function PrintAgentTokenSection({
                 ? "(değiştirmek için doldurun; boş bırakılırsa mevcut parola korunur)"
                 : "(en az 4 karakter) *"}
             </label>
-            <input
-              type="password"
+            <PasswordInputWithGenerator
               value={terminalPassword}
               onChange={(e) => setTerminalPassword(e.target.value)}
               placeholder="••••••••"

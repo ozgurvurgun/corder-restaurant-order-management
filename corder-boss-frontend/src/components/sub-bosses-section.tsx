@@ -9,6 +9,7 @@ import {
 } from "@/lib/corder-email"
 import { Building2, Crown, Plus, X } from "lucide-react"
 import { CustomSelect } from "./ui/custom-inputs"
+import { PasswordInputWithGenerator } from "./ui/password-input"
 
 export function SubBossesSection() {
   const { branches, effectiveBranchId, showToast } = useBossStore()
@@ -261,11 +262,11 @@ export function SubBossesSection() {
                 <label className="block text-[11px] font-semibold text-[#86868b] mb-1">
                   Parola (Yeni hesap ise en az 8 karakter)
                 </label>
-                <input
-                  type="password"
+                <PasswordInputWithGenerator
                   value={sbPassword}
                   onChange={(e) => setSbPassword(e.target.value)}
                   placeholder="••••••••"
+                  minLength={8}
                   className="w-full h-9 px-3 text-[12px] bg-[#f5f5f7] rounded-xl border border-[#d1d1d6]"
                 />
               </div>

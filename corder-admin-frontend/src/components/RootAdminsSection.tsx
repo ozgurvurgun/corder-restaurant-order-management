@@ -4,6 +4,7 @@ import type { BossTier, RootAdmin } from "@/lib/types"
 import { useAdminStore } from "@/lib/store"
 import { CorderEmailInput } from "@/components/CorderEmailInput"
 import { CustomSelect } from "@/components/ui/custom-inputs"
+import { PasswordInputWithGenerator } from "@/components/ui/password-input"
 import { formatCanonicalCorderEmail } from "@/lib/corder-email"
 
 interface RootAdminsSectionProps {
@@ -351,21 +352,9 @@ export function RootAdminsSection({
               </div>
               <div>
                 <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                  {mode === "edit"
-                    ? "Yeni Parola (değiştirmek istemiyorsanız boş bırakın)"
-                    : "Parola (en az 8 karakter) *"}
+                  {mode === "edit" ? "Yeni Parola (değiştirmek istemiyorsanız boş bırakın)" : "Parola (en az 8 karakter) *"}
                 </label>
-                <input
-                  type="password"
-                  value={adminPassword}
-                  onChange={(e) => setAdminPassword(e.target.value)}
-                  placeholder="••••••••"
-                  minLength={8}
-                  autoComplete="new-password"
-                  className={fieldCls}
-                  required={mode === "create"}
-                  disabled={adminSubmitLoading}
-                />
+                <PasswordInputWithGenerator value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="••••••••" minLength={8} autoComplete="new-password" className={fieldCls} required={mode === "create"} disabled={adminSubmitLoading} />
               </div>
               {mode === "edit" && (
                 <label className="flex items-center gap-2 text-[12px] font-medium text-[#1d1d1f] cursor-pointer">

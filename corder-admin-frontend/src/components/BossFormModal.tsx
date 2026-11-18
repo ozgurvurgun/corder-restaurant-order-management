@@ -3,6 +3,7 @@ import type { BossTier, Restaurant, RootAdmin } from "@/lib/types"
 import { Building2, Check, X } from "lucide-react"
 import { CorderEmailInput } from "@/components/CorderEmailInput"
 import { CustomSelect } from "@/components/ui/custom-inputs"
+import { PasswordInputWithGenerator } from "@/components/ui/password-input"
 import { formatCanonicalCorderEmail } from "@/lib/corder-email"
 
 interface BossFormModalProps {
@@ -275,11 +276,11 @@ export function BossFormModal({
                 ? "Yeni Parola (değiştirmek istemiyorsanız boş bırakın)"
                 : "Parola (en az 8 karakter) *"}
             </label>
-            <input
-              type="password"
+            <PasswordInputWithGenerator
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
+              minLength={8}
               autoComplete="new-password"
               className={fieldCls}
               required={!editingBoss}
