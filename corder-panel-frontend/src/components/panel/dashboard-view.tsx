@@ -178,7 +178,7 @@ export default function DashboardView(_props: DashboardViewProps) {
 
   return (
     <div className="h-full overflow-auto">
-      <div className="p-6 max-w-[1400px]">
+      <div className="p-6 w-full">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-[22px] font-bold text-[var(--panel-text)]">

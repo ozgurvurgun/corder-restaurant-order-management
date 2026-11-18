@@ -266,7 +266,7 @@ export default function StockView() {
       </div>
 
       <div className="flex-1 overflow-auto p-5">
-        <div className="max-w-6xl flex flex-col gap-4">
+        <div className="w-full flex flex-col gap-4">
           {activeTab === "materials" && (
             <MaterialsTab
               stockMaterials={stockMaterials}

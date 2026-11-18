@@ -401,7 +401,7 @@ export default function CashRegisterView() {
       </div>
 
       <div className="flex-1 overflow-auto p-5">
-        <div className="max-w-5xl flex flex-col gap-5">
+        <div className="w-full flex flex-col gap-5">
           {activeTab === "overview" && (
             <ShiftOverviewSection
               currentShift={currentShift}

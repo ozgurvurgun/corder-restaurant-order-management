@@ -99,7 +99,7 @@ export default function BillingView() {
       </div>
 
       <div className="flex-1 overflow-auto p-5">
-        <div className="max-w-4xl space-y-5">
+        <div className="w-full space-y-5">
           {/* Collection Window Warning Banner */}
           {(isCollectionWindow ||
             info?.billingStatus === "pending" ||

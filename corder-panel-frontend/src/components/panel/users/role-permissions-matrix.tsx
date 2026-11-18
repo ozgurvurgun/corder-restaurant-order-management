@@ -129,7 +129,7 @@ export function RolePermissionsMatrix({
   }
 
   return (
-    <div className="max-w-5xl space-y-4">
+    <div className="w-full space-y-4">
       <div className="bg-white rounded-2xl border border-[#d1d1d6]/70 p-4 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>

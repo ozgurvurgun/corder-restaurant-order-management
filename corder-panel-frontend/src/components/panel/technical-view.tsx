@@ -171,7 +171,7 @@ export default function TechnicalView() {
       </div>
 
       <div className="flex-1 overflow-auto p-5">
-        <div className="max-w-5xl flex flex-col gap-4">
+        <div className="w-full flex flex-col gap-4">
           {activeTab === "notifications" && (
             <>
               <div className="flex justify-between items-center">

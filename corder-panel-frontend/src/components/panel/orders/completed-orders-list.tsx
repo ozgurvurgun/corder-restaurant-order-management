@@ -88,7 +88,7 @@ export function CompletedOrdersList(props: {
   }
 
   return (
-    <div className="flex flex-col gap-4 max-w-5xl">
+    <div className="flex flex-col gap-4 w-full">
       {paginatedTables.map((closedTable) => {
         const isExpanded = expandedId === closedTable.id
         const allItems = closedTable.orders.flatMap((order) => order.items)

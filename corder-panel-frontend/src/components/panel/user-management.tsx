@@ -143,7 +143,7 @@ export default function UserManagement() {
 
       <div className="flex-1 overflow-auto p-5">
         {activeTab === "staff" ? (
-          <div className="max-w-5xl space-y-4">
+          <div className="w-full space-y-4">
             {canManageStaff && (showAdd || editingUser) && (
               <StaffAccountModal
                 key={editingUser?.id ?? "new"}

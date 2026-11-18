@@ -373,7 +373,7 @@ export default function ReportsView() {
       </div>
 
       <div className="flex-1 overflow-auto p-5">
-        <div className="max-w-6xl flex flex-col gap-5">
+        <div className="w-full flex flex-col gap-5">
           {activeTab === "daily" && (
             <>
               <div className={`grid gap-3 ${summaryCards.length === 5 ? "grid-cols-5" : "grid-cols-3"}`}>

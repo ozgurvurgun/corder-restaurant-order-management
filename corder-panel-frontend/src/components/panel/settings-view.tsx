@@ -127,7 +127,7 @@ export default function SettingsView() {
       </div>
 
       <div className="flex-1 overflow-auto p-5">
-        <div className="max-w-3xl flex flex-col gap-6">
+        <div className="w-full flex flex-col gap-6">
           {activeTab === "general" && canManageSettings && (
             <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-5">
               <div className="flex items-center gap-2 mb-4">
