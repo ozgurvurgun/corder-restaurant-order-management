@@ -1,4 +1,14 @@
-import { IsOptional, IsString, MinLength, ValidateIf } from 'class-validator';
+import {
+  IsIn,
+  IsOptional,
+  IsString,
+  MinLength,
+  ValidateIf,
+} from 'class-validator';
+import {
+  RESTAURANT_MENU_TEMPLATES,
+  RestaurantMenuTemplate,
+} from '../../../platform/domain/restaurant.entity';
 
 export class UpdateRestaurantSettingsDto {
   @IsOptional()
@@ -50,4 +60,8 @@ export class UpdateRestaurantSettingsDto {
   @ValidateIf((_, v) => v !== null)
   @IsString()
   logoUrl?: string | null;
+
+  @IsOptional()
+  @IsIn(RESTAURANT_MENU_TEMPLATES)
+  menuTemplate?: RestaurantMenuTemplate;
 }

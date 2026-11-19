@@ -1,6 +1,7 @@
 import { useEffect } from "react"
 import type {
   AuditLog,
+  MenuTemplateId,
   PanelOrder,
   PanelTable,
   PanelUser,
@@ -93,6 +94,7 @@ export function usePanelHydration(params: {
           facebook: s.facebook ?? undefined,
           website: s.website ?? undefined,
           workingHours: s.workingHours ?? undefined,
+          menuTemplate: (s.menuTemplate as MenuTemplateId) || "classic",
         }))
       })
       .catch(console.error)

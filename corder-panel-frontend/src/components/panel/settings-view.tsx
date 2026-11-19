@@ -4,6 +4,7 @@ import { usePanelAuth } from "@/lib/panel-auth"
 import { api } from "@/lib/api"
 import ImageUpload from "./image-upload"
 import { BulkCreateTablesModal, NotificationSoundSettingsCard, TableQrCodesModal } from "./settings/table-qr-and-bulk-modal"
+import { MenuTemplatePickerCard } from "./settings/menu-template-picker"
 import { Plus, Pencil, Trash2, MapPin, Store, X, Globe, Instagram, MessageCircle, Monitor, Type, LayoutGrid, Image, ToggleLeft, ToggleRight, Zap, Layers, QrCode } from "lucide-react"
 
 type SettingsTab = "general" | "sections-tables" | "appearance" | "social"
@@ -356,52 +357,66 @@ export default function SettingsView() {
                   </div>
                 </div>
               </div>
+              <MenuTemplatePickerCard
+                selectedTemplate={settings.menuTemplate || "classic"}
+                restaurantSlug={currentBusiness?.slug || "restoran"}
+                canManage={canManageSettings}
+                onSelect={(tpl) => updateSettings({ menuTemplate: tpl })}
+              />
               <NotificationSoundSettingsCard />
             </>
           )}
 
           {activeTab === "social" && canManageSettings && (
-            <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-5">
-              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                <div className="flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-[#e63462]" />
-                  <h3 className="text-[14px] font-semibold text-[#1d1d1f]">QR Menü İletişim &amp; Sosyal Medya</h3>
+            <>
+              <MenuTemplatePickerCard
+                selectedTemplate={settings.menuTemplate || "classic"}
+                restaurantSlug={currentBusiness?.slug || "restoran"}
+                canManage={canManageSettings}
+                onSelect={(tpl) => updateSettings({ menuTemplate: tpl })}
+              />
+              <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-5">
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-[#e63462]" />
+                    <h3 className="text-[14px] font-semibold text-[#1d1d1f]">QR Menü İletişim &amp; Sosyal Medya</h3>
+                  </div>
+                  <button type="button" onClick={() => setShowQrCodesModal(true)} className="h-[30px] px-3 flex items-center gap-1.5 bg-[#1d1d1f] text-white rounded-lg text-[11px] font-medium hover:bg-[#3a3a3c]">
+                    <QrCode className="w-3.5 h-3.5" /> Masaya Özel QR Kodları &amp; Yazdır
+                  </button>
                 </div>
-                <button type="button" onClick={() => setShowQrCodesModal(true)} className="h-[30px] px-3 flex items-center gap-1.5 bg-[#1d1d1f] text-white rounded-lg text-[11px] font-medium hover:bg-[#3a3a3c]">
-                  <QrCode className="w-3.5 h-3.5" /> Masaya Özel QR Kodları &amp; Yazdır
-                </button>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] text-[#86868b] font-medium mb-1 flex items-center gap-1">Telefon (Menüde Gösterilir)</label>
+                    <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Örn: 0232 000 00 00" className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-[#86868b] font-medium mb-1 flex items-center gap-1"><MapPin className="w-3 h-3" /> Açık Adres / Konum (Menüde Gösterilir)</label>
+                    <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Örn: Bornova Küçükpark, İzmir" className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-[#86868b] font-medium mb-1 flex items-center gap-1"><MessageCircle className="w-3 h-3" /> WhatsApp</label>
+                    <input type="tel" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="905551234567" className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-[#86868b] font-medium mb-1 flex items-center gap-1"><Instagram className="w-3 h-3" /> Instagram</label>
+                    <input type="text" value={instagram} onChange={(e) => setInstagram(e.target.value)} placeholder="@kullanici_adi" className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-[#86868b] font-medium mb-1 flex items-center gap-1"><Globe className="w-3 h-3" /> Facebook</label>
+                    <input type="text" value={facebook} onChange={(e) => setFacebook(e.target.value)} placeholder="facebook.com/sayfa" className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-[#86868b] font-medium mb-1 flex items-center gap-1"><Globe className="w-3 h-3" /> Web Sitesi</label>
+                    <input type="url" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://..." className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
+                  </div>
+                </div>
+                <p className="text-[10px] text-[#86868b] mt-3">Bu bilgiler menü sayfasındaki iletişim bölümünde gösterilir.</p>
+                <div className="flex justify-end mt-4">
+                  <button onClick={handleSaveSettings} className="h-[34px] px-5 text-[12px] font-medium text-white bg-[#e63462] rounded-lg hover:bg-[#d42d56] transition-colors">Kaydet</button>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] text-[#86868b] font-medium mb-1 flex items-center gap-1">Telefon (Menüde Gösterilir)</label>
-                  <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Örn: 0232 000 00 00" className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
-                </div>
-                <div>
-                  <label className="text-[11px] text-[#86868b] font-medium mb-1 flex items-center gap-1"><MapPin className="w-3 h-3" /> Açık Adres / Konum (Menüde Gösterilir)</label>
-                  <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Örn: Bornova Küçükpark, İzmir" className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
-                </div>
-                <div>
-                  <label className="text-[11px] text-[#86868b] font-medium mb-1 flex items-center gap-1"><MessageCircle className="w-3 h-3" /> WhatsApp</label>
-                  <input type="tel" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="905551234567" className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
-                </div>
-                <div>
-                  <label className="text-[11px] text-[#86868b] font-medium mb-1 flex items-center gap-1"><Instagram className="w-3 h-3" /> Instagram</label>
-                  <input type="text" value={instagram} onChange={(e) => setInstagram(e.target.value)} placeholder="@kullanici_adi" className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
-                </div>
-                <div>
-                  <label className="text-[11px] text-[#86868b] font-medium mb-1 flex items-center gap-1"><Globe className="w-3 h-3" /> Facebook</label>
-                  <input type="text" value={facebook} onChange={(e) => setFacebook(e.target.value)} placeholder="facebook.com/sayfa" className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
-                </div>
-                <div>
-                  <label className="text-[11px] text-[#86868b] font-medium mb-1 flex items-center gap-1"><Globe className="w-3 h-3" /> Web Sitesi</label>
-                  <input type="url" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://..." className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
-                </div>
-              </div>
-              <p className="text-[10px] text-[#86868b] mt-3">Bu bilgiler menü sayfasındaki iletişim bölümünde gösterilir.</p>
-              <div className="flex justify-end mt-4">
-                <button onClick={handleSaveSettings} className="h-[34px] px-5 text-[12px] font-medium text-white bg-[#e63462] rounded-lg hover:bg-[#d42d56] transition-colors">Kaydet</button>
-              </div>
-            </div>
+            </>
           )}
         </div>
       </div>

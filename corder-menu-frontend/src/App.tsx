@@ -28,7 +28,14 @@ function MenuWithQuery() {
   const [searchParams] = useSearchParams()
   const restaurant = resolveSlugFromLocation(searchParams)
   const tableToken = searchParams.get("t")?.trim() || ""
-  return <MenuContent slug={restaurant} tableToken={tableToken} />
+  const templateOverride = searchParams.get("template")?.trim() || undefined
+  return (
+    <MenuContent
+      slug={restaurant}
+      tableToken={tableToken}
+      templateOverride={templateOverride}
+    />
+  )
 }
 
 export default function App() {

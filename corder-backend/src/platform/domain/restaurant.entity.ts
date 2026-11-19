@@ -11,6 +11,19 @@ import {
 } from './subscription-billing.policy';
 
 export type RestaurantBranchType = 'independent' | 'company_owned' | 'franchise';
+export type RestaurantMenuTemplate =
+  | 'classic'
+  | 'bistro-grid'
+  | 'luxury-noir'
+  | 'editorial'
+  | 'vibrant-pop';
+export const RESTAURANT_MENU_TEMPLATES: readonly RestaurantMenuTemplate[] = [
+  'classic',
+  'bistro-grid',
+  'luxury-noir',
+  'editorial',
+  'vibrant-pop',
+] as const;
 export type { RestaurantBillingStatus, RestaurantPaymentRecord };
 
 @Entity('restaurants')
@@ -125,6 +138,9 @@ export class RestaurantEntity {
 
   @Column({ name: 'logo_url', type: 'varchar', length: 500, nullable: true })
   logoUrl?: string | null;
+
+  @Column({ name: 'menu_template', type: 'varchar', length: 40, default: 'classic' })
+  menuTemplate: RestaurantMenuTemplate;
 
   @Column({ name: 'notifications_cleared_at', type: 'timestamptz', nullable: true })
   notificationsClearedAt?: Date | null;

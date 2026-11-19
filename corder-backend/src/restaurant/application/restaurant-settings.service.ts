@@ -2,7 +2,9 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
+  RESTAURANT_MENU_TEMPLATES,
   RestaurantEntity,
+  RestaurantMenuTemplate,
   RestaurantPaymentRecord,
 } from '../../platform/domain/restaurant.entity';
 import { PlatformBillingConfigEntity } from '../../platform/domain/platform-billing-config.entity';
@@ -24,6 +26,7 @@ export interface RestaurantSettingsDto {
   website?: string | null;
   workingHours?: string | null;
   logoUrl?: string | null;
+  menuTemplate?: RestaurantMenuTemplate;
 }
 
 export interface MerchantBillingInfoDto {
@@ -101,6 +104,7 @@ export class RestaurantSettingsService {
       website: r.website,
       workingHours: r.workingHours,
       logoUrl: r.logoUrl ?? null,
+      menuTemplate: (r.menuTemplate as RestaurantMenuTemplate) || 'classic',
     };
   }
 
@@ -211,6 +215,12 @@ export class RestaurantSettingsService {
     }
     if (dto.logoUrl !== undefined) {
       r.logoUrl = dto.logoUrl?.trim() || null;
+    }
+    if (dto.menuTemplate !== undefined) {
+      if (!RESTAURANT_MENU_TEMPLATES.includes(dto.menuTemplate)) {
+        throw new BadRequestException('Invalid menu template');
+      }
+      r.menuTemplate = dto.menuTemplate;
     }
     await this.repo.save(r);
     return this.get(restaurantId);

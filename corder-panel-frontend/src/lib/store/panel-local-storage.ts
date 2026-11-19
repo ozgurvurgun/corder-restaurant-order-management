@@ -148,6 +148,7 @@ export const DEFAULT_SETTINGS: RestaurantSettings = {
   name: "",
   currency: "TRY",
   currencySymbol: "₺",
+  menuTemplate: "classic",
   fontSize: "medium",
   tableCardSize: "normal",
   showProductImages: true,

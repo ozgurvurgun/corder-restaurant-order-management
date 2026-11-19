@@ -1,6 +1,7 @@
 import type {
   CloseCheckPaymentMethod,
   CloseCheckSplitMethod,
+  MenuTemplateId,
   PanelDiscountType,
   PanelTable,
 } from "../panel-types"
@@ -325,6 +326,7 @@ export interface RestaurantSettingsDto {
   facebook?: string | null
   website?: string | null
   workingHours?: string | null
+  menuTemplate?: MenuTemplateId | string | null
 }
 
 export interface FraudAlertDto {

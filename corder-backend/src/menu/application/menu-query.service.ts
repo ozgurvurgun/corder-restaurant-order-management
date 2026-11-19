@@ -7,7 +7,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, MoreThanOrEqual, Repository } from 'typeorm';
-import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
+import {
+  RestaurantEntity,
+  RestaurantMenuTemplate,
+} from '../../platform/domain/restaurant.entity';
 import { CategoryEntity } from '../../restaurant/domain/category.entity';
 import { ProductEntity } from '../../restaurant/domain/product.entity';
 import { CampaignEntity } from '../../restaurant/domain/campaign.entity';
@@ -46,6 +49,7 @@ export interface MenuBusinessDto {
   workingHours?: string;
   logo?: string;
   logoUrl?: string | null;
+  menuTemplate?: RestaurantMenuTemplate;
   whatsapp?: string;
   instagram?: string;
   facebook?: string;
@@ -55,6 +59,7 @@ export interface MenuBusinessDto {
     name: string;
     slug: string;
     logoUrl: string | null;
+    menuTemplate: RestaurantMenuTemplate;
     address: string | null;
     phone: string | null;
     workingHours: string | null;
@@ -257,6 +262,7 @@ export class MenuQueryService {
       workingHours: restaurant.workingHours ?? undefined,
       logo: restaurant.logoUrl ?? undefined,
       logoUrl: restaurant.logoUrl ?? null,
+      menuTemplate: (restaurant.menuTemplate as RestaurantMenuTemplate) || 'classic',
       whatsapp: restaurant.whatsapp ?? undefined,
       instagram: restaurant.instagram ?? undefined,
       facebook: restaurant.facebook ?? undefined,
@@ -266,6 +272,7 @@ export class MenuQueryService {
         name: restaurant.name,
         slug: restaurant.slug,
         logoUrl: restaurant.logoUrl ?? null,
+        menuTemplate: (restaurant.menuTemplate as RestaurantMenuTemplate) || 'classic',
         address: restaurant.menuAddress ?? null,
         phone: restaurant.menuPhone ?? null,
         workingHours: restaurant.workingHours ?? null,

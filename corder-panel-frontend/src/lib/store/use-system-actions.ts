@@ -226,24 +226,26 @@ export function useSystemActions(params: {
         }
       }
       if (!token) return
-      const serverFields = ["name", "logoUrl", "address", "phone", "taxId", "whatsapp", "instagram", "facebook", "website", "workingHours"] as const
-      if (!serverFields.some((k) => s[k] !== undefined)) return
+      const serverFields = ["name", "logoUrl", "address", "phone", "taxId", "whatsapp", "instagram", "facebook", "website", "workingHours", "menuTemplate"] as const
+      if (!serverFields.some((k) => s[k] !== undefined || k in s)) return
       api.restaurant
         .updateSettings(token, {
           ...(s.name?.trim() ? { name: s.name.trim() } : {}),
           ...(s.logoUrl !== undefined ? { logoUrl: s.logoUrl || null } : {}),
-          address: s.address ?? null,
-          phone: s.phone ?? null,
-          taxId: s.taxId ?? null,
-          whatsapp: s.whatsapp ?? null,
-          instagram: s.instagram ?? null,
-          facebook: s.facebook ?? null,
-          website: s.website ?? null,
-          workingHours: s.workingHours ?? null,
+          ...("address" in s ? { address: s.address ?? null } : {}),
+          ...("phone" in s ? { phone: s.phone ?? null } : {}),
+          ...("taxId" in s ? { taxId: s.taxId ?? null } : {}),
+          ...("whatsapp" in s ? { whatsapp: s.whatsapp ?? null } : {}),
+          ...("instagram" in s ? { instagram: s.instagram ?? null } : {}),
+          ...("facebook" in s ? { facebook: s.facebook ?? null } : {}),
+          ...("website" in s ? { website: s.website ?? null } : {}),
+          ...("workingHours" in s ? { workingHours: s.workingHours ?? null } : {}),
+          ...(s.menuTemplate !== undefined ? { menuTemplate: s.menuTemplate } : {}),
         })
         .then(() => {
           logActivity({ action: "settings_updated", category: "settings", details: "Restoran ayarları güncellendi", metadata: { fields: Object.keys(s) } })
-          showPanelToast("Ayarlar kaydedildi", "success")
+          const isTplOnly = s.menuTemplate !== undefined && Object.keys(s).length === 1
+          showPanelToast(isTplOnly ? "QR menü tasarım şablonu güncellendi" : "Ayarlar kaydedildi", "success")
         })
         .catch((err) => showPanelToast(err instanceof Error ? err.message : "Ayarlar güncellenemedi", "error"))
     },

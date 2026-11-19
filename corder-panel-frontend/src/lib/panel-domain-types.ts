@@ -171,6 +171,13 @@ export interface HourlyDensity {
   average: number
 }
 
+export type MenuTemplateId =
+  | "classic"
+  | "bistro-grid"
+  | "luxury-noir"
+  | "editorial"
+  | "vibrant-pop"
+
 export interface RestaurantSettings {
   name: string
   logoUrl?: string | null
@@ -186,12 +193,15 @@ export interface RestaurantSettings {
   facebook?: string
   website?: string
   workingHours?: string
+  menuTemplate?: MenuTemplateId
   fontSize?: "small" | "medium" | "large"
   tableCardSize?: "compact" | "normal" | "large"
   showProductImages?: boolean
   sidebarCollapsed?: boolean
   quickActionsEnabled?: boolean
 }
+
+export type PanelSettings = RestaurantSettings
 
 export interface Campaign {
   id: string

@@ -29,6 +29,25 @@ export interface MenuCampaign {
   isActive: boolean
 }
 
+export type MenuTemplateId =
+  | "classic"
+  | "bistro-grid"
+  | "luxury-noir"
+  | "editorial"
+  | "vibrant-pop"
+
+export const MENU_TEMPLATE_IDS: readonly MenuTemplateId[] = [
+  "classic",
+  "bistro-grid",
+  "luxury-noir",
+  "editorial",
+  "vibrant-pop",
+] as const
+
+export function isValidMenuTemplateId(value: unknown): value is MenuTemplateId {
+  return typeof value === "string" && (MENU_TEMPLATE_IDS as readonly string[]).includes(value)
+}
+
 export interface MenuTableContext {
   tableId: string
   tableName: string
@@ -42,6 +61,7 @@ export interface MenuRestaurantInfo {
   slug?: string
   logo?: string | null
   logoUrl?: string | null
+  menuTemplate?: MenuTemplateId
 }
 
 export interface MenuResponse {
@@ -58,6 +78,7 @@ export interface MenuResponse {
   instagram?: string
   facebook?: string
   website?: string
+  menuTemplate?: MenuTemplateId
   restaurant?: MenuRestaurantInfo | null
   tableContext?: MenuTableContext | null
   categories: MenuCategory[]
@@ -266,6 +287,10 @@ function normalizeMenuCategoryTree(cat: MenuCategory): MenuCategory {
 function normalizeMenuResponse(data: MenuResponse, tableToken?: string): MenuResponse {
   const resolvedLogo =
     data.logoUrl ?? data.logo ?? data.restaurant?.logoUrl ?? data.restaurant?.logo ?? null
+  const rawTemplate = data.menuTemplate ?? data.restaurant?.menuTemplate ?? "classic"
+  const resolvedTemplate: MenuTemplateId = isValidMenuTemplateId(rawTemplate)
+    ? rawTemplate
+    : "classic"
   const cleanToken = tableToken?.trim() || ""
   const rawCtx = cleanToken ? data.tableContext : null
   const validTableContext =
@@ -282,12 +307,14 @@ function normalizeMenuResponse(data: MenuResponse, tableToken?: string): MenuRes
     ...data,
     logo: resolvedLogo ?? undefined,
     logoUrl: resolvedLogo,
+    menuTemplate: resolvedTemplate,
     restaurant: {
       id: data.restaurant?.id ?? data.id,
       name: data.restaurant?.name ?? data.name,
       slug: data.restaurant?.slug ?? data.slug,
       logo: resolvedLogo,
       logoUrl: resolvedLogo,
+      menuTemplate: resolvedTemplate,
     },
     tableContext: validTableContext,
     categories: (data.categories ?? []).map(normalizeMenuCategoryTree),
