@@ -53,11 +53,13 @@ const STATUS_LABELS: Record<FraudAlertDto["status"], { label: string; badge: str
   false_positive: { label: "Yanlış Alarm", badge: "bg-slate-100 text-slate-600" },
 }
 
+let cachedFraudAlerts: FraudAlertDto[] = []
+
 export function SecurityFraudTab(props: { canManageAlerts: boolean }) {
   const { canManageAlerts } = props
   const { token } = usePanelAuth()
 
-  const [alerts, setAlerts] = useState<FraudAlertDto[]>([])
+  const [alerts, setAlerts] = useState<FraudAlertDto[]>(() => cachedFraudAlerts)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [scanning, setScanning] = useState(false)
@@ -74,6 +76,7 @@ export function SecurityFraudTab(props: { canManageAlerts: boolean }) {
     try {
       const res = await api.security.listFraudAlerts(token)
       const list = Array.isArray(res) ? res : (res?.alerts ?? [])
+      cachedFraudAlerts = list
       setAlerts(list)
       setSelectedIds((prev) => prev.filter((id) => list.some((a) => a.id === id)))
     } catch {
@@ -362,11 +365,7 @@ export function SecurityFraudTab(props: { canManageAlerts: boolean }) {
         </div>
       </div>
 
-      {loading ? (
-        <div className="bg-white rounded-xl border border-[#d1d1d6]/60 py-14 flex items-center justify-center gap-2 text-[#86868b] text-[13px]">
-          <Loader2 className="w-5 h-5 animate-spin" /> Güvenlik kayıtları yükleniyor…
-        </div>
-      ) : paginatedAlerts.length === 0 ? (
+      {paginatedAlerts.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#d1d1d6]/60 py-12 text-center">
           <ShieldCheck className="w-10 h-10 text-green-500 mx-auto mb-2" />
           <p className="text-[14px] font-semibold text-[#1d1d1f]">Şüpheli İşlem veya Suistimal Uyarısı Bulunmadı</p>

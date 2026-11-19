@@ -18,7 +18,6 @@ export function SubBossesSection() {
   const confirm = useConfirm()
 
   const [subBosses, setSubBosses] = useState<SubBossItemDto[]>([])
-  const [loadingList, setLoadingList] = useState(false)
   const [showSubBossModal, setShowSubBossModal] = useState(false)
   const [sbName, setSbName] = useState("")
   const [sbEmail, setSbEmail] = useState("")
@@ -31,12 +30,10 @@ export function SubBossesSection() {
   const pageSize = 4
 
   useEffect(() => {
-    setLoadingList(true)
     bossApi.overview
       .listSubBosses()
       .then(setSubBosses)
       .catch(() => {})
-      .finally(() => setLoadingList(false))
   }, [])
 
   const pagedSubBosses = useMemo(() => {
@@ -131,10 +128,6 @@ export function SubBossesSection() {
             Şube / Franchise Boss Ata
           </button>
         </div>
-
-        {loadingList && subBosses.length === 0 && (
-          <p className="mt-3 text-[12px] text-[#86868b]">Şube yöneticileri yükleniyor…</p>
-        )}
 
         {subBosses.length > 0 && (
           <>
