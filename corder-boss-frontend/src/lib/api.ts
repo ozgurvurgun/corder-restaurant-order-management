@@ -290,9 +290,34 @@ export async function updateFraudAlert(
   return normalizeFraudAlert(raw ?? { id, ...body }, 0)
 }
 
+export async function deleteFraudAlert(token: string, id: string): Promise<{ ok: boolean; deletedCount: number }> {
+  const effectiveToken = token && token.includes(".") ? token : getBossToken()
+  return bossFetch<{ ok: boolean; deletedCount: number }>(
+    `/restaurant/boss/fraud-alerts/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+    undefined,
+    effectiveToken
+  )
+}
+
+export async function bulkDeleteFraudAlerts(
+  token: string,
+  body: { ids?: string[]; deleteAll?: boolean; onlyResolved?: boolean; branchId?: string }
+): Promise<{ ok: boolean; deletedCount: number }> {
+  const effectiveToken = token && token.includes(".") ? token : getBossToken()
+  return bossFetch<{ ok: boolean; deletedCount: number }>(
+    "/restaurant/boss/fraud-alerts/bulk-delete",
+    { method: "POST", body: JSON.stringify(body) },
+    undefined,
+    effectiveToken
+  )
+}
+
 export const bossApi = {
   getFraudAlerts,
   updateFraudAlert,
+  deleteFraudAlert,
+  bulkDeleteFraudAlerts,
   auth: {
     async login(email: string, password: string) {
       const res = await fetch(`${BASE}/restaurant/auth/login`, {
@@ -410,25 +435,13 @@ export const bossApi = {
       return bossFetch<StaffMemberDto[]>("/restaurant/staff", {}, branchId)
     },
     async create(branchId: string, body: Record<string, unknown>) {
-      return bossFetch<StaffMemberDto>(
-        "/restaurant/staff",
-        { method: "POST", body: JSON.stringify(body) },
-        branchId
-      )
+      return bossFetch<StaffMemberDto>("/restaurant/staff", { method: "POST", body: JSON.stringify(body) }, branchId)
     },
     async update(branchId: string, id: string, body: Record<string, unknown>) {
-      return bossFetch<StaffMemberDto>(
-        `/restaurant/staff/${encodeURIComponent(id)}`,
-        { method: "PUT", body: JSON.stringify(body) },
-        branchId
-      )
+      return bossFetch<StaffMemberDto>(`/restaurant/staff/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(body) }, branchId)
     },
     async remove(branchId: string, id: string) {
-      return bossFetch<void>(
-        `/restaurant/staff/${encodeURIComponent(id)}`,
-        { method: "DELETE" },
-        branchId
-      )
+      return bossFetch<void>(`/restaurant/staff/${encodeURIComponent(id)}`, { method: "DELETE" }, branchId)
     },
   },
   auditLogs: {

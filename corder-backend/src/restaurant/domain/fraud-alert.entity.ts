@@ -25,7 +25,8 @@ export type FraudAlertStatus =
   | 'open'
   | 'investigating'
   | 'resolved'
-  | 'false_positive';
+  | 'false_positive'
+  | 'deleted';
 
 @Entity('fraud_alerts')
 @Index(['restaurantId'])

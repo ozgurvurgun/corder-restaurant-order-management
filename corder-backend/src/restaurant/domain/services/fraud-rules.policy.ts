@@ -72,14 +72,21 @@ export class FraudRulesPolicy {
       const cancelledAt = item.cancelledAt ?? ord.updatedAt ?? ord.createdAt;
 
       const priorReceipt = printJobs.find((pj) => {
-        if (pj.createdAt > cancelledAt) return false;
-        const pOrd = (pj.payload as { order?: Record<string, unknown> })?.order;
-        if (!pOrd) return false;
-        return (
-          pOrd.tableId === ord.tableId ||
-          pOrd.orderId === ord.id ||
-          (typeof pOrd.tableName === 'string' && pOrd.tableName === tableName)
-        );
+        if (pj.createdAt < ord.createdAt || pj.createdAt > cancelledAt) {
+          return false;
+        }
+        if (cancelledAt.getTime() - pj.createdAt.getTime() > 2 * 60 * 60 * 1000) {
+          return false;
+        }
+        const payloadObj = pj.payload as {
+          isReprint?: boolean;
+          shiftReport?: unknown;
+          order?: Record<string, unknown>;
+        };
+        if (payloadObj?.shiftReport) return false;
+        const pOrd = payloadObj?.order;
+        if (!pOrd || pOrd.completedOrderId) return false;
+        return pOrd.orderId === ord.id || pOrd.tableId === ord.tableId;
       });
 
       if (priorReceipt) {
@@ -94,10 +101,11 @@ export class FraudRulesPolicy {
           actorId: ord.userId,
           tableName,
           amountImpact: lineAmount,
-          sourceKey: `post-print-void:${item.id}`,
+          sourceKey: `post-print-void-v2:${item.id}`,
           evidence: {
             itemId: item.id,
             orderId: ord.id,
+            orderCreatedAt: ord.createdAt.toISOString(),
             productName: item.productName,
             quantity: item.quantity,
             cancelReason: item.cancelReason,

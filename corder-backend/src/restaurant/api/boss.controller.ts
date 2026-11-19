@@ -126,4 +126,42 @@ export class BossController {
       user.name || 'Boss',
     );
   }
+
+  @Delete('fraud-alerts/:id')
+  async deleteFraudAlert(
+    @RestaurantUser()
+    user: { sub: string; role?: string; isBoss?: boolean },
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    this.assertBossActor(user, 'Only Boss accounts can delete fraud alerts');
+    const ownedBranches = await this.bossHierarchy.loadBossOwnedBranches(user.sub);
+    return this.fraudService.deleteAlerts(
+      ownedBranches.map((b) => b.id),
+      { ids: [id] },
+    );
+  }
+
+  @Post('fraud-alerts/bulk-delete')
+  async bulkDeleteFraudAlerts(
+    @RestaurantUser()
+    user: { sub: string; role?: string; isBoss?: boolean },
+    @Body()
+    body: {
+      ids?: string[];
+      deleteAll?: boolean;
+      onlyResolved?: boolean;
+      branchId?: string;
+    },
+  ) {
+    this.assertBossActor(user, 'Only Boss accounts can bulk-delete fraud alerts');
+    const ownedBranches = await this.bossHierarchy.loadBossOwnedBranches(user.sub);
+    const targetBranches =
+      body?.branchId && body.branchId !== 'ALL'
+        ? ownedBranches.filter((b) => b.id === body.branchId)
+        : ownedBranches;
+    return this.fraudService.deleteAlerts(
+      targetBranches.map((b) => b.id),
+      body || {},
+    );
+  }
 }

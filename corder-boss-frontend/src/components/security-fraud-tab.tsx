@@ -3,42 +3,23 @@ import { useBossStore } from "@/lib/boss-store"
 import type { FraudAlertDto, FraudAlertStatus, FraudSeverity } from "@/lib/types"
 import { formatIstanbulDateTime, formatMoney, sumMoney } from "@/lib/format"
 import {
-  FRAUD_ALGORITHMS,
-  playFraudAlertChime,
-  requestBrowserNotificationPermission,
-  triggerFraudPushNotification,
+  FRAUD_ALGORITHMS, playFraudAlertChime,
+  requestBrowserNotificationPermission, triggerFraudPushNotification,
 } from "@/lib/fraud-notifier"
 import { PaginationBar } from "./ui/pagination-bar"
 import {
-  ShieldAlert,
-  Bell,
-  BellOff,
-  Volume2,
-  CheckCircle2,
-  Eye,
-  XCircle,
-  AlertTriangle,
-  Clock,
-  Building2,
-  User,
-  Cpu,
-  MessageSquare,
+  ShieldAlert, Bell, BellOff, Volume2, CheckCircle2, Eye,
+  XCircle, AlertTriangle, Clock, Building2, User, Cpu, MessageSquare, Trash2,
 } from "lucide-react"
 
 const SEVERITY_OPTIONS: Array<{ id: FraudSeverity | "ALL"; label: string }> = [
-  { id: "ALL", label: "Tüm Seviyeler" },
-  { id: "critical", label: "Kritik" },
-  { id: "high", label: "Yüksek" },
-  { id: "medium", label: "Orta" },
-  { id: "low", label: "Düşük" },
+  { id: "ALL", label: "Tüm Seviyeler" }, { id: "critical", label: "Kritik" },
+  { id: "high", label: "Yüksek" }, { id: "medium", label: "Orta" }, { id: "low", label: "Düşük" },
 ]
 
 const STATUS_OPTIONS: Array<{ id: FraudAlertStatus | "ALL"; label: string }> = [
-  { id: "ALL", label: "Tüm Durumlar" },
-  { id: "open", label: "Açık" },
-  { id: "investigating", label: "İnceleniyor" },
-  { id: "resolved", label: "Çözüldü" },
-  { id: "false_positive", label: "Yanlış Alarm" },
+  { id: "ALL", label: "Tüm Durumlar" }, { id: "open", label: "Açık" },
+  { id: "investigating", label: "İnceleniyor" }, { id: "resolved", label: "Çözüldü" }, { id: "false_positive", label: "Yanlış Alarm" },
 ]
 
 const SEVERITY_BADGES: Record<FraudSeverity, { label: string; className: string }> = {
@@ -55,15 +36,36 @@ const STATUS_BADGES: Record<FraudAlertStatus, { label: string; className: string
   false_positive: { label: "Yanlış Alarm", className: "bg-zinc-100 text-zinc-600 border border-zinc-200" },
 }
 
+const RULE_BADGE_LABELS: Record<string, string> = {
+  post_print_void_or_discount: "Fiş Sonrası İptal/İskonto",
+  post_print_void_discount: "Fiş Sonrası İptal/İskonto",
+  closed_check_downgrade: "Kapalı Hesap Düşürme",
+  excessive_void_pattern: "Aşırı İptal Deseni",
+  transfer_then_void: "Masa Aktarma Sonrası İptal",
+  cash_drawer_discrepancy: "Kasa Açığı",
+  unusual_cash_out: "Şüpheli Nakit Çıkışı",
+  boundary_discount_abuse: "Limit Sınırı İskonto",
+  off_hours_sensitive_action: "Mesai Dışı Şüpheli İşlem",
+}
+
 export function SecurityFraudTab() {
-  const { fraudAlerts, pushSoundEnabled, togglePushSound, updateFraudAlertStatus, showToast } = useBossStore()
+  const {
+    fraudAlerts,
+    pushSoundEnabled,
+    togglePushSound,
+    updateFraudAlertStatus,
+    deleteFraudAlerts,
+    showToast,
+  } = useBossStore()
   const [severityFilter, setSeverityFilter] = useState<FraudSeverity | "ALL">("ALL")
   const [statusFilter, setStatusFilter] = useState<FraudAlertStatus | "ALL">("ALL")
-  const [showAlgorithms, setShowAlgorithms] = useState(true)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [showAlgorithms, setShowAlgorithms] = useState(false)
   const [activeNoteAlertId, setActiveNoteAlertId] = useState<string | null>(null)
   const [pendingStatus, setPendingStatus] = useState<FraudAlertStatus>("investigating")
   const [noteDraft, setNoteDraft] = useState("")
   const [submittingId, setSubmittingId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [page, setPage] = useState(1)
   const pageSize = 6
 
@@ -93,6 +95,34 @@ export function SecurityFraudTab() {
     () => filteredAlerts.slice((page - 1) * pageSize, page * pageSize),
     [filteredAlerts, page]
   )
+
+  const allFilteredSelected =
+    filteredAlerts.length > 0 && filteredAlerts.every((a) => selectedIds.includes(a.id))
+
+  const toggleSelectAllFiltered = () => {
+    if (allFilteredSelected) {
+      const fSet = new Set(filteredAlerts.map((a) => a.id))
+      setSelectedIds((prev) => prev.filter((id) => !fSet.has(id)))
+    } else {
+      const next = new Set([...selectedIds, ...filteredAlerts.map((a) => a.id)])
+      setSelectedIds(Array.from(next))
+    }
+  }
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
+
+  const handleBulkDelete = async (opts: { ids?: string[]; deleteAll?: boolean; onlyResolved?: boolean }) => {
+    if (deleting) return
+    setDeleting(true)
+    try {
+      await deleteFraudAlerts(opts)
+      setSelectedIds([])
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   const openActionPrompt = (alert: FraudAlertDto, status: FraudAlertStatus) => {
     setActiveNoteAlertId(alert.id)
@@ -134,7 +164,6 @@ export function SecurityFraudTab() {
 
   return (
     <div className="space-y-4">
-      {/* Header & Push / Sound Notification Controls */}
       <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-start gap-3">
@@ -152,6 +181,36 @@ export function SecurityFraudTab() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {selectedIds.length > 0 && (
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => void handleBulkDelete({ ids: selectedIds })}
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-red-600 px-3 text-[12px] font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Seçilenleri Sil ({selectedIds.length})
+              </button>
+            )}
+            {summary.resolvedCount > 0 && (
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => void handleBulkDelete({ onlyResolved: true })}
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 text-[12px] font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Kapatılanları Sil ({summary.resolvedCount})
+              </button>
+            )}
+            {fraudAlerts.length > 0 && (
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => void handleBulkDelete({ deleteAll: true })}
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#e5e5ea] bg-white px-3 text-[12px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Tümünü Sil
+              </button>
+            )}
             <button
               type="button"
               onClick={() => void togglePushSound(!pushSoundEnabled)}
@@ -196,7 +255,6 @@ export function SecurityFraudTab() {
         </div>
       </div>
 
-      {/* 7 Real-Time Fraud Detection Algorithms Overview */}
       <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -234,10 +292,20 @@ export function SecurityFraudTab() {
         )}
       </div>
 
-      {/* Filters & Paginated Fraud Alerts List */}
       <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-4">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <div className="flex flex-wrap items-center gap-1.5">
+            {filteredAlerts.length > 0 && (
+              <label className="inline-flex items-center gap-1.5 rounded-xl bg-[#f5f5f7] px-2.5 py-1 text-[11px] font-semibold text-[#1d1d1f] cursor-pointer mr-1">
+                <input
+                  type="checkbox"
+                  checked={allFilteredSelected}
+                  onChange={toggleSelectAllFiltered}
+                  className="accent-[#e63462]"
+                />
+                Tümünü Seç
+              </label>
+            )}
             <span className="text-[11px] font-semibold text-[#86868b] mr-1">Risk Seviyesi:</span>
             {SEVERITY_OPTIONS.map((opt) => (
               <button
@@ -287,6 +355,9 @@ export function SecurityFraudTab() {
                 const sevBadge = SEVERITY_BADGES[alert.severity]
                 const stBadge = STATUS_BADGES[alert.status]
                 const isEditingNote = activeNoteAlertId === alert.id
+                const isSelected = selectedIds.includes(alert.id)
+                const ruleLabel =
+                  RULE_BADGE_LABELS[(alert.ruleKey || "").toLowerCase()] || alert.ruleKey
                 return (
                   <div
                     key={alert.id}
@@ -299,7 +370,14 @@ export function SecurityFraudTab() {
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-1.5">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSelectOne(alert.id)}
+                            className="accent-[#e63462] mr-1 cursor-pointer"
+                          />
                           <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${sevBadge.className}`}>{sevBadge.label}</span>
+                          <span className="rounded-md px-2 py-0.5 text-[10px] font-semibold bg-[#1d1d1f] text-white">{ruleLabel}</span>
                           <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${stBadge.className}`}>{stBadge.label}</span>
                           <h4 className="text-[13.5px] font-semibold text-[#1d1d1f]">{alert.title}</h4>
                           {alert.branchName && (
@@ -322,9 +400,7 @@ export function SecurityFraudTab() {
                         )}
                       </div>
                       <div className="text-right flex-shrink-0">
-                        {alert.amountImpact > 0 && (
-                          <p className="text-[15px] font-bold text-red-600 tabular-nums">₺{formatMoney(alert.amountImpact)}</p>
-                        )}
+                        <p className="text-[15px] font-bold text-red-600 tabular-nums">₺{formatMoney(alert.amountImpact)}</p>
                         <p className="flex items-center justify-end gap-1 text-[10.5px] text-[#86868b] mt-0.5">
                           <Clock className="h-3 w-3" /> {formatIstanbulDateTime(alert.createdAt)}
                         </p>
@@ -355,7 +431,14 @@ export function SecurityFraudTab() {
                           <XCircle className="h-3 w-3" /> Yanlış Alarm
                         </button>
                       </div>
-                      <span className="text-[10px] font-mono text-[#86868b]">Kural: {alert.ruleKey}</span>
+                      <button
+                        type="button"
+                        disabled={deleting}
+                        onClick={() => void handleBulkDelete({ ids: [alert.id] })}
+                        className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50"
+                      >
+                        <Trash2 className="h-3 w-3" /> Sil
+                      </button>
                     </div>
 
                     {isEditingNote && (

@@ -145,9 +145,18 @@ export class FraudDetectionService {
     ]);
 
     const existingKeys = new Set<string>();
+    const staleIdsToDelete: string[] = [];
     for (const a of existingAlerts) {
-      const sk = (a.evidence as { sourceKey?: string } | undefined)?.sourceKey;
+      const ev = a.evidence as { sourceKey?: string; orderCreatedAt?: string } | undefined;
+      const sk = ev?.sourceKey;
+      if (typeof sk === 'string' && sk.startsWith('post-print-void:') && !ev?.orderCreatedAt) {
+        staleIdsToDelete.push(a.id);
+        continue;
+      }
       if (typeof sk === 'string' && sk) existingKeys.add(sk);
+    }
+    if (staleIdsToDelete.length > 0) {
+      await this.alertRepo.delete({ id: In(staleIdsToDelete) });
     }
 
     const orderIds = orders.map((o) => o.id);
@@ -182,11 +191,12 @@ export class FraudDetectionService {
     if (opts?.runScan !== false) {
       await this.analyzeRestaurantAnomalies(restaurantId);
     }
-    const allAlerts = await this.alertRepo.find({
+    const rawAlerts = await this.alertRepo.find({
       where: { restaurantId },
       order: { createdAt: 'DESC' },
-      take: 250,
+      take: 300,
     });
+    const allAlerts = rawAlerts.filter((a) => a.status !== 'deleted');
     const filtered =
       opts?.status && opts.status !== 'all'
         ? allAlerts.filter((a) => a.status === opts.status)
@@ -210,11 +220,12 @@ export class FraudDetectionService {
         this.analyzeRestaurantAnomalies(id).catch(() => 0),
       ),
     );
-    const allAlerts = await this.alertRepo.find({
+    const rawAlerts = await this.alertRepo.find({
       where: { restaurantId: In(branchIds) },
       order: { createdAt: 'DESC' },
-      take: 300,
+      take: 400,
     });
+    const allAlerts = rawAlerts.filter((a) => a.status !== 'deleted');
     return {
       alerts: allAlerts.map((a) => ({
         ...this.serializeAlert(a),
@@ -222,6 +233,37 @@ export class FraudDetectionService {
       })),
       summary: this.computeSummary(allAlerts),
     };
+  }
+
+  async deleteAlerts(
+    allowedRestaurantIds: string | string[],
+    opts: { ids?: string[]; deleteAll?: boolean; onlyResolved?: boolean },
+  ): Promise<{ ok: true; deletedCount: number }> {
+    const restIds = Array.isArray(allowedRestaurantIds)
+      ? allowedRestaurantIds
+      : [allowedRestaurantIds];
+    if (restIds.length === 0) return { ok: true, deletedCount: 0 };
+
+    const rows = await this.alertRepo.find({
+      where: {
+        restaurantId: In(restIds),
+        ...(opts.ids && opts.ids.length > 0 ? { id: In(opts.ids) } : {}),
+      },
+    });
+    const targets = rows.filter((r) => {
+      if (r.status === 'deleted') return false;
+      if (opts.onlyResolved) {
+        return r.status === 'resolved' || r.status === 'false_positive';
+      }
+      if (opts.deleteAll) return true;
+      return Boolean(opts.ids && opts.ids.includes(r.id));
+    });
+    if (targets.length === 0) return { ok: true, deletedCount: 0 };
+    for (const t of targets) {
+      t.status = 'deleted';
+    }
+    await this.alertRepo.save(targets);
+    return { ok: true, deletedCount: targets.length };
   }
 
   async updateStatus(
@@ -298,6 +340,7 @@ export class FraudDetectionService {
   }
 
   serializeAlert(a: FraudAlertEntity) {
+    const impact = Number(a.amountImpact || 0);
     return {
       id: a.id,
       restaurantId: a.restaurantId,
@@ -307,9 +350,12 @@ export class FraudDetectionService {
       title: a.title,
       description: a.description,
       actorName: a.actorName,
+      staffName: a.actorName,
       actorId: a.actorId,
+      staffId: a.actorId,
       tableName: a.tableName,
-      amountImpact: Number(a.amountImpact || 0),
+      amountImpact: impact,
+      estimatedRiskAmount: impact,
       status: a.status,
       resolutionNote: a.resolutionNote,
       resolvedBy: a.resolvedBy,

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -83,5 +84,36 @@ export class FraudAlertsController {
       body,
       user?.name || 'Yönetici',
     );
+  }
+
+  @Delete(':id')
+  @RequirePermissions(
+    'security.manage_fraud_alerts',
+    'security.view_fraud_alerts',
+    'reports.view_audit_logs',
+  )
+  removeOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @RestaurantId() restaurantId: string,
+  ) {
+    return this.fraudService.deleteAlerts(restaurantId, { ids: [id] });
+  }
+
+  @Post('bulk-delete')
+  @RequirePermissions(
+    'security.manage_fraud_alerts',
+    'security.view_fraud_alerts',
+    'reports.view_audit_logs',
+  )
+  bulkDelete(
+    @RestaurantId() restaurantId: string,
+    @Body()
+    body: {
+      ids?: string[];
+      deleteAll?: boolean;
+      onlyResolved?: boolean;
+    },
+  ) {
+    return this.fraudService.deleteAlerts(restaurantId, body || {});
   }
 }

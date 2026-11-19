@@ -1,16 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
 import {
-  AlertOctagon,
-  AlertTriangle,
-  CheckCircle2,
-  Eye,
-  Loader2,
-  RefreshCw,
-  ShieldAlert,
-  ShieldCheck,
-  Sparkles,
-  User,
-  XCircle,
+  AlertOctagon, AlertTriangle, CheckCircle2, Eye, Loader2,
+  RefreshCw, ShieldAlert, ShieldCheck, Sparkles, Trash2, User, XCircle,
 } from "lucide-react"
 import { api, type FraudAlertDto } from "@/lib/api"
 import { usePanelAuth } from "@/lib/panel-auth"
@@ -19,41 +10,33 @@ import { formatCurrency, formatIstanbulDateTime, fromMinorUnits, toMinorUnits } 
 import { PaginationBar } from "@/components/ui/pagination-bar"
 
 const RULE_BADGE_LABELS: Record<string, string> = {
-  post_receipt_void: "Fiş Sonrası İptal/İskonto",
-  post_print_cancel: "Fiş Sonrası İptal/İskonto",
-  post_receipt_cancel_or_discount: "Fiş Sonrası İptal/İskonto",
-  closed_check_downgrade: "Kapalı Hesap Düşürme",
-  completed_order_downgrade: "Kapalı Hesap Düşürme",
-  closed_order_reduction: "Kapalı Hesap Düşürme",
-  excessive_void_pattern: "Aşırı İptal Deseni",
-  excessive_cancel_pattern: "Aşırı İptal Deseni",
-  high_void_rate: "Aşırı İptal Deseni",
-  post_transfer_void: "Masa Aktarma Sonrası İptal",
-  table_move_then_void: "Masa Aktarma Sonrası İptal",
-  move_then_cancel: "Masa Aktarma Sonrası İptal",
-  cash_shortage: "Kasa Açığı",
-  shift_shortage: "Kasa Açığı",
-  shift_cash_shortage: "Kasa Açığı",
-  suspicious_cash_out: "Şüpheli Nakit Çıkışı",
-  unusual_cash_out: "Şüpheli Nakit Çıkışı",
-  threshold_discount: "Limit Sınırı İskonto",
-  limit_edge_discount: "Limit Sınırı İskonto",
-  boundary_discount_abuse: "Limit Sınırı İskonto",
+  post_print_void_or_discount: "Fiş Sonrası İptal/İskonto", post_receipt_void: "Fiş Sonrası İptal/İskonto",
+  post_print_cancel: "Fiş Sonrası İptal/İskonto", post_receipt_cancel_or_discount: "Fiş Sonrası İptal/İskonto",
+  closed_check_downgrade: "Kapalı Hesap Düşürme", completed_order_downgrade: "Kapalı Hesap Düşürme",
+  closed_order_reduction: "Kapalı Hesap Düşürme", excessive_void_pattern: "Aşırı İptal Deseni",
+  excessive_cancel_pattern: "Aşırı İptal Deseni", high_void_rate: "Aşırı İptal Deseni",
+  transfer_then_void: "Masa Aktarma Sonrası İptal", post_transfer_void: "Masa Aktarma Sonrası İptal",
+  table_move_then_void: "Masa Aktarma Sonrası İptal", move_then_cancel: "Masa Aktarma Sonrası İptal",
+  cash_drawer_discrepancy: "Kasa Açığı", cash_shortage: "Kasa Açığı",
+  shift_shortage: "Kasa Açığı", shift_cash_shortage: "Kasa Açığı",
+  suspicious_cash_out: "Şüpheli Nakit Çıkışı", unusual_cash_out: "Şüpheli Nakit Çıkışı",
+  threshold_discount: "Limit Sınırı İskonto", limit_edge_discount: "Limit Sınırı İskonto",
+  boundary_discount_abuse: "Limit Sınırı İskonto", off_hours_sensitive_action: "Mesai Dışı Şüpheli İşlem",
 }
 
 const ALL_RULE_LABELS = [
-  "Fiş Sonrası İptal/İskonto",
-  "Kapalı Hesap Düşürme",
-  "Aşırı İptal Deseni",
-  "Masa Aktarma Sonrası İptal",
-  "Kasa Açığı",
-  "Şüpheli Nakit Çıkışı",
-  "Limit Sınırı İskonto",
+  "Fiş Sonrası İptal/İskonto", "Kapalı Hesap Düşürme", "Aşırı İptal Deseni",
+  "Masa Aktarma Sonrası İptal", "Kasa Açığı", "Şüpheli Nakit Çıkışı", "Limit Sınırı İskonto",
 ]
 
 function resolveRuleBadgeLabel(ruleCode: string): string {
-  const key = (ruleCode || "").trim().toLowerCase()
-  return RULE_BADGE_LABELS[key] || ruleCode || "Kural İhlali"
+  return RULE_BADGE_LABELS[(ruleCode || "").trim().toLowerCase()] || "Kural İhlali"
+}
+function getAlertRiskAmount(a: FraudAlertDto): number {
+  return Number(a.amountImpact ?? a.estimatedRiskAmount ?? 0) || 0
+}
+function getAlertActorName(a: FraudAlertDto): string {
+  return (a.actorName || a.staffName || "").trim()
 }
 
 const SEVERITY_STYLES: Record<FraudAlertDto["severity"], { label: string; badge: string; border: string }> = {
@@ -75,9 +58,11 @@ export function SecurityFraudTab(props: { canManageAlerts: boolean }) {
   const { token } = usePanelAuth()
 
   const [alerts, setAlerts] = useState<FraudAlertDto[]>([])
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [severityFilter, setSeverityFilter] = useState<string>("all")
   const [page, setPage] = useState(1)
@@ -88,7 +73,9 @@ export function SecurityFraudTab(props: { canManageAlerts: boolean }) {
     setLoading(true)
     try {
       const res = await api.security.listFraudAlerts(token)
-      setAlerts(Array.isArray(res) ? res : (res?.alerts ?? []))
+      const list = Array.isArray(res) ? res : (res?.alerts ?? [])
+      setAlerts(list)
+      setSelectedIds((prev) => prev.filter((id) => list.some((a) => a.id === id)))
     } catch {
       setAlerts([])
     } finally {
@@ -139,14 +126,55 @@ export function SecurityFraudTab(props: { canManageAlerts: boolean }) {
     }
   }
 
+  const handleDeleteOne = async (id: string) => {
+    if (!token || !canManageAlerts || deleting) return
+    setDeleting(true)
+    try {
+      await api.security.deleteFraudAlert(token, id)
+      setAlerts((prev) => prev.filter((a) => a.id !== id))
+      setSelectedIds((prev) => prev.filter((x) => x !== id))
+      showPanelToast("Güvenlik kaydı silindi", "success")
+    } catch (err) {
+      showPanelToast(err instanceof Error ? err.message : "Kayıt silinemedi", "error")
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const handleBulkDelete = async (opts: { ids?: string[]; deleteAll?: boolean; onlyResolved?: boolean }) => {
+    if (!token || !canManageAlerts || deleting) return
+    setDeleting(true)
+    try {
+      const res = await api.security.bulkDeleteFraudAlerts(token, opts)
+      if (opts.deleteAll) {
+        setAlerts([])
+        setSelectedIds([])
+      } else if (opts.onlyResolved) {
+        setAlerts((prev) => prev.filter((a) => a.status !== "resolved" && a.status !== "false_positive"))
+        setSelectedIds([])
+      } else if (opts.ids?.length) {
+        const idSet = new Set(opts.ids)
+        setAlerts((prev) => prev.filter((a) => !idSet.has(a.id)))
+        setSelectedIds((prev) => prev.filter((id) => !idSet.has(id)))
+      }
+      showPanelToast(`${res.deletedCount || 0} güvenlik kaydı temizlendi`, "success")
+    } catch (err) {
+      showPanelToast(err instanceof Error ? err.message : "Toplu silme başarısız", "error")
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const kpis = useMemo(() => {
     const active = alerts.filter((a) => a.status === "open" || a.status === "investigating")
     const critical = active.filter((a) => a.severity === "critical" || a.severity === "high")
-    const riskMinor = active.reduce((sum, a) => sum + toMinorUnits(Number(a.estimatedRiskAmount) || 0), 0)
+    const riskMinor = active.reduce((sum, a) => sum + toMinorUnits(getAlertRiskAmount(a)), 0)
+    const resolvedCount = alerts.filter((a) => a.status === "resolved" || a.status === "false_positive").length
     return {
       openCount: active.length,
       criticalCount: critical.length,
       estimatedRisk: fromMinorUnits(riskMinor),
+      resolvedCount,
     }
   }, [alerts])
 
@@ -164,6 +192,23 @@ export function SecurityFraudTab(props: { canManageAlerts: boolean }) {
     () => filteredAlerts.slice((page - 1) * pageSize, page * pageSize),
     [filteredAlerts, page],
   )
+
+  const allFilteredSelected =
+    filteredAlerts.length > 0 && filteredAlerts.every((a) => selectedIds.includes(a.id))
+
+  const toggleSelectAllFiltered = () => {
+    if (allFilteredSelected) {
+      const fSet = new Set(filteredAlerts.map((a) => a.id))
+      setSelectedIds((prev) => prev.filter((id) => !fSet.has(id)))
+    } else {
+      const next = new Set([...selectedIds, ...filteredAlerts.map((a) => a.id)])
+      setSelectedIds(Array.from(next))
+    }
+  }
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
 
   return (
     <div className="space-y-4">
@@ -211,7 +256,37 @@ export function SecurityFraudTab(props: { canManageAlerts: boolean }) {
             </span>
           ))}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {canManageAlerts && selectedIds.length > 0 && (
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() => void handleBulkDelete({ ids: selectedIds })}
+              className="h-[30px] px-3 flex items-center gap-1.5 rounded-lg bg-red-600 text-white text-[12px] font-medium hover:bg-red-700 disabled:opacity-50"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Seçilenleri Sil ({selectedIds.length})
+            </button>
+          )}
+          {canManageAlerts && kpis.resolvedCount > 0 && (
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() => void handleBulkDelete({ onlyResolved: true })}
+              className="h-[30px] px-3 flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 text-[12px] font-medium hover:bg-red-100 disabled:opacity-50"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Kapatılanları Sil ({kpis.resolvedCount})
+            </button>
+          )}
+          {canManageAlerts && alerts.length > 0 && (
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() => void handleBulkDelete({ deleteAll: true })}
+              className="h-[30px] px-3 flex items-center gap-1.5 rounded-lg border border-[#d1d1d6]/60 bg-white text-red-600 text-[12px] font-medium hover:bg-red-50 disabled:opacity-50"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Tümünü Sil
+            </button>
+          )}
           <button
             type="button"
             disabled={loading}
@@ -234,6 +309,17 @@ export function SecurityFraudTab(props: { canManageAlerts: boolean }) {
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 flex-wrap">
+          {canManageAlerts && filteredAlerts.length > 0 && (
+            <label className="inline-flex items-center gap-1.5 h-[28px] px-2.5 rounded-lg bg-white border border-[#d1d1d6]/60 text-[11px] font-medium text-[#1d1d1f] cursor-pointer mr-1">
+              <input
+                type="checkbox"
+                checked={allFilteredSelected}
+                onChange={toggleSelectAllFiltered}
+                className="accent-[#e63462]"
+              />
+              Tümünü Seç
+            </label>
+          )}
           {[
             { id: "all", label: "Tüm Durumlar" },
             { id: "open", label: "Açık" },
@@ -294,13 +380,24 @@ export function SecurityFraudTab(props: { canManageAlerts: boolean }) {
             const sev = SEVERITY_STYLES[alert.severity] || SEVERITY_STYLES.medium
             const st = STATUS_LABELS[alert.status] || STATUS_LABELS.open
             const ruleBadge = resolveRuleBadgeLabel(alert.ruleCode)
-            const isBusy = updatingId === alert.id
+            const isBusy = updatingId === alert.id || deleting
+            const riskAmt = getAlertRiskAmount(alert)
+            const actor = getAlertActorName(alert)
+            const isSelected = selectedIds.includes(alert.id)
 
             return (
               <div key={alert.id} className={`rounded-xl border p-4 transition-all ${sev.border}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-1.5 flex-1 min-w-[240px]">
                     <div className="flex flex-wrap items-center gap-1.5">
+                      {canManageAlerts && (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectOne(alert.id)}
+                          className="accent-[#e63462] mr-1 cursor-pointer"
+                        />
+                      )}
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${sev.badge}`}>{sev.label}</span>
                       <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-[#1d1d1f] text-white">{ruleBadge}</span>
                       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${st.badge}`}>{st.label}</span>
@@ -309,9 +406,9 @@ export function SecurityFraudTab(props: { canManageAlerts: boolean }) {
                     <h4 className="text-[14px] font-semibold text-[#1d1d1f]">{alert.title}</h4>
                     <p className="text-[12px] text-[#636366] leading-relaxed">{alert.description}</p>
                     <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-[#86868b]">
-                      {alert.staffName && (
+                      {actor && (
                         <span className="inline-flex items-center gap-1 font-medium text-[#1d1d1f]">
-                          <User className="w-3 h-3 text-[#e63462]" /> Personel: {alert.staffName}
+                          <User className="w-3 h-3 text-[#e63462]" /> Personel: {actor}
                         </span>
                       )}
                       {alert.tableName && <span>Masa: {alert.tableName}</span>}
@@ -323,7 +420,7 @@ export function SecurityFraudTab(props: { canManageAlerts: boolean }) {
                     <div className="text-right">
                       <span className="text-[10px] text-[#86868b] block">Tahmini Risk Tutarı</span>
                       <span className="text-[16px] font-bold text-[#e63462]">
-                        {"\u20BA"}{formatCurrency(Number(alert.estimatedRiskAmount) || 0)}
+                        {"\u20BA"}{formatCurrency(riskAmt)}
                       </span>
                     </div>
                     {canManageAlerts && (
@@ -358,6 +455,15 @@ export function SecurityFraudTab(props: { canManageAlerts: boolean }) {
                             <XCircle className="w-3 h-3" /> Yanlış Alarm
                           </button>
                         )}
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => void handleDeleteOne(alert.id)}
+                          title="Kaydı Sil"
+                          className="h-[28px] px-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-[11px] font-medium flex items-center gap-1 disabled:opacity-50"
+                        >
+                          <Trash2 className="w-3 h-3" /> Sil
+                        </button>
                       </div>
                     )}
                   </div>
@@ -366,7 +472,13 @@ export function SecurityFraudTab(props: { canManageAlerts: boolean }) {
             )
           })}
 
-          <PaginationBar currentPage={page} totalItems={filteredAlerts.length} pageSize={pageSize} onPageChange={setPage} itemLabel="güvenlik uyarısı" />
+          <PaginationBar
+            currentPage={page}
+            totalItems={filteredAlerts.length}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            itemLabel="güvenlik uyarısı"
+          />
         </div>
       )}
     </div>

@@ -40,6 +40,7 @@ interface BossStoreContextValue {
   pushSoundEnabled: boolean
   togglePushSound: (enabled: boolean) => Promise<void>
   updateFraudAlertStatus: (id: string, status: FraudAlertStatus, resolutionNote?: string) => Promise<void>
+  deleteFraudAlerts: (opts: { ids?: string[]; deleteAll?: boolean; onlyResolved?: boolean }) => Promise<void>
   loading: boolean
   error: string | null
   toast: { message: string; type: "success" | "error" } | null
@@ -161,11 +162,8 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
 
   const fraudAlerts = useMemo(() => {
     void heuristicRevision
-    const heuristic = deriveHeuristicFraudAlerts(overview, orders, tables)
-    if (backendFraudAlerts.length === 0) return heuristic
-    const existingIds = new Set(backendFraudAlerts.map((a) => a.id))
-    return [...backendFraudAlerts, ...heuristic.filter((h) => !existingIds.has(h.id))]
-  }, [backendFraudAlerts, overview, orders, tables, heuristicRevision])
+    return backendFraudAlerts
+  }, [backendFraudAlerts, heuristicRevision])
 
   const openCriticalHighAlertCount = useMemo(
     () =>
@@ -252,6 +250,33 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
       showToast("Güvenlik uyarısı durumu güncellendi")
     },
     [showToast]
+  )
+
+  const deleteFraudAlerts = useCallback(
+    async (opts: { ids?: string[]; deleteAll?: boolean; onlyResolved?: boolean }) => {
+      const token = getBossToken()
+      if (!token) return
+      try {
+        const res = await bossApi.bulkDeleteFraudAlerts(token, {
+          ...opts,
+          branchId: selectedBranchId,
+        })
+        if (opts.deleteAll) {
+          setBackendFraudAlerts([])
+        } else if (opts.onlyResolved) {
+          setBackendFraudAlerts((prev) =>
+            prev.filter((a) => a.status !== "resolved" && a.status !== "false_positive")
+          )
+        } else if (opts.ids?.length) {
+          const idSet = new Set(opts.ids)
+          setBackendFraudAlerts((prev) => prev.filter((a) => !idSet.has(a.id)))
+        }
+        showToast(`${res.deletedCount || 0} güvenlik kaydı silindi`)
+      } catch (e) {
+        showToast(e instanceof Error ? e.message : "Kayıt silinemedi", "error")
+      }
+    },
+    [selectedBranchId, showToast]
   )
 
   const setSelectedBranchId = useCallback(
@@ -443,7 +468,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
         isAuthenticated: Boolean(user && getBossToken()),
         user, branches, selectedBranchId, effectiveBranchId, effectiveBranch, setSelectedBranchId,
         overview, catalog, roles, staff, tables, orders, products, categories,
-        fraudAlerts, openCriticalHighAlertCount, pushSoundEnabled, togglePushSound, updateFraudAlertStatus,
+        fraudAlerts, openCriticalHighAlertCount, pushSoundEnabled, togglePushSound, updateFraudAlertStatus, deleteFraudAlerts,
         loading, error, toast, showToast, login, logout, refreshAll, refreshBranchDetails,
       }}
     >

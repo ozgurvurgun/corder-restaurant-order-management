@@ -410,4 +410,24 @@ export const securityApi = {
         body: JSON.stringify(body),
       },
     ),
+  deleteFraudAlert: (token: string, id: string) =>
+    request<{ ok: boolean; deletedCount: number }>(
+      `/restaurant/security/fraud-alerts/${encodeURIComponent(id)}`,
+      {
+        method: "DELETE",
+        token,
+      },
+    ),
+  bulkDeleteFraudAlerts: (
+    token: string,
+    body: { ids?: string[]; deleteAll?: boolean; onlyResolved?: boolean },
+  ) =>
+    request<{ ok: boolean; deletedCount: number }>(
+      "/restaurant/security/fraud-alerts/bulk-delete",
+      {
+        method: "POST",
+        token,
+        body: JSON.stringify(body),
+      },
+    ),
 }
