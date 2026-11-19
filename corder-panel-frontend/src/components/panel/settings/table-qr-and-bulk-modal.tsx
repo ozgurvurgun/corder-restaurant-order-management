@@ -188,21 +188,27 @@ export function TableQrCodesModal(props: {
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 backdrop-blur-sm p-3">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[680px] max-h-[86vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#f0f0f0]">
-          <div className="flex items-center gap-2">
-            <QrCode className="w-4 h-4 text-[#e63462]" />
-            <div>
-              <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Masaya Özel İmzalı QR Kodlar (Garson Çağrılı)</h3>
-              <p className="text-[11px] text-[#86868b]">
-                Her masanın kriptografik imzalı QR bağlantısı yalnızca o masa için garson çağrısını aktif eder.
-              </p>
-            </div>
+        <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-[#f0f0f0]">
+          <div className="flex items-center gap-2 min-w-0">
+            <QrCode className="w-4 h-4 text-[#e63462] flex-shrink-0" />
+            <h3 className="text-[15px] font-semibold text-[#1d1d1f] truncate">
+              Masaya Özel İmzalı QR Kodlar (Garson Çağrılı)
+            </h3>
           </div>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={handlePrintAllQrCodes} className="h-[32px] px-3 rounded-lg bg-[#1d1d1f] text-white text-[12px] font-medium hover:bg-[#3a3a3c] flex items-center gap-1.5">
-              <Printer className="w-3.5 h-3.5" /> Masa QR Kodlarını Yazdır
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              type="button"
+              onClick={handlePrintAllQrCodes}
+              className="h-[32px] px-3.5 rounded-lg bg-[#1d1d1f] text-white text-[12px] font-medium hover:bg-[#3a3a3c] inline-flex items-center gap-1.5 whitespace-nowrap flex-shrink-0"
+            >
+              <Printer className="w-3.5 h-3.5 flex-shrink-0" />
+              <span>Masa QR Kodlarını Yazdır</span>
             </button>
-            <button type="button" onClick={onClose} className="w-7 h-7 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed]">
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-7 h-7 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed] flex-shrink-0"
+            >
               <X className="w-3.5 h-3.5 text-[#86868b]" />
             </button>
           </div>
