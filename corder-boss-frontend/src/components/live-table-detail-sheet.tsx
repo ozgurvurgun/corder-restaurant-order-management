@@ -102,7 +102,7 @@ export function LiveTableDetailSheet({
                     <span>{formatIstanbulTime(ord.createdAt)}</span>
                   </div>
                   <div className="divide-y divide-[#e5e5ea]">
-                    {ord.items.map((item) => {
+                    {ord.items.filter((item) => item.status !== "paid").map((item) => {
                       const lineTotal = fromMinorUnits(
                         toMinorUnits(item.price) * Number(item.quantity || 0)
                       )

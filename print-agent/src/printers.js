@@ -114,6 +114,10 @@ async function sendToSystemPrinter(bytes, printerName, usbDrainMs) {
         `\\\\localhost\\${safeName}`,
       ])
     } else {
+      if (process.platform === "linux") {
+        await runExecFile("cupsenable", [safeName], 3000).catch(() => {})
+        await runExecFile("cupsaccept", [safeName], 3000).catch(() => {})
+      }
       try {
         await runExecFile("lp", ["-d", safeName, "-o", "raw", tempFile])
       } catch (lpErr) {

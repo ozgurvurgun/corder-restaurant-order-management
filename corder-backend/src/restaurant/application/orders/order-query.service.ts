@@ -131,7 +131,9 @@ export class OrderQueryService {
       restaurantId,
       orders.map((o) => o.userId),
     );
-    return orders.map((o) => serializeOrder(o, nameMap));
+    return orders
+      .map((o) => serializeOrder(o, nameMap))
+      .filter((o) => Array.isArray(o.items) && o.items.length > 0);
   }
 
   async findOne(id: string, restaurantId: string): Promise<Record<string, unknown>> {
@@ -141,7 +143,9 @@ export class OrderQueryService {
   async findPendingKitchenOrdersForPrintAgent(
     restaurantId: string,
   ): Promise<Record<string, unknown>[]> {
-    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const nowMs = Date.now();
+    const cutoff = new Date(nowMs - 24 * 60 * 60 * 1000);
+    const closedOrderMaxAgeMs = 15 * 60 * 1000;
     const orders = await this.orderRepo.find({
       where: {
         restaurantId,
@@ -162,6 +166,13 @@ export class OrderQueryService {
     const allRowItems: Array<{ productId?: string; categoryId?: string }> = [];
     const out: Record<string, unknown>[] = [];
     for (const order of orders) {
+      if (
+        order.status === 'closed' &&
+        nowMs - order.createdAt.getTime() > closedOrderMaxAgeMs
+      ) {
+        emptyOrderIdsToMark.push(order.id);
+        continue;
+      }
       const items =
         order.items?.filter((i) => OrderStatusPolicy.isItemPrintableForKitchen(i.status)) ?? [];
       if (!items.length) {

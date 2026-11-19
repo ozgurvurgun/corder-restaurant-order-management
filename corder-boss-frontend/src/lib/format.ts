@@ -84,7 +84,7 @@ export function computeTableTotals(
   let rawMinorUnits = 0
   for (const ord of activeOrders) {
     for (const item of ord.items) {
-      if (item.status !== "cancelled" && item.status !== "ledger") {
+      if (item.status !== "cancelled" && item.status !== "ledger" && item.status !== "paid") {
         rawMinorUnits += toMinorUnits(item.price) * Number(item.quantity || 0)
       }
     }

@@ -73,7 +73,7 @@ export function DashboardView({
     return raw.map((ord) => {
       const items = ord.items ?? []
       const activeTotal = items
-        .filter((i) => i.status !== "cancelled" && i.status !== "ledger")
+        .filter((i) => i.status !== "cancelled" && i.status !== "ledger" && i.status !== "paid")
         .reduce((s, i) => sumMoney(s, i.price * i.quantity), 0)
       const cancelledItemsCount = items
         .filter((i) => i.status === "cancelled")

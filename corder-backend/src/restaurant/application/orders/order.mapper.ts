@@ -29,8 +29,10 @@ export function serializeOrder(
     updatedAt: order.updatedAt,
     mergedFrom: order.mergedFrom ?? null,
     kitchenTicketPrintedAt: order.kitchenTicketPrintedAt ?? null,
-    items: (order.items || []).map((item) => ({
-      id: item.id,
+    items: (order.items || [])
+      .filter((item) => item.status !== 'paid')
+      .map((item) => ({
+        id: item.id,
       orderId: item.orderId,
       productId: item.productId,
       productName: item.productName,
