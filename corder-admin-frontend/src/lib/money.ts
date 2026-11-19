@@ -199,14 +199,14 @@ export function enumeratePeriodsInclusive(startPeriod: string, endPeriod: string
 }
 
 export function formatPeriodLong(period: string | null | undefined): string {
-  if (!isValidPeriod(period)) return period || "—"
+  if (!isValidPeriod(period)) return period || "-"
   const [y, m] = period.split("-")
   const monthIdx = Number(m) - 1
   return `${TURKISH_MONTHS_LONG[monthIdx] ?? m} ${y}`
 }
 
 export function formatPeriodShort(period: string | null | undefined): string {
-  if (!isValidPeriod(period)) return period || "—"
+  if (!isValidPeriod(period)) return period || "-"
   const [y, m] = period.split("-")
   const monthIdx = Number(m) - 1
   return `${TURKISH_MONTHS_SHORT[monthIdx] ?? m} ${y.slice(-2)}`
@@ -215,7 +215,7 @@ export function formatPeriodShort(period: string | null | undefined): string {
 export function formatPeriodsSummary(periods: string[] | undefined, fallbackPeriod?: string): string {
   const valid = (periods ?? []).filter(isValidPeriod).sort()
   if (valid.length === 0) {
-    return fallbackPeriod ? formatPeriodLong(fallbackPeriod) : "—"
+    return fallbackPeriod ? formatPeriodLong(fallbackPeriod) : "-"
   }
   if (valid.length === 1) {
     return formatPeriodLong(valid[0])
@@ -299,9 +299,9 @@ export function evaluateRestaurantPeriod(
 export function formatIstanbulDate(
   input: string | Date | null | undefined
 ): string {
-  if (!input) return "—"
+  if (!input) return "-"
   const d = typeof input === "string" ? new Date(input) : input
-  if (Number.isNaN(d.getTime())) return "—"
+  if (Number.isNaN(d.getTime())) return "-"
   try {
     return new Intl.DateTimeFormat("tr-TR", {
       timeZone: ISTANBUL_TIMEZONE,
@@ -334,9 +334,9 @@ export function formatIstanbulShortDayMonth(
 export function formatIstanbulDateTime(
   input: string | Date | null | undefined
 ): string {
-  if (!input) return "—"
+  if (!input) return "-"
   const d = typeof input === "string" ? new Date(input) : input
-  if (Number.isNaN(d.getTime())) return "—"
+  if (Number.isNaN(d.getTime())) return "-"
   try {
     return new Intl.DateTimeFormat("tr-TR", {
       timeZone: ISTANBUL_TIMEZONE,

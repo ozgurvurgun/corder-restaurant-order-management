@@ -27,7 +27,7 @@ export class PrintReceiptLineDto {
   @IsString()
   note?: string;
 
-  /** Product ID — server attaches category UUID (print-agent category→printer). */
+  /** Product ID - server attaches category UUID (print-agent category→printer). */
   @IsOptional()
   @IsUUID()
   productId?: string;
@@ -39,7 +39,7 @@ export class PrintReceiptLineDto {
 
 /** Table receipt: server merges via `tableId`. Walk-in sale etc.: if no `tableId`, `tableName` + `items` + `total` are required. */
 export class PrintReceiptDto {
-  /** Single order (check) receipt — includes notes; can also be used for completed orders. */
+  /** Single order (check) receipt - includes notes; can also be used for completed orders. */
   @IsOptional()
   @IsUUID()
   orderId?: string;

@@ -283,7 +283,7 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-3 text-[13px]">
           <p className="text-[11px] text-[#86868b] mb-3">
-            {closedTable.tableName} — ürün adedini değiştirebilir, satır iptal edebilir
+            {closedTable.tableName} - ürün adedini değiştirebilir, satır iptal edebilir
             veya ödeme yöntemini güncelleyebilirsiniz. Toplamlar sunucuda
             doğrulanır.
           </p>

@@ -120,7 +120,7 @@ export function CloseShiftModal(props: {
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-[#34c759]" />
               <h3 className="text-[15px] font-semibold text-[#1d1d1f]">
-                Kasa Vardiyası Kapatıldı — Z Raporu Basılsın mı?
+                Kasa Vardiyası Kapatıldı - Z Raporu Basılsın mı?
               </h3>
             </div>
             <button

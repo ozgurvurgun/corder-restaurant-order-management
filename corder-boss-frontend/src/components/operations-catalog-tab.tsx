@@ -180,7 +180,7 @@ export function OperationsCatalogTab() {
         <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-[14px] font-semibold text-[#1d1d1f]">
-              {effectiveBranch?.name} — Canlı Masa Durumu ({tables.length} Masa)
+              {effectiveBranch?.name} - Canlı Masa Durumu ({tables.length} Masa)
             </h3>
           </div>
 

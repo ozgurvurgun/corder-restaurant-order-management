@@ -43,7 +43,7 @@ const METHOD_LABELS: Record<string, string> = {
 }
 
 function formatPeriodTr(period?: string | null): string {
-  if (!period || !/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) return period || "—"
+  if (!period || !/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) return period || "-"
   const [y, m] = period.split("-")
   return `${TURKISH_MONTHS[Number(m) - 1] ?? m} ${y}`
 }

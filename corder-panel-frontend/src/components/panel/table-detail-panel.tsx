@@ -73,7 +73,7 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
   const hasPaidPersonShares = table.splitInfo?.type === "person" &&
     (table.splitInfo.paidShares?.length ?? 0) > 0
   const handlePrint = () => {
-    void reprintReceipt(tableId); showToast(`${table.name} masası — konsolide fiş yazıcıya gönderildi`, "success")
+    void reprintReceipt(tableId); showToast(`${table.name} masası - konsolide fiş yazıcıya gönderildi`, "success")
   }
   const handlePrintActiveOrder = () => {
     if (!activeOrder || !activeOrder.items.some((i) => itemCountsTowardBill(i))) return
@@ -167,7 +167,7 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
             >
               <span className="w-5 h-5 rounded-full bg-[#007aff] text-white text-[10px] flex items-center justify-center">1</span>
               <span className="text-[#007aff]">{formatCurrency(selectedTotal)} TL</span>
-              <span className="text-[10px] text-[#007aff]/80">(Ayrılan — Öde)</span>
+              <span className="text-[10px] text-[#007aff]/80">(Ayrılan - Öde)</span>
             </button>
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f5f5f7] rounded-lg text-[12px] font-medium">
               <span className="w-5 h-5 rounded-full bg-[#86868b] text-white text-[10px] flex items-center justify-center">2</span>
@@ -434,7 +434,7 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
         </div>
       </div>
       {showAddOrder && (
-        <AddTableOrderModal tableId={tableId} tableName={table.name} onClose={() => setShowAddOrder(false)} onSuccess={() => { setShowAddOrder(false); showToast(`${table.name} — sipariş gönderildi`, "success") }} />
+        <AddTableOrderModal tableId={tableId} tableName={table.name} onClose={() => setShowAddOrder(false)} onSuccess={() => { setShowAddOrder(false); showToast(`${table.name} - sipariş gönderildi`, "success") }} />
       )}
       {paymentTarget && (
         <PaymentModal

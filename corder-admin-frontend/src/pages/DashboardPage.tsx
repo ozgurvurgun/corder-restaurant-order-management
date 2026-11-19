@@ -235,7 +235,7 @@ export function DashboardPage() {
                           ? r.bosses.map((b) => b.name).join(", ")
                           : r.rootAdminId
                             ? "Boss Atanmış"
-                            : "—"}
+                            : "-"}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <Link

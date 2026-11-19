@@ -116,7 +116,7 @@ export function BranchPerformanceList({
             </span>
           </div>
           <p className="mt-1 text-[11px] text-red-700/90">
-            {suspendedBranches.map((b) => b.name).join(", ")} — Aylık abonelik ödemesi tamamlandığında erişim otomatik açılır.
+            {suspendedBranches.map((b) => b.name).join(", ")} - Aylık abonelik ödemesi tamamlandığında erişim otomatik açılır.
           </p>
         </div>
       )}

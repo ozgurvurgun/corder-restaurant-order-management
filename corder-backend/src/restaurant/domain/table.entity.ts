@@ -62,7 +62,7 @@ export class TableEntity {
   @Column({ name: 'split_info', type: 'jsonb', nullable: true, default: null })
   splitInfo: TableSplitState | null;
 
-  /** Waiter is working this table on the terminal — persistent like register checkout; other waiters cannot enter via API. */
+  /** Waiter is working this table on the terminal - persistent like register checkout; other waiters cannot enter via API. */
   @Column({ name: 'session_staff_id', type: 'uuid', nullable: true })
   sessionStaffId: string | null;
 

@@ -246,7 +246,7 @@ export default function QuickSaleView() {
         })),
         total: res.completedOrder.netAmount,
       }); setCartItems([]); setReceivedCash(""); setShowSuccess(true); showToast(
-        `Hızlı satış tamamlandı — ₺${formatCurrency(res.completedOrder.netAmount)}`,
+        `Hızlı satış tamamlandı - ₺${formatCurrency(res.completedOrder.netAmount)}`,
         "success",
       ); setTimeout(() => setShowSuccess(false), 5000)
     } finally {

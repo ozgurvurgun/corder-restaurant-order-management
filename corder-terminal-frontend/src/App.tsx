@@ -51,7 +51,7 @@ export default function App() {
       const sectionLabel = call.sectionName || "Salon"
       const actionLabel =
         call.requestType === "bill" ? "Hesap İstiyor!" : "Garson Çağırıyor!"
-      showToast(`🔔 ${call.tableName} (${sectionLabel}) — ${actionLabel}`, "info")
+      showToast(`🔔 ${call.tableName} (${sectionLabel}) - ${actionLabel}`, "info")
     }
     window.addEventListener("corder:waiter-called", onWaiterCalled)
     return () => window.removeEventListener("corder:waiter-called", onWaiterCalled)
@@ -157,7 +157,7 @@ export default function App() {
   const offlineBanner = isOffline ? (
     <div className="bg-amber-600 text-white px-4 py-1.5 text-[12px] font-semibold flex items-center justify-center gap-2 z-[60]">
       <WifiOff className="h-3.5 w-3.5 flex-shrink-0" />
-      <span>İnternet bağlantısı yok — bağlantı bekleniyor, sepetiniz korunuyor</span>
+      <span>İnternet bağlantısı yok - bağlantı bekleniyor, sepetiniz korunuyor</span>
     </div>
   ) : null
 

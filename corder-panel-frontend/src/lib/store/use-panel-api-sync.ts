@@ -175,7 +175,7 @@ function buildDerivedNotifications(
     return {
       id: wc.id,
       type: "waiter-call" as const,
-      title: `🔔 ${wc.tableName} (${section}) — ${isBill ? "Hesap İstiyor!" : "Garson Çağırıyor!"}`,
+      title: `🔔 ${wc.tableName} (${section}) - ${isBill ? "Hesap İstiyor!" : "Garson Çağırıyor!"}`,
       message: wc.note
         ? `Not: ${wc.note}`
         : `${wc.tableName} masasından ${isBill ? "hesap talebi" : "garson çağrısı"} geldi.`,
@@ -198,7 +198,7 @@ function buildDerivedNotifications(
     id: `notif-cancel-${ci.id}`,
     type: "kitchen-alert" as const,
     title: "Sipariş İptali",
-    message: `${ci.tableName} — ${ci.orderItem.productName} iptal edildi (${ci.reason})`,
+    message: `${ci.tableName} - ${ci.orderItem.productName} iptal edildi (${ci.reason})`,
     read: readIds.has(`notif-cancel-${ci.id}`),
     createdAt: ci.cancelledAt,
   }))

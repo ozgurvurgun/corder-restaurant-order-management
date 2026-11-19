@@ -87,7 +87,7 @@ export function MoveOrderItemScreen({
       }
       showToast(
         qty < safeMax
-          ? `${productName} — ${qty} adet -> ${selectedTarget?.name} taşındı`
+          ? `${productName} - ${qty} adet -> ${selectedTarget?.name} taşındı`
           : `${productName} -> ${selectedTarget?.name} taşındı`,
         "success"
       )
@@ -130,7 +130,7 @@ export function MoveOrderItemScreen({
       </header>
 
       <p className="px-4 py-2 text-[13px] text-muted-foreground border-b border-border">
-        <span className="font-medium text-foreground">{productName}</span> — {fromTable?.name} masasından seçeceğiniz masaya{" "}
+        <span className="font-medium text-foreground">{productName}</span> - {fromTable?.name} masasından seçeceğiniz masaya{" "}
         <span className="font-medium text-foreground">yeni adisyon</span> olarak aktarılır.
       </p>
 

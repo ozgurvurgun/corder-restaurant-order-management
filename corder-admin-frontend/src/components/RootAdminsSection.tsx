@@ -411,7 +411,7 @@ export function RootAdminsSection({
                 <option value="">Boss hesabı seçin...</option>
                 {linkableBosses.map((b) => (
                   <option key={b.id} value={b.id}>
-                    {b.name} ({b.email}) —{" "}
+                    {b.name} ({b.email}) -{" "}
                     {b.bossTier === "brand_owner" ? "Marka HQ" : "Şube Boss"} •{" "}
                     {b.restaurants?.length ?? 0} şube
                   </option>

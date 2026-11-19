@@ -134,7 +134,7 @@ export function StaffUsersTab() {
               </h2>
             </div>
             <p className="mt-0.5 text-[12px] text-[#86868b]">
-              Şube: <span className="font-semibold text-[#1d1d1f]">{effectiveBranch?.name}</span> — Müdür, kasiyer, garson ve özel yetkili kullanıcıları buradan veya Merchant Panelinden oluşturabilirsiniz.
+              Şube: <span className="font-semibold text-[#1d1d1f]">{effectiveBranch?.name}</span> - Müdür, kasiyer, garson ve özel yetkili kullanıcıları buradan veya Merchant Panelinden oluşturabilirsiniz.
             </p>
           </div>
 

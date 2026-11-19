@@ -130,7 +130,7 @@ export function usePanelSocket(params: {
       const tableName = payload.tableName || "Masa"
       const sectionName = payload.sectionName || "Salon"
       const isBill = payload.requestType === "bill"
-      const title = `🔔 ${tableName} (${sectionName}) — ${isBill ? "Hesap İstiyor!" : "Garson Çağırıyor!"}`
+      const title = `🔔 ${tableName} (${sectionName}) - ${isBill ? "Hesap İstiyor!" : "Garson Çağırıyor!"}`
       const message = payload.note
         ? `Not: ${payload.note}`
         : `${tableName} masasından ${isBill ? "hesap talebi" : "garson çağrısı"} geldi.`

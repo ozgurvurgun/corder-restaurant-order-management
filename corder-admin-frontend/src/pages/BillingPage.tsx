@@ -164,7 +164,7 @@ export function BillingPage() {
   const handleDeletePayment = async (r: Restaurant, payment: RestaurantPaymentRecord) => {
     await deleteRestaurantPayment(r.id, payment.id)
     showNotice(
-      `${r.name} — ${formatPeriodsSummary(payment.periods, payment.period)} tahsilat kaydı silindi.`
+      `${r.name} - ${formatPeriodsSummary(payment.periods, payment.period)} tahsilat kaydı silindi.`
     )
   }
 

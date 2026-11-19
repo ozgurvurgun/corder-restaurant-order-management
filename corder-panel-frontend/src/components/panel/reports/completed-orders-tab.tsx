@@ -85,6 +85,9 @@ export function HistoryTab(props: {
                 <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
                   Garson
                 </th>
+                <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
+                  Kapatan
+                </th>
                 <th className="text-right px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
                   Tutar
                 </th>
@@ -115,6 +118,9 @@ export function HistoryTab(props: {
                   </td>
                   <td className="px-4 py-2 text-[12px] text-[#86868b]">
                     {ct.waiter}
+                  </td>
+                  <td className="px-4 py-2 text-[12px] font-medium text-[#1d1d1f]">
+                    {ct.closedBy || "-"}
                   </td>
                   <td className="px-4 py-2 text-[12px] text-right text-[#1d1d1f]">
                     {"\u20BA"}

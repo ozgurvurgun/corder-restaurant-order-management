@@ -250,7 +250,7 @@ export function BossAnalyticsSections({
                     <div>
                       <p className="text-[10px] text-[#86868b]">Sayılan</p>
                       <p className="font-semibold text-[#1d1d1f] tabular-nums">
-                        {sh.closingBalance != null ? `₺${formatMoney(sh.closingBalance)}` : "—"}
+                        {sh.closingBalance != null ? `₺${formatMoney(sh.closingBalance)}` : "-"}
                       </p>
                     </div>
                     <div>

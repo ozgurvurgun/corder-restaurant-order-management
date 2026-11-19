@@ -161,7 +161,7 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill,
         completedRef.current = true; if (!res.fullyClosed && token) void api.tables.update(token, tableId, { status: "occupied" }).catch(() => {}); showToast(
           res.fullyClosed
             ? `${table?.name || "Masa"} tüm kişi payları ödendi ve masa kapatıldı`
-            : `${table?.name || "Masa"} — ${splitTarget.shareIndex + 1}. kişi payı (${formatCurrency(splitTarget.amount)} TL) ödendi`,
+            : `${table?.name || "Masa"} - ${splitTarget.shareIndex + 1}. kişi payı (${formatCurrency(splitTarget.amount)} TL) ödendi`,
           "success",
         ); onClose()
         return
@@ -221,7 +221,7 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill,
       }
       showToast(
         res.tableFullyClosed === false
-          ? `${table?.name || "Masa"} — seçili ürünler tahsil edildi (${formatCurrency(res.completedOrder.netAmount)} TL)`
+          ? `${table?.name || "Masa"} - seçili ürünler tahsil edildi (${formatCurrency(res.completedOrder.netAmount)} TL)`
           : `${res.completedOrder.tableName || table?.name || "Masa"} hesabı kesildi - ${formatCurrency(res.completedOrder.netAmount)} TL`,
         "success",
       ); onClose()

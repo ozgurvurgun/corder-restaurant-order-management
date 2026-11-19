@@ -55,7 +55,7 @@ export default function OrderCancelModal({
       const ok = await cancelOrderItem(orderId, itemId, finalReason, qty)
       if (!ok) return
       showToast(
-        qty < safeMax ? `${itemName} — ${qty} adet iptal edildi` : `${itemName} iptal edildi`,
+        qty < safeMax ? `${itemName} - ${qty} adet iptal edildi` : `${itemName} iptal edildi`,
         "warning",
       )
       onClose()

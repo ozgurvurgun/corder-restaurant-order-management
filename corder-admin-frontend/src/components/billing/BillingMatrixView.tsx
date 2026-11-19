@@ -259,7 +259,7 @@ export function BillingMatrixView({
                           }
                           className="w-full rounded-lg py-2.5 text-center text-[11px] text-[#d1d1d6] select-none"
                         >
-                          —
+                          -
                         </div>
                       </td>
                     )

@@ -43,7 +43,7 @@ export function LiveTableDetailSheet({
         <div className="flex items-center justify-between border-b border-[#f0f0f0] pb-3">
           <div>
             <h3 className="text-[15px] font-semibold text-[#1d1d1f]">
-              {table.name} — Canlı Adisyon Detayı
+              {table.name} - Canlı Adisyon Detayı
             </h3>
             <p className="text-[11px] text-[#86868b]">
               {totals.discountAmount > 0 ? (

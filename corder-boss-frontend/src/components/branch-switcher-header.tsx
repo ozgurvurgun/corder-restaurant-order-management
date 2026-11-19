@@ -125,7 +125,7 @@ export function BranchSwitcherHeader({ activeTab = "dashboard" }: { activeTab?: 
                   Dükkan / Şube Seçimi
                 </h3>
                 <p className="text-[12px] text-[#86868b]">
-                  {user?.name} — {branches.length} kayıtlı şube
+                  {user?.name} - {branches.length} kayıtlı şube
                 </p>
               </div>
               <button

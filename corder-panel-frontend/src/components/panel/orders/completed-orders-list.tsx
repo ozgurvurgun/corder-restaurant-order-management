@@ -75,7 +75,7 @@ export function CompletedOrdersList(props: {
   const formatPaymentDisplay = (p: Payment) => {
     const base = getPaymentMethodLabel(p.method); if (p.method === "ledger") {
       const cust = getLedgerCustomerLabel(p)
-      return cust ? `${base} — ${cust}` : base
+      return cust ? `${base} - ${cust}` : base
     }
     if (p.method === "split" && p.splitDetails && p.splitDetails.length > 0) {
       const parts = p.splitDetails.map(
@@ -109,15 +109,22 @@ export function CompletedOrdersList(props: {
         const cancelledItems = allItems.filter((i) => i.status === "cancelled"); return (
           <div key={closedTable.id} className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden hover:shadow-sm transition-shadow">
             <div className="flex items-center justify-between px-4 py-3 bg-[#f5f5f7]/50 border-b border-[#f0f0f0] cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : closedTable.id) }>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 flex-wrap">
                 <div className="flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-[#e63462]" />
                   <span className="font-semibold text-[14px] text-[#1d1d1f]"> {closedTable.tableName} </span>
                   <span className="text-[11px] px-2 py-0.5 bg-[#e8e8ed] rounded text-[#636366]"> {closedTable.section} </span>
                 </div>
                 <div className="flex items-center gap-1 text-[12px] text-[#86868b]">
-                  <User className="w-3 h-3" /> {closedTable.waiter}
+                  <User className="w-3 h-3" />
+                  <span>{locale === "tr" ? "Garson:" : "Waiter:"} <span className="font-medium text-[#1d1d1f]">{closedTable.waiter}</span></span>
                 </div>
+                {closedTable.closedBy && (
+                  <div className="flex items-center gap-1 text-[12px] text-[#86868b]">
+                    <DoorClosed className="w-3 h-3 text-[#e63462]" />
+                    <span>{locale === "tr" ? "Kapatan:" : "Closed by:"} <span className="font-semibold text-[#1d1d1f]">{closedTable.closedBy}</span></span>
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-3">
                 {isExpanded ? (
@@ -181,6 +188,13 @@ export function CompletedOrdersList(props: {
                   <span className="flex items-center gap-1.5"><CreditCard className="w-3.5 h-3.5 text-[#86868b]" /><span className="text-[#86868b]"> {locale === "tr" ? "Ödeme" : "Payment"}: </span>
                     <span className="font-semibold text-[#1d1d1f]"> {formatPaymentDisplay(closedTable.payment)} </span>
                   </span>
+                  {closedTable.closedBy && (
+                    <span className="flex items-center gap-1.5">
+                      <DoorClosed className="w-3.5 h-3.5 text-[#86868b]" />
+                      <span className="text-[#86868b]">{locale === "tr" ? "Masayı Kapatan" : "Closed by"}:</span>
+                      <span className="font-semibold text-[#1d1d1f]">{closedTable.closedBy}</span>
+                    </span>
+                  )}
                   {closedTable.discountAmount > 0 && (
                     <span className="inline-flex flex-wrap items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200/80 text-[11px] text-amber-800">
                       <span className="font-semibold">

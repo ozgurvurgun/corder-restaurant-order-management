@@ -382,7 +382,7 @@ export function RestaurantSupportConsole({
                   <tr key={s.id} className="hover:bg-[#f9f9fb]">
                     <td className="px-4 py-2.5 font-semibold text-[#1d1d1f]">{s.name}</td>
                     <td className="px-4 py-2.5 text-[#636366]">{ROLE_LABELS[s.role] ?? s.role}</td>
-                    <td className="px-4 py-2.5 font-mono text-[11px] text-[#636366]">{s.email || "—"}</td>
+                    <td className="px-4 py-2.5 font-mono text-[11px] text-[#636366]">{s.email || "-"}</td>
                     <td className="px-4 py-2.5">
                       <div className="flex flex-wrap gap-1">
                         {s.canAccessPanel && <span className="rounded bg-purple-50 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700">Panel</span>}

@@ -53,9 +53,9 @@ export function BulkCreateTablesModal(props: {
 
   const previewText = useMemo(() => {
     if (previewList.length <= 6) {
-      return `${previewList.join(", ")} — ${previewList.length} masa oluşturulacak`
+      return `${previewList.join(", ")} - ${previewList.length} masa oluşturulacak`
     }
-    return `${previewList.slice(0, 3).join(", ")} ... ${previewList[previewList.length - 1]} — ${previewList.length} masa oluşturulacak`
+    return `${previewList.slice(0, 3).join(", ")} ... ${previewList[previewList.length - 1]} - ${previewList.length} masa oluşturulacak`
   }, [previewList])
 
   const handleSubmit = async () => {
@@ -181,7 +181,7 @@ export function TableQrCodesModal(props: {
         return `<div class="card"><div class="brand">${restaurantName || "Restoran"}</div><div class="section">${t.section}</div><div class="table">${t.name}</div><img src="${qrImg}" alt="${t.name}" width="160" height="160" /><div class="hint">Menüyü görmek ve garson çağırmak için okutun</div></div>`
       })
       .join("")
-    win.document.write(`<!DOCTYPE html><html lang="tr"><head><meta charset="utf-8"/><title>Masa QR Kodları — ${restaurantName}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:20px;color:#1d1d1f}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.card{border:1.5px solid #d1d1d6;border-radius:16px;padding:16px;text-align:center;page-break-inside:avoid}.brand{font-size:12px;font-weight:600;color:#86868b}.section{font-size:11px;color:#e63462;font-weight:600;margin-top:2px}.table{font-size:20px;font-weight:800;margin:4px 0 10px}.hint{font-size:10px;color:#636366;margin-top:8px}</style></head><body><div class="grid">${cardsHtml}</div><script>window.onload=()=>setTimeout(()=>window.print(),400);</script></body></html>`)
+    win.document.write(`<!DOCTYPE html><html lang="tr"><head><meta charset="utf-8"/><title>Masa QR Kodları - ${restaurantName}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:20px;color:#1d1d1f}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.card{border:1.5px solid #d1d1d6;border-radius:16px;padding:16px;text-align:center;page-break-inside:avoid}.brand{font-size:12px;font-weight:600;color:#86868b}.section{font-size:11px;color:#e63462;font-weight:600;margin-top:2px}.table{font-size:20px;font-weight:800;margin:4px 0 10px}.hint{font-size:10px;color:#636366;margin-top:8px}</style></head><body><div class="grid">${cardsHtml}</div><script>window.onload=()=>setTimeout(()=>window.print(),400);</script></body></html>`)
     win.document.close()
   }
 
@@ -212,7 +212,7 @@ export function TableQrCodesModal(props: {
           <div className="rounded-xl bg-[#f5f5f7] border border-[#d1d1d6]/60 p-3.5 flex items-center justify-between gap-3">
             <div className="min-w-0">
               <span className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
-                Genel QR Menü (Masasız — Garson Çağrısı Gizli)
+                Genel QR Menü (Masasız - Garson Çağrısı Gizli)
               </span>
               <p className="text-[12px] font-mono text-[#1d1d1f] truncate mt-0.5">{generalMenuUrl}</p>
             </div>
@@ -299,7 +299,7 @@ export function NotificationSoundSettingsCard() {
     if (currentPerm === "granted") {
       updatePref({ browserPushEnabled: true })
       showBrowserNotification(
-        "🔔 Masa 1 (Salon) — Garson Çağırıyor!",
+        "🔔 Masa 1 (Salon) - Garson Çağırıyor!",
         "Standart Push bildirimi ve sistem bildirim sesi aktif.",
         `corder-test-${Date.now()}`,
       )

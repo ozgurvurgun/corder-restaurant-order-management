@@ -355,7 +355,7 @@ export class CompletedOrdersService {
           shiftId: openShift.id,
           type: 'sale',
           amount: fromMinorUnits(cashDeltaMinor),
-          description: `${row.tableName} — completed check adjustment`,
+          description: `${row.tableName} - completed check adjustment`,
           reference: row.id,
           createdBy,
         });

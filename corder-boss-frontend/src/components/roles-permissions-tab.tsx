@@ -213,7 +213,7 @@ export function RolesPermissionsTab() {
               </h2>
             </div>
             <p className="mt-0.5 text-[12px] text-[#86868b]">
-              Şube: <span className="font-semibold text-[#1d1d1f]">{effectiveBranch?.name}</span> — Masa taşıma, iskonto limitleri, iptal, kasa ve tüm aksiyon yetkileri.
+              Şube: <span className="font-semibold text-[#1d1d1f]">{effectiveBranch?.name}</span> - Masa taşıma, iskonto limitleri, iptal, kasa ve tüm aksiyon yetkileri.
             </p>
           </div>
 

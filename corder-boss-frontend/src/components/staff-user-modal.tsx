@@ -215,7 +215,7 @@ export function StaffUserModal({
         <div className="flex items-center justify-between border-b border-[#f0f0f0] pb-3.5">
           <div>
             <h3 className="text-[15px] font-semibold text-[#1d1d1f]">
-              {editingUser ? `${editingUser.name} — Düzenle` : "Yeni Kullanıcı / Personel Oluştur"}
+              {editingUser ? `${editingUser.name} - Düzenle` : "Yeni Kullanıcı / Personel Oluştur"}
             </h3>
             <p className="text-[11px] text-[#86868b]">Şube: {branchName}</p>
           </div>

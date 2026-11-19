@@ -164,7 +164,7 @@ export class CompletedPaymentDto {
   ledgerCustomerName?: string;
 }
 
-/** Completed check adjustment — totals are recalculated on the server in minor units. */
+/** Completed check adjustment - totals are recalculated on the server in minor units. */
 export class UpdateCompletedOrderDto {
   @IsArray()
   @ValidateNested({ each: true })

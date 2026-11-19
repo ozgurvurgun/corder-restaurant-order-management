@@ -121,7 +121,7 @@ export function MenuContent({
   // Dynamic SEO / Metadata
   useEffect(() => {
     if (!data?.name) return
-    document.title = `${data.name} — Dijital Menü`
+    document.title = `${data.name} - Dijital Menü`
     const descMeta = document.querySelector('meta[name="description"]')
     if (descMeta) {
       descMeta.setAttribute(

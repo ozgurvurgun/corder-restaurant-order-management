@@ -183,10 +183,10 @@ export function BossFormModal({
               className={fieldCls}
             >
               <option value="franchise_owner">
-                Şube / Franchise Sahibi (Şube Boss&apos;u — Kendi Dükkanının Ciro, Metrik ve Ekibini Yönetir)
+                Şube / Franchise Sahibi (Şube Boss&apos;u - Kendi Dükkanının Ciro, Metrik ve Ekibini Yönetir)
               </option>
               <option value="brand_owner">
-                Marka &amp; Üst Franchise Sahibi (HQ — Tüm Şubelerin Eksiksiz Analizini ve Cirosunu Görür)
+                Marka &amp; Üst Franchise Sahibi (HQ - Tüm Şubelerin Eksiksiz Analizini ve Cirosunu Görür)
               </option>
               <option value="regional_manager">
                 Bölge / Grup Yöneticisi (Atanan Bölgedeki Şubeleri Yönetir)

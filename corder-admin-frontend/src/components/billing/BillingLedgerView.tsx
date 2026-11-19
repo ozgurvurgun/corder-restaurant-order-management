@@ -107,7 +107,7 @@ export function BillingLedgerView({
   ) => {
     if (
       !confirm(
-        `${restaurant.name} — ${formatPeriodsSummary(payment.periods, payment.period)} (${formatMoney(payment.amount)}) tahsilat kaydını silmek istediğinize emin misiniz?`
+        `${restaurant.name} - ${formatPeriodsSummary(payment.periods, payment.period)} (${formatMoney(payment.amount)}) tahsilat kaydını silmek istediğinize emin misiniz?`
       )
     ) {
       return
@@ -252,7 +252,7 @@ export function BillingLedgerView({
                     {payment.note ? (
                       <p className="text-[#1d1d1f]">{payment.note}</p>
                     ) : (
-                      <span className="text-[#aeaeb2]">—</span>
+                      <span className="text-[#aeaeb2]">-</span>
                     )}
                     {payment.recordedBy && (
                       <span className="block text-[11px] text-[#86868b]">

@@ -30,7 +30,7 @@ export function WaiterCallAlertBanner(props: {
           >
             <div className="min-w-0 flex-1">
               <p className="text-[13px] font-bold leading-snug">
-                🔔 {call.tableName} ({sectionLabel}) — {actionText}
+                🔔 {call.tableName} ({sectionLabel}) - {actionText}
               </p>
               {call.note && (
                 <p className="text-[11px] text-white/90 truncate mt-0.5">
@@ -96,7 +96,7 @@ export function TerminalNotificationSettingsModal(props: {
     if (status === "granted") {
       updatePref({ browserPushEnabled: true })
       triggerTerminalPushNotification(
-        "🔔 Masa 1 (Salon) — Garson Çağırıyor!",
+        "🔔 Masa 1 (Salon) - Garson Çağırıyor!",
         "Standart Push bildirimi aktif.",
         `corder-terminal-test-${Date.now()}`
       )

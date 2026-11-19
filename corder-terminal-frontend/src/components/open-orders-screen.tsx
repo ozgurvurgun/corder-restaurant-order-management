@@ -138,7 +138,7 @@ export function OpenOrdersScreen({
       if (ok) {
         showToast(
           qty < cancelTarget.maxQuantity
-            ? `${cancelTarget.productName} — ${qty} adet iptal edildi`
+            ? `${cancelTarget.productName} - ${qty} adet iptal edildi`
             : `${cancelTarget.productName} iptal edildi`
         )
         setCancelTarget(null)
@@ -238,7 +238,7 @@ export function OpenOrdersScreen({
                 <div className="flex items-center gap-1.5 text-muted-foreground">
                   <User className="h-3.5 w-3.5" />
                   <span className="text-[13px] font-medium capitalize">
-                    {activeOrder.waiterName?.trim() || "—"}
+                    {activeOrder.waiterName?.trim() || "-"}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -336,7 +336,7 @@ export function OpenOrdersScreen({
           <div className="w-full max-w-md rounded-t-3xl bg-white p-5 safe-bottom shadow-2xl">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <h3 className="text-[16px] font-bold text-foreground">
-                Ürün İptali — {cancelTarget.productName}
+                Ürün İptali - {cancelTarget.productName}
               </h3>
               <button
                 type="button"

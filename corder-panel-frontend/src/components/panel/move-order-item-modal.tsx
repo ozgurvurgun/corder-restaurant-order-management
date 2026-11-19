@@ -85,7 +85,7 @@ export default function MoveOrderItemModal({
           <div>
             <h2 className="text-[17px] font-semibold text-[#1d1d1f]">Ürünü Masaya Taşı</h2>
             <p className="text-[13px] text-[#86868b]">
-              {currentTable?.name} — hedef masada <span className="font-medium">yeni adisyon</span> olarak açılır
+              {currentTable?.name} - hedef masada <span className="font-medium">yeni adisyon</span> olarak açılır
               {productHint ? ` (${productHint})` : ""}
             </p>
           </div>

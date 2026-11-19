@@ -90,7 +90,7 @@ export function RestaurantBillingHistoryModal({
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#f0f0f0] pb-4">
           <div>
             <h3 className="text-[16px] font-semibold text-[#1d1d1f]">
-              {restaurant.name} — Dönem Çizelgesi &amp; Tahsilat Geçmişi
+              {restaurant.name} - Dönem Çizelgesi &amp; Tahsilat Geçmişi
             </h3>
             <p className="mt-0.5 text-[12px] text-[#86868b]">
               Abonelik Başlangıcı:{" "}
@@ -255,7 +255,7 @@ export function RestaurantBillingHistoryModal({
                 >
                   <p className="text-[11px] font-medium">{monthLabel}</p>
                   <p className="mt-0.5 text-[10px]">
-                    {cell.state === "exempt" ? "Muaf" : "—"}
+                    {cell.state === "exempt" ? "Muaf" : "-"}
                   </p>
                   <p className="text-[10px]">Kaydı Yok</p>
                 </div>

@@ -64,7 +64,7 @@ export function useTerminalApiSync(params: {
       const sectionLabel = call.sectionName || "Salon"
       const actionLabel =
         call.requestType === "bill" ? "Hesap İstiyor!" : "Garson Çağırıyor!"
-      const title = `🔔 ${call.tableName} (${sectionLabel}) — ${actionLabel}`
+      const title = `🔔 ${call.tableName} (${sectionLabel}) - ${actionLabel}`
       const body = call.note ? `Not: ${call.note}` : `${call.tableName} masası çağrı gönderdi.`
 
       if (prefs.browserPushEnabled) {

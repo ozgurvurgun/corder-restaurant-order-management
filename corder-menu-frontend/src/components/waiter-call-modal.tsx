@@ -199,7 +199,7 @@ export function WaiterCallWidget(props: {
                 >
                   <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
                   <p className={`font-bold text-base ${isDarkModal ? "text-emerald-200" : "text-emerald-950"}`}>
-                    Garsonunuz çağrıldı — Masa {tableContext.tableName}
+                    Garsonunuz çağrıldı - Masa {tableContext.tableName}
                   </p>
                   <p className={`text-xs ${isDarkModal ? "text-emerald-300/80" : "text-emerald-700"}`}>
                     {lastSubmittedType === "bill"

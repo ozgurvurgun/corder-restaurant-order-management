@@ -114,8 +114,8 @@ export function ZReportSection(props: {
             {allShifts.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.status === "open"
-                  ? `Açık Vardiya — ${s.openedBy} (${formatIstanbulDateTime(s.openedAt)})`
-                  : `Kapalı — ${s.openedBy} (${formatIstanbulDateTime(s.openedAt)} - ${s.closedAt ? formatIstanbulTime(s.closedAt) : "-"})`}
+                  ? `Açık Vardiya - ${s.openedBy} (${formatIstanbulDateTime(s.openedAt)})`
+                  : `Kapalı - ${s.openedBy} (${formatIstanbulDateTime(s.openedAt)} - ${s.closedAt ? formatIstanbulTime(s.closedAt) : "-"})`}
               </option>
             ))}
           </CustomSelect>

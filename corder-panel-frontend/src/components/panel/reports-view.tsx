@@ -253,7 +253,7 @@ export default function ReportsView() {
       <html lang="tr">
         <head>
           <meta charset="utf-8" />
-          <title>Rapor — ${settings.name || "Corder POS"}</title>
+          <title>Rapor - ${settings.name || "Corder POS"}</title>
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; color: #1d1d1f; }
             h1 { font-size: 18px; margin: 0 0 4px; }
@@ -268,7 +268,7 @@ export default function ReportsView() {
           </style>
         </head>
         <body>
-          <h1>${settings.name || "Restoran"} — Satış Raporu</h1>
+          <h1>${settings.name || "Restoran"} - Satış Raporu</h1>
           <p class="sub">Oluşturulma: ${formatIstanbulDateTime(new Date())}</p>
           <div class="cards">
             <div class="card"><div class="lbl">Toplam Ciro</div><div class="val">₺${formatCurrency(filteredReport.totalRevenue)}</div></div>
