@@ -434,4 +434,33 @@ WHERE co.id = c.id
     OR co.orders_snapshot IS DISTINCT FROM c.next_orders_snapshot
   );
 
+-- 9. Translate seeded English system role names & descriptions in restaurant_roles to canonical Turkish
+UPDATE restaurant_roles
+SET
+  name = CASE key
+    WHEN 'branch_manager' THEN 'Şube Müdürü'
+    WHEN 'shift_supervisor' THEN 'Vardiya Amiri / Şef'
+    WHEN 'cashier' THEN 'Kasiyer'
+    WHEN 'head_waiter' THEN 'Şef Garson'
+    WHEN 'waiter' THEN 'Garson'
+    WHEN 'runner' THEN 'Komi / Stajyer'
+    WHEN 'inventory_manager' THEN 'Depo & Stok Sorumlusu'
+    WHEN 'accountant' THEN 'Muhasebe & Finans'
+    ELSE name
+  END,
+  description = CASE key
+    WHEN 'branch_manager' THEN 'Tüm şube operasyonları, finansal yönetim, stok ve personel üzerinde tam yetki'
+    WHEN 'shift_supervisor' THEN 'Salon, kasa, iskonto, iptal ve vardiya operasyonlarını yönetir'
+    WHEN 'cashier' THEN 'Kasa vardiyası, tahsilat, adisyon kapatma, cari ve açık hesap işlemleri'
+    WHEN 'head_waiter' THEN 'Salon operasyonları, masa taşıma, ürün iptali ve sınırlı iskonto yetkisi'
+    WHEN 'waiter' THEN 'El terminali ve panel üzerinden masa açma, sipariş alma ve adisyon yazdırma'
+    WHEN 'runner' THEN 'Sadece masa görüntüleme, sipariş ekleme ve garson çağrısı yanıtlama yetkisi'
+    WHEN 'inventory_manager' THEN 'Hammadde, reçete, tedarikçi, satın alma ve stok sayım işlemleri'
+    WHEN 'accountant' THEN 'Ciro, kasa, cari hesap, stok maliyet ve denetim raporlarını inceleme yetkisi'
+    ELSE description
+  END
+WHERE is_system = true
+  AND key IN ('branch_manager', 'shift_supervisor', 'cashier', 'head_waiter', 'waiter', 'runner', 'inventory_manager', 'accountant')
+  AND name IN ('Branch Manager', 'Shift Supervisor', 'Cashier', 'Head Waiter', 'Waiter', 'Runner / Busser', 'Inventory Manager', 'Accountant');
+
 COMMIT;

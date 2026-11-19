@@ -211,6 +211,14 @@ export const PERMISSION_LABELS: Record<
     title: "Denetim Kayıtlarını (Audit Log) Görme",
     description: "İptal, masa taşıma, fiyat değişimi ve kritik sistem hareket kayıtlarını inceleyebilir.",
   },
+  "security.view_fraud_alerts": {
+    title: "Güvenlik & Suistimal Uyarılarını Görme",
+    description: "Anomali tespiti, şüpheli iptal/iskonto desenleri ve kasa farkı uyarılarını görüntüleyebilir.",
+  },
+  "security.manage_fraud_alerts": {
+    title: "Güvenlik & Suistimal Uyarılarını Yönetme",
+    description: "Suistimal ve kayıp önleme uyarılarını inceleyebilir, çözümleyebilir veya yanlış alarm olarak işaretleyebilir.",
+  },
   "staff.view": {
     title: "Personel Listesini Görüntüleme",
     description: "Şubedeki personel ve kullanıcı listesini görüntüleyebilir.",

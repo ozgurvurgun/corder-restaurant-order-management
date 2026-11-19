@@ -20,8 +20,8 @@ export interface RoleTemplateDefinition {
 export const DEFAULT_ROLE_TEMPLATES: RoleTemplateDefinition[] = [
   {
     key: 'branch_manager',
-    name: 'Branch Manager',
-    description: 'Manages all branch operations, cash register, menu, inventory, staff accounts, roles/permissions, and reporting workflows.',
+    name: 'Şube Müdürü',
+    description: 'Şube içi tüm operasyon, kasa, menü, stok, personel, rol/yetki ve raporlama süreçlerini yönetir.',
     color: '#9333ea',
     isSystem: true,
     canAccessPanel: true,
@@ -32,8 +32,8 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplateDefinition[] = [
   },
   {
     key: 'shift_supervisor',
-    name: 'Shift Supervisor',
-    description: 'Supervises floor operations, table/item transfers, cancellations, register shifts, and daily flow.',
+    name: 'Vardiya Amiri / Şef',
+    description: 'Saha operasyonunu, masa/ürün taşımalarını, iptalleri, kasayı ve günlük akışı denetler.',
     color: '#0284c7',
     isSystem: true,
     canAccessPanel: true,
@@ -55,8 +55,8 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplateDefinition[] = [
   },
   {
     key: 'cashier',
-    name: 'Cashier',
-    description: 'Handles register shifts, check settlement, split payments, quick sales, and customer ledger collections.',
+    name: 'Kasiyer',
+    description: 'Kasa vardiyası, hesap kesme, parçalı tahsilat, hızlı satış ve cari tahsilat işlemlerini yapar.',
     color: '#2563eb',
     isSystem: true,
     canAccessPanel: true,
@@ -75,8 +75,8 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplateDefinition[] = [
   },
   {
     key: 'head_waiter',
-    name: 'Head Waiter',
-    description: 'Takes orders on the terminal, moves tables and items, voids items, and applies limited discounts.',
+    name: 'Şef Garson',
+    description: 'Terminalden sipariş alır, masa ve kalem taşıma, ürün iptali ve sınırlı iskonto yapabilir.',
     color: '#0d9488',
     isSystem: true,
     canAccessPanel: false,
@@ -91,8 +91,8 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplateDefinition[] = [
   },
   {
     key: 'waiter',
-    name: 'Waiter',
-    description: 'Opens tables on the terminal, enters orders, transfers tables/items, and prints proforma receipts.',
+    name: 'Garson',
+    description: 'Terminalden masa açar, sipariş girer, masa/kalem taşır ve ara hesap fişi yazdırır.',
     color: '#16a34a',
     isSystem: true,
     canAccessPanel: false,
@@ -106,8 +106,8 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplateDefinition[] = [
   },
   {
     key: 'runner',
-    name: 'Runner',
-    description: 'Views tables and adds new order items; cannot transfer tables or cancel items.',
+    name: 'Komi / Stajyer',
+    description: 'Sadece masaları görüntüler ve yeni sipariş kalemi ekleyebilir; taşıma ve iptal yapamaz.',
     color: '#64748b',
     isSystem: true,
     canAccessPanel: false,
@@ -118,8 +118,8 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplateDefinition[] = [
   },
   {
     key: 'inventory_manager',
-    name: 'Inventory Manager',
-    description: 'Manages raw materials, stock inflows/outflows/waste, suppliers, purchase orders, and inventory counts.',
+    name: 'Depo & Stok Sorumlusu',
+    description: 'Hammadde, stok giriş/çıkış/fire, tedarikçi, satın alma ve envanter sayımlarını yönetir.',
     color: '#d97706',
     isSystem: true,
     canAccessPanel: true,
@@ -134,8 +134,8 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplateDefinition[] = [
   },
   {
     key: 'accountant',
-    name: 'Accountant',
-    description: 'Reviews financial reports, cash shift history, customer ledgers, inventory levels, and audit logs.',
+    name: 'Muhasebe & Finans',
+    description: 'Finansal raporları, kasa geçmişini, cari hesapları, stokları ve denetim kayıtlarını inceler.',
     color: '#4f46e5',
     isSystem: true,
     canAccessPanel: true,
@@ -165,8 +165,8 @@ export function getDefaultRoleTemplate(roleKey: string): RoleTemplateDefinition 
   if (normalized === 'boss') {
     return {
       key: 'boss',
-      name: 'Owner (Boss)',
-      description: 'Business owner with full authority across all branches and actions.',
+      name: 'İşletme Sahibi (Boss)',
+      description: 'Tüm şubeler ve aksiyonlar üzerinde tam yetkili işletme sahibi.',
       color: '#e63462',
       isSystem: true,
       canAccessPanel: true,
