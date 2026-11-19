@@ -3,6 +3,7 @@ import { UserPlus, Link2, Crown, Building2, Pencil, Unlink, Trash2 } from "lucid
 import type { BossTier, RootAdmin } from "@/lib/types"
 import { useAdminStore } from "@/lib/store"
 import { CorderEmailInput } from "@/components/CorderEmailInput"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { CustomSelect } from "@/components/ui/custom-inputs"
 import { PasswordInputWithGenerator } from "@/components/ui/password-input"
 import { formatCanonicalCorderEmail } from "@/lib/corder-email"
@@ -38,6 +39,7 @@ export function RootAdminsSection({
   onAddRootAdmin,
   onDeleteRootAdmin,
 }: RootAdminsSectionProps) {
+  const confirm = useConfirm()
   const { allBosses, linkExistingBoss, unlinkBossFromRestaurant, updateRootAdmin } =
     useAdminStore()
   const [mode, setMode] = useState<"none" | "create" | "link" | "edit">("none")
@@ -147,9 +149,12 @@ export function RootAdminsSection({
 
   const handleUnlink = async (admin: RootAdmin) => {
     if (
-      !confirm(
-        `${admin.name} Boss hesabının bu şube ile bağlantısını ayırmak istediğinize emin misiniz? (Boss hesabı silinmez)`
-      )
+      !(await confirm({
+        title: "Şube Bağlantısını Ayır",
+        message: `${admin.name} Boss hesabının bu şube ile bağlantısını ayırmak istediğinize emin misiniz? (Boss hesabı silinmez)`,
+        confirmLabel: "Şubeden Ayır",
+        variant: "warning",
+      }))
     ) {
       return
     }
@@ -163,9 +168,12 @@ export function RootAdminsSection({
 
   const handleDeleteAccount = async (admin: RootAdmin) => {
     if (
-      !confirm(
-        `${admin.name} (${admin.email}) Boss hesabını tamamen silmek istediğinize emin misiniz?`
-      )
+      !(await confirm({
+        title: "Boss Hesabını Sil",
+        message: `${admin.name} (${admin.email}) Boss hesabını tamamen silmek istediğinize emin misiniz?`,
+        confirmLabel: "Hesabı Sil",
+        variant: "danger",
+      }))
     ) {
       return
     }

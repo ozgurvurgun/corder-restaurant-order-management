@@ -82,15 +82,12 @@ export function NewRestaurantPage() {
     if (!cleanTerminalEmail && terminalPassword.length > 0) {
       return setError("Terminal parolası girildiğinde terminal kullanıcı adı (@ öncesi) da belirtilmelidir.")
     }
-    const cleanPrintUser = printAgentUsername.trim().toLowerCase()
-    if (cleanPrintUser && cleanPrintUser.length < 3) {
-      return setError("Print Agent kullanıcı adı en az 3 karakter olmalıdır.")
-    }
+    const cleanPrintUser = formatCanonicalCorderEmail(printAgentUsername, cleanSlug)
     if (cleanPrintUser && printAgentPassword.length < 6) {
       return setError("Print Agent kullanıcısı tanımlarken en az 6 karakterli parola girilmelidir.")
     }
     if (!cleanPrintUser && printAgentPassword.length > 0) {
-      return setError("Print Agent parolası girildiğinde kullanıcı adı da belirtilmelidir.")
+      return setError("Print Agent parolası girildiğinde Print Agent e-posta adı (@ öncesi) da belirtilmelidir.")
     }
 
     setLoading(true)

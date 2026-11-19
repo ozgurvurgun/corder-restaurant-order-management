@@ -10,6 +10,7 @@ import { AnalyticsAuditTab } from "@/components/analytics-audit-tab"
 import { OperationsCatalogTab } from "@/components/operations-catalog-tab"
 import { SecurityFraudTab } from "@/components/security-fraud-tab"
 import { CustomSelect } from "@/components/ui/custom-inputs"
+import { ConfirmDialogProvider } from "@/components/ui/confirm-dialog"
 import {
   AlertTriangle,
   Home,
@@ -289,8 +290,10 @@ function BossShell() {
 
 export default function App() {
   return (
-    <BossStoreProvider>
-      <BossShell />
-    </BossStoreProvider>
+    <ConfirmDialogProvider>
+      <BossStoreProvider>
+        <BossShell />
+      </BossStoreProvider>
+    </ConfirmDialogProvider>
   )
 }

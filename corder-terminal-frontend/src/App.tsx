@@ -13,7 +13,6 @@ import { MoveTableScreen } from "@/components/move-table-screen"
 import { OpenOrdersScreen } from "@/components/open-orders-screen"
 import { MoveOrderItemScreen } from "@/components/move-order-item-screen"
 import { WaiterCallAlertBanner } from "@/components/notification-settings-modal"
-import type { ActiveWaiterCall } from "@/lib/terminal-notifications"
 
 export default function App() {
   const {
@@ -43,19 +42,6 @@ export default function App() {
   const [leaveCartConfirm, setLeaveCartConfirm] = useState(false)
 
   const currentTableId = selectedTable?.id ?? selectedTableId
-
-  useEffect(() => {
-    const onWaiterCalled = (e: Event) => {
-      const call = (e as CustomEvent<ActiveWaiterCall>).detail
-      if (!call) return
-      const sectionLabel = call.sectionName || "Salon"
-      const actionLabel =
-        call.requestType === "bill" ? "Hesap İstiyor!" : "Garson Çağırıyor!"
-      showToast(`🔔 ${call.tableName} (${sectionLabel}) - ${actionLabel}`, "info")
-    }
-    window.addEventListener("corder:waiter-called", onWaiterCalled)
-    return () => window.removeEventListener("corder:waiter-called", onWaiterCalled)
-  }, [showToast])
 
   useEffect(() => {
     if (!currentUser) {

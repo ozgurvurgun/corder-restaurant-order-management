@@ -80,9 +80,9 @@ export function PrintAgentTokenSection({
     e.preventDefault()
     setPrintAgentError("")
     setPrintAgentSuccess("")
-    const cleanUser = printAgentUsername.trim().toLowerCase()
-    if (!cleanUser || cleanUser.length < 3) {
-      setPrintAgentError("Kullanıcı adı en az 3 karakter olmalıdır.")
+    const cleanEmail = formatCanonicalCorderEmail(printAgentUsername, restaurantSlug)
+    if (!cleanEmail) {
+      setPrintAgentError("Print Agent kullanıcı adı (@ öncesi) gerekli.")
       return
     }
     if (!initialPrintAgentUsername && printAgentPassword.length < 6) {
@@ -98,7 +98,7 @@ export function PrintAgentTokenSection({
     setPrintAgentSaveLoading(true)
     try {
       await onSaveTerminalConfig({
-        printAgentUsername: cleanUser,
+        printAgentUsername: cleanEmail,
         ...(printAgentPassword ? { printAgentPassword } : {}),
       })
       setPrintAgentPassword("")
@@ -117,23 +117,20 @@ export function PrintAgentTokenSection({
     <div className="space-y-4">
       <div className="rounded-2xl border border-[#e5e5ea] bg-white p-5">
         <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
-          Print Agent (Masaüstü Yazıcı Uygulaması) Kullanıcısı
+          Print Agent (Masaüstü Yazıcı Uygulaması) Giriş Bilgileri
         </h2>
         <p className="mt-1 text-[12px] text-[#86868b]">
           Mekandaki bilgisayara kurulan Corder Yazıcı &amp; Mutfak Merkezi masaüstü uygulamasına
-          giriş yapmak için kullanılacak kullanıcı adı ve parola.
+          giriş yapmak için kullanılacak e-posta ve parola.
         </p>
         <form onSubmit={handleSavePrintAgent} className="mt-4 space-y-3.5">
           <div>
-            <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Kullanıcı Adı</label>
-            <input
-              type="text"
+            <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">Print Agent E-posta</label>
+            <CorderEmailInput
               value={printAgentUsername}
-              onChange={(e) => setPrintAgentUsername(e.target.value)}
-              placeholder="Örn: merkez-yazici"
-              minLength={3}
-              autoComplete="off"
-              className={`${inputCls} font-mono`}
+              onChange={setPrintAgentUsername}
+              tenantSlugOrName={restaurantSlug}
+              placeholder="yazici"
               disabled={printAgentSaveLoading}
               required
             />
@@ -168,7 +165,7 @@ export function PrintAgentTokenSection({
             <Printer className="h-4 w-4" />
             {printAgentSaveLoading
               ? "Kaydediliyor…"
-              : "Print Agent Kullanıcısını Kaydet"}
+              : "Print Agent Bilgilerini Kaydet"}
           </button>
         </form>
       </div>

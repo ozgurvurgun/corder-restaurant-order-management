@@ -7,6 +7,7 @@ import {
 } from "@/lib/api"
 import type { RestaurantDiagnosticsStaffDto, RestaurantSupportActionType } from "@/lib/types"
 import { formatIstanbulDate, formatMoney } from "@/lib/money"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { PaginationBar } from "@/components/ui/pagination-bar"
 import { PasswordInputWithGenerator } from "@/components/ui/password-input"
 import {
@@ -93,6 +94,7 @@ export function RestaurantSupportConsole({
   restaurantId: string
   restaurantName: string
 }) {
+  const confirm = useConfirm()
   const [data, setData] = useState<RestaurantDiagnosticsDto | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -129,7 +131,15 @@ export function RestaurantSupportConsole({
     label: string,
     opts?: { targetId?: string; newPassword?: string; skipConfirm?: boolean }
   ) => {
-    if (!opts?.skipConfirm && !confirm(`${restaurantName} için "${label}" işlemini uygulamak istiyor musunuz?`)) {
+    if (
+      !opts?.skipConfirm &&
+      !(await confirm({
+        title: "Canlı Destek Müdahalesini Onayla",
+        message: `${restaurantName} için "${label}" işlemini uygulamak istiyor musunuz?`,
+        confirmLabel: "Uygula",
+        variant: "warning",
+      }))
+    ) {
       return
     }
     setBusyAction(opts?.targetId ? `${action}:${opts.targetId}` : action)

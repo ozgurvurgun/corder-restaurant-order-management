@@ -9,11 +9,13 @@ import {
 } from "@/lib/corder-email"
 import { Building2, Crown, Plus, X } from "lucide-react"
 import { CustomSelect } from "./ui/custom-inputs"
+import { useConfirm } from "./ui/confirm-dialog"
 import { PasswordInputWithGenerator } from "./ui/password-input"
 import { PaginationBar } from "./ui/pagination-bar"
 
 export function SubBossesSection() {
   const { branches, effectiveBranchId, showToast } = useBossStore()
+  const confirm = useConfirm()
 
   const [subBosses, setSubBosses] = useState<SubBossItemDto[]>([])
   const [loadingList, setLoadingList] = useState(false)
@@ -92,7 +94,7 @@ export function SubBossesSection() {
   }
 
   const handleUnlinkSubBoss = async (subBossId: string, branchId: string, name: string) => {
-    if (!confirm(`${name} hesabının bu şube ile bağlantısını kaldırmak istiyor musunuz?`)) return
+    if (!(await confirm(`${name} hesabının bu şube ile bağlantısını kaldırmak istiyor musunuz?`))) return
     try {
       const updated = await bossApi.overview.unlinkSubBoss(subBossId, branchId)
       setSubBosses(updated)

@@ -15,6 +15,7 @@ import {
 } from "@/lib/money"
 import { Pencil, ReceiptText, Search, Trash2 } from "lucide-react"
 import { CustomSelect } from "@/components/ui/custom-inputs"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { PaginationBar } from "@/components/ui/pagination-bar"
 
 const LEDGER_PAGE_SIZE = 10
@@ -39,6 +40,7 @@ export function BillingLedgerView({
   onEditPayment,
   onDeletePayment,
 }: BillingLedgerViewProps) {
+  const confirm = useConfirm()
   const [yearFilter, setYearFilter] = useState<string>("ALL")
   const [methodFilter, setMethodFilter] = useState<string>("ALL")
   const [searchQuery, setSearchQuery] = useState("")
@@ -106,9 +108,12 @@ export function BillingLedgerView({
     payment: RestaurantPaymentRecord
   ) => {
     if (
-      !confirm(
-        `${restaurant.name} - ${formatPeriodsSummary(payment.periods, payment.period)} (${formatMoney(payment.amount)}) tahsilat kaydını silmek istediğinize emin misiniz?`
-      )
+      !(await confirm({
+        title: "Tahsilat Kaydını Sil",
+        message: `${restaurant.name} - ${formatPeriodsSummary(payment.periods, payment.period)} (${formatMoney(payment.amount)}) tahsilat kaydını silmek istediğinize emin misiniz?`,
+        confirmLabel: "Kaydı Sil",
+        variant: "danger",
+      }))
     ) {
       return
     }

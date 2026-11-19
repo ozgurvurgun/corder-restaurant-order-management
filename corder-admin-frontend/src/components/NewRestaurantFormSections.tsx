@@ -328,21 +328,19 @@ export function DeviceCredentialsCards({
         <div className="flex items-center gap-2">
           <Printer className="h-4 w-4 text-[#e63462]" />
           <p className="text-[14px] font-semibold text-[#1d1d1f]">
-            Print Agent (Masaüstü Yazıcı Uygulaması) Kullanıcısı (İsteğe Bağlı)
+            Print Agent (Masaüstü Yazıcı Uygulaması) Giriş Bilgileri (İsteğe Bağlı)
           </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-              Kullanıcı Adı
+              Print Agent E-posta
             </label>
-            <input
-              type="text"
+            <CorderEmailInput
               value={printAgentUsername}
-              onChange={(e) => onPrintAgentUsernameChange(e.target.value)}
-              placeholder="Örn: merkez-yazici"
-              minLength={3}
-              className={`${inputCls} font-mono`}
+              onChange={onPrintAgentUsernameChange}
+              tenantSlugOrName={tenantSlugOrName}
+              placeholder="yazici"
               disabled={disabled}
             />
           </div>

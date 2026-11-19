@@ -10,6 +10,87 @@ import {
   type TerminalNotificationPrefs,
 } from "@/lib/terminal-notifications"
 
+const WAITER_TOAST_DURATION_MS = 10_000
+
+function WaiterCallToastItem(props: {
+  call: ActiveWaiterCall
+  onDismiss: (id: string) => void
+}) {
+  const { call, onDismiss } = props
+  const [remainingMs, setRemainingMs] = useState(WAITER_TOAST_DURATION_MS)
+
+  useEffect(() => {
+    const startedAt = Date.now()
+    const timer = window.setInterval(() => {
+      const elapsed = Date.now() - startedAt
+      const next = Math.max(0, WAITER_TOAST_DURATION_MS - elapsed)
+      setRemainingMs(next)
+      if (next <= 0) {
+        window.clearInterval(timer)
+        onDismiss(call.id)
+      }
+    }, 100)
+    return () => window.clearInterval(timer)
+  }, [call.id, onDismiss])
+
+  const secondsLeft = Math.max(1, Math.ceil(remainingMs / 1000))
+  const progressPct = Math.max(0, Math.min(100, (remainingMs / WAITER_TOAST_DURATION_MS) * 100))
+  const sectionLabel = call.sectionName || "Salon"
+  const isBill = call.requestType === "bill"
+  const actionText = isBill ? "Hesap İstiyor!" : "Garson Çağırıyor!"
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="pointer-events-auto relative overflow-hidden rounded-2xl bg-[#1d1d1f]/95 text-white shadow-2xl border border-white/15 backdrop-blur-md px-3.5 py-2.5 animate-in fade-in slide-in-from-top-2 duration-200"
+    >
+      <div className="flex items-center justify-between gap-2.5">
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          <div
+            className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
+              isBill ? "bg-amber-500/20 text-amber-300" : "bg-[#e63462]/25 text-[#ff6b8b]"
+            }`}
+          >
+            <Bell className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-bold leading-snug truncate">
+              {call.tableName} ({sectionLabel}) - {actionText}
+            </p>
+            {call.note && (
+              <p className="text-[11px] text-white/80 truncate mt-0.5">
+                Not: {call.note}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <span className="inline-flex items-center justify-center min-w-[34px] h-6 px-1.5 rounded-lg bg-white/10 text-[11px] font-bold tabular-nums text-amber-300">
+            {secondsLeft}sn
+          </span>
+          <button
+            type="button"
+            onClick={() => onDismiss(call.id)}
+            aria-label="Bildirimi kapat"
+            className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 active:scale-95 transition-all"
+          >
+            <Check className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+      <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10">
+        <div
+          className={`h-full transition-all duration-100 ease-linear ${
+            isBill ? "bg-amber-400" : "bg-[#e63462]"
+          }`}
+          style={{ width: `${progressPct}%` }}
+        />
+      </div>
+    </div>
+  )
+}
+
 export function WaiterCallAlertBanner(props: {
   calls: ActiveWaiterCall[]
   onDismiss: (id: string) => void
@@ -18,37 +99,10 @@ export function WaiterCallAlertBanner(props: {
   if (calls.length === 0) return null
 
   return (
-    <div className="bg-amber-500 text-white px-3 py-2 space-y-2 shadow-lg z-[55] border-b border-amber-600/30">
-      {calls.slice(0, 3).map((call) => {
-        const sectionLabel = call.sectionName || "Salon"
-        const actionText =
-          call.requestType === "bill" ? "Hesap İstiyor!" : "Garson Çağırıyor!"
-        return (
-          <div
-            key={call.id}
-            className="flex items-center justify-between gap-2 bg-black/15 rounded-xl px-3 py-2"
-          >
-            <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-bold leading-snug">
-                🔔 {call.tableName} ({sectionLabel}) - {actionText}
-              </p>
-              {call.note && (
-                <p className="text-[11px] text-white/90 truncate mt-0.5">
-                  Not: {call.note}
-                </p>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => onDismiss(call.id)}
-              className="flex-shrink-0 inline-flex items-center gap-1 bg-white text-amber-900 font-bold text-[12px] px-3 py-1.5 rounded-lg shadow-sm active:scale-95 transition-transform"
-            >
-              <Check className="h-3.5 w-3.5 stroke-[2.5]" />
-              <span>İlgilenildi / Tamam</span>
-            </button>
-          </div>
-        )
-      })}
+    <div className="fixed top-12 left-1/2 -translate-x-1/2 w-[calc(100%-24px)] max-w-[400px] z-[95] space-y-2 pointer-events-none">
+      {calls.slice(0, 3).map((call) => (
+        <WaiterCallToastItem key={call.id} call={call} onDismiss={onDismiss} />
+      ))}
     </div>
   )
 }

@@ -19,12 +19,14 @@ import {
 import { RestaurantSupportConsole } from "@/components/RestaurantSupportConsole"
 import { PaymentFormModal } from "@/components/billing/PaymentFormModal"
 import { RestaurantBillingHistoryModal } from "@/components/billing/RestaurantBillingHistoryModal"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { CustomSelect } from "@/components/ui/custom-inputs"
 import { toCorderEmailTenantSlug } from "@/lib/corder-email"
 
 export function EditRestaurantPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const confirm = useConfirm()
   const {
     restaurants,
     restaurantsLoading,
@@ -176,7 +178,14 @@ export function EditRestaurantPage() {
   }
 
   const handleQuickSuspend = async () => {
-    if (!confirm(`${restaurant.name} mekanının tüm sistemlere erişimini durdurmak istediğinize emin misiniz?`)) {
+    if (
+      !(await confirm({
+        title: "Sistem Erişimini Durdur",
+        message: `${restaurant.name} mekanının tüm sistemlere erişimini durdurmak istediğinize emin misiniz?`,
+        confirmLabel: "Erişimi Durdur",
+        variant: "danger",
+      }))
+    ) {
       return
     }
     setBillingBusy(true)
@@ -207,7 +216,15 @@ export function EditRestaurantPage() {
   }
 
   const handleDeleteRestaurant = async () => {
-    if (deleting || !confirm("Bu restoranı ve ilişkili kayıtları silmek istediğinize emin misiniz?")) {
+    if (
+      deleting ||
+      !(await confirm({
+        title: "Restoranı Sil",
+        message: "Bu restoranı ve ilişkili kayıtları silmek istediğinize emin misiniz?",
+        confirmLabel: "Restoranı Sil",
+        variant: "danger",
+      }))
+    ) {
       return
     }
     setDeleting(true)

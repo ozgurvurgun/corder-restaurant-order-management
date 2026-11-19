@@ -22,6 +22,7 @@ import {
   Trash2,
   X,
 } from "lucide-react"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 
 interface RestaurantBillingHistoryModalProps {
   restaurant: Restaurant | null
@@ -40,6 +41,7 @@ export function RestaurantBillingHistoryModal({
   onEditPayment,
   onDeletePayment,
 }: RestaurantBillingHistoryModalProps) {
+  const confirm = useConfirm()
   const currentPeriod = getIstanbulBillingPeriod()
   const currentYear = Number(currentPeriod.split("-")[0]) || new Date().getFullYear()
   const [selectedYear, setSelectedYear] = useState(currentYear)
@@ -64,9 +66,12 @@ export function RestaurantBillingHistoryModal({
 
   const handleDelete = async (payment: RestaurantPaymentRecord) => {
     if (
-      !confirm(
-        `${formatPeriodsSummary(payment.periods, payment.period)} (${formatMoney(payment.amount)}) tahsilat kaydını silmek istediğinize emin misiniz? Bu işlem ilgili dönem(ler)i tekrar ödenmemiş durumuna döndürür.`
-      )
+      !(await confirm({
+        title: "Tahsilat Kaydını Sil",
+        message: `${formatPeriodsSummary(payment.periods, payment.period)} (${formatMoney(payment.amount)}) tahsilat kaydını silmek istediğinize emin misiniz? Bu işlem ilgili dönem(ler)i tekrar ödenmemiş durumuna döndürür.`,
+        confirmLabel: "Kaydı Sil",
+        variant: "danger",
+      }))
     ) {
       return
     }

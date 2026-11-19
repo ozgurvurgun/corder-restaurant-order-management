@@ -7,6 +7,7 @@ import { RolePermissionMatrix } from "./role-permission-matrix"
 import { RoleAccessLimitsCard } from "./role-access-limits-card"
 import { NewRoleModal } from "./new-role-modal"
 import { CustomSelect } from "./ui/custom-inputs"
+import { useConfirm } from "./ui/confirm-dialog"
 import { ShieldCheck, Plus, Save, CopyCheck, Building2 } from "lucide-react"
 
 export function RolesPermissionsTab() {
@@ -21,6 +22,7 @@ export function RolesPermissionsTab() {
     refreshBranchDetails,
     showToast,
   } = useBossStore()
+  const confirm = useConfirm()
 
   const [selectedRoleKey, setSelectedRoleKey] = useState<string>("branch_manager")
   const [draftPermissions, setDraftPermissions] = useState<string[]>([])
@@ -122,7 +124,7 @@ export function RolesPermissionsTab() {
   const handleResetDefault = async () => {
     if (!selectedRole || !effectiveBranchId) return
     const roleTitle = getRoleDisplayName(selectedRole.key, selectedRole.name)
-    if (!confirm(`${roleTitle} rolünü fabrika varsayılan yetkilerine sıfırlamak istediğinize emin misiniz?`)) return
+    if (!(await confirm(`${roleTitle} rolünü fabrika varsayılan yetkilerine sıfırlamak istediğinize emin misiniz?`))) return
     setSaving(true)
     try {
       const resetRole = await bossApi.roles.reset(effectiveBranchId, selectedRole.key)
@@ -138,7 +140,15 @@ export function RolesPermissionsTab() {
 
   const handleSyncToAllBranches = async () => {
     if (!effectiveBranchId || branches.length <= 1) return
-    if (!confirm(`${effectiveBranch?.name} şubesindeki tüm rol ve yetki matrisini diğer ${branches.length - 1} şubenize de kopyalamak istiyor musunuz?`)) return
+    if (
+      !(await confirm({
+        title: "Tüm Şubelere Eşitle",
+        message: `${effectiveBranch?.name} şubesindeki tüm rol ve yetki matrisini diğer ${branches.length - 1} şubenize de kopyalamak istiyor musunuz?`,
+        confirmLabel: "Tümüne Kopyala",
+        variant: "primary",
+      }))
+    )
+      return
     setSyncing(true)
     try {
       const res = await bossApi.overview.syncRoles(effectiveBranchId)
@@ -186,7 +196,7 @@ export function RolesPermissionsTab() {
   const handleDeleteCustomRole = async () => {
     if (!selectedRole || selectedRole.isSystem || !effectiveBranchId) return
     const roleTitle = getRoleDisplayName(selectedRole.key, selectedRole.name)
-    if (!confirm(`${roleTitle} rolünü silmek istediğinize emin misiniz?`)) return
+    if (!(await confirm(`${roleTitle} rolünü silmek istediğinize emin misiniz?`))) return
     setSaving(true)
     try {
       await bossApi.roles.remove(effectiveBranchId, selectedRole.key)

@@ -3,6 +3,7 @@ import { useAdminStore } from "@/lib/store"
 import { formatIstanbulDate } from "@/lib/money"
 import type { BossTier, RootAdmin } from "@/lib/types"
 import { BossFormModal } from "@/components/BossFormModal"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { PaginationBar } from "@/components/ui/pagination-bar"
 import {
   Crown,
@@ -51,6 +52,7 @@ export function BossesPage() {
     deleteBoss,
   } = useAdminStore()
 
+  const confirm = useConfirm()
   const [showModal, setShowModal] = useState(false)
   const [editingBoss, setEditingBoss] = useState<RootAdmin | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -91,9 +93,12 @@ export function BossesPage() {
 
   const handleDelete = async (boss: RootAdmin) => {
     if (
-      !confirm(
-        `${boss.name} (${boss.email}) Boss hesabını tamamen silmek istediğinize emin misiniz?`
-      )
+      !(await confirm({
+        title: "Boss Hesabını Sil",
+        message: `${boss.name} (${boss.email}) Boss hesabını tamamen silmek istediğinize emin misiniz?`,
+        confirmLabel: "Hesabı Sil",
+        variant: "danger",
+      }))
     ) {
       return
     }

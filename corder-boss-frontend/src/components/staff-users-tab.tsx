@@ -6,6 +6,7 @@ import { getRoleDisplayName } from "@/lib/permission-labels"
 import { StaffUserModal } from "./staff-user-modal"
 import { SubBossesSection } from "./sub-bosses-section"
 import { CustomSelect } from "./ui/custom-inputs"
+import { useConfirm } from "./ui/confirm-dialog"
 import { PaginationBar } from "./ui/pagination-bar"
 import {
   Users,
@@ -33,6 +34,7 @@ export function StaffUsersTab() {
     refreshBranchDetails,
     showToast,
   } = useBossStore()
+  const confirm = useConfirm()
 
   const [showModal, setShowModal] = useState(false)
   const [editingUser, setEditingUser] = useState<StaffMemberDto | null>(null)
@@ -109,7 +111,7 @@ export function StaffUsersTab() {
 
   const handleDelete = async (u: StaffMemberDto) => {
     if (!effectiveBranchId) return
-    if (!confirm(`${u.name} kullanıcısını silmek istediğinize emin misiniz?`)) return
+    if (!(await confirm(`${u.name} kullanıcısını silmek istediğinize emin misiniz?`))) return
     try {
       await bossApi.staff.remove(effectiveBranchId, u.id)
       await refreshBranchDetails(effectiveBranchId)

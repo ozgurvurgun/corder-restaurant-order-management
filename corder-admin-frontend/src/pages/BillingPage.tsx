@@ -38,10 +38,12 @@ import { BillingLedgerView } from "@/components/billing/BillingLedgerView"
 import { PaymentFormModal } from "@/components/billing/PaymentFormModal"
 import { RestaurantBillingHistoryModal } from "@/components/billing/RestaurantBillingHistoryModal"
 import { useBillingPeriodMetrics } from "@/components/billing/use-billing-metrics"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 
 type BillingTabMode = "period" | "matrix" | "ledger"
 
 export function BillingPage() {
+  const confirm = useConfirm()
   const {
     restaurants,
     loadRestaurants,
@@ -170,9 +172,12 @@ export function BillingPage() {
 
   const handleSuspendUnpaid = async (r: Restaurant) => {
     if (
-      !confirm(
-        `${r.name} işletmesinin tüm sistemlere (Merchant Panel, Boss Panel, El Terminali, Print Agent) erişimini durdurmak istediğinize emin misiniz?`
-      )
+      !(await confirm({
+        title: "Sistem Erişimini Durdur",
+        message: `${r.name} işletmesinin tüm sistemlere (Merchant Panel, Boss Panel, El Terminali, Print Agent) erişimini durdurmak istediğinize emin misiniz?`,
+        confirmLabel: "Erişimi Durdur",
+        variant: "danger",
+      }))
     ) {
       return
     }
@@ -201,9 +206,13 @@ export function BillingPage() {
 
   const handleBulkSuspendUnpaid = async () => {
     if (
-      !confirm(
-        "Bu dönem veya geçmiş dönem ödemesi tamamlanmamış aktif mekanların sistem erişimlerini durdurmak istediğinize emin misiniz? (Açık kasa vardiyası olan mekanlar vardiya kapanana kadar korunur.)"
-      )
+      !(await confirm({
+        title: "Ödenmemiş Mekanları Toplu Durdur",
+        message:
+          "Bu dönem veya geçmiş dönem ödemesi tamamlanmamış aktif mekanların sistem erişimlerini durdurmak istediğinize emin misiniz? (Açık kasa vardiyası olan mekanlar vardiya kapanana kadar korunur.)",
+        confirmLabel: "Toplu Durdur",
+        variant: "danger",
+      }))
     ) {
       return
     }

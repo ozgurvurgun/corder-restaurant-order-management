@@ -279,11 +279,14 @@ export class RestaurantService {
         ? await bcrypt.hash(params.terminalPassword, 10)
         : null;
 
-    const printAgentUsername = params.printAgentUsername?.trim().toLowerCase() || null;
+    const printAgentUsername = formatCanonicalCorderEmail(
+      params.printAgentUsername,
+      params.tenantSlug,
+    );
     if (printAgentUsername) {
       const owner = await this.repo.findOne({ where: { printAgentUsername } });
       if (owner && owner.id !== params.excludeRestaurantId) {
-        throw new ConflictException('Print agent username already in use');
+        throw new ConflictException('Print agent email already in use');
       }
     }
     const printAgentPasswordHash =

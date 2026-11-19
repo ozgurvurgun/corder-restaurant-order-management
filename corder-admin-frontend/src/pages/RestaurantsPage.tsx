@@ -21,11 +21,13 @@ import {
   Unlock,
 } from "lucide-react"
 import { PaymentFormModal } from "@/components/billing/PaymentFormModal"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { PaginationBar } from "@/components/ui/pagination-bar"
 
 const RESTAURANTS_PAGE_SIZE = 10
 
 export function RestaurantsPage() {
+  const confirm = useConfirm()
   const {
     restaurants,
     restaurantsLoading,
@@ -57,7 +59,12 @@ export function RestaurantsPage() {
 
   const handleQuickSuspend = async (id: string, name: string) => {
     if (
-      !confirm(`${name} mekanının sistem erişimini durdurmak istiyor musunuz?`)
+      !(await confirm({
+        title: "Sistem Erişimini Durdur",
+        message: `${name} mekanının sistem erişimini durdurmak istiyor musunuz?`,
+        confirmLabel: "Erişimi Durdur",
+        variant: "danger",
+      }))
     ) {
       return
     }

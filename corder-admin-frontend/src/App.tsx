@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom"
 import { usePlatformAuth } from "@/lib/auth-context"
+import { ConfirmDialogProvider } from "@/components/ui/confirm-dialog"
 import { LoginPage } from "@/pages/LoginPage"
 import { DashboardLayout } from "@/pages/DashboardLayout"
 import { DashboardPage } from "@/pages/DashboardPage"
@@ -16,18 +17,20 @@ function HomeRedirect() {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<HomeRedirect />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/dashboard" element={<DashboardLayout />}>
-        <Route index element={<DashboardPage />} />
-        <Route path="bosses" element={<BossesPage />} />
-        <Route path="billing" element={<BillingPage />} />
-        <Route path="restaurants" element={<RestaurantsPage />} />
-        <Route path="restaurants/new" element={<NewRestaurantPage />} />
-        <Route path="restaurants/:id" element={<EditRestaurantPage />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <ConfirmDialogProvider>
+      <Routes>
+        <Route path="/" element={<HomeRedirect />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/dashboard" element={<DashboardLayout />}>
+          <Route index element={<DashboardPage />} />
+          <Route path="bosses" element={<BossesPage />} />
+          <Route path="billing" element={<BillingPage />} />
+          <Route path="restaurants" element={<RestaurantsPage />} />
+          <Route path="restaurants/new" element={<NewRestaurantPage />} />
+          <Route path="restaurants/:id" element={<EditRestaurantPage />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </ConfirmDialogProvider>
   )
 }
