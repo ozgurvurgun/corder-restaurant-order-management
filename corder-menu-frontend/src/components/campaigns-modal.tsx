@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { X, ChevronLeft, ChevronRight } from "lucide-react"
 import { applyCfImageFallback, resolveImageUrl, type MenuCampaign } from "@/lib/api"
 
@@ -9,6 +10,7 @@ export function CampaignsModal(props: {
   onClose: () => void
 }) {
   const { campaigns, activeIndex, formatCurrency, onChangeIndex, onClose } = props
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({})
   const currentCampaign = campaigns[activeIndex] ?? campaigns[0]
   if (!currentCampaign) return null
   const currentImgUrl = resolveImageUrl(currentCampaign.imageUrl)
@@ -41,8 +43,9 @@ export function CampaignsModal(props: {
               }}
             >
               <div className="aspect-[4/3] bg-stone-100">
-                {imgUrl && (
+                {imgUrl && !failedImages[campaign.id] && (
                   <img
+                    key={campaign.id}
                     src={imgUrl}
                     alt={campaign.title}
                     loading="lazy"
@@ -50,7 +53,7 @@ export function CampaignsModal(props: {
                     onError={(e) => {
                       const el = e.currentTarget
                       applyCfImageFallback(el, () => {
-                        el.style.display = "none"
+                        setFailedImages((prev) => ({ ...prev, [campaign.id]: true }))
                       })
                     }}
                     className="w-full h-full object-cover"
@@ -70,15 +73,16 @@ export function CampaignsModal(props: {
             <X className="w-5 h-5" />
           </button>
           <div className="relative aspect-[4/3] bg-stone-100">
-            {currentImgUrl && (
+            {currentImgUrl && !failedImages[currentCampaign.id] && (
               <img
+                key={currentCampaign.id}
                 src={currentImgUrl}
                 alt={currentCampaign.title}
                 decoding="async"
                 onError={(e) => {
                   const el = e.currentTarget
                   applyCfImageFallback(el, () => {
-                    el.style.display = "none"
+                    setFailedImages((prev) => ({ ...prev, [currentCampaign.id]: true }))
                   })
                 }}
                 className="w-full h-full object-cover"

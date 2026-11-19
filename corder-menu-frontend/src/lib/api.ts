@@ -97,7 +97,7 @@ export interface ImageTransformOptions {
   quality?: number
 }
 
-const CACHE_PREFIX = "corder_menu_cache_v2:"
+const CACHE_PREFIX = "corder_menu_cache_v3:"
 const CACHE_TTL_MS = 60_000
 const memoryCache = new Map<string, { timestamp: number; data: MenuResponse }>()
 
@@ -144,9 +144,10 @@ export function applyCfImageFallback(
   img: HTMLImageElement,
   onFinalError?: () => void
 ): void {
-  if (img.dataset.cfFallback !== "1" && img.src.includes("/cdn-cgi/image/")) {
-    img.dataset.cfFallback = "1"
-    img.src = stripCfImageTransform(img.src)
+  if (img.dataset.cfFallbackSrc !== img.src && img.src.includes("/cdn-cgi/image/")) {
+    const stripped = stripCfImageTransform(img.src)
+    img.dataset.cfFallbackSrc = stripped
+    img.src = stripped
     return
   }
   onFinalError?.()
@@ -159,7 +160,7 @@ export function resolveAssetUrl(
   if (!url) return undefined
   const trimmed = url.trim()
   if (!trimmed) return undefined
-  if (trimmed.startsWith("data:")) return trimmed
+  if (trimmed.startsWith("data:") || trimmed.startsWith("blob:")) return trimmed
 
   let resolved = trimmed
   if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
@@ -168,26 +169,20 @@ export function resolveAssetUrl(
     resolved = base ? `${base.replace(/\/$/, "")}${path}` : path
   }
 
-  if (resolved.startsWith("http://") || resolved.startsWith("https://")) {
+  if (options?.width && resolved.startsWith("https://")) {
     try {
       const parsed = new URL(resolved)
       const host = parsed.hostname.toLowerCase()
-      const isLocal =
+      const isDirectStorageOrLocal =
         host === "localhost" ||
         host === "127.0.0.1" ||
         host.endsWith(".local") ||
+        host.endsWith(".r2.dev") ||
+        host.endsWith(".r2.cloudflarestorage.com") ||
         /^\d+\.\d+\.\d+\.\d+$/.test(host)
-      const isR2OrCdn =
-        !isLocal &&
-        (host.includes("r2.dev") ||
-          host.includes("cloudflare") ||
-          host.includes("cdn") ||
-          host.includes("media") ||
-          host.includes("assets") ||
-          Boolean(options?.width))
-      if (isR2OrCdn && !parsed.pathname.startsWith("/cdn-cgi/image/")) {
-        const width = options?.width ?? 400
-        const quality = options?.quality ?? 82
+      if (!isDirectStorageOrLocal && !parsed.pathname.startsWith("/cdn-cgi/image/")) {
+        const width = options.width
+        const quality = options.quality ?? 82
         const cleanPath = parsed.pathname.replace(/^\/+/, "")
         if (cleanPath) {
           parsed.pathname = `/cdn-cgi/image/width=${width},quality=${quality},format=auto/${cleanPath}`
