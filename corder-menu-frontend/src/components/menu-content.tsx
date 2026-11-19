@@ -23,6 +23,7 @@ import { WaiterCallWidget, type MenuWidgetTheme } from "./waiter-call-modal"
 import {
   categoryHasProducts,
   flattenMenuProducts,
+  searchProductsWithLevenshtein,
   type MenuTemplateProps,
 } from "./menu-template-shared"
 import { ClassicMenuTemplate } from "./templates/template-classic"
@@ -143,15 +144,10 @@ export function MenuContent({
       })),
     [roots]
   )
-  const filteredProducts = useMemo(() => {
-    const q = searchQuery.trim().toLocaleLowerCase("tr-TR")
-    if (!q) return []
-    return allProducts.filter(
-      (p) =>
-        p.name.toLocaleLowerCase("tr-TR").includes(q) ||
-        (p.description?.toLocaleLowerCase("tr-TR").includes(q) ?? false)
-    )
-  }, [searchQuery, allProducts])
+  const filteredProducts = useMemo(
+    () => searchProductsWithLevenshtein(allProducts, searchQuery),
+    [searchQuery, allProducts]
+  )
 
   const hasTreeContent = useMemo(() => roots.some(categoryHasProducts), [roots])
 
@@ -297,6 +293,7 @@ export function MenuContent({
         onToggle={() => setShowContact(!showContact)}
         onClose={() => setShowContact(false)}
         theme={widgetTheme}
+        hasWaiterCall={Boolean(verifiedTable)}
       />
 
       {showSearch && (

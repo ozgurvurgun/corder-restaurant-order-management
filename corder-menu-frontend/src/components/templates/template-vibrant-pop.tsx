@@ -11,7 +11,6 @@ import type { ProductDisplay } from "../menu-modals"
 import {
   categoryHasProducts,
   countCategoryProducts,
-  TableSessionPill,
   type MenuTemplateProps,
 } from "../menu-template-shared"
 
@@ -131,7 +130,6 @@ export function VibrantPopMenuTemplate(props: MenuTemplateProps) {
     logoUrl,
     logoFailed,
     onLogoError,
-    verifiedTable,
     activeCampaigns,
     roots,
     activeRoot,
@@ -140,7 +138,6 @@ export function VibrantPopMenuTemplate(props: MenuTemplateProps) {
     onSelectProduct,
     onOpenSearch,
     onOpenCampaigns,
-    onOpenWaiterCall,
   } = props
 
   return (
@@ -151,28 +148,17 @@ export function VibrantPopMenuTemplate(props: MenuTemplateProps) {
           className="pointer-events-none absolute -top-20 -right-20 w-64 h-64 rounded-full bg-white/10 blur-2xl"
         />
         <div className="relative max-w-2xl mx-auto">
-          {(verifiedTable || activeCampaigns.length > 0) && (
-            <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
-              {verifiedTable ? (
-                <TableSessionPill
-                  tableContext={verifiedTable}
-                  onOpenWaiterCall={onOpenWaiterCall}
-                  variant="vibrant"
-                />
-              ) : (
-                <div />
-              )}
-              {activeCampaigns.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => onOpenCampaigns(0)}
-                  aria-label="Kampanyaları Gör"
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white text-rose-600 text-xs font-extrabold shadow-md hover:bg-rose-50 transition-colors"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Kampanyalar ({activeCampaigns.length})</span>
-                </button>
-              )}
+          {activeCampaigns.length > 0 && (
+            <div className="flex items-center justify-end gap-2 mb-4 flex-wrap">
+              <button
+                type="button"
+                onClick={() => onOpenCampaigns(0)}
+                aria-label="Kampanyaları Gör"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white text-rose-600 text-xs font-extrabold shadow-md hover:bg-rose-50 transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Kampanyalar ({activeCampaigns.length})</span>
+              </button>
             </div>
           )}
 

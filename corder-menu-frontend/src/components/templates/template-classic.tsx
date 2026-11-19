@@ -10,7 +10,6 @@ import {
 import type { ProductDisplay } from "../menu-modals"
 import {
   categoryHasProducts,
-  TableSessionPill,
   type MenuTemplateProps,
 } from "../menu-template-shared"
 
@@ -110,7 +109,6 @@ export function ClassicMenuTemplate(props: MenuTemplateProps) {
     logoUrl,
     logoFailed,
     onLogoError,
-    verifiedTable,
     activeCampaigns,
     roots,
     activeRoot,
@@ -119,22 +117,12 @@ export function ClassicMenuTemplate(props: MenuTemplateProps) {
     onSelectProduct,
     onOpenSearch,
     onOpenCampaigns,
-    onOpenWaiterCall,
   } = props
 
   return (
     <div className="min-h-dvh bg-[#FAF9F6] text-stone-900 flex flex-col">
       <header className="bg-white border-b border-stone-200/60">
         <div className="max-w-2xl mx-auto px-5 pt-7 pb-5">
-          {verifiedTable && (
-            <div className="mb-3.5 flex items-center justify-between">
-              <TableSessionPill
-                tableContext={verifiedTable}
-                onOpenWaiterCall={onOpenWaiterCall}
-                variant="classic"
-              />
-            </div>
-          )}
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-rose-500 to-orange-400 flex items-center justify-center shadow-md shadow-rose-200/50 flex-shrink-0 overflow-hidden ring-1 ring-stone-200/60">
               {logoUrl && !logoFailed ? (

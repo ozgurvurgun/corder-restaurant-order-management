@@ -1,9 +1,8 @@
 import { useState } from "react"
-import { ConciergeBell, Sparkles } from "lucide-react"
+import { Sparkles } from "lucide-react"
 import {
   applyCfImageFallback,
   formatMenuPrice,
-  formatTitleCase,
   resolveImageUrl,
   type MenuCampaign,
   type MenuCategory,
@@ -55,68 +54,172 @@ export function countCategoryProducts(category: MenuCategory): number {
   return count
 }
 
-export function TableSessionPill(props: {
-  tableContext: MenuTableContext | null
-  onOpenWaiterCall: () => void
-  variant?: "classic" | "bistro" | "noir" | "editorial" | "vibrant"
-}) {
-  const { tableContext, onOpenWaiterCall, variant = "classic" } = props
-  if (!tableContext) return null
+const TURKISH_CHAR_FOLD_MAP: Record<string, string> = {
+  ç: "c",
+  ğ: "g",
+  ı: "i",
+  i: "i",
+  ö: "o",
+  ş: "s",
+  ü: "u",
+  â: "a",
+  î: "i",
+  û: "u",
+}
 
-  const sectionLabel = tableContext.sectionName
-    ? formatTitleCase(tableContext.sectionName)
-    : null
+export function normalizeSearchText(input: string | null | undefined): string {
+  if (!input) return ""
+  return input
+    .toLocaleLowerCase("tr-TR")
+    .replace(/\u0307/g, "")
+    .replace(/[çğıiöşüâîû]/g, (ch) => TURKISH_CHAR_FOLD_MAP[ch] ?? ch)
+    .replace(/[^\p{L}\p{N}\s]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
 
-  const containerStyles =
-    variant === "noir"
-      ? "bg-white/[0.04] hover:bg-white/[0.08] border border-amber-400/25 text-[#F5F2EB] shadow-sm shadow-black/40"
-      : variant === "editorial"
-        ? "bg-[#EFE9DC] hover:bg-[#E5DEC9] border border-[#1C1917]/20 text-[#1C1917]"
-        : variant === "vibrant"
-          ? "bg-white/15 hover:bg-white/25 backdrop-blur-md border border-white/30 text-white shadow-sm"
-          : variant === "bistro"
-            ? "bg-stone-900/[0.04] hover:bg-stone-900/[0.08] border border-stone-200/90 text-stone-800"
-            : "bg-stone-100/90 hover:bg-stone-200/70 border border-stone-200/80 text-stone-800"
+export function levenshteinDistance(a: string, b: string): number {
+  if (a === b) return 0
+  const m = a.length
+  const n = b.length
+  if (m === 0) return n
+  if (n === 0) return m
 
-  const dotSeparatorClass =
-    variant === "noir"
-      ? "text-amber-400/60"
-      : variant === "vibrant"
-        ? "text-white/60"
-        : "text-stone-400"
+  let prev = new Array<number>(n + 1)
+  let curr = new Array<number>(n + 1)
+  for (let j = 0; j <= n; j++) prev[j] = j
 
-  const actionChipClass =
-    variant === "noir"
-      ? "text-amber-300 border-l border-white/10 pl-2 ml-1"
-      : variant === "editorial"
-        ? "text-[#8C2D19] border-l border-[#1C1917]/15 pl-2 ml-1"
-        : variant === "vibrant"
-          ? "text-white/95 border-l border-white/25 pl-2 ml-1"
-          : "text-rose-600 border-l border-stone-300/70 pl-2 ml-1"
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i
+    const aCode = a.charCodeAt(i - 1)
+    for (let j = 1; j <= n; j++) {
+      const cost = aCode === b.charCodeAt(j - 1) ? 0 : 1
+      curr[j] = Math.min(
+        prev[j] + 1,
+        curr[j - 1] + 1,
+        prev[j - 1] + cost
+      )
+    }
+    const tmp = prev
+    prev = curr
+    curr = tmp
+  }
+  return prev[n]
+}
 
-  return (
-    <button
-      type="button"
-      onClick={onOpenWaiterCall}
-      aria-label={`Masa ${tableContext.tableName}${sectionLabel ? ` (${sectionLabel})` : ""} — Garson Çağır`}
-      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all active:scale-95 cursor-pointer ${containerStyles}`}
-    >
-      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
-      <span className="font-semibold tracking-tight">Masa {tableContext.tableName}</span>
-      {sectionLabel && (
-        <>
-          <span className={dotSeparatorClass} aria-hidden="true">
-            •
-          </span>
-          <span className="opacity-85">{sectionLabel}</span>
-        </>
-      )}
-      <span className={`inline-flex items-center gap-1 font-semibold ${actionChipClass}`}>
-        <ConciergeBell className="w-3.5 h-3.5" />
-        <span>Servis</span>
-      </span>
-    </button>
-  )
+function maxAllowedDistance(tokenLength: number): number {
+  if (tokenLength <= 2) return 0
+  if (tokenLength <= 4) return 1
+  if (tokenLength <= 7) return 2
+  return 3
+}
+
+function scoreQueryTokenAgainstWords(qToken: string, words: string[], weight: number): number {
+  if (!qToken || words.length === 0) return 0
+  const maxDist = maxAllowedDistance(qToken.length)
+  let best = 0
+
+  for (const word of words) {
+    if (!word) continue
+    if (word === qToken) {
+      best = Math.max(best, 100 * weight)
+      break
+    }
+    if (word.startsWith(qToken)) {
+      best = Math.max(best, 88 * weight)
+      continue
+    }
+    if (word.includes(qToken)) {
+      best = Math.max(best, 76 * weight)
+      continue
+    }
+    if (maxDist === 0) continue
+
+    const fullDist = levenshteinDistance(qToken, word)
+    if (fullDist <= maxDist) {
+      const sim = Math.max(10, 70 - fullDist * 18)
+      best = Math.max(best, sim * weight)
+    }
+
+    if (word.length > qToken.length && qToken.length >= 3) {
+      const prefix = word.slice(0, qToken.length)
+      const prefixDist = levenshteinDistance(qToken, prefix)
+      if (prefixDist <= Math.min(1, maxDist)) {
+        const sim = Math.max(12, 66 - prefixDist * 18)
+        best = Math.max(best, sim * weight)
+      }
+    }
+  }
+  return best
+}
+
+export function searchProductsWithLevenshtein(
+  products: ProductDisplay[],
+  rawQuery: string
+): ProductDisplay[] {
+  const normQuery = normalizeSearchText(rawQuery)
+  if (!normQuery) return []
+  const qTokens = normQuery.split(" ").filter(Boolean)
+  if (qTokens.length === 0) return []
+  const compactQuery = qTokens.join("")
+
+  const scored: Array<{ product: ProductDisplay; score: number }> = []
+
+  for (const product of products) {
+    const normName = normalizeSearchText(product.name)
+    const normDesc = normalizeSearchText(product.description)
+    const nameWords = normName.split(" ").filter(Boolean)
+    const descWords = normDesc.split(" ").filter(Boolean)
+    const compactName = nameWords.join("")
+
+    let totalScore = 0
+
+    if (normName === normQuery || compactName === compactQuery) {
+      totalScore += 300
+    } else if (normName.startsWith(normQuery) || compactName.startsWith(compactQuery)) {
+      totalScore += 220
+    } else if (normName.includes(normQuery) || compactName.includes(compactQuery)) {
+      totalScore += 170
+    } else if (normDesc.includes(normQuery)) {
+      totalScore += 110
+    } else if (compactQuery.length >= 4 && compactName.length >= 3) {
+      const compactDist = levenshteinDistance(
+        compactQuery,
+        compactName.slice(0, Math.max(compactQuery.length, Math.min(compactName.length, compactQuery.length + 2)))
+      )
+      if (compactDist <= maxAllowedDistance(compactQuery.length)) {
+        totalScore += Math.max(40, 140 - compactDist * 30)
+      }
+    }
+
+    let allTokensMatched = true
+    let tokenScoreSum = 0
+    for (const qToken of qTokens) {
+      const nameTokenScore = scoreQueryTokenAgainstWords(qToken, nameWords, 1.0)
+      const descTokenScore = scoreQueryTokenAgainstWords(qToken, descWords, 0.55)
+      const bestTokenScore = Math.max(nameTokenScore, descTokenScore)
+      if (bestTokenScore <= 0) {
+        allTokensMatched = false
+        break
+      }
+      tokenScoreSum += bestTokenScore
+    }
+
+    if (allTokensMatched) {
+      totalScore += tokenScoreSum
+    }
+
+    if (totalScore > 0) {
+      scored.push({ product, score: totalScore })
+    }
+  }
+
+  return scored
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score
+      return a.product.name.localeCompare(b.product.name, "tr")
+    })
+    .map((entry) => entry.product)
 }
 
 export function ActiveCampaignsShowcaseStrip(props: {

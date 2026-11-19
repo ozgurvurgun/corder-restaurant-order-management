@@ -12,7 +12,6 @@ import {
   ActiveCampaignsShowcaseStrip,
   categoryHasProducts,
   countCategoryProducts,
-  TableSessionPill,
   type MenuTemplateProps,
 } from "../menu-template-shared"
 
@@ -122,7 +121,6 @@ export function BistroGridMenuTemplate(props: MenuTemplateProps) {
     logoUrl,
     logoFailed,
     onLogoError,
-    verifiedTable,
     activeCampaigns,
     roots,
     activeRoot,
@@ -131,7 +129,6 @@ export function BistroGridMenuTemplate(props: MenuTemplateProps) {
     onSelectProduct,
     onOpenSearch,
     onOpenCampaigns,
-    onOpenWaiterCall,
   } = props
 
   return (
@@ -181,16 +178,6 @@ export function BistroGridMenuTemplate(props: MenuTemplateProps) {
               <Search className="w-4 h-4" />
             </button>
           </div>
-
-          {verifiedTable && (
-            <div className="mt-3.5 pt-3 border-t border-stone-100 flex items-center">
-              <TableSessionPill
-                tableContext={verifiedTable}
-                onOpenWaiterCall={onOpenWaiterCall}
-                variant="bistro"
-              />
-            </div>
-          )}
         </div>
 
         {activeCampaigns.length > 0 && (

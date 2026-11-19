@@ -10,7 +10,6 @@ import {
 import type { ProductDisplay } from "../menu-modals"
 import {
   categoryHasProducts,
-  TableSessionPill,
   type MenuTemplateProps,
 } from "../menu-template-shared"
 
@@ -121,7 +120,6 @@ export function EditorialMenuTemplate(props: MenuTemplateProps) {
     logoUrl,
     logoFailed,
     onLogoError,
-    verifiedTable,
     activeCampaigns,
     roots,
     activeRoot,
@@ -130,33 +128,23 @@ export function EditorialMenuTemplate(props: MenuTemplateProps) {
     onSelectProduct,
     onOpenSearch,
     onOpenCampaigns,
-    onOpenWaiterCall,
   } = props
 
   return (
     <div className="min-h-dvh bg-[#F6F1E7] text-[#1C1917] flex flex-col">
       <header className="px-5 pt-7 pb-5 border-b border-[#1C1917]/15">
         <div className="max-w-2xl mx-auto text-center">
-          {(verifiedTable || activeCampaigns.length > 0) && (
+          {activeCampaigns.length > 0 && (
             <div className="flex items-center justify-center gap-2.5 mb-4 flex-wrap">
-              {verifiedTable && (
-                <TableSessionPill
-                  tableContext={verifiedTable}
-                  onOpenWaiterCall={onOpenWaiterCall}
-                  variant="editorial"
-                />
-              )}
-              {activeCampaigns.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => onOpenCampaigns(0)}
-                  aria-label="Kampanyaları Gör"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#8C2D19] text-[#F6F1E7] text-xs font-medium hover:bg-[#732312] transition-colors"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Günün Seçkisi ({activeCampaigns.length})</span>
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => onOpenCampaigns(0)}
+                aria-label="Kampanyaları Gör"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#8C2D19] text-[#F6F1E7] text-xs font-medium hover:bg-[#732312] transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Günün Seçkisi ({activeCampaigns.length})</span>
+              </button>
             </div>
           )}
 

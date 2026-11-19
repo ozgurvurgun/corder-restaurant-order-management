@@ -41,8 +41,9 @@ export function ContactPopover(props: {
   onToggle: () => void
   onClose: () => void
   theme?: MenuWidgetTheme
+  hasWaiterCall?: boolean
 }) {
-  const { business, showContact, onToggle, onClose, theme = "light" } = props
+  const { business, showContact, onToggle, onClose, theme = "light", hasWaiterCall = false } = props
   const whatsappDigits = business.whatsapp ? sanitizeWhatsappNumber(business.whatsapp) : ""
   const instagramHandle = business.instagram ? sanitizeInstagramHandle(business.instagram) : ""
   const hasAnyContact = Boolean(
@@ -75,7 +76,7 @@ export function ContactPopover(props: {
 
   return (
     <>
-      <div className="fixed bottom-6 right-6 z-30">
+      <div className={`fixed ${hasWaiterCall ? "bottom-24" : "bottom-6"} right-6 z-30 transition-all duration-200`}>
         <div
           role="dialog"
           aria-label="İletişim Bilgileri"
