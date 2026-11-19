@@ -1,7 +1,9 @@
 import type {
   BossDto,
   BossTier,
+  CreatePlatformNotificationPayload,
   PlatformBillingConfig,
+  PlatformNotificationDto,
   PlatformRestaurantDto,
   RecordPaymentPayload,
   RestaurantBranchType,
@@ -13,6 +15,8 @@ import type {
 
 export type {
   BossDto,
+  CreatePlatformNotificationPayload,
+  PlatformNotificationDto,
   PlatformRestaurantDto,
   RecordPaymentPayload,
   RestaurantDiagnosticsDto,
@@ -448,6 +452,29 @@ export const platform = {
     },
     async delete(id: string) {
       return platformFetch<void>(`/platform/bosses/${id}`, { method: "DELETE" })
+    },
+  },
+  notifications: {
+    async list() {
+      return platformFetch<PlatformNotificationDto[]>("/platform/notifications")
+    },
+    async create(body: CreatePlatformNotificationPayload) {
+      return platformFetch<PlatformNotificationDto>("/platform/notifications", {
+        method: "POST",
+        body: JSON.stringify(body),
+      })
+    },
+    async sendNow(id: string) {
+      return platformFetch<PlatformNotificationDto>(
+        `/platform/notifications/${encodeURIComponent(id)}/send-now`,
+        { method: "POST", body: JSON.stringify({}) }
+      )
+    },
+    async delete(id: string) {
+      return platformFetch<{ ok: boolean; id: string }>(
+        `/platform/notifications/${encodeURIComponent(id)}`,
+        { method: "DELETE" }
+      )
     },
   },
 }

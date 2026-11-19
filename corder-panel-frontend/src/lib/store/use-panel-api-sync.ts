@@ -156,6 +156,15 @@ function buildDerivedNotifications(
     note?: string
     createdAt: string
   }>,
+  serverPlatformNotifications?: Array<{
+    id: string
+    title: string
+    message: string
+    level: string
+    targetApps: string[]
+    sentAt: string
+    createdAt: string
+  }>,
 ): PanelNotification[] {
   const readIds = getReadNotifIds()
   const dismissedIds = getDismissedNotifIds()
@@ -168,6 +177,20 @@ function buildDerivedNotifications(
     if (clearedAtMs > 0 && Number.isFinite(t) && t <= clearedAtMs) return false
     return true
   }
+
+  const platformNotifs: PanelNotification[] = (serverPlatformNotifications ?? [])
+    .filter((pn) => !Array.isArray(pn.targetApps) || pn.targetApps.includes("merchant"))
+    .map((pn) => {
+      const notifId = `platform:${pn.id}`
+      return {
+        id: notifId,
+        type: "system" as const,
+        title: `📢 ${pn.title}`,
+        message: pn.message,
+        read: readIds.has(notifId) || readIds.has(pn.id),
+        createdAt: new Date(pn.sentAt || pn.createdAt),
+      }
+    })
 
   const waiterNotifs: PanelNotification[] = (serverWaiterCalls ?? []).map((wc) => {
     const isBill = wc.requestType === "bill"
@@ -202,7 +225,7 @@ function buildDerivedNotifications(
     read: readIds.has(`notif-cancel-${ci.id}`),
     createdAt: ci.cancelledAt,
   }))
-  return [...waiterNotifs, ...lowStockNotifs, ...cancelNotifs]
+  return [...platformNotifs, ...waiterNotifs, ...lowStockNotifs, ...cancelNotifs]
     .filter((n) => isVisible(n.id, n.createdAt))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 }
@@ -392,6 +415,7 @@ export function usePanelApiSync(
           mats,
           hydratedCancelled,
           notifStateRes?.waiterCalls,
+          notifStateRes?.platformNotifications,
         )
         setNotifications?.((prev) => mergeDerivedAndRealtimeNotifications(prev, derived))
 

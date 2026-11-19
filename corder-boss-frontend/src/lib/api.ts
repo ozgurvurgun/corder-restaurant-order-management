@@ -1,5 +1,5 @@
 import type {
-  AuditCategory, AuditLogDto, BossOverviewResponse, BranchSummary,
+  AuditCategory, AuditLogDto, BossOverviewResponse, BossPlatformNotificationDto, BranchSummary,
   CatalogCategoryDto, CatalogProductDto, FraudAlertDto, FraudAlertStatus,
   FraudSeverity, LiveOrderDto, LiveTableDto, PermissionCatalogResponse,
   RoleDefinition, StaffMemberDto, SubBossItemDto,
@@ -473,6 +473,22 @@ export const bossApi = {
       return bossFetch<CatalogProductDto>(
         `/restaurant/products/${encodeURIComponent(productId)}`,
         { method: "PUT", body: JSON.stringify(body) },
+        branchId
+      )
+    },
+  },
+  notifications: {
+    async getState(branchId: string) {
+      return bossFetch<{
+        clearedAt: string | null
+        dismissedIds: string[]
+        platformNotifications?: BossPlatformNotificationDto[]
+      }>("/restaurant/notifications", {}, branchId)
+    },
+    async dismiss(branchId: string, ids: string[]) {
+      return bossFetch<{ ok: boolean }>(
+        "/restaurant/notifications/dismiss",
+        { method: "POST", body: JSON.stringify({ ids }) },
         branchId
       )
     },

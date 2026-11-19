@@ -8,6 +8,7 @@ import { BossRestaurantEntity } from '../platform/domain/boss-restaurant.entity'
 import { RestaurantEntity } from '../platform/domain/restaurant.entity';
 import { PlatformBillingConfigEntity } from '../platform/domain/platform-billing-config.entity';
 import { RestaurantSubscriptionPaymentEntity } from '../platform/domain/restaurant-subscription-payment.entity';
+import { PlatformNotificationEntity } from '../platform/domain/platform-notification.entity';
 import { TableEntity } from './domain/table.entity';
 import { OrderEntity } from './domain/order.entity';
 import { OrderItemEntity } from './domain/order-item.entity';
@@ -113,6 +114,7 @@ import {
       RestaurantEntity,
       PlatformBillingConfigEntity,
       RestaurantSubscriptionPaymentEntity,
+      PlatformNotificationEntity,
       RestaurantStaffEntity,
       RestaurantRoleEntity,
       TableEntity,

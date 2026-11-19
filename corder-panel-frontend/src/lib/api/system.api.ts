@@ -357,6 +357,15 @@ export const notificationsApi = {
         note?: string
         createdAt: string
       }>
+      platformNotifications?: Array<{
+        id: string
+        title: string
+        message: string
+        level: string
+        targetApps: string[]
+        sentAt: string
+        createdAt: string
+      }>
     }>("/restaurant/notifications", { token }),
   dismiss: (token: string, ids: string[]) =>
     request<{ ok: boolean }>("/restaurant/notifications/dismiss", {

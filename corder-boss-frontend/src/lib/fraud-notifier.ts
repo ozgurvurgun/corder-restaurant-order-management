@@ -1,5 +1,6 @@
 import type {
   BossOverviewDto,
+  BossPlatformNotificationDto,
   FraudAlertDto,
   FraudAlertStatus,
   FraudSeverity,
@@ -10,6 +11,80 @@ import { formatMoney } from "./format"
 
 const PUSH_SOUND_PREF_KEY = "corder-boss-fraud-push-sound-enabled"
 const LOCAL_RESOLUTIONS_KEY = "corder-boss-fraud-local-resolutions"
+const BOSS_READ_NOTIFS_KEY = "corder-boss-read-notifs"
+const BOSS_DISMISSED_NOTIFS_KEY = "corder-boss-dismissed-notifs"
+
+export function getBossReadNotifIds(): Set<string> {
+  if (typeof window === "undefined") return new Set()
+  try {
+    const raw = localStorage.getItem(BOSS_READ_NOTIFS_KEY)
+    const arr = raw ? (JSON.parse(raw) as unknown[]) : []
+    return new Set(Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string") : [])
+  } catch {
+    return new Set()
+  }
+}
+
+export function markBossNotifReadLocal(id: string): void {
+  if (typeof window === "undefined") return
+  const set = getBossReadNotifIds()
+  set.add(id)
+  localStorage.setItem(BOSS_READ_NOTIFS_KEY, JSON.stringify(Array.from(set).slice(-300)))
+}
+
+export function getBossDismissedNotifIds(): Set<string> {
+  if (typeof window === "undefined") return new Set()
+  try {
+    const raw = localStorage.getItem(BOSS_DISMISSED_NOTIFS_KEY)
+    const arr = raw ? (JSON.parse(raw) as unknown[]) : []
+    return new Set(Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string") : [])
+  } catch {
+    return new Set()
+  }
+}
+
+export function markBossNotifsDismissedLocal(ids: string[]): void {
+  if (typeof window === "undefined") return
+  const set = getBossDismissedNotifIds()
+  for (const id of ids) set.add(id)
+  localStorage.setItem(BOSS_DISMISSED_NOTIFS_KEY, JSON.stringify(Array.from(set).slice(-500)))
+}
+
+export async function triggerPlatformPushNotification(
+  notif: Pick<BossPlatformNotificationDto, "id" | "title" | "message" | "level">
+): Promise<void> {
+  if (typeof window === "undefined" || !("Notification" in window)) return
+  if (Notification.permission !== "granted") return
+
+  const title = `📢 ${notif.title || "Corder Duyurusu"}`
+  const body = notif.message || ""
+  const tag = `corder-platform-${notif.id}`
+
+  try {
+    if ("serviceWorker" in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration()
+      if (reg && typeof reg.showNotification === "function") {
+        await reg.showNotification(title, {
+          body,
+          icon: "/corder-logo.png",
+          badge: "/icon-96x96.png",
+          tag,
+          silent: false,
+          data: { notificationId: notif.id },
+        })
+        return
+      }
+    }
+    new Notification(title, {
+      body,
+      icon: "/corder-logo.png",
+      tag,
+      silent: false,
+    })
+  } catch {
+    // Ignore push notification errors
+  }
+}
 
 export interface FraudAlgorithmSpec {
   key: string

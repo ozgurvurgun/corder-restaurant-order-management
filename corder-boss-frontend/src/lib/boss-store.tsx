@@ -9,46 +9,34 @@ import {
 } from "./api"
 import { formatTitleCase } from "./format"
 import {
-  deriveHeuristicFraudAlerts, getFraudPushSoundEnabled,
-  requestBrowserNotificationPermission, saveLocalFraudResolution, setFraudPushSoundEnabled,
-  triggerFraudPushNotification,
+  getBossDismissedNotifIds, getBossReadNotifIds, getFraudPushSoundEnabled,
+  markBossNotifReadLocal, markBossNotifsDismissedLocal, requestBrowserNotificationPermission,
+  saveLocalFraudResolution, setFraudPushSoundEnabled,
+  triggerFraudPushNotification, triggerPlatformPushNotification,
 } from "./fraud-notifier"
 import type {
-  BossOverviewResponse, BranchSummary, CatalogCategoryDto, CatalogProductDto,
+  BossOverviewResponse, BossPlatformNotificationDto, BranchSummary, CatalogCategoryDto, CatalogProductDto,
   FraudAlertDto, FraudAlertStatus, LiveOrderDto, LiveTableDto,
   PermissionCatalogResponse, RoleDefinition, StaffMemberDto,
 } from "./types"
 
 interface BossStoreContextValue {
-  isAuthenticated: boolean
-  user: StoredBossUser | null
-  branches: BranchSummary[]
-  selectedBranchId: string
-  effectiveBranchId: string
-  effectiveBranch: BranchSummary | null
-  setSelectedBranchId: (id: string) => void
-  overview: BossOverviewResponse | null
-  catalog: PermissionCatalogResponse | null
-  roles: RoleDefinition[]
-  staff: StaffMemberDto[]
-  tables: LiveTableDto[]
-  orders: LiveOrderDto[]
-  products: CatalogProductDto[]
-  categories: CatalogCategoryDto[]
-  fraudAlerts: FraudAlertDto[]
-  openCriticalHighAlertCount: number
-  pushSoundEnabled: boolean
-  togglePushSound: (enabled: boolean) => Promise<void>
+  isAuthenticated: boolean; user: StoredBossUser | null; branches: BranchSummary[]
+  selectedBranchId: string; effectiveBranchId: string; effectiveBranch: BranchSummary | null
+  setSelectedBranchId: (id: string) => void; overview: BossOverviewResponse | null
+  catalog: PermissionCatalogResponse | null; roles: RoleDefinition[]; staff: StaffMemberDto[]
+  tables: LiveTableDto[]; orders: LiveOrderDto[]; products: CatalogProductDto[]
+  categories: CatalogCategoryDto[]; fraudAlerts: FraudAlertDto[]; openCriticalHighAlertCount: number
+  platformNotifications: BossPlatformNotificationDto[]
+  markPlatformNotificationRead: (id: string) => void
+  clearPlatformNotifications: () => void
+  pushSoundEnabled: boolean; togglePushSound: (enabled: boolean) => Promise<void>
   updateFraudAlertStatus: (id: string, status: FraudAlertStatus, resolutionNote?: string) => Promise<void>
   deleteFraudAlerts: (opts: { ids?: string[]; deleteAll?: boolean; onlyResolved?: boolean }) => Promise<void>
-  loading: boolean
-  error: string | null
-  toast: { message: string; type: "success" | "error" } | null
+  loading: boolean; error: string | null; toast: { message: string; type: "success" | "error" } | null
   showToast: (message: string, type?: "success" | "error") => void
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>
-  logout: () => void
-  refreshAll: () => Promise<void>
-  refreshBranchDetails: (branchId?: string) => Promise<void>
+  logout: () => void; refreshAll: () => Promise<void>; refreshBranchDetails: (branchId?: string) => Promise<void>
 }
 
 const BossStoreContext = createContext<BossStoreContextValue | null>(null)
@@ -86,6 +74,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<CatalogProductDto[]>([])
   const [categories, setCategories] = useState<CatalogCategoryDto[]>([])
   const [backendFraudAlerts, setBackendFraudAlerts] = useState<FraudAlertDto[]>([])
+  const [platformNotifications, setPlatformNotifications] = useState<BossPlatformNotificationDto[]>([])
   const [heuristicRevision, setHeuristicRevision] = useState(0)
   const [pushSoundEnabled, setPushSoundEnabledState] = useState<boolean>(getFraudPushSoundEnabled)
   const [loading, setLoading] = useState(false)
@@ -109,12 +98,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const resetBranchScopedState = useCallback(() => {
-    setRoles([])
-    setStaff([])
-    setTables([])
-    setOrders([])
-    setProducts([])
-    setCategories([])
+    setRoles([]); setStaff([]); setTables([]); setOrders([]); setProducts([]); setCategories([])
   }, [])
 
   const logout = useCallback(() => {
@@ -128,12 +112,8 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     seenAlertIdsRef.current.clear()
     initialAlertsLoadedRef.current = false
     clearBossSession()
-    setUser(null)
-    setBranches([])
-    setOverview(null)
-    setCatalog(null)
-    setBackendFraudAlerts([])
-    setError(null)
+    setUser(null); setBranches([]); setOverview(null); setCatalog(null)
+    setBackendFraudAlerts([]); setPlatformNotifications([]); setError(null)
     resetBranchScopedState()
   }, [resetBranchScopedState])
 
@@ -154,24 +134,13 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     () => (selectedBranchId && selectedBranchId !== "ALL" ? selectedBranchId : (branches[0]?.id ?? "")),
     [selectedBranchId, branches]
   )
-
   const effectiveBranch = useMemo(
     () => branches.find((b) => b.id === effectiveBranchId) ?? branches[0] ?? null,
     [branches, effectiveBranchId]
   )
-
-  const fraudAlerts = useMemo(() => {
-    void heuristicRevision
-    return backendFraudAlerts
-  }, [backendFraudAlerts, heuristicRevision])
-
+  const fraudAlerts = useMemo(() => { void heuristicRevision; return backendFraudAlerts }, [backendFraudAlerts, heuristicRevision])
   const openCriticalHighAlertCount = useMemo(
-    () =>
-      fraudAlerts.filter(
-        (a) =>
-          (a.status === "open" || a.status === "investigating") &&
-          (a.severity === "critical" || a.severity === "high")
-      ).length,
+    () => fraudAlerts.filter((a) => (a.status === "open" || a.status === "investigating") && (a.severity === "critical" || a.severity === "high")).length,
     [fraudAlerts]
   )
 
@@ -183,16 +152,10 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
       return
     }
     const newCriticalOrHigh = fraudAlerts.filter(
-      (a) =>
-        !seenAlertIdsRef.current.has(a.id) &&
-        a.status === "open" &&
-        (a.severity === "critical" || a.severity === "high")
+      (a) => !seenAlertIdsRef.current.has(a.id) && a.status === "open" && (a.severity === "critical" || a.severity === "high")
     )
     for (const a of fraudAlerts) seenAlertIdsRef.current.add(a.id)
-    if (newCriticalOrHigh.length > 0 && pushSoundEnabled) {
-      const top = newCriticalOrHigh[0]!
-      void triggerFraudPushNotification(top)
-    }
+    if (newCriticalOrHigh.length > 0 && pushSoundEnabled) void triggerFraudPushNotification(newCriticalOrHigh[0]!)
   }, [fraudAlerts, pushSoundEnabled])
 
   const togglePushSound = useCallback(
@@ -223,6 +186,35 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
       // Fallback to heuristic alerts when endpoint is not populated
     }
   }, [])
+
+  const fetchPlatformNotifsSilently = useCallback(async (branchId?: string) => {
+    if (!branchId || !getBossToken()) return
+    try {
+      const state = await bossApi.notifications.getState(branchId)
+      const readSet = getBossReadNotifIds()
+      const dismissedSet = getBossDismissedNotifIds()
+      const items = (state.platformNotifications ?? [])
+        .filter((pn) => (!Array.isArray(pn.targetApps) || pn.targetApps.includes("boss")) && !dismissedSet.has(pn.id))
+        .map((pn) => ({ ...pn, read: readSet.has(pn.id) }))
+      setPlatformNotifications(items)
+    } catch {}
+  }, [])
+
+  const markPlatformNotificationRead = useCallback((id: string) => {
+    markBossNotifReadLocal(id)
+    setPlatformNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
+  }, [])
+
+  const clearPlatformNotifications = useCallback(() => {
+    setPlatformNotifications((prev) => {
+      const ids = prev.map((n) => n.id)
+      markBossNotifsDismissedLocal(ids)
+      if (effectiveBranchId && ids.length > 0) {
+        void bossApi.notifications.dismiss(effectiveBranchId, ids).catch(() => {})
+      }
+      return []
+    })
+  }, [effectiveBranchId])
 
   const updateFraudAlertStatus = useCallback(
     async (id: string, status: FraudAlertStatus, resolutionNote?: string) => {
@@ -374,7 +366,10 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
       void fetchFraudAlertsSilently(selectedBranchId)
       targetBranchId =
         selectedBranchId && selectedBranchId !== "ALL" ? selectedBranchId : (meRes.restaurants[0]?.id ?? "")
-      if (targetBranchId) await refreshBranchDetails(targetBranchId)
+      if (targetBranchId) {
+        void fetchPlatformNotifsSilently(targetBranchId)
+        await refreshBranchDetails(targetBranchId)
+      }
     } catch (e) {
       if (!getBossToken()) {
         logout()
@@ -384,7 +379,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false)
     }
-  }, [effectiveBranchId, selectedBranchId, refreshBranchDetails, fetchFraudAlertsSilently, logout])
+  }, [effectiveBranchId, selectedBranchId, refreshBranchDetails, fetchFraudAlertsSilently, fetchPlatformNotifsSilently, logout])
 
   useEffect(() => {
     if (!user?.id || !getBossToken()) return
@@ -420,7 +415,17 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     const onAuthExpired = (payload?: { reason?: string }) => {
       notifyUnauthorized(payload?.reason)
     }
+    const onPlatformNotification = (payload?: BossPlatformNotificationDto) => {
+      if (!payload || !payload.id) return
+      if (Array.isArray(payload.targetApps) && !payload.targetApps.includes("boss")) return
+      setPlatformNotifications((prev) =>
+        prev.some((n) => n.id === payload.id) ? prev : [{ ...payload, read: false }, ...prev]
+      )
+      showToast(`📢 ${payload.title}: ${payload.message}`, payload.level === "urgent" ? "error" : "success")
+      if (pushSoundEnabled) void triggerPlatformPushNotification(payload)
+    }
     socket.on("auth:expired", onAuthExpired)
+    socket.on("platform:notification", onPlatformNotification)
     socket.on("order:created", scheduleLiveRefresh)
     socket.on("orders:moved", scheduleLiveRefresh)
     socket.on("orders:updated", scheduleLiveRefresh)
@@ -434,7 +439,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
       socket.disconnect()
       if (socketRef.current === socket) socketRef.current = null
     }
-  }, [effectiveBranchId, selectedBranchId, tokenVersion, user?.id, refreshLiveOperations])
+  }, [effectiveBranchId, selectedBranchId, tokenVersion, user?.id, refreshLiveOperations, pushSoundEnabled, showToast])
 
   const login = useCallback(async (email: string, password: string) => {
     try {
@@ -471,7 +476,9 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
         isAuthenticated: Boolean(user && getBossToken()),
         user, branches, selectedBranchId, effectiveBranchId, effectiveBranch, setSelectedBranchId,
         overview, catalog, roles, staff, tables, orders, products, categories,
-        fraudAlerts, openCriticalHighAlertCount, pushSoundEnabled, togglePushSound, updateFraudAlertStatus, deleteFraudAlerts,
+        fraudAlerts, openCriticalHighAlertCount,
+        platformNotifications, markPlatformNotificationRead, clearPlatformNotifications,
+        pushSoundEnabled, togglePushSound, updateFraudAlertStatus, deleteFraudAlerts,
         loading, error, toast, showToast, login, logout, refreshAll, refreshBranchDetails,
       }}
     >

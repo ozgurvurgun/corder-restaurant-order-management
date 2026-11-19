@@ -9,6 +9,7 @@ import { NewRestaurantPage } from "@/pages/NewRestaurantPage"
 import { EditRestaurantPage } from "@/pages/EditRestaurantPage"
 import { BossesPage } from "@/pages/BossesPage"
 import { BillingPage } from "@/pages/BillingPage"
+import { NotificationsPage } from "@/pages/NotificationsPage"
 
 function HomeRedirect() {
   const { isAuthenticated } = usePlatformAuth()
@@ -25,6 +26,7 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="bosses" element={<BossesPage />} />
           <Route path="billing" element={<BillingPage />} />
+          <Route path="notifications" element={<NotificationsPage />} />
           <Route path="restaurants" element={<RestaurantsPage />} />
           <Route path="restaurants/new" element={<NewRestaurantPage />} />
           <Route path="restaurants/:id" element={<EditRestaurantPage />} />

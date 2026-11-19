@@ -7,6 +7,7 @@ import {
   UtensilsCrossed,
   Crown,
   CreditCard,
+  Bell,
   LogOut,
   ShieldCheck,
   RefreshCw,
@@ -18,6 +19,7 @@ const NAV_GROUPS = [
     label: "Genel",
     items: [
       { to: "/dashboard", label: "Ana Sayfa", mobileLabel: "Özet", icon: Home, end: true },
+      { to: "/dashboard/notifications", label: "Bildirim Merkezi", mobileLabel: "Bildirim", icon: Bell, end: false },
     ],
   },
   {
@@ -39,6 +41,7 @@ const FLAT_NAV = NAV_GROUPS.flatMap((g) => g.items)
 
 function resolvePageTitle(pathname: string): string {
   if (pathname === "/dashboard/bosses") return "Marka & Şube Boss Hesapları"
+  if (pathname.startsWith("/dashboard/notifications")) return "Anlık & Zamanlanmış Bildirim Merkezi"
   if (pathname === "/dashboard/restaurants/new") return "Yeni Restoran / Franchise Şubesi"
   if (pathname.startsWith("/dashboard/restaurants/")) return "Restoran & Şube Detayı"
   if (pathname.startsWith("/dashboard/restaurants")) return "Restoranlar & Franchise Ağı"

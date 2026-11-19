@@ -413,3 +413,14 @@ export type BossTabId =
   | "analytics"
   | "operations"
   | "security"
+
+export interface BossPlatformNotificationDto {
+  id: string
+  title: string
+  message: string
+  level: "info" | "warning" | "urgent" | "success" | string
+  targetApps: string[]
+  sentAt: string
+  createdAt: string
+  read?: boolean
+}

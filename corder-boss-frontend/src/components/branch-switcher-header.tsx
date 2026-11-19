@@ -1,11 +1,14 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useBossStore } from "@/lib/boss-store"
+import { formatIstanbulDateTime } from "@/lib/format"
 import type { BossTabId } from "@/lib/types"
 import {
+  Bell,
   Building2,
   ChevronDown,
   Layers,
   LogOut,
+  Megaphone,
   RefreshCw,
   Check,
   X,
@@ -27,22 +30,40 @@ export function BranchSwitcherHeader({ activeTab = "dashboard" }: { activeTab?: 
     selectedBranchId,
     setSelectedBranchId,
     effectiveBranch,
+    platformNotifications,
+    markPlatformNotificationRead,
+    clearPlatformNotifications,
     loading,
     refreshAll,
     logout,
   } = useBossStore()
   const [openSheet, setOpenSheet] = useState(false)
+  const [showNotifs, setShowNotifs] = useState(false)
+  const notifRef = useRef<HTMLDivElement>(null)
+
+  const unreadNotifCount = platformNotifications.filter((n) => !n.read).length
 
   useEffect(() => {
-    if (!openSheet) return
+    const onMouseDown = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setShowNotifs(false)
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown)
+    return () => document.removeEventListener("mousedown", onMouseDown)
+  }, [])
+
+  useEffect(() => {
+    if (!openSheet && !showNotifs) return
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setOpenSheet(false)
+        setShowNotifs(false)
       }
     }
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [openSheet])
+  }, [openSheet, showNotifs])
 
   const currentLabel =
     selectedBranchId === "ALL"
@@ -76,6 +97,82 @@ export function BranchSwitcherHeader({ activeTab = "dashboard" }: { activeTab?: 
             </span>
             <ChevronDown className="h-3.5 w-3.5 flex-shrink-0 text-[#86868b]" />
           </button>
+
+          <div ref={notifRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setShowNotifs((v) => !v)}
+              className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-[#e5e5ea] bg-[#f5f5f7]/70 text-[#636366] hover:bg-[#f5f5f7] hover:text-[#1d1d1f] transition-colors"
+              title="Platform Bildirimleri"
+            >
+              <Bell className="h-4 w-4" />
+              {unreadNotifCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#e63462] px-1 text-[10px] font-bold text-white">
+                  {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
+                </span>
+              )}
+            </button>
+
+            {showNotifs && (
+              <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 rounded-2xl border border-[#e5e5ea] bg-white shadow-2xl overflow-hidden z-50">
+                <div className="flex items-center justify-between border-b border-[#e5e5ea] px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <Megaphone className="h-4 w-4 text-[#e63462]" />
+                    <h3 className="text-[14px] font-semibold text-[#1d1d1f]">
+                      Bildirimler
+                    </h3>
+                  </div>
+                  {platformNotifications.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => clearPlatformNotifications()}
+                      className="text-[12px] font-medium text-[#e63462] hover:underline"
+                    >
+                      Tümünü Temizle
+                    </button>
+                  )}
+                </div>
+                <div className="max-h-80 overflow-y-auto divide-y divide-[#f0f0f0]">
+                  {platformNotifications.length === 0 ? (
+                    <div className="py-8 text-center">
+                      <Bell className="h-7 w-7 text-[#d1d1d6] mx-auto mb-2" />
+                      <p className="text-[12px] text-[#86868b]">Yeni bildirim bulunmuyor</p>
+                    </div>
+                  ) : (
+                    platformNotifications.map((n) => (
+                      <div
+                        key={n.id}
+                        onClick={() => markPlatformNotificationRead(n.id)}
+                        className={`flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-[#f5f5f7] transition-colors ${
+                          !n.read ? "bg-[#e63462]/[0.04]" : ""
+                        }`}
+                      >
+                        <div className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-[#e63462]/10 text-[#e63462]">
+                          <Megaphone className="h-3.5 w-3.5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className={`text-[13px] text-[#1d1d1f] truncate ${!n.read ? "font-semibold" : "font-medium"}`}>
+                              {n.title}
+                            </p>
+                            {!n.read && (
+                              <span className="h-2 w-2 rounded-full bg-[#e63462] flex-shrink-0" />
+                            )}
+                          </div>
+                          <p className="text-[12px] text-[#636366] leading-snug mt-0.5 whitespace-pre-line">
+                            {n.message}
+                          </p>
+                          <p className="text-[10px] text-[#aeaeb2] mt-1">
+                            {formatIstanbulDateTime(n.sentAt || n.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           <button
             type="button"

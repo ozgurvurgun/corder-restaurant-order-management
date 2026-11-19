@@ -183,6 +183,52 @@ export function usePanelSocket(params: {
       showBrowserNotification(title, message, notifId)
     }
 
+    const handlePlatformNotification = (payload: {
+      id?: string
+      title?: string
+      message?: string
+      level?: string
+      targetApps?: string[]
+      sentAt?: string
+      createdAt?: string
+    }) => {
+      if (
+        Array.isArray(payload.targetApps) &&
+        !payload.targetApps.includes("merchant")
+      ) {
+        return
+      }
+      const title = `📢 ${payload.title || "Platform Bildirimi"}`
+      const message = payload.message || ""
+      const notifId = payload.id ? `platform:${payload.id}` : `platform:${Date.now()}`
+      setNotifications?.((prev) => {
+        if (prev.some((n) => n.id === notifId || n.id === payload.id)) return prev
+        return [
+          {
+            id: notifId,
+            type: "system",
+            title,
+            message,
+            read: false,
+            createdAt: payload.sentAt
+              ? new Date(payload.sentAt)
+              : payload.createdAt
+                ? new Date(payload.createdAt)
+                : new Date(),
+          },
+          ...prev,
+        ]
+      })
+      const toastType =
+        payload.level === "urgent"
+          ? "error"
+          : payload.level === "success"
+            ? "success"
+            : "info"
+      showPanelToast(`${title} - ${message}`, toastType)
+      showBrowserNotification(title, message, notifId)
+    }
+
     socket.on("connect", handleConnect)
     socket.io.on("reconnect", handleReconnect)
     socket.on("auth:expired", handleAuthExpired)
@@ -192,6 +238,7 @@ export function usePanelSocket(params: {
     socket.on("tables:presence", handleTablesPresence)
     socket.on("waiter:called", handleWaiterCalled)
     socket.on("fraud:alert", handleFraudAlert)
+    socket.on("platform:notification", handlePlatformNotification)
 
     return () => {
       socket.off("connect", handleConnect)
@@ -203,6 +250,7 @@ export function usePanelSocket(params: {
       socket.off("tables:presence", handleTablesPresence)
       socket.off("waiter:called", handleWaiterCalled)
       socket.off("fraud:alert", handleFraudAlert)
+      socket.off("platform:notification", handlePlatformNotification)
       socket.disconnect()
       socketRef.current = null
     }

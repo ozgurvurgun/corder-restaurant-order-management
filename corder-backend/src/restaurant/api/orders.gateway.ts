@@ -239,4 +239,25 @@ export class OrdersGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     });
     this.server.in(room).disconnectSockets(true);
   }
+
+  emitPlatformNotification(
+    restaurantIds: string[],
+    payload: {
+      id: string;
+      title: string;
+      message: string;
+      level: string;
+      targetApps: string[];
+      targetRestaurantIds: string[];
+      sentAt: string;
+      createdAt: string;
+    },
+  ) {
+    if (!this.server) return;
+    for (const restaurantId of restaurantIds) {
+      this.server
+        .to(getRestaurantRoom(restaurantId))
+        .emit('platform:notification', payload);
+    }
+  }
 }

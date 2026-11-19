@@ -10,6 +10,7 @@ import {
 import {
   AlertCircle,
   Ban,
+  Bell,
   Building2,
   CheckCircle2,
   Clock,
@@ -352,6 +353,14 @@ export function RestaurantsPage() {
                               Durdur
                             </button>
                           )}
+                          <Link
+                            to={`/dashboard/notifications?restaurantId=${r.id}`}
+                            className="inline-flex items-center gap-1 rounded-lg border border-[#e5e5ea] bg-[#f5f5f7] px-2.5 py-1.5 text-[11px] font-semibold text-[#1d1d1f] hover:bg-[#e8e8ed]"
+                            title={`${r.name} mekanına ve Boss uygulamasına bildirim gönder`}
+                          >
+                            <Bell className="h-3 w-3 text-[#e63462]" />
+                            Bildirim
+                          </Link>
                           <Link
                             to={`/dashboard/restaurants/${r.id}`}
                             className="inline-flex rounded-lg bg-[#f5f5f7] p-2 text-[#636366] hover:bg-[#e8e8ed] hover:text-[#1d1d1f]"

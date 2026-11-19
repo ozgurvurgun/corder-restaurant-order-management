@@ -11,6 +11,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, MoreThanOrEqual, Repository } from 'typeorm';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
+import { PlatformNotificationEntity } from '../../platform/domain/platform-notification.entity';
 import { WaiterCallEntity } from '../domain/waiter-call.entity';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
@@ -25,6 +26,8 @@ export class NotificationsController {
     private readonly restaurantRepo: Repository<RestaurantEntity>,
     @InjectRepository(WaiterCallEntity)
     private readonly waiterCallRepo: Repository<WaiterCallEntity>,
+    @InjectRepository(PlatformNotificationEntity)
+    private readonly platformNotifRepo: Repository<PlatformNotificationEntity>,
     private readonly ordersGateway: OrdersGateway,
   ) {}
 
@@ -52,15 +55,29 @@ export class NotificationsController {
       new Date(Date.now() - 24 * 60 * 60 * 1000);
     const dismissedSet = new Set(restaurant.dismissedNotificationIds ?? []);
 
-    const calls = await this.waiterCallRepo.find({
-      where: {
-        restaurantId,
-        acknowledged: false,
-        createdAt: MoreThanOrEqual(since),
-      },
-      order: { createdAt: 'DESC' },
-      take: 50,
-    });
+    const platformSince =
+      restaurant.notificationsClearedAt ??
+      new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const [calls, sentPlatformNotifs] = await Promise.all([
+      this.waiterCallRepo.find({
+        where: {
+          restaurantId,
+          acknowledged: false,
+          createdAt: MoreThanOrEqual(since),
+        },
+        order: { createdAt: 'DESC' },
+        take: 50,
+      }),
+      this.platformNotifRepo.find({
+        where: {
+          status: 'sent',
+          sentAt: MoreThanOrEqual(platformSince),
+        },
+        order: { sentAt: 'DESC' },
+        take: 50,
+      }),
+    ]);
 
     const waiterCalls = calls
       .filter(
@@ -81,6 +98,32 @@ export class NotificationsController {
         createdAt: c.createdAt.toISOString(),
       }));
 
+    const platformNotifications = sentPlatformNotifs
+      .filter((pn) => {
+        if (
+          dismissedSet.has(pn.id) ||
+          dismissedSet.has(`platform:${pn.id}`) ||
+          dismissedSet.has(`platform-notif-${pn.id}`)
+        ) {
+          return false;
+        }
+        const targets = Array.isArray(pn.targetRestaurantIds)
+          ? pn.targetRestaurantIds
+          : [];
+        return targets.length === 0 || targets.includes(restaurantId);
+      })
+      .map((pn) => ({
+        id: pn.id,
+        title: pn.title,
+        message: pn.message,
+        level: pn.level || 'info',
+        targetApps: Array.isArray(pn.targetApps)
+          ? pn.targetApps
+          : ['merchant', 'boss'],
+        sentAt: (pn.sentAt ?? pn.createdAt).toISOString(),
+        createdAt: pn.createdAt.toISOString(),
+      }));
+
     return {
       clearedAt: restaurant.notificationsClearedAt
         ? restaurant.notificationsClearedAt.toISOString()
@@ -89,6 +132,7 @@ export class NotificationsController {
         ? restaurant.dismissedNotificationIds
         : [],
       waiterCalls,
+      platformNotifications,
     };
   }
 

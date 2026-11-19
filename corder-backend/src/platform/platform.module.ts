@@ -9,10 +9,12 @@ import { RootAdminEntity } from './domain/root-admin.entity';
 import { BossRestaurantEntity } from './domain/boss-restaurant.entity';
 import { PlatformBillingConfigEntity } from './domain/platform-billing-config.entity';
 import { RestaurantSubscriptionPaymentEntity } from './domain/restaurant-subscription-payment.entity';
+import { PlatformNotificationEntity } from './domain/platform-notification.entity';
 import { PlatformAuthService } from './application/platform-auth.service';
 import { RestaurantService } from './application/restaurant.service';
 import { PlatformBillingService } from './application/platform-billing.service';
 import { PlatformSupportService } from './application/platform-support.service';
+import { PlatformNotificationsService } from './application/platform-notifications.service';
 import { RootAdminService } from './application/root-admin.service';
 import { PlatformAuthController } from './api/platform-auth.controller';
 import {
@@ -23,6 +25,7 @@ import {
   PlatformBossesController,
   RootAdminsController,
 } from './api/root-admins.controller';
+import { PlatformNotificationsController } from './api/platform-notifications.controller';
 import { PlatformJwtStrategy } from './infrastructure/platform-jwt.strategy';
 import { PlatformAdminSeed } from './infrastructure/platform-admin.seed';
 import { RestaurantModule } from '../restaurant/restaurant.module';
@@ -41,6 +44,7 @@ import {
       BossRestaurantEntity,
       PlatformBillingConfigEntity,
       RestaurantSubscriptionPaymentEntity,
+      PlatformNotificationEntity,
     ]),
     PassportModule.register({ defaultStrategy: 'platform-jwt' }),
     JwtModule.registerAsync({
@@ -58,12 +62,14 @@ import {
     PlatformBillingController,
     RootAdminsController,
     PlatformBossesController,
+    PlatformNotificationsController,
   ],
   providers: [
     PlatformAuthService,
     RestaurantService,
     PlatformBillingService,
     PlatformSupportService,
+    PlatformNotificationsService,
     RootAdminService,
     PlatformJwtStrategy,
     PlatformAdminSeed,
@@ -73,6 +79,7 @@ import {
     RestaurantService,
     PlatformBillingService,
     PlatformSupportService,
+    PlatformNotificationsService,
     RootAdminService,
   ],
 })

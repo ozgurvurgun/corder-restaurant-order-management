@@ -271,3 +271,32 @@ export interface RestaurantDiagnosticsDto {
   printers?: RestaurantDiagnosticsPrinterDto[]
   staff?: RestaurantDiagnosticsStaffDto[]
 }
+
+export type PlatformNotificationLevel = "info" | "warning" | "urgent" | "success"
+export type PlatformNotificationTargetApp = "merchant" | "boss"
+export type PlatformNotificationStatus = "scheduled" | "sent" | "cancelled"
+
+export interface PlatformNotificationDto {
+  id: string
+  title: string
+  message: string
+  level: PlatformNotificationLevel
+  targetApps: PlatformNotificationTargetApp[]
+  targetRestaurantIds: string[]
+  targetRestaurants: Array<{ id: string; name: string; slug: string }>
+  isAllRestaurants: boolean
+  scheduledAt: string | null
+  sentAt: string | null
+  status: PlatformNotificationStatus
+  createdBy: string
+  createdAt: string
+}
+
+export interface CreatePlatformNotificationPayload {
+  title: string
+  message: string
+  level?: PlatformNotificationLevel
+  targetApps?: PlatformNotificationTargetApp[]
+  targetRestaurantIds?: string[]
+  scheduledAt?: string | null
+}
