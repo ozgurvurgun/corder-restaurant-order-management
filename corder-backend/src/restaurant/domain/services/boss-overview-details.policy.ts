@@ -41,7 +41,6 @@ export class BossOverviewDetailsPolicy {
         hour: b.hour,
         revenue: fromMinorUnits(b.revenueMinor),
         ordersCount: b.ordersCount,
-        orders: b.ordersCount,
       }));
   }
 
@@ -138,7 +137,6 @@ export class BossOverviewDetailsPolicy {
       .sort((a, b) => b.revenueMinor - a.revenueMinor)
       .slice(0, 12)
       .map((p) => ({
-        name: p.productName,
         productName: p.productName,
         quantity: p.quantity,
         revenue: fromMinorUnits(p.revenueMinor),
@@ -166,7 +164,8 @@ export class BossOverviewDetailsPolicy {
 
     const ensure = (rawName: string) => {
       const name = (rawName || 'Personel').trim() || 'Personel';
-      let cur = stats.get(name);
+      const key = name.toLocaleLowerCase('tr-TR');
+      let cur = stats.get(key);
       if (!cur) {
         cur = {
           waiterName: name,
@@ -176,7 +175,7 @@ export class BossOverviewDetailsPolicy {
           cancelledCount: 0,
           cancelledMinor: 0,
         };
-        stats.set(name, cur);
+        stats.set(key, cur);
       }
       return cur;
     };
@@ -229,7 +228,6 @@ export class BossOverviewDetailsPolicy {
       .sort((a, b) => b.revenueMinor - a.revenueMinor)
       .slice(0, 15)
       .map((s) => ({
-        name: s.waiterName,
         waiterName: s.waiterName,
         ordersCount: s.ordersCount,
         revenue: fromMinorUnits(s.revenueMinor),

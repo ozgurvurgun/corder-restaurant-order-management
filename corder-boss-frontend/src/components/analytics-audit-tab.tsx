@@ -80,7 +80,7 @@ export function AnalyticsAuditTab() {
 
   const hourly = overview?.hourlySales ?? []
   const topProducts = overview?.topProducts ?? []
-  const staffPerf = overview?.staffPerformance ?? []
+  const staffPerf = overview?.waiterPerformance ?? []
 
   const audits = useMemo(() => {
     if (selectedBranchId !== "ALL" && branchAudits) {
@@ -161,7 +161,7 @@ export function AnalyticsAuditTab() {
           ) : (
             <div className="space-y-2.5">
               {topProducts.map((p, idx) => {
-                const label = p.name || p.productName || `Ürün #${idx + 1}`
+                const label = p.productName || `Ürün #${idx + 1}`
                 return (
                   <div
                     key={label}
@@ -204,15 +204,15 @@ export function AnalyticsAuditTab() {
             <div className="space-y-2.5">
               {staffPerf.map((s) => (
                 <div
-                  key={s.name}
+                  key={s.waiterName}
                   className="flex items-center justify-between rounded-xl bg-[#f9f9fb] px-3 py-2"
                 >
                   <div>
                     <p className="text-[13px] font-semibold text-[#1d1d1f]">
-                      {s.name}
+                      {s.waiterName}
                     </p>
                     <p className="text-[11px] text-[#86868b]">
-                      {s.ordersCount} adisyon • İskonto: ₺{formatMoney(s.discountGiven)}
+                      {s.ordersCount} adisyon • İskonto: ₺{formatMoney(s.discountGiven ?? 0)}
                     </p>
                   </div>
                   <span className="text-[13px] font-bold text-[#34c759] tabular-nums">

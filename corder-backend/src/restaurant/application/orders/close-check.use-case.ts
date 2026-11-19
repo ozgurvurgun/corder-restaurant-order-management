@@ -6,6 +6,7 @@ import { OrderEntity } from '../../domain/order.entity';
 import { OrderItemEntity } from '../../domain/order-item.entity';
 import { TableEntity } from '../../domain/table.entity';
 import { RestaurantStaffEntity } from '../../domain/restaurant-staff.entity';
+import { RootAdminEntity } from '../../../platform/domain/root-admin.entity';
 import { ProductEntity } from '../../domain/product.entity';
 import { CashShiftEntity } from '../../domain/cash-shift.entity';
 import { CashTransactionEntity } from '../../domain/cash-transaction.entity';
@@ -192,13 +193,24 @@ export class CloseCheckUseCase {
     }
 
     const staffIds = [...new Set(activeOrders.map((o) => o.userId?.trim() || '').filter(Boolean))];
-    const staffRows = staffIds.length
-      ? await em.find(RestaurantStaffEntity, { where: { restaurantId, id: In(staffIds) }, select: ['id', 'name'] })
-      : [];
-    const staffNameById = new Map(staffRows.map((s) => [s.id, (s.name || '').trim()]));
+    const [staffRows, bossRows] = staffIds.length
+      ? await Promise.all([
+          em.find(RestaurantStaffEntity, { where: { restaurantId, id: In(staffIds) }, select: ['id', 'name'] }),
+          em.find(RootAdminEntity, { where: { id: In(staffIds) }, select: ['id', 'name'] }),
+        ])
+      : [[], []];
+    const staffNameById = new Map<string, string>();
+    for (const b of bossRows) {
+      const n = (b.name || '').trim();
+      if (n) staffNameById.set(b.id, n);
+    }
+    for (const s of staffRows) {
+      const n = (s.name || '').trim();
+      if (n) staffNameById.set(s.id, n);
+    }
     const latestOrder = [...activeOrders].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0];
     const latestUid = latestOrder?.userId?.trim() || '';
-    const waiterName = latestOrder?.userDisplayName?.trim() || (latestUid ? staffNameById.get(latestUid) : '') || actorName;
+    const waiterName = (latestUid ? staffNameById.get(latestUid) : '') || latestOrder?.userDisplayName?.trim() || actorName;
 
     if (requestedLines && requestedLines.length > 0) {
       return this.buildPartialTableBillContext(

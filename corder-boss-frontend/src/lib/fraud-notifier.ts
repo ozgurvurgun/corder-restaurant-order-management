@@ -1,16 +1,11 @@
 import type {
-  BossOverviewDto,
   BossPlatformNotificationDto,
   FraudAlertDto,
-  FraudAlertStatus,
   FraudSeverity,
-  LiveOrderDto,
-  LiveTableDto,
 } from "./types"
 import { formatMoney } from "./format"
 
 const PUSH_SOUND_PREF_KEY = "corder-boss-fraud-push-sound-enabled"
-const LOCAL_RESOLUTIONS_KEY = "corder-boss-fraud-local-resolutions"
 const BOSS_READ_NOTIFS_KEY = "corder-boss-read-notifs"
 const BOSS_DISMISSED_NOTIFS_KEY = "corder-boss-dismissed-notifs"
 
@@ -202,131 +197,6 @@ export async function triggerFraudPushNotification(alert: FraudAlertDto): Promis
       silent: false,
     })
   } catch {
-    // Fallback ignored if notification fails
+    // Notification errors ignored
   }
-}
-
-export function getLocalFraudResolutions(): Record<
-  string,
-  { status: FraudAlertStatus; resolutionNote?: string; resolvedAt: string }
-> {
-  if (typeof window === "undefined") return {}
-  try {
-    const raw = localStorage.getItem(LOCAL_RESOLUTIONS_KEY)
-    return raw ? JSON.parse(raw) : {}
-  } catch {
-    return {}
-  }
-}
-
-export function saveLocalFraudResolution(
-  id: string,
-  status: FraudAlertStatus,
-  resolutionNote?: string
-): void {
-  if (typeof window === "undefined") return
-  const current = getLocalFraudResolutions()
-  current[id] = {
-    status,
-    resolutionNote,
-    resolvedAt: new Date().toISOString(),
-  }
-  localStorage.setItem(LOCAL_RESOLUTIONS_KEY, JSON.stringify(current))
-}
-
-export function deriveHeuristicFraudAlerts(
-  overview: BossOverviewDto | null,
-  orders: LiveOrderDto[],
-  tables: LiveTableDto[]
-): FraudAlertDto[] {
-  if (!overview) return []
-  const localRes = getLocalFraudResolutions()
-  const derived: FraudAlertDto[] = []
-  const tableMap = new Map(tables.map((t) => [t.id, t.name]))
-
-  for (const audit of overview.recentAudits ?? []) {
-    const text = `${audit.action} ${audit.details}`.toLowerCase()
-    let matchedRule: FraudAlgorithmSpec | null = null
-    if (text.includes("fiş") && (text.includes("iptal") || text.includes("iskonto"))) {
-      matchedRule = FRAUD_ALGORITHMS[0]
-    } else if (text.includes("taşı") && text.includes("iptal")) {
-      matchedRule = FRAUD_ALGORITHMS[3]
-    } else if (text.includes("iptal") || text.includes("zayi")) {
-      matchedRule = FRAUD_ALGORITHMS[2]
-    } else if (text.includes("iskonto") || text.includes("indirim") || text.includes("ikram")) {
-      matchedRule = FRAUD_ALGORITHMS[6]
-    } else if (text.includes("nakit çıkış") || text.includes("kasa çıkış")) {
-      matchedRule = FRAUD_ALGORITHMS[5]
-    }
-    if (matchedRule) {
-      const id = `audit-fraud-${audit.id}`
-      const saved = localRes[id]
-      derived.push({
-        id,
-        restaurantId: audit.restaurantId,
-        branchName: audit.branchName,
-        ruleKey: matchedRule.key,
-        title: `${matchedRule.title} (${audit.action})`,
-        description: audit.details,
-        severity: matchedRule.severity,
-        status: saved?.status ?? "open",
-        amountImpact: 0,
-        staffName: audit.userName,
-        resolutionNote: saved?.resolutionNote ?? null,
-        resolvedAt: saved?.resolvedAt ?? null,
-        createdAt: audit.createdAt,
-      })
-    }
-  }
-
-  for (const br of overview.branches ?? []) {
-    if (br.todayCancelCount >= 3 || br.todayCancelAmount >= 500) {
-      const id = `branch-void-${br.id}`
-      const saved = localRes[id]
-      derived.push({
-        id,
-        restaurantId: br.id,
-        branchId: br.id,
-        branchName: br.name,
-        ruleKey: "EXCESSIVE_VOID_PATTERN",
-        title: "Aşırı İptal Deseni Tespiti",
-        description: `${br.name} şubesinde bugün ${br.todayCancelCount} adet ürün/kalem iptali (Toplam ₺${formatMoney(br.todayCancelAmount)}) gerçekleşti.`,
-        severity: br.todayCancelAmount >= 1000 ? "critical" : "high",
-        status: saved?.status ?? "open",
-        amountImpact: br.todayCancelAmount,
-        staffName: br.activeShift?.openedBy ?? "Şube Personeli",
-        resolutionNote: saved?.resolutionNote ?? null,
-        resolvedAt: saved?.resolvedAt ?? null,
-        createdAt: new Date().toISOString(),
-      })
-    }
-  }
-
-  for (const ord of orders) {
-    if (ord.mergedFrom) {
-      const cancelledItems = (ord.items ?? []).filter((i) => i.status === "cancelled")
-      if (cancelledItems.length > 0) {
-        const impact = cancelledItems.reduce((s, i) => s + i.price * i.quantity, 0)
-        const id = `transfer-void-${ord.id}`
-        const saved = localRes[id]
-        derived.push({
-          id,
-          ruleKey: "POST_TRANSFER_VOID",
-          title: "Masa Taşıma / Birleştirme Sonrası İptal",
-          description: `${tableMap.get(ord.tableId) ?? "Masa"} hesabında masa taşıma sonrası ${cancelledItems.length} kalem iptal edildi.`,
-          severity: "high",
-          status: saved?.status ?? "open",
-          amountImpact: impact,
-          staffName: ord.userName ?? cancelledItems[0]?.cancelledBy ?? null,
-          tableName: tableMap.get(ord.tableId) ?? null,
-          orderId: ord.id,
-          resolutionNote: saved?.resolutionNote ?? null,
-          resolvedAt: saved?.resolvedAt ?? null,
-          createdAt: ord.createdAt,
-        })
-      }
-    }
-  }
-
-  return derived
 }

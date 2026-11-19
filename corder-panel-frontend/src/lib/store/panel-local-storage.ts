@@ -246,9 +246,10 @@ export function computeReportForClosedTables(
     { name: string; tables: number; revenueMinorUnits: number; orders: number }
   >()
   closedTables.forEach((ct) => {
-    const name = ct.waiter || "Bilinmiyor"
-    const prev = waiterMap.get(name) || {
-      name,
+    const displayName = (ct.waiter || "Bilinmiyor").trim() || "Bilinmiyor"
+    const key = displayName.toLocaleLowerCase("tr-TR")
+    const prev = waiterMap.get(key) || {
+      name: displayName,
       tables: 0,
       revenueMinorUnits: 0,
       orders: 0,
@@ -256,7 +257,7 @@ export function computeReportForClosedTables(
     prev.tables += 1
     prev.revenueMinorUnits += toMinorUnits(ct.netAmount)
     prev.orders += ct.orders?.length || 0
-    waiterMap.set(name, prev)
+    waiterMap.set(key, prev)
   })
   const waiterPerformance = Array.from(waiterMap.values())
     .sort((a, b) => b.revenueMinorUnits - a.revenueMinorUnits)

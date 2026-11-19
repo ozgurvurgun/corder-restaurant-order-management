@@ -24,81 +24,24 @@ const ROLE_LABELS: Record<string, string> = {
   runner: "Komi / Runner", inventory_manager: "Depo & Stok Sorumlusu", accountant: "Muhasebe",
 }
 
-function normalizeDiagnostics(raw: RestaurantDiagnosticsDto | null) {
-  const d = (raw ?? {}) as Record<string, any>
-  const tablesObj = d.tablesSummary ?? d.tables ?? {}
-  const ordersObj = d.orders ?? {}
-  const revObj = d.revenue ?? {}
-  const shiftObj = d.openShift ?? d.shift ?? d.activeShift ?? null
-  const menuObj = d.menu ?? {}
-  const pqObj = d.printQueue ?? {}
-  const creditObj = d.ledgerSummary ?? d.credit ?? d.cari ?? d.openAccounts ?? {}
-  const secRaw = d.securityAlerts ?? d.recentFraudAlerts
-
-  const totalTables = Number(tablesObj.total ?? d.totalTables ?? 0)
-  const occupiedTables = Number(tablesObj.occupied ?? d.occupiedTables ?? 0)
-  const reservedTables = Number(tablesObj.reserved ?? d.reservedTables ?? 0)
-  const emptyTables = Number(
-    tablesObj.empty ??
-      tablesObj.available ??
-      d.emptyTables ??
-      Math.max(0, totalTables - occupiedTables - reservedTables)
-  )
-  const securityAlertsCount = Number(
-    d.openFraudAlertsCount ??
-      d.openSecurityAlertsCount ??
-      d.securityAlertsCount ??
-      (Array.isArray(secRaw)
-        ? secRaw.length
-        : secRaw?.openCount ?? secRaw?.totalCount ?? secRaw?.count ?? 0)
-  )
-  const staffList = Array.isArray(d.staffMembers)
-    ? (d.staffMembers as RestaurantDiagnosticsStaffDto[])
-    : Array.isArray(d.staff)
-      ? (d.staff as RestaurantDiagnosticsStaffDto[])
-      : []
-
+function extractDiagnosticsViewModel(raw: RestaurantDiagnosticsDto | null) {
   return {
-    totalTables,
-    occupiedTables,
-    emptyTables,
-    reservedTables,
-    activeOrders: Number(
-      ordersObj.active ?? ordersObj.activeCount ?? d.activeOrdersCount ?? d.activeOrders ?? 0
-    ),
-    todayRevenue: Number(revObj.today ?? ordersObj.todayRevenue ?? d.todayRevenue ?? 0),
-    totalRevenue: Number(revObj.total ?? ordersObj.totalRevenue ?? d.totalRevenue ?? 0),
-    openShift: shiftObj
-      ? {
-          id: String(shiftObj.id ?? ""),
-          openedBy: String(shiftObj.openedBy ?? shiftObj.cashierName ?? "Kasiyer"),
-          openedAt: String(shiftObj.openedAt ?? ""),
-          openingBalance: Number(shiftObj.openingBalance ?? 0),
-        }
-      : null,
-    categoriesCount: Number(menuObj.categoriesCount ?? menuObj.categories ?? d.categoriesCount ?? 0),
-    productsCount: Number(menuObj.productsCount ?? menuObj.products ?? d.productsCount ?? 0),
-    pendingPrintJobs: Number(
-      pqObj.pending ?? pqObj.total ?? d.pendingPrintJobsCount ?? d.pendingPrintJobs ?? 0
-    ),
-    openCreditCount: Number(
-      creditObj.customerCount ??
-        creditObj.openAccountsCount ??
-        creditObj.accountsCount ??
-        creditObj.count ??
-        d.openCreditAccountsCount ??
-        0
-    ),
-    openCreditDebt: Number(
-      creditObj.totalReceivable ??
-        creditObj.totalDebt ??
-        creditObj.totalBalance ??
-        d.openCreditTotalDebt ??
-        0
-    ),
-    securityAlertsCount,
-    printers: Array.isArray(d.printers) ? d.printers : [],
-    staff: staffList,
+    totalTables: raw?.tablesSummary?.total ?? 0,
+    occupiedTables: raw?.tablesSummary?.occupied ?? 0,
+    emptyTables: raw?.tablesSummary?.empty ?? 0,
+    reservedTables: raw?.tablesSummary?.reserved ?? 0,
+    activeOrders: raw?.activeOrdersCount ?? 0,
+    todayRevenue: raw?.todayRevenue ?? 0,
+    totalRevenue: raw?.totalRevenue ?? 0,
+    openShift: raw?.openShift ?? null,
+    categoriesCount: raw?.categoriesCount ?? 0,
+    productsCount: raw?.productsCount ?? 0,
+    pendingPrintJobs: raw?.pendingPrintJobsCount ?? 0,
+    openCreditCount: raw?.ledgerSummary?.customerCount ?? 0,
+    openCreditDebt: raw?.ledgerSummary?.totalReceivable ?? 0,
+    securityAlertsCount: raw?.openFraudAlertsCount ?? 0,
+    printers: raw?.printers ?? [],
+    staff: raw?.staffMembers ?? [],
   }
 }
 
@@ -186,7 +129,7 @@ export function RestaurantSupportConsole({
     setNewPassword("")
   }
 
-  const m = normalizeDiagnostics(data)
+  const m = extractDiagnosticsViewModel(data)
   const totalStaffPages = Math.max(1, Math.ceil(m.staff.length / STAFF_PAGE_SIZE))
   const safeStaffPage = Math.min(staffPage, totalStaffPages)
   const paginatedStaff = m.staff.slice((safeStaffPage - 1) * STAFF_PAGE_SIZE, safeStaffPage * STAFF_PAGE_SIZE)

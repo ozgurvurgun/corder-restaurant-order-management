@@ -1,7 +1,9 @@
 -- Canonical Database Backfill & Normalization Script
 -- Ensures historical rows in orders, order_items, completed_orders, cash_shifts,
--- cash_transactions, restaurant_audit_logs, and root_admins match the current
--- schema and lowercase storage standard without requiring fallback shims in application code.
+-- cash_transactions, stock_movements, ledger_entries, restaurant_audit_logs,
+-- fraud_alerts, tables, restaurants, restaurant_staff, and root_admins match
+-- the current schema, canonical actor names, and lowercase storage standard
+-- without requiring backward-compatibility fallback shims in application code.
 
 BEGIN;
 
@@ -18,7 +20,33 @@ UPDATE products SET name = pg_temp.tr_norm(name) WHERE name IS DISTINCT FROM pg_
 UPDATE categories SET name = pg_temp.tr_norm(name) WHERE name IS DISTINCT FROM pg_temp.tr_norm(name);
 UPDATE restaurant_staff SET name = pg_temp.tr_norm(name) WHERE name IS DISTINCT FROM pg_temp.tr_norm(name);
 
--- 2. Backfill missing orders.user_id from restaurant_staff and root_admins, then normalize user_display_name
+-- 2. Ensure canonical @<slug>.corder.app format on device & staff credentials
+UPDATE restaurants
+SET print_agent_username = lower(btrim(print_agent_username)) || '@' || lower(btrim(slug)) || '.corder.app'
+WHERE print_agent_username IS NOT NULL
+  AND btrim(print_agent_username) <> ''
+  AND position('@' in print_agent_username) = 0;
+
+UPDATE restaurants
+SET terminal_email = lower(btrim(terminal_email)) || '@' || lower(btrim(slug)) || '.corder.app'
+WHERE terminal_email IS NOT NULL
+  AND btrim(terminal_email) <> ''
+  AND position('@' in terminal_email) = 0;
+
+UPDATE restaurant_staff s
+SET email = lower(btrim(s.email)) || '@' || lower(btrim(r.slug)) || '.corder.app'
+FROM restaurants r
+WHERE s.restaurant_id = r.id
+  AND s.email IS NOT NULL
+  AND btrim(s.email) <> ''
+  AND position('@' in s.email) = 0;
+
+-- 3. Remove legacy post-print-void fraud alerts that lack orderCreatedAt evidence
+DELETE FROM fraud_alerts
+WHERE (evidence->>'sourceKey') LIKE 'post-print-void:%'
+  AND NOT (evidence ? 'orderCreatedAt');
+
+-- 4. Backfill missing orders.user_id from restaurant_staff and root_admins, then normalize user_display_name
 UPDATE orders o
 SET user_id = s.id
 FROM restaurant_staff s
@@ -36,7 +64,95 @@ UPDATE orders
 SET user_display_name = pg_temp.tr_norm(user_display_name)
 WHERE user_display_name IS DISTINCT FROM pg_temp.tr_norm(user_display_name);
 
--- 3. Normalize order_items and migrate any legacy ledger-cancelled items to status = 'ledger'
+-- 5. Discover historical actor name aliases (e.g. renamed Boss or Staff member) from ID-linked records
+CREATE TEMP TABLE actor_current_directory ON COMMIT DROP AS
+SELECT id::text AS actor_id, restaurant_id, pg_temp.tr_norm(name) AS current_name
+FROM restaurant_staff
+UNION
+SELECT ra.id::text AS actor_id, r.id AS restaurant_id, pg_temp.tr_norm(ra.name) AS current_name
+FROM root_admins ra
+JOIN restaurants r
+  ON r.id = ra.restaurant_id
+  OR r.root_admin_id = ra.id
+  OR EXISTS (
+    SELECT 1 FROM boss_restaurants br WHERE br.boss_id = ra.id AND br.restaurant_id = r.id
+  )
+  OR (ra.boss_tier = 'brand_owner' AND ra.brand_name IS NOT NULL AND lower(btrim(r.brand_name)) = lower(btrim(ra.brand_name)));
+
+CREATE TEMP TABLE actor_name_aliases ON COMMIT DROP AS
+WITH raw_observations AS (
+  SELECT o.restaurant_id, o.user_id::text AS actor_id, pg_temp.tr_norm(o.user_display_name) AS old_name
+  FROM orders o
+  WHERE o.user_id IS NOT NULL AND o.user_display_name IS NOT NULL
+  UNION
+  SELECT co.restaurant_id, (ord->>'userId') AS actor_id, pg_temp.tr_norm(ord->>'userName') AS old_name
+  FROM completed_orders co,
+       jsonb_array_elements(CASE WHEN jsonb_typeof(co.orders_snapshot) = 'array' THEN co.orders_snapshot ELSE '[]'::jsonb END) AS ord
+  WHERE (ord->>'userId') IS NOT NULL AND (ord->>'userName') IS NOT NULL
+  UNION
+  SELECT al.restaurant_id, al.user_id AS actor_id, pg_temp.tr_norm(al.user_name) AS old_name
+  FROM restaurant_audit_logs al
+  WHERE al.user_id IS NOT NULL AND al.user_name IS NOT NULL
+  UNION
+  SELECT fa.restaurant_id, fa.actor_id::text AS actor_id, pg_temp.tr_norm(fa.actor_name) AS old_name
+  FROM fraud_alerts fa
+  WHERE fa.actor_id IS NOT NULL AND fa.actor_name IS NOT NULL
+  UNION
+  SELECT le.restaurant_id, le.received_by_user_id AS actor_id, pg_temp.tr_norm(le.received_by) AS old_name
+  FROM ledger_entries le
+  WHERE le.received_by_user_id IS NOT NULL AND le.received_by IS NOT NULL
+)
+SELECT DISTINCT
+  d.restaurant_id,
+  d.actor_id,
+  obs.old_name,
+  d.current_name
+FROM raw_observations obs
+JOIN actor_current_directory d
+  ON d.actor_id = obs.actor_id
+WHERE obs.old_name IS NOT NULL
+  AND obs.old_name <> ''
+  AND d.current_name IS NOT NULL
+  AND d.current_name <> ''
+  AND obs.old_name <> d.current_name;
+
+-- 6. Sync direct ID-referenced actor names to current canonical names
+UPDATE orders o
+SET user_display_name = d.current_name
+FROM actor_current_directory d
+WHERE o.user_id::text = d.actor_id
+  AND o.restaurant_id = d.restaurant_id
+  AND o.user_display_name IS DISTINCT FROM d.current_name;
+
+UPDATE tables t
+SET session_staff_name = d.current_name
+FROM actor_current_directory d
+WHERE t.session_staff_id::text = d.actor_id
+  AND t.restaurant_id = d.restaurant_id
+  AND t.session_staff_name IS DISTINCT FROM d.current_name;
+
+UPDATE ledger_entries le
+SET received_by = d.current_name
+FROM actor_current_directory d
+WHERE le.received_by_user_id = d.actor_id
+  AND le.restaurant_id = d.restaurant_id
+  AND le.received_by IS DISTINCT FROM d.current_name;
+
+UPDATE restaurant_audit_logs al
+SET user_name = d.current_name
+FROM actor_current_directory d
+WHERE al.user_id = d.actor_id
+  AND al.restaurant_id = d.restaurant_id
+  AND al.user_name IS DISTINCT FROM d.current_name;
+
+UPDATE fraud_alerts fa
+SET actor_name = d.current_name
+FROM actor_current_directory d
+WHERE fa.actor_id::text = d.actor_id
+  AND fa.restaurant_id = d.restaurant_id
+  AND fa.actor_name IS DISTINCT FROM d.current_name;
+
+-- 7. Normalize order_items, cash_shifts, cash_transactions, stock_movements, ledger_entries, audit_logs, fraud_alerts
 UPDATE order_items
 SET status = 'ledger', cancel_reason = NULL
 WHERE status = 'cancelled' AND (cancel_reason = 'Assigned to ledger' OR cancel_reason LIKE 'Cari%');
@@ -49,30 +165,125 @@ UPDATE order_items
 SET cancelled_by = pg_temp.tr_norm(cancelled_by)
 WHERE cancelled_by IS NOT NULL AND cancelled_by IS DISTINCT FROM pg_temp.tr_norm(cancelled_by);
 
--- 4. Normalize cash_shifts, cash_transactions, restaurant_audit_logs
+UPDATE order_items oi
+SET cancelled_by = a.current_name
+FROM orders o, actor_name_aliases a
+WHERE oi.order_id = o.id
+  AND o.restaurant_id = a.restaurant_id
+  AND oi.cancelled_by = a.old_name;
+
 UPDATE cash_shifts
 SET opened_by = pg_temp.tr_norm(opened_by),
     closed_by = CASE WHEN closed_by IS NOT NULL THEN pg_temp.tr_norm(closed_by) ELSE NULL END;
+
+UPDATE cash_shifts cs
+SET opened_by = a.current_name
+FROM actor_name_aliases a
+WHERE cs.restaurant_id = a.restaurant_id
+  AND cs.opened_by = a.old_name;
+
+UPDATE cash_shifts cs
+SET closed_by = a.current_name
+FROM actor_name_aliases a
+WHERE cs.restaurant_id = a.restaurant_id
+  AND cs.closed_by = a.old_name;
 
 UPDATE cash_transactions
 SET created_by = pg_temp.tr_norm(created_by)
 WHERE created_by IS DISTINCT FROM pg_temp.tr_norm(created_by);
 
+UPDATE cash_transactions ct
+SET created_by = a.current_name
+FROM actor_name_aliases a
+WHERE ct.restaurant_id = a.restaurant_id
+  AND ct.created_by = a.old_name;
+
+UPDATE stock_movements
+SET created_by = pg_temp.tr_norm(created_by)
+WHERE created_by IS DISTINCT FROM pg_temp.tr_norm(created_by);
+
+UPDATE stock_movements sm
+SET created_by = a.current_name
+FROM actor_name_aliases a
+WHERE sm.restaurant_id = a.restaurant_id
+  AND sm.created_by = a.old_name;
+
+UPDATE ledger_entries
+SET received_by = pg_temp.tr_norm(received_by)
+WHERE received_by IS NOT NULL AND received_by IS DISTINCT FROM pg_temp.tr_norm(received_by);
+
+UPDATE ledger_entries le
+SET received_by = a.current_name
+FROM actor_name_aliases a
+WHERE le.restaurant_id = a.restaurant_id
+  AND le.received_by = a.old_name;
+
 UPDATE restaurant_audit_logs
 SET user_name = pg_temp.tr_norm(user_name)
 WHERE user_name IS DISTINCT FROM pg_temp.tr_norm(user_name);
 
--- 5. Backfill completed_orders: processedBy, discount.appliedBy, and orders_snapshot
+UPDATE restaurant_audit_logs al
+SET user_name = a.current_name
+FROM actor_name_aliases a
+WHERE al.restaurant_id = a.restaurant_id
+  AND al.user_name = a.old_name;
+
+UPDATE fraud_alerts
+SET actor_name = CASE WHEN actor_name IS NOT NULL THEN pg_temp.tr_norm(actor_name) ELSE NULL END,
+    resolved_by = CASE WHEN resolved_by IS NOT NULL THEN pg_temp.tr_norm(resolved_by) ELSE NULL END;
+
+UPDATE fraud_alerts fa
+SET actor_name = a.current_name
+FROM actor_name_aliases a
+WHERE fa.restaurant_id = a.restaurant_id
+  AND fa.actor_name = a.old_name;
+
+UPDATE fraud_alerts fa
+SET resolved_by = a.current_name
+FROM actor_name_aliases a
+WHERE fa.restaurant_id = a.restaurant_id
+  AND fa.resolved_by = a.old_name;
+
+-- 8. Backfill completed_orders: normalize text and apply actor_name_aliases to waiter, closed_by, discounts, and orders_snapshot
+CREATE OR REPLACE FUNCTION pg_temp.resolve_actor_name(p_rest_id uuid, p_actor_id text, p_raw_name text) RETURNS text AS $$
+DECLARE
+  v_norm text;
+  v_mapped text;
+BEGIN
+  IF p_actor_id IS NOT NULL AND p_actor_id <> '' THEN
+    SELECT d.current_name INTO v_mapped
+    FROM actor_current_directory d
+    WHERE d.restaurant_id = p_rest_id AND d.actor_id = p_actor_id
+    LIMIT 1;
+    IF v_mapped IS NOT NULL THEN
+      RETURN v_mapped;
+    END IF;
+  END IF;
+
+  v_norm := pg_temp.tr_norm(p_raw_name);
+  IF v_norm IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  SELECT a.current_name INTO v_mapped
+  FROM actor_name_aliases a
+  WHERE a.restaurant_id = p_rest_id AND a.old_name = v_norm
+  LIMIT 1;
+
+  RETURN COALESCE(v_mapped, v_norm);
+END;
+$$ LANGUAGE plpgsql;
+
 UPDATE completed_orders co
 SET
-  waiter = pg_temp.tr_norm(co.waiter),
-  closed_by = pg_temp.tr_norm(co.closed_by),
+  waiter = pg_temp.resolve_actor_name(co.restaurant_id, NULL, co.waiter),
+  closed_by = pg_temp.resolve_actor_name(co.restaurant_id, NULL, co.closed_by),
   payment_discount = CASE
     WHEN co.payment_discount IS NOT NULL
     THEN jsonb_set(
       co.payment_discount,
       '{appliedBy}',
-      to_jsonb(pg_temp.tr_norm(COALESCE(co.payment_discount->>'appliedBy', co.closed_by)))
+      to_jsonb(pg_temp.resolve_actor_name(co.restaurant_id, NULL, COALESCE(co.payment_discount->>'appliedBy', co.closed_by)))
     )
     ELSE NULL
   END,
@@ -82,39 +293,39 @@ SET
       jsonb_set(
         co.payment_snapshot,
         '{processedBy}',
-        to_jsonb(pg_temp.tr_norm(co.closed_by))
+        to_jsonb(pg_temp.resolve_actor_name(co.restaurant_id, NULL, co.closed_by))
       ),
       '{discount,appliedBy}',
-      to_jsonb(pg_temp.tr_norm(COALESCE(co.payment_snapshot->'discount'->>'appliedBy', co.closed_by)))
+      to_jsonb(pg_temp.resolve_actor_name(co.restaurant_id, NULL, COALESCE(co.payment_snapshot->'discount'->>'appliedBy', co.closed_by)))
     )
     ELSE jsonb_set(
       co.payment_snapshot,
       '{processedBy}',
-      to_jsonb(pg_temp.tr_norm(co.closed_by))
+      to_jsonb(pg_temp.resolve_actor_name(co.restaurant_id, NULL, co.closed_by))
     )
   END,
   orders_snapshot = (
-    SELECT jsonb_agg(
+    SELECT COALESCE(jsonb_agg(
       jsonb_set(
         ord,
         '{userName}',
-        to_jsonb(pg_temp.tr_norm(ord->>'userName'))
+        to_jsonb(pg_temp.resolve_actor_name(co.restaurant_id, ord->>'userId', ord->>'userName'))
       ) || jsonb_build_object(
         'items',
         COALESCE((
           SELECT jsonb_agg(
             CASE
               WHEN itm ? 'cancelledBy' AND (itm->>'cancelledBy') IS NOT NULL
-              THEN jsonb_set(itm, '{cancelledBy}', to_jsonb(pg_temp.tr_norm(itm->>'cancelledBy')))
+              THEN jsonb_set(itm, '{cancelledBy}', to_jsonb(pg_temp.resolve_actor_name(co.restaurant_id, NULL, itm->>'cancelledBy')))
               ELSE itm
             END
           )
-          FROM jsonb_array_elements(ord->'items') AS itm
+          FROM jsonb_array_elements(COALESCE(ord->'items', '[]'::jsonb)) AS itm
         ), '[]'::jsonb)
       )
-    )
+    ), '[]'::jsonb)
     FROM jsonb_array_elements(co.orders_snapshot) AS ord
-  );
+  )
+WHERE jsonb_typeof(co.orders_snapshot) = 'array';
 
 COMMIT;
-

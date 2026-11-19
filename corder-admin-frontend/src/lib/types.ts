@@ -191,85 +191,46 @@ export interface RestaurantDiagnosticsStaffDto {
 }
 
 export interface RestaurantDiagnosticsDto {
-  restaurantId?: string
-  tables?: {
-    total?: number
-    occupied?: number
-    empty?: number
-    available?: number
-    reserved?: number
-    stuck?: number
+  restaurant: {
+    id: string
+    name: string
+    slug: string
+    status: string
+    brandName: string | null
+    branchType: string
+    isAccessSuspended: boolean
+    logoUrl: string | null
   }
-  totalTables?: number
-  occupiedTables?: number
-  emptyTables?: number
-  reservedTables?: number
-  activeOrdersCount?: number
-  activeOrders?: number
-  orders?: {
-    active?: number
-    completedToday?: number
-    todayRevenue?: number
-    totalRevenue?: number
+  tablesSummary: {
+    total: number
+    occupied: number
+    empty: number
+    reserved: number
+    checkout: number
+    lockedSessionsCount: number
   }
-  todayRevenue?: number
-  totalRevenue?: number
-  revenue?: {
-    today?: number
-    total?: number
-  }
-  openShift?: {
+  activeOrdersCount: number
+  todayRevenue: number
+  totalRevenue: number
+  openShift: {
     id: string
     openedBy: string
     openedAt: string
     openingBalance: number
-    totalRevenue?: number
-    status?: string
+    expectedCash?: number
+    cashDifference?: number
   } | null
-  shift?: {
-    id: string
-    openedBy: string
-    openedAt: string
-    openingBalance: number
-    totalRevenue?: number
-    status?: string
-  } | null
-  categoriesCount?: number
-  productsCount?: number
-  menu?: {
-    categoriesCount?: number
-    productsCount?: number
-    categories?: number
-    products?: number
+  categoriesCount: number
+  productsCount: number
+  printers: RestaurantDiagnosticsPrinterDto[]
+  pendingPrintJobsCount: number
+  unacknowledgedWaiterCallsCount: number
+  staffMembers: RestaurantDiagnosticsStaffDto[]
+  openFraudAlertsCount: number
+  ledgerSummary: {
+    customerCount: number
+    totalReceivable: number
   }
-  pendingPrintJobsCount?: number
-  pendingPrintJobs?: number
-  printQueue?: {
-    pending?: number
-    failed?: number
-    total?: number
-  }
-  openCreditAccountsCount?: number
-  openCreditTotalDebt?: number
-  credit?: {
-    accountsCount?: number
-    openAccountsCount?: number
-    totalBalance?: number
-    totalDebt?: number
-  }
-  cari?: {
-    openAccountsCount?: number
-    totalDebt?: number
-  }
-  securityAlertsCount?: number
-  openSecurityAlertsCount?: number
-  securityAlerts?: {
-    openCount?: number
-    totalCount?: number
-    count?: number
-  } | Array<unknown>
-  printers?: RestaurantDiagnosticsPrinterDto[]
-  staff?: RestaurantDiagnosticsStaffDto[]
 }
 
 export type PlatformNotificationLevel = "info" | "warning" | "urgent" | "success"

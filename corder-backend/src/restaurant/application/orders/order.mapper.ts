@@ -15,8 +15,9 @@ export function serializeOrder(
 ): Record<string, unknown> {
   const uid = order.userId?.trim() ?? null;
   const userName =
+    (uid ? staffNameMap.get(uid) ?? null : null) ||
     (order.userDisplayName && order.userDisplayName.trim()) ||
-    (uid ? staffNameMap.get(uid) ?? null : null);
+    null;
   return {
     id: order.id,
     restaurantId: order.restaurantId,
@@ -54,8 +55,9 @@ export function buildClosedOrderSnapshot(
 ): Record<string, unknown> {
   const uid = order.userId?.trim() || '';
   const resolvedUserName =
+    (uid ? staffNameById.get(uid) || undefined : undefined) ||
     order.userDisplayName?.trim() ||
-    (uid ? staffNameById.get(uid) || undefined : undefined);
+    undefined;
 
   return {
     id: order.id,

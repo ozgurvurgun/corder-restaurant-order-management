@@ -1,0 +1,154 @@
+import { Injectable } from '@nestjs/common';
+import { DataSource } from 'typeorm';
+import { normalizeStorageText } from './text-normalizer';
+
+export interface SyncActorNameChangeParams {
+  restaurantIds: string[];
+  actorId: string;
+  oldName?: string | null;
+  newName?: string | null;
+}
+
+@Injectable()
+export class ActorNameSyncService {
+  constructor(private readonly dataSource: DataSource) {}
+
+  async syncActorNameChange(params: SyncActorNameChangeParams): Promise<void> {
+    const oldNorm = params.oldName ? normalizeStorageText(params.oldName) : '';
+    const newNorm = params.newName ? normalizeStorageText(params.newName) : '';
+    if (!newNorm || oldNorm === newNorm) {
+      return;
+    }
+
+    const actorId = (params.actorId || '').trim();
+    const restIds = Array.from(
+      new Set((params.restaurantIds ?? []).map((id) => id?.trim()).filter(Boolean)),
+    );
+
+    await this.dataSource.transaction(async (em) => {
+      if (actorId) {
+        await em.query(
+          `UPDATE orders SET user_display_name = $1 WHERE user_id = $2::uuid AND user_display_name IS DISTINCT FROM $1`,
+          [newNorm, actorId],
+        );
+        await em.query(
+          `UPDATE tables SET session_staff_name = $1 WHERE session_staff_id = $2::uuid AND session_staff_name IS DISTINCT FROM $1`,
+          [newNorm, actorId],
+        );
+        await em.query(
+          `UPDATE ledger_entries SET received_by = $1 WHERE received_by_user_id = $2 AND received_by IS DISTINCT FROM $1`,
+          [newNorm, actorId],
+        );
+        await em.query(
+          `UPDATE restaurant_audit_logs SET user_name = $1 WHERE user_id = $2 AND user_name IS DISTINCT FROM $1`,
+          [newNorm, actorId],
+        );
+        await em.query(
+          `UPDATE fraud_alerts SET actor_name = $1 WHERE actor_id = $2::uuid AND actor_name IS DISTINCT FROM $1`,
+          [newNorm, actorId],
+        );
+      }
+
+      if (!oldNorm || restIds.length === 0) {
+        return;
+      }
+
+      await em.query(
+        `UPDATE orders SET user_display_name = $1 WHERE restaurant_id = ANY($2::uuid[]) AND LOWER(BTRIM(user_display_name)) = $3`,
+        [newNorm, restIds, oldNorm],
+      );
+      await em.query(
+        `UPDATE tables SET session_staff_name = $1 WHERE restaurant_id = ANY($2::uuid[]) AND LOWER(BTRIM(session_staff_name)) = $3`,
+        [newNorm, restIds, oldNorm],
+      );
+      await em.query(
+        `UPDATE tables SET discount = jsonb_set(discount, '{appliedBy}', to_jsonb($1::text)) WHERE restaurant_id = ANY($2::uuid[]) AND discount IS NOT NULL AND LOWER(BTRIM(discount->>'appliedBy')) = $3`,
+        [newNorm, restIds, oldNorm],
+      );
+      await em.query(
+        `UPDATE order_items oi SET cancelled_by = $1 FROM orders o WHERE oi.order_id = o.id AND o.restaurant_id = ANY($2::uuid[]) AND LOWER(BTRIM(oi.cancelled_by)) = $3`,
+        [newNorm, restIds, oldNorm],
+      );
+      await em.query(
+        `UPDATE completed_orders SET waiter = $1 WHERE restaurant_id = ANY($2::uuid[]) AND LOWER(BTRIM(waiter)) = $3`,
+        [newNorm, restIds, oldNorm],
+      );
+      await em.query(
+        `UPDATE completed_orders SET closed_by = $1 WHERE restaurant_id = ANY($2::uuid[]) AND LOWER(BTRIM(closed_by)) = $3`,
+        [newNorm, restIds, oldNorm],
+      );
+      await em.query(
+        `UPDATE completed_orders SET payment_discount = jsonb_set(payment_discount, '{appliedBy}', to_jsonb($1::text)) WHERE restaurant_id = ANY($2::uuid[]) AND payment_discount IS NOT NULL AND LOWER(BTRIM(payment_discount->>'appliedBy')) = $3`,
+        [newNorm, restIds, oldNorm],
+      );
+      await em.query(
+        `UPDATE completed_orders SET payment_snapshot = jsonb_set(payment_snapshot, '{processedBy}', to_jsonb($1::text)) WHERE restaurant_id = ANY($2::uuid[]) AND payment_snapshot IS NOT NULL AND LOWER(BTRIM(payment_snapshot->>'processedBy')) = $3`,
+        [newNorm, restIds, oldNorm],
+      );
+      await em.query(
+        `UPDATE completed_orders SET payment_snapshot = jsonb_set(payment_snapshot, '{discount,appliedBy}', to_jsonb($1::text)) WHERE restaurant_id = ANY($2::uuid[]) AND (payment_snapshot->'discount') IS NOT NULL AND LOWER(BTRIM(payment_snapshot->'discount'->>'appliedBy')) = $3`,
+        [newNorm, restIds, oldNorm],
+      );
+      await em.query(
+        `UPDATE completed_orders co
+         SET orders_snapshot = (
+           SELECT COALESCE(jsonb_agg(
+             CASE
+               WHEN ($4 <> '' AND (ord->>'userId') = $4) OR LOWER(BTRIM(ord->>'userName')) = $3
+               THEN jsonb_set(ord, '{userName}', to_jsonb($1::text))
+               ELSE ord
+             END || jsonb_build_object(
+               'items',
+               COALESCE((
+                 SELECT jsonb_agg(
+                   CASE
+                     WHEN itm ? 'cancelledBy' AND LOWER(BTRIM(itm->>'cancelledBy')) = $3
+                     THEN jsonb_set(itm, '{cancelledBy}', to_jsonb($1::text))
+                     ELSE itm
+                   END
+                 )
+                 FROM jsonb_array_elements(COALESCE(ord->'items', '[]'::jsonb)) AS itm
+               ), '[]'::jsonb)
+             )
+           ), '[]'::jsonb)
+           FROM jsonb_array_elements(co.orders_snapshot) AS ord
+         )
+         WHERE co.restaurant_id = ANY($2::uuid[])
+           AND jsonb_typeof(co.orders_snapshot) = 'array'`,
+        [newNorm, restIds, oldNorm, actorId],
+      );
+      await em.query(
+        `UPDATE cash_shifts SET opened_by = $1 WHERE restaurant_id = ANY($2::uuid[]) AND LOWER(BTRIM(opened_by)) = $3`,
+        [newNorm, restIds, oldNorm],
+      );
+      await em.query(
+        `UPDATE cash_shifts SET closed_by = $1 WHERE restaurant_id = ANY($2::uuid[]) AND LOWER(BTRIM(closed_by)) = $3`,
+        [newNorm, restIds, oldNorm],
+      );
+      await em.query(
+        `UPDATE cash_transactions SET created_by = $1 WHERE restaurant_id = ANY($2::uuid[]) AND LOWER(BTRIM(created_by)) = $3`,
+        [newNorm, restIds, oldNorm],
+      );
+      await em.query(
+        `UPDATE stock_movements SET created_by = $1 WHERE restaurant_id = ANY($2::uuid[]) AND LOWER(BTRIM(created_by)) = $3`,
+        [newNorm, restIds, oldNorm],
+      );
+      await em.query(
+        `UPDATE ledger_entries SET received_by = $1 WHERE restaurant_id = ANY($2::uuid[]) AND LOWER(BTRIM(received_by)) = $3`,
+        [newNorm, restIds, oldNorm],
+      );
+      await em.query(
+        `UPDATE restaurant_audit_logs SET user_name = $1 WHERE restaurant_id = ANY($2::uuid[]) AND LOWER(BTRIM(user_name)) = $3`,
+        [newNorm, restIds, oldNorm],
+      );
+      await em.query(
+        `UPDATE fraud_alerts SET actor_name = $1 WHERE restaurant_id = ANY($2::uuid[]) AND LOWER(BTRIM(actor_name)) = $3`,
+        [newNorm, restIds, oldNorm],
+      );
+      await em.query(
+        `UPDATE fraud_alerts SET resolved_by = $1 WHERE restaurant_id = ANY($2::uuid[]) AND LOWER(BTRIM(resolved_by)) = $3`,
+        [newNorm, restIds, oldNorm],
+      );
+    });
+  }
+}

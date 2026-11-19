@@ -14,6 +14,7 @@ import { BossRestaurantEntity } from '../../platform/domain/boss-restaurant.enti
 import { RestaurantRoleEntity } from '../domain/restaurant-role.entity';
 import { normalizeStorageText } from '../../common/text/text-normalizer';
 import { formatCanonicalCorderEmail } from '../../common/text/corder-email.policy';
+import { ActorNameSyncService } from '../../common/text/actor-name-sync.service';
 import { RestaurantAuthService } from './restaurant-auth.service';
 import { RolesService } from './roles.service';
 
@@ -37,6 +38,7 @@ export class BossHierarchyService {
     private readonly roleRepo: Repository<RestaurantRoleEntity>,
     private readonly authService: RestaurantAuthService,
     private readonly rolesService: RolesService,
+    private readonly actorNameSync: ActorNameSyncService,
   ) {}
 
   async loadBossOwnedBranches(bossId: string): Promise<RestaurantEntity[]> {
@@ -130,12 +132,22 @@ export class BossHierarchyService {
           'This boss account is linked to branches outside your authority',
         );
       }
+      const previousName = existing.name;
       if (dto.name?.trim()) existing.name = normalizeStorageText(dto.name);
       if (dto.phone !== undefined) existing.phone = dto.phone?.trim() || null;
       if (dto.password && dto.password.length >= 8) {
         existing.passwordHash = await bcrypt.hash(dto.password, 10);
       }
-      return this.rootAdminRepo.save(existing);
+      const saved = await this.rootAdminRepo.save(existing);
+      if (previousName && saved.name && previousName !== saved.name) {
+        await this.actorNameSync.syncActorNameChange({
+          restaurantIds: Array.from(ownedIds),
+          actorId: saved.id,
+          oldName: previousName,
+          newName: saved.name,
+        });
+      }
+      return saved;
     }
 
     if (!dto.password || dto.password.length < 8) {

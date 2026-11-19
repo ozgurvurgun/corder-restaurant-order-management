@@ -36,46 +36,38 @@ export function BossDetailedAnalytics({
   filteredBranches,
   onNavigate,
 }: BossDetailedAnalyticsProps) {
-  const { overview, products, categories, orders, fraudAlerts } = useBossStore()
+  const { overview, fraudAlerts } = useBossStore()
 
   const metrics = useMemo(() => {
     const branches = filteredBranches
     const netRevenue = sumMoney(...branches.map((b) => b.todayRevenue))
     const todayOrderCount = branches.reduce((s, b) => s + b.todayOrderCount, 0)
     const discountTotal =
-      overview?.discountTotal ??
       overview?.consolidated?.discountTotal ??
       sumMoney(...branches.map((b) => b.todayDiscountTotal))
     const cancelledCount =
-      overview?.cancelledCount ??
       overview?.consolidated?.cancelledCount ??
       branches.reduce((s, b) => s + b.todayCancelCount, 0)
     const cancelAmount = sumMoney(...branches.map((b) => b.todayCancelAmount))
     const grossRevenue =
-      overview?.grossRevenue ??
       overview?.consolidated?.grossRevenue ??
       sumMoney(netRevenue, discountTotal, cancelAmount)
     const discountRatePct =
-      overview?.discountRatePct ??
       overview?.consolidated?.discountRatePct ??
       (grossRevenue > 0 ? Number(((discountTotal / grossRevenue) * 100).toFixed(1)) : 0)
     const cancelRatePct =
-      overview?.cancelRatePct ??
       overview?.consolidated?.cancelRatePct ??
       (grossRevenue > 0 ? Number(((cancelAmount / grossRevenue) * 100).toFixed(1)) : 0)
     const occupiedTables = branches.reduce((s, b) => s + b.occupiedTableCount, 0)
     const totalTables = branches.reduce((s, b) => s + b.totalTableCount, 0)
     const openChecksTotal = sumMoney(...branches.map((b) => b.openChecksTotal))
     const openLedgerTotal =
-      overview?.openLedgerTotal ??
       overview?.consolidated?.openLedgerTotal ??
       sumMoney(...branches.map((b) => b.openLedgerBalance))
     const averageOrderValue =
-      overview?.averageOrderValue ??
       overview?.consolidated?.averageOrderValue ??
       (todayOrderCount > 0 ? Number((netRevenue / todayOrderCount).toFixed(2)) : 0)
     const revenuePerTable =
-      overview?.revenuePerTable ??
       overview?.consolidated?.revenuePerTable ??
       (totalTables > 0 ? Number((netRevenue / totalTables).toFixed(2)) : 0)
     const occupancyPct =
@@ -145,7 +137,7 @@ export function BossDetailedAnalytics({
       (overview?.hourlySales ?? []).map((h) => ({
         hour: h.hour,
         revenue: h.revenue,
-        ordersCount: h.ordersCount ?? h.orders ?? 0,
+        ordersCount: h.ordersCount ?? 0,
       })),
     [overview?.hourlySales]
   )
@@ -153,60 +145,22 @@ export function BossDetailedAnalytics({
   const topProducts = useMemo(
     () =>
       (overview?.topProducts ?? []).map((p) => ({
-        productName: p.productName || p.name || "Ürün",
+        productName: p.productName || "Ürün",
         quantity: p.quantity,
         revenue: p.revenue,
       })),
     [overview?.topProducts]
   )
 
-  const categoryBreakdown: CategoryBreakdownDto[] = useMemo(() => {
-    if (overview?.categoryBreakdown && overview.categoryBreakdown.length > 0) {
-      return overview.categoryBreakdown
-    }
-    const catById = new Map(categories.map((c) => [c.id, c.name]))
-    const prodCatByName = new Map(
-      products.map((p) => [p.name.toLowerCase(), catById.get(p.categoryId) || "Genel Menü"])
-    )
-    const agg = new Map<string, { categoryName: string; revenue: number; quantity: number }>()
-    for (const tp of topProducts) {
-      const cName = prodCatByName.get(tp.productName.toLowerCase()) || "Ana Menü"
-      const cur = agg.get(cName) ?? { categoryName: cName, revenue: 0, quantity: 0 }
-      cur.revenue = sumMoney(cur.revenue, tp.revenue)
-      cur.quantity += tp.quantity
-      agg.set(cName, cur)
-    }
-    return Array.from(agg.values()).sort((a, b) => b.revenue - a.revenue)
-  }, [overview?.categoryBreakdown, categories, products, topProducts])
+  const categoryBreakdown: CategoryBreakdownDto[] = useMemo(
+    () => overview?.categoryBreakdown ?? [],
+    [overview?.categoryBreakdown]
+  )
 
-  const waiterPerformance: WaiterPerformanceDto[] = useMemo(() => {
-    if (overview?.waiterPerformance && overview.waiterPerformance.length > 0) {
-      return overview.waiterPerformance
-    }
-    const cancelByWaiter = new Map<string, { count: number; amount: number }>()
-    for (const ord of orders) {
-      const wName = (ord.userName || "Personel").trim()
-      for (const item of ord.items ?? []) {
-        if (item.status === "cancelled") {
-          const cur = cancelByWaiter.get(wName) ?? { count: 0, amount: 0 }
-          cur.count += item.quantity
-          cur.amount = sumMoney(cur.amount, item.price * item.quantity)
-          cancelByWaiter.set(wName, cur)
-        }
-      }
-    }
-    return (overview?.staffPerformance ?? []).map((s) => {
-      const c = cancelByWaiter.get(s.name)
-      return {
-        waiterName: s.name,
-        ordersCount: s.ordersCount,
-        revenue: s.revenue,
-        cancelledCount: s.cancelledCount ?? c?.count ?? 0,
-        cancelledAmount: s.cancelledAmount ?? c?.amount ?? 0,
-        discountGiven: s.discountGiven,
-      }
-    })
-  }, [overview?.waiterPerformance, overview?.staffPerformance, orders])
+  const waiterPerformance: WaiterPerformanceDto[] = useMemo(
+    () => overview?.waiterPerformance ?? [],
+    [overview?.waiterPerformance]
+  )
 
   const shiftSummaries: ShiftSummaryDto[] = useMemo(() => {
     if (overview?.shiftSummaries && overview.shiftSummaries.length > 0) {

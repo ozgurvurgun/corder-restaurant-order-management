@@ -29,6 +29,7 @@ import { CreateStaffDto } from '../api/dto/create-staff.dto';
 import { UpdateStaffDto } from '../api/dto/update-staff.dto';
 import { normalizeStorageText } from '../../common/text/text-normalizer';
 import { formatCanonicalCorderEmail } from '../../common/text/corder-email.policy';
+import { ActorNameSyncService } from '../../common/text/actor-name-sync.service';
 
 const DUMMY_PIN_HASH = bcrypt.hashSync('00000000', 10);
 
@@ -71,23 +72,13 @@ export class StaffService {
     private readonly staffSession: StaffSessionService,
     private readonly rolesService: RolesService,
     private readonly ordersGateway: OrdersGateway,
+    private readonly actorNameSync: ActorNameSyncService,
   ) {}
 
-  private async resolveCanonicalStaffEmail(
-    restaurantId: string,
-    rawEmail: string,
-  ): Promise<string> {
-    const rest = await this.restaurantRepo.findOne({
-      where: { id: restaurantId },
-      select: ['id', 'slug', 'name'],
-    });
-    const canonical = formatCanonicalCorderEmail(
-      rawEmail,
-      rest?.slug || rest?.name,
-    );
-    if (!canonical) {
-      throw new BadRequestException('Invalid email username');
-    }
+  private async resolveCanonicalStaffEmail(restaurantId: string, rawEmail: string): Promise<string> {
+    const rest = await this.restaurantRepo.findOne({ where: { id: restaurantId }, select: ['id', 'slug', 'name'] });
+    const canonical = formatCanonicalCorderEmail(rawEmail, rest?.slug || rest?.name);
+    if (!canonical) throw new BadRequestException('Invalid email username');
     return canonical;
   }
 
@@ -263,6 +254,7 @@ export class StaffService {
     }
     this.assertActorCanGrantPolicies(actor, dto);
 
+    const previousName = staff.name;
     if (dto.name != null && dto.name.trim()) {
       staff.name = normalizeStorageText(dto.name);
     }
@@ -346,6 +338,15 @@ export class StaffService {
     }
 
     const saved = await this.staffRepo.save(staff);
+    if (previousName && saved.name && previousName !== saved.name) {
+      await this.actorNameSync.syncActorNameChange({
+        restaurantIds: [restaurantId],
+        actorId: saved.id,
+        oldName: previousName,
+        newName: saved.name,
+      });
+      this.ordersGateway.emitOrdersUpdated(restaurantId);
+    }
     this.ordersGateway.emitStaffSessionUpdated(restaurantId, saved.id);
     return this.toPublicDto(saved);
   }

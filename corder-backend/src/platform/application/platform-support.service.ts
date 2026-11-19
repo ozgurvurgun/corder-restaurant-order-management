@@ -227,7 +227,6 @@ export class PlatformSupportService {
         logoUrl: restaurant.logoUrl ?? null,
       },
       tablesSummary,
-      tables: tablesSummary,
       activeOrdersCount,
       todayRevenue: fromMinorUnits(todayRevenueMinor),
       totalRevenue: fromMinorUnits(totalRevenueMinor),
@@ -249,9 +248,7 @@ export class PlatformSupportService {
       pendingPrintJobsCount: pendingJobsCount + pendingKitchenCount,
       unacknowledgedWaiterCallsCount: unackWaiterCallsCount,
       staffMembers: serializedStaff,
-      staff: serializedStaff,
       openFraudAlertsCount,
-      openSecurityAlertsCount: openFraudAlertsCount,
       recentFraudAlerts: fraudAlerts
         .slice(0, 10)
         .map((a) => this.fraudService.serializeAlert(a)),

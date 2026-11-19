@@ -33,10 +33,10 @@ function resolveRuleBadgeLabel(ruleCode: string): string {
   return RULE_BADGE_LABELS[(ruleCode || "").trim().toLowerCase()] || "Kural İhlali"
 }
 function getAlertRiskAmount(a: FraudAlertDto): number {
-  return Number(a.amountImpact ?? a.estimatedRiskAmount ?? 0) || 0
+  return Number(a.amountImpact ?? 0) || 0
 }
 function getAlertActorName(a: FraudAlertDto): string {
-  return (a.actorName || a.staffName || "").trim()
+  return (a.actorName || "").trim()
 }
 
 const SEVERITY_STYLES: Record<FraudAlertDto["severity"], { label: string; badge: string; border: string }> = {

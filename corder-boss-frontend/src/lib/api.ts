@@ -210,29 +210,22 @@ function normalizeFraudAlert(raw: Record<string, unknown>, idx: number): FraudAl
     restaurantId: typeof raw.restaurantId === "string" ? raw.restaurantId : undefined,
     branchId: typeof raw.branchId === "string" ? raw.branchId : undefined,
     branchName: typeof raw.branchName === "string" ? raw.branchName : undefined,
-    ruleKey: String(raw.ruleKey ?? raw.ruleCode ?? raw.type ?? "SUSPICIOUS_ACTIVITY"),
-    title: String(raw.title ?? raw.action ?? "Şüpheli İşlem Tespiti"),
-    description: String(raw.description ?? raw.details ?? ""),
+    ruleKey: String(raw.ruleCode ?? raw.ruleKey ?? "SUSPICIOUS_ACTIVITY"),
+    title: String(raw.title ?? "Şüpheli İşlem Tespiti"),
+    description: String(raw.description ?? ""),
     severity,
     status,
-    amountImpact: Number(raw.amountImpact ?? raw.amount ?? 0) || 0,
-    staffId: typeof raw.staffId === "string" ? raw.staffId : null,
-    staffName:
-      typeof raw.staffName === "string"
-        ? raw.staffName
-        : typeof raw.actorName === "string"
-          ? raw.actorName
-          : typeof raw.userName === "string"
-            ? raw.userName
-            : null,
+    amountImpact: Number(raw.amountImpact ?? 0) || 0,
+    staffId: typeof raw.actorId === "string" ? raw.actorId : null,
+    staffName: typeof raw.actorName === "string" ? raw.actorName : null,
     tableName: typeof raw.tableName === "string" ? raw.tableName : null,
     orderId: typeof raw.orderId === "string" ? raw.orderId : null,
     resolutionNote: typeof raw.resolutionNote === "string" ? raw.resolutionNote : null,
     resolvedBy: typeof raw.resolvedBy === "string" ? raw.resolvedBy : null,
     resolvedAt: typeof raw.resolvedAt === "string" ? raw.resolvedAt : null,
     metadata:
-      raw.metadata && typeof raw.metadata === "object"
-        ? (raw.metadata as Record<string, unknown>)
+      raw.evidence && typeof raw.evidence === "object"
+        ? (raw.evidence as Record<string, unknown>)
         : null,
     createdAt:
       typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),

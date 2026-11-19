@@ -105,6 +105,7 @@ import {
   DEFAULT_JWT_EXPIRES_IN,
   requireConfigSecret,
 } from '../common/security/env.validation';
+import { ActorNameSyncService } from '../common/text/actor-name-sync.service';
 
 @Module({
   imports: [
@@ -219,6 +220,7 @@ import {
     PrintersService,
     AuditLogsService,
     R2UploadService,
+    ActorNameSyncService,
     PrintAgentGuard,
     PanelRootGuard,
   ],
@@ -233,6 +235,7 @@ import {
     FraudDetectionService,
     PrintersService,
     OrdersGateway,
+    ActorNameSyncService,
   ],
 })
 export class RestaurantModule {}

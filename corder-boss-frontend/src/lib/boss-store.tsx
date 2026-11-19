@@ -11,8 +11,7 @@ import { formatTitleCase } from "./format"
 import {
   getBossDismissedNotifIds, getBossReadNotifIds, getFraudPushSoundEnabled,
   markBossNotifReadLocal, markBossNotifsDismissedLocal, requestBrowserNotificationPermission,
-  saveLocalFraudResolution, setFraudPushSoundEnabled,
-  triggerFraudPushNotification, triggerPlatformPushNotification,
+  setFraudPushSoundEnabled, triggerFraudPushNotification, triggerPlatformPushNotification,
 } from "./fraud-notifier"
 import type {
   BossOverviewResponse, BossPlatformNotificationDto, BranchSummary, CatalogCategoryDto, CatalogProductDto,
@@ -73,9 +72,8 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
   const [orders, setOrders] = useState<LiveOrderDto[]>([])
   const [products, setProducts] = useState<CatalogProductDto[]>([])
   const [categories, setCategories] = useState<CatalogCategoryDto[]>([])
-  const [backendFraudAlerts, setBackendFraudAlerts] = useState<FraudAlertDto[]>([])
+  const [fraudAlerts, setBackendFraudAlerts] = useState<FraudAlertDto[]>([])
   const [platformNotifications, setPlatformNotifications] = useState<BossPlatformNotificationDto[]>([])
-  const [heuristicRevision, setHeuristicRevision] = useState(0)
   const [pushSoundEnabled, setPushSoundEnabledState] = useState<boolean>(getFraudPushSoundEnabled)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -138,7 +136,6 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     () => branches.find((b) => b.id === effectiveBranchId) ?? branches[0] ?? null,
     [branches, effectiveBranchId]
   )
-  const fraudAlerts = useMemo(() => { void heuristicRevision; return backendFraudAlerts }, [backendFraudAlerts, heuristicRevision])
   const openCriticalHighAlertCount = useMemo(
     () => fraudAlerts.filter((a) => (a.status === "open" || a.status === "investigating") && (a.severity === "critical" || a.severity === "high")).length,
     [fraudAlerts]
@@ -219,25 +216,11 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
   const updateFraudAlertStatus = useCallback(
     async (id: string, status: FraudAlertStatus, resolutionNote?: string) => {
       const token = getBossToken()
-      const isHeuristic =
-        id.startsWith("audit-fraud-") || id.startsWith("branch-void-") || id.startsWith("transfer-void-")
-      if (!isHeuristic && token) {
-        try {
-          const updated = await bossApi.updateFraudAlert(token, id, { status, resolutionNote })
-          setBackendFraudAlerts((prev) =>
-            prev.map((a) => (a.id === id ? { ...a, ...updated, status, resolutionNote } : a))
-          )
-          showToast("Güvenlik uyarısı durumu güncellendi")
-          return
-        } catch {
-          // Fall back to local resolution persistence
-        }
-      }
-      saveLocalFraudResolution(id, status, resolutionNote)
+      if (!token) return
+      const updated = await bossApi.updateFraudAlert(token, id, { status, resolutionNote })
       setBackendFraudAlerts((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, status, resolutionNote: resolutionNote ?? a.resolutionNote } : a))
+        prev.map((a) => (a.id === id ? { ...a, ...updated, status, resolutionNote } : a))
       )
-      setHeuristicRevision((v) => v + 1)
       showToast("Güvenlik uyarısı durumu güncellendi")
     },
     [showToast]

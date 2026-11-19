@@ -136,25 +136,9 @@ export class RestaurantAuthService {
 
   async loginPrintAgent(usernameInput: string, password: string) {
     const username = usernameInput.toLowerCase().trim();
-    let restaurant = await this.restaurantRepo.findOne({
+    const restaurant = await this.restaurantRepo.findOne({
       where: { printAgentUsername: username },
     });
-    if (!restaurant && username.includes('@')) {
-      const [localPart, domainPart] = username.split('@');
-      const slugFromDomain = domainPart?.endsWith('.corder.app')
-        ? domainPart.slice(0, -'.corder.app'.length)
-        : '';
-      if (localPart) {
-        restaurant = await this.restaurantRepo.findOne({
-          where: slugFromDomain
-            ? [
-                { slug: slugFromDomain, printAgentUsername: localPart },
-                { printAgentUsername: localPart },
-              ]
-            : { printAgentUsername: localPart },
-        });
-      }
-    }
     if (
       !restaurant?.printAgentPasswordHash ||
       !(await bcrypt.compare(password, restaurant.printAgentPasswordHash))

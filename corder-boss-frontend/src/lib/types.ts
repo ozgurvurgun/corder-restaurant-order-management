@@ -285,36 +285,18 @@ export interface BossOverviewDto {
       ledger: number
     }
   }
-  grossRevenue?: number
-  discountTotal?: number
-  discountRatePct?: number
-  cancelledCount?: number
-  cancelRatePct?: number
-  averageOrderValue?: number
-  revenuePerTable?: number
-  openLedgerTotal?: number
   hourlySales: Array<{
     hour: string
     revenue: number
-    orders?: number
-    ordersCount?: number
+    ordersCount: number
   }>
   categoryBreakdown?: CategoryBreakdownDto[]
   topProducts: Array<{
-    name?: string
-    productName?: string
+    productName: string
     quantity: number
     revenue: number
   }>
-  staffPerformance: Array<{
-    name: string
-    ordersCount: number
-    revenue: number
-    discountGiven: number
-    cancelledCount?: number
-    cancelledAmount?: number
-  }>
-  waiterPerformance?: WaiterPerformanceDto[]
+  waiterPerformance: WaiterPerformanceDto[]
   shiftSummaries?: ShiftSummaryDto[]
   fraudSummary?: FraudSummaryDto
   liveOrders?: Array<

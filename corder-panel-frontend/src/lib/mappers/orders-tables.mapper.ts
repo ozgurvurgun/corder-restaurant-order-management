@@ -81,12 +81,13 @@ export function resolveStaffNameForTable(
     (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
   )
   for (const o of sorted) {
+    const uid = o.userId?.trim()
+    if (uid) {
+      const name = staffUsers.find((u) => u.id === uid)?.name?.trim()
+      if (name) return name
+    }
     const fromApi = o.userName?.trim()
     if (fromApi) return fromApi
-    const uid = o.userId?.trim()
-    if (!uid) continue
-    const name = staffUsers.find((u) => u.id === uid)?.name
-    if (name) return name
   }
   return undefined
 }

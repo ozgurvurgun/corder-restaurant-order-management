@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, MoreThanOrEqual, Repository } from 'typeorm';
 import { OrderEntity } from '../../domain/order.entity';
 import { RestaurantStaffEntity } from '../../domain/restaurant-staff.entity';
+import { RootAdminEntity } from '../../../platform/domain/root-admin.entity';
 import { ProductEntity } from '../../domain/product.entity';
 import { PrintJobEntity } from '../../domain/print-job.entity';
 import { OrderStatusPolicy } from '../../domain/services/order-status.policy';
@@ -15,6 +16,8 @@ export class OrderQueryService {
     private readonly orderRepo: Repository<OrderEntity>,
     @InjectRepository(RestaurantStaffEntity)
     private readonly staffRepo: Repository<RestaurantStaffEntity>,
+    @InjectRepository(RootAdminEntity)
+    private readonly rootAdminRepo: Repository<RootAdminEntity>,
     @InjectRepository(ProductEntity)
     private readonly productRepo: Repository<ProductEntity>,
     @InjectRepository(PrintJobEntity)
@@ -57,12 +60,22 @@ export class OrderQueryService {
       ),
     ];
     if (!ids.length) return new Map();
-    const rows = await this.staffRepo.find({
-      where: { restaurantId, id: In(ids) },
-      select: ['id', 'name'],
-    });
+    const [staffRows, bossRows] = await Promise.all([
+      this.staffRepo.find({
+        where: { restaurantId, id: In(ids) },
+        select: ['id', 'name'],
+      }),
+      this.rootAdminRepo.find({
+        where: { id: In(ids) },
+        select: ['id', 'name'],
+      }),
+    ]);
     const map = new Map<string, string>();
-    for (const staff of rows) {
+    for (const boss of bossRows) {
+      const name = (boss.name ?? '').trim();
+      if (name) map.set(boss.id, name);
+    }
+    for (const staff of staffRows) {
       const name = (staff.name ?? '').trim();
       if (name) map.set(staff.id, name);
     }
@@ -153,8 +166,9 @@ export class OrderQueryService {
         restaurantId,
         tableName: order.table?.name ?? null,
         waiterName:
+          (uid ? staffNameMap.get(uid) ?? null : null) ||
           (order.userDisplayName && order.userDisplayName.trim()) ||
-          (uid ? staffNameMap.get(uid) ?? null : null),
+          null,
       } as Record<string, unknown>;
       const rowItems = row.items as
         | Array<{ productId?: string } & Record<string, unknown>>

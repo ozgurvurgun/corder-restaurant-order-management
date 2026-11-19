@@ -13,24 +13,16 @@ import { CreateRootAdminDto } from '../api/dto/create-root-admin.dto';
 import { UpdateRootAdminDto } from '../api/dto/update-root-admin.dto';
 import { normalizeStorageText } from '../../common/text/text-normalizer';
 import { formatCanonicalCorderEmail } from '../../common/text/corder-email.policy';
+import { ActorNameSyncService } from '../../common/text/actor-name-sync.service';
+import { OrdersGateway } from '../../restaurant/api/orders.gateway';
 
 export interface BossWithRestaurantsDto {
-  id: string;
-  name: string;
-  email: string;
-  phone: string | null;
-  bossTier: BossTier;
-  brandName: string | null;
-  isActive: boolean;
+  id: string; name: string; email: string; phone: string | null;
+  bossTier: BossTier; brandName: string | null; isActive: boolean;
   restaurantId: string | null;
   restaurants: Array<{
-    id: string;
-    name: string;
-    slug: string;
-    status: string;
-    brandName: string | null;
-    branchType: string;
-    billingStatus: string;
+    id: string; name: string; slug: string; status: string;
+    brandName: string | null; branchType: string; billingStatus: string;
     isAccessSuspended: boolean;
   }>;
   createdAt: Date;
@@ -51,6 +43,8 @@ export class RootAdminService {
     private readonly bossRestaurantRepo: Repository<BossRestaurantEntity>,
     @InjectRepository(RestaurantEntity)
     private readonly restaurantRepo: Repository<RestaurantEntity>,
+    private readonly actorNameSync: ActorNameSyncService,
+    private readonly ordersGateway: OrdersGateway,
   ) {}
 
   async enrichBosses(admins: RootAdminEntity[]): Promise<BossWithRestaurantsDto[]> {
@@ -382,6 +376,7 @@ export class RootAdminService {
       }
     }
 
+    const previousName = entity.name;
     if (dto.name !== undefined) entity.name = normalizeStorageText(dto.name);
     if (dto.phone !== undefined) entity.phone = dto.phone?.trim() || null;
     if (dto.isActive !== undefined) entity.isActive = Boolean(dto.isActive);
@@ -451,7 +446,20 @@ export class RootAdminService {
         await this.restaurantRepo.update(terminalTargetRestaurantId, update);
       }
     }
-    return this.enrichBoss(saved);
+    const enriched = await this.enrichBoss(saved);
+    if (previousName && saved.name && previousName !== saved.name) {
+      const restIds = enriched.restaurants.map((r) => r.id);
+      await this.actorNameSync.syncActorNameChange({
+        restaurantIds: restIds,
+        actorId: saved.id,
+        oldName: previousName,
+        newName: saved.name,
+      });
+      for (const rId of restIds) {
+        this.ordersGateway.emitOrdersUpdated(rId);
+      }
+    }
+    return enriched;
   }
 
   async remove(id: string, fromRestaurantId?: string): Promise<void> {

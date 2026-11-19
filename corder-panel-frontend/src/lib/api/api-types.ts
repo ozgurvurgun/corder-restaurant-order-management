@@ -341,10 +341,7 @@ export interface FraudAlertDto {
   status: "open" | "investigating" | "resolved" | "false_positive"
   title: string
   description: string
-  estimatedRiskAmount?: number
   amountImpact?: number
-  staffId?: string | null
-  staffName?: string | null
   actorId?: string | null
   actorName?: string | null
   tableId?: string | null

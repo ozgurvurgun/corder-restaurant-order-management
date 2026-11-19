@@ -145,18 +145,9 @@ export class FraudDetectionService {
     ]);
 
     const existingKeys = new Set<string>();
-    const staleIdsToDelete: string[] = [];
     for (const a of existingAlerts) {
-      const ev = a.evidence as { sourceKey?: string; orderCreatedAt?: string } | undefined;
-      const sk = ev?.sourceKey;
-      if (typeof sk === 'string' && sk.startsWith('post-print-void:') && !ev?.orderCreatedAt) {
-        staleIdsToDelete.push(a.id);
-        continue;
-      }
+      const sk = (a.evidence as { sourceKey?: string } | undefined)?.sourceKey;
       if (typeof sk === 'string' && sk) existingKeys.add(sk);
-    }
-    if (staleIdsToDelete.length > 0) {
-      await this.alertRepo.delete({ id: In(staleIdsToDelete) });
     }
 
     const orderIds = orders.map((o) => o.id);
@@ -350,12 +341,9 @@ export class FraudDetectionService {
       title: a.title,
       description: a.description,
       actorName: a.actorName,
-      staffName: a.actorName,
       actorId: a.actorId,
-      staffId: a.actorId,
       tableName: a.tableName,
       amountImpact: impact,
-      estimatedRiskAmount: impact,
       status: a.status,
       resolutionNote: a.resolutionNote,
       resolvedBy: a.resolvedBy,
