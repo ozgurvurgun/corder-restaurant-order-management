@@ -188,19 +188,20 @@ export function OperationsCatalogTab() {
             {tables.map((t) => {
               const tOrders = getTableActiveOrders(t.id)
               const totals = computeTableTotals(tOrders, t.discount)
-              const hasActiveBill = totals.subtotal > 0 || tOrders.length > 0
-              const occupied =
-                hasActiveBill || t.status === "occupied" || t.status === "checkout"
-              const waiter =
-                t.sessionStaffName ||
-                (tOrders[0] ? getWaiterDisplayName(tOrders[0]) : null)
+              const hasActiveBill = tOrders.length > 0 && totals.subtotal > 0
+              const isCheckout = hasActiveBill && t.status === "checkout"
+              const occupied = hasActiveBill
+              const waiter = occupied
+                ? t.sessionStaffName ||
+                  (tOrders[0] ? getWaiterDisplayName(tOrders[0]) : null)
+                : null
               return (
                 <button
                   key={t.id}
                   type="button"
                   onClick={() => setSelectedTableId(t.id)}
                   className={`rounded-xl border p-3 text-left transition-all ${
-                    t.status === "checkout"
+                    isCheckout
                       ? "border-blue-400 bg-blue-50"
                       : occupied
                         ? "border-[#e63462] bg-[#e63462]/8"
@@ -213,7 +214,7 @@ export function OperationsCatalogTab() {
                     </span>
                     <span
                       className={`h-2.5 w-2.5 rounded-full ${
-                        t.status === "checkout"
+                        isCheckout
                           ? "bg-blue-500"
                           : occupied
                             ? "bg-[#e63462]"

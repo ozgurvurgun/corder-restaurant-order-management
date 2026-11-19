@@ -34,11 +34,50 @@ export class TableService {
     return table;
   }
 
+  private async tableHasBillableItems(
+    em: Repository<TableEntity>['manager'],
+    restaurantId: string,
+    tableId: string,
+  ): Promise<boolean> {
+    const activeOrders = await em.find(OrderEntity, {
+      where: { restaurantId, tableId, status: 'active' },
+      relations: ['items'],
+    });
+    return activeOrders.some((o) =>
+      (o.items ?? []).some((i) => OrderStatusPolicy.isItemOnActiveBill(i.status)),
+    );
+  }
+
   async findByRestaurant(restaurantId: string): Promise<TableEntity[]> {
     const now = new Date();
-    const tables = await this.repo.find({ where: { restaurantId } });
+    const [tables, activeOrders] = await Promise.all([
+      this.repo.find({ where: { restaurantId } }),
+      this.repo.manager.find(OrderEntity, {
+        where: { restaurantId, status: 'active' },
+        relations: ['items'],
+      }),
+    ]);
+    const billableTableIds = new Set<string>();
+    for (const ord of activeOrders) {
+      if ((ord.items ?? []).some((i) => OrderStatusPolicy.isItemOnActiveBill(i.status))) {
+        billableTableIds.add(ord.tableId);
+      }
+    }
+    const staleTablesToHeal: TableEntity[] = [];
     for (const table of tables) {
+      if (
+        (table.status === 'checkout' ||
+          table.status === 'occupied' ||
+          table.status === 'ordering') &&
+        !billableTableIds.has(table.id)
+      ) {
+        table.markEmpty();
+        staleTablesToHeal.push(table);
+      }
       this.sanitizeStaleLock(table, now);
+    }
+    if (staleTablesToHeal.length > 0) {
+      await this.repo.save(staleTablesToHeal).catch(() => undefined);
     }
     return tables.sort((a, b) => {
       const sectionCmp = a.section.localeCompare(b.section, undefined, {
@@ -134,19 +173,19 @@ export class TableService {
       if (dto.discount !== undefined) entity.discount = dto.discount;
       if (dto.splitInfo !== undefined) entity.splitInfo = dto.splitInfo;
       if (dto.status !== undefined) {
+        const hasBillableItems = await this.tableHasBillableItems(
+          em,
+          restaurantId,
+          entity.id,
+        );
         if (dto.status === 'empty') {
-          const activeOrders = await em.find(OrderEntity, {
-            where: { restaurantId, tableId: entity.id, status: 'active' },
-            relations: ['items'],
-          });
-          const hasBillableItems = activeOrders.some((o) =>
-            (o.items ?? []).some((i) => OrderStatusPolicy.isItemOnActiveBill(i.status)),
-          );
           if (hasBillableItems) {
             throw new BadRequestException(
               'Cannot mark table as empty while it has active unpaid orders',
             );
           }
+          entity.markEmpty();
+        } else if (!hasBillableItems && dto.status !== 'reserved') {
           entity.markEmpty();
         } else {
           entity.status = dto.status;
@@ -255,7 +294,11 @@ export class TableService {
       });
       if (!table) throw new NotFoundException('Table not found');
       if (table.status === 'checkout') {
-        return { ok: false, holderName: 'Register checkout' };
+        const hasBillable = await this.tableHasBillableItems(em, restaurantId, table.id);
+        if (hasBillable) {
+          return { ok: false, holderName: 'Register checkout' };
+        }
+        table.markEmpty();
       }
       const now = new Date();
       if (table.isLockedByOther(staffId, SESSION_LOCK_STALE_MS, now)) {
