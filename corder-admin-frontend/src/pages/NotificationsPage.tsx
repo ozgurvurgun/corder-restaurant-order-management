@@ -7,13 +7,13 @@ import type {
   PlatformNotificationTargetApp,
 } from "@/lib/types"
 import { useConfirm } from "@/components/ui/confirm-dialog"
+import { CustomDateTimePicker } from "@/components/ui/custom-inputs"
 import {
   LEVEL_OPTIONS,
   NotificationHistoryPanel,
 } from "@/components/notifications/NotificationHistoryPanel"
 import {
   Bell,
-  Calendar,
   Check,
   Clock,
   Crown,
@@ -427,15 +427,11 @@ export function NotificationsPage() {
 
             {deliveryMode === "scheduled" && (
               <div className="space-y-2 pt-1">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-[#e63462] flex-shrink-0" />
-                  <input
-                    type="datetime-local"
-                    value={scheduledAtInput}
-                    onChange={(e) => setScheduledAtInput(e.target.value)}
-                    className="w-full h-9 rounded-lg border border-[#d1d1d6] bg-white px-2.5 text-[12px] text-[#1d1d1f] outline-none focus:border-[#e63462]"
-                  />
-                </div>
+                <CustomDateTimePicker
+                  value={scheduledAtInput}
+                  onChange={(e) => setScheduledAtInput(e.target.value)}
+                  className="w-full h-9 rounded-lg border border-[#d1d1d6] bg-white px-2.5 text-[12px] text-[#1d1d1f]"
+                />
                 <div className="flex flex-wrap gap-1.5">
                   {[
                     { label: "+15 Dakika", mins: 15 },

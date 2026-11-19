@@ -1,4 +1,5 @@
 import { Clock } from "lucide-react"
+import { CustomTimePicker } from "@/components/ui/custom-time-picker"
 
 function computeEffectiveEndPreview(
   endTime: string,
@@ -94,22 +95,18 @@ export function StaffShiftRestrictionFields({
               <label className="block text-[11px] font-semibold text-[#1d1d1f] mb-1">
                 Mesai Başlangıç Saati
               </label>
-              <input
-                type="time"
+              <CustomTimePicker
                 value={startTime}
-                onChange={(e) => onChangeStartTime(e.target.value)}
-                className="w-full h-9 rounded-lg border border-[#d1d1d6] bg-white px-3 text-[13px] font-medium text-[#1d1d1f] outline-none focus:border-[#e63462]"
+                onValueChange={onChangeStartTime}
               />
             </div>
             <div>
               <label className="block text-[11px] font-semibold text-[#1d1d1f] mb-1">
                 Mesai Bitiş Saati
               </label>
-              <input
-                type="time"
+              <CustomTimePicker
                 value={endTime}
-                onChange={(e) => onChangeEndTime(e.target.value)}
-                className="w-full h-9 rounded-lg border border-[#d1d1d6] bg-white px-3 text-[13px] font-medium text-[#1d1d1f] outline-none focus:border-[#e63462]"
+                onValueChange={onChangeEndTime}
               />
             </div>
           </div>
