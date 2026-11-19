@@ -9,16 +9,16 @@ import {
   QrCode,
   ToggleLeft,
   ToggleRight,
-  Volume2,
   X,
 } from "lucide-react"
 import type { PanelSection, PanelTable } from "@/lib/panel-types"
 import { showPanelToast } from "../panel-toast"
 import {
+  getBrowserNotificationPermission,
   getNotificationPrefs,
-  playWaiterCallChime,
   requestBrowserNotificationPermission,
   saveNotificationPrefs,
+  showBrowserNotification,
   type NotificationPrefs,
 } from "@/lib/notification-sound"
 
@@ -268,20 +268,44 @@ export function TableQrCodesModal(props: {
 
 export function NotificationSoundSettingsCard() {
   const [prefs, setPrefs] = useState<NotificationPrefs>(() => getNotificationPrefs())
+  const [perm, setPerm] = useState<NotificationPermission | "unsupported">(() =>
+    getBrowserNotificationPermission(),
+  )
 
   const updatePref = (patch: Partial<NotificationPrefs>) => {
     setPrefs(saveNotificationPrefs(patch))
   }
 
   const handleRequestPush = async () => {
-    const perm = await requestBrowserNotificationPermission()
+    const nextPerm = await requestBrowserNotificationPermission()
+    setPerm(nextPerm)
     setPrefs(getNotificationPrefs())
-    if (perm === "granted") {
-      showPanelToast("Tarayıcı anlık bildirim izni verildi", "success")
-    } else if (perm === "denied") {
-      showPanelToast("Tarayıcı bildirim izni reddedildi. Tarayıcı adres çubuğundan izin verebilirsiniz.", "error")
+    if (nextPerm === "granted") {
+      showPanelToast("Push bildirim izni verildi", "success")
+    } else if (nextPerm === "denied") {
+      showPanelToast("Bildirim izni reddedildi. Tarayıcı adres çubuğundan izin verebilirsiniz.", "error")
     } else {
-      showPanelToast("Tarayıcı bildirim durumu: " + perm, "info")
+      showPanelToast("Bildirim izni durumu: " + nextPerm, "info")
+    }
+  }
+
+  const handleTestPush = async () => {
+    let currentPerm = getBrowserNotificationPermission()
+    if (currentPerm !== "granted") {
+      currentPerm = await requestBrowserNotificationPermission()
+      setPerm(currentPerm)
+      setPrefs(getNotificationPrefs())
+    }
+    if (currentPerm === "granted") {
+      updatePref({ browserPushEnabled: true })
+      showBrowserNotification(
+        "🔔 Masa 1 (Salon) — Garson Çağırıyor!",
+        "Standart Push bildirimi ve sistem bildirim sesi aktif.",
+        `corder-test-${Date.now()}`,
+      )
+      showPanelToast("Test Push bildirimi gönderildi", "success")
+    } else {
+      showPanelToast("Push bildirimi için tarayıcı bildirim izni gereklidir.", "error")
     }
   }
 
@@ -292,36 +316,38 @@ export function NotificationSoundSettingsCard() {
           <Bell className="w-4 h-4 text-[#e63462]" />
           <div>
             <h3 className="text-[14px] font-semibold text-[#1d1d1f]">
-              Bildirim &amp; Ses Ayarları (Garson Çağrısı &amp; Uyarılar)
+              Anlık Push Bildirim Ayarları (Garson Çağrısı &amp; Uyarılar)
             </h3>
             <p className="text-[11px] text-[#86868b]">
-              Masalardan gelen QR garson çağrıları ve güvenlik uyarıları için sesli ikaz ve tarayıcı bildirim tercihlerini yönetin.
+              Masalardan gelen QR garson çağrıları ve güvenlik uyarıları standart cihaz/tarayıcı Push bildirimi ve sistem bildirim sesi ile iletilir.
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => playWaiterCallChime(prefs.volume)}
+            onClick={() => void handleTestPush()}
             className="h-[30px] px-3 rounded-lg bg-[#f5f5f7] hover:bg-[#e8e8ed] border border-[#d1d1d6]/60 text-[12px] font-medium text-[#1d1d1f] flex items-center gap-1.5"
           >
-            <Volume2 className="w-3.5 h-3.5 text-[#e63462]" /> Test Sesi Çal
+            <Bell className="w-3.5 h-3.5 text-[#e63462]" /> Push Bildirimini Test Et
           </button>
-          <button
-            type="button"
-            onClick={() => void handleRequestPush()}
-            className="h-[30px] px-3 rounded-lg bg-[#1d1d1f] hover:bg-[#3a3a3c] text-[12px] font-medium text-white flex items-center gap-1.5"
-          >
-            <Bell className="w-3.5 h-3.5" /> Tarayıcı Bildirim İzni İste
-          </button>
+          {perm !== "granted" && (
+            <button
+              type="button"
+              onClick={() => void handleRequestPush()}
+              className="h-[30px] px-3 rounded-lg bg-[#1d1d1f] hover:bg-[#3a3a3c] text-[12px] font-medium text-white flex items-center gap-1.5"
+            >
+              <Bell className="w-3.5 h-3.5" /> Bildirim İzni İste
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="flex items-center justify-between p-3 bg-[#f5f5f7] rounded-xl">
           <div>
             <p className="text-[13px] font-medium text-[#1d1d1f]">Garson Çağrısı Bildirimi</p>
-            <p className="text-[11px] text-[#86868b]">QR menüden gelen çağrıları göster</p>
+            <p className="text-[11px] text-[#86868b]">QR menüden gelen çağrıları bildirim olarak al</p>
           </div>
           <button type="button" onClick={() => updatePref({ waiterCallEnabled: !prefs.waiterCallEnabled })}>
             {prefs.waiterCallEnabled ? <ToggleRight className="w-8 h-8 text-[#e63462]" /> : <ToggleLeft className="w-8 h-8 text-[#d1d1d6]" />}
@@ -330,28 +356,27 @@ export function NotificationSoundSettingsCard() {
 
         <div className="flex items-center justify-between p-3 bg-[#f5f5f7] rounded-xl">
           <div>
-            <p className="text-[13px] font-medium text-[#1d1d1f]">Sesli Uyarı (Chime)</p>
-            <p className="text-[11px] text-[#86868b]">Çağrı geldiğinde zil sesi çal</p>
+            <p className="text-[13px] font-medium text-[#1d1d1f]">Standart Push Bildirimi (Sistem Sesi)</p>
+            <p className="text-[11px] text-[#86868b]">
+              Durum: {perm === "granted" ? (prefs.browserPushEnabled ? "Aktif (İzin Verildi)" : "Kapalı") : perm === "denied" ? "Engellendi" : "İzin Bekliyor"}
+            </p>
           </div>
-          <button type="button" onClick={() => updatePref({ soundEnabled: !prefs.soundEnabled })}>
-            {prefs.soundEnabled ? <ToggleRight className="w-8 h-8 text-[#34c759]" /> : <ToggleLeft className="w-8 h-8 text-[#d1d1d6]" />}
+          <button
+            type="button"
+            onClick={() => {
+              if (perm !== "granted") {
+                void handleRequestPush()
+              } else {
+                updatePref({ browserPushEnabled: !prefs.browserPushEnabled })
+              }
+            }}
+          >
+            {perm === "granted" && prefs.browserPushEnabled ? (
+              <ToggleRight className="w-8 h-8 text-[#34c759]" />
+            ) : (
+              <ToggleLeft className="w-8 h-8 text-[#d1d1d6]" />
+            )}
           </button>
-        </div>
-
-        <div className="flex flex-col justify-center p-3 bg-[#f5f5f7] rounded-xl">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[12px] font-medium text-[#1d1d1f]">Ses Seviyesi</span>
-            <span className="text-[11px] font-semibold text-[#e63462]">%{Math.round(prefs.volume * 100)}</span>
-          </div>
-          <input
-            type="range"
-            min={0.1}
-            max={1}
-            step={0.05}
-            value={prefs.volume}
-            onChange={(e) => updatePref({ volume: parseFloat(e.target.value) })}
-            className="w-full accent-[#e63462] cursor-pointer"
-          />
         </div>
       </div>
     </div>

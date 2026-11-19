@@ -9,7 +9,7 @@ import {
 } from "./api"
 import { formatTitleCase } from "./format"
 import {
-  deriveHeuristicFraudAlerts, getFraudPushSoundEnabled, playFraudAlertChime,
+  deriveHeuristicFraudAlerts, getFraudPushSoundEnabled,
   requestBrowserNotificationPermission, saveLocalFraudResolution, setFraudPushSoundEnabled,
   triggerFraudPushNotification,
 } from "./fraud-notifier"
@@ -191,7 +191,6 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     for (const a of fraudAlerts) seenAlertIdsRef.current.add(a.id)
     if (newCriticalOrHigh.length > 0 && pushSoundEnabled) {
       const top = newCriticalOrHigh[0]!
-      playFraudAlertChime(top.severity)
       void triggerFraudPushNotification(top)
     }
   }, [fraudAlerts, pushSoundEnabled])
@@ -202,14 +201,14 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
       setFraudPushSoundEnabled(enabled)
       if (enabled) {
         const perm = await requestBrowserNotificationPermission()
-        playFraudAlertChime("high")
         showToast(
           perm === "granted"
-            ? "Push & Sesli Güvenlik Uyarıları aktif edildi"
-            : "Sesli uyarı aktif (tarayıcı bildirim izni kapalı)"
+            ? "Anlık Push Güvenlik Bildirimleri aktif edildi"
+            : "Push bildirimi için tarayıcı bildirim izni gereklidir",
+          perm === "granted" ? "success" : "error"
         )
       } else {
-        showToast("Push & Sesli Güvenlik Uyarıları kapatıldı")
+        showToast("Anlık Push Güvenlik Bildirimleri kapatıldı")
       }
     },
     [showToast]

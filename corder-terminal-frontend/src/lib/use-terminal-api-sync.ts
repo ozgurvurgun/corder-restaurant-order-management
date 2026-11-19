@@ -4,7 +4,6 @@ import { getBase, getToken } from "./api"
 import {
   getTerminalNotificationPrefs,
   normalizeWaiterCallPayload,
-  playTerminalWaiterChime,
   triggerTerminalPushNotification,
   type ActiveWaiterCall,
 } from "./terminal-notifications"
@@ -61,10 +60,6 @@ export function useTerminalApiSync(params: {
       if (!call) return
       const prefs = getTerminalNotificationPrefs()
       if (!prefs.enabled) return
-
-      if (prefs.soundEnabled) {
-        playTerminalWaiterChime(prefs.volume)
-      }
 
       const sectionLabel = call.sectionName || "Salon"
       const actionLabel =

@@ -94,42 +94,6 @@ export async function requestBrowserNotificationPermission(): Promise<Notificati
   }
 }
 
-export function playFraudAlertChime(severity: FraudSeverity = "critical"): void {
-  if (typeof window === "undefined") return
-  const AudioCtx =
-    window.AudioContext ||
-    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-  if (!AudioCtx) return
-
-  try {
-    const ctx = new AudioCtx()
-    const now = ctx.currentTime
-    const freqs = severity === "critical" ? [880, 1174.66, 880, 1318.51] : [740, 987.77, 740]
-
-    freqs.forEach((freq, idx) => {
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.type = severity === "critical" ? "triangle" : "sine"
-      osc.frequency.setValueAtTime(freq, now + idx * 0.14)
-
-      gain.gain.setValueAtTime(0.001, now + idx * 0.14)
-      gain.gain.exponentialRampToValueAtTime(0.24, now + idx * 0.14 + 0.02)
-      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.14 + 0.13)
-
-      osc.connect(gain)
-      gain.connect(ctx.destination)
-      osc.start(now + idx * 0.14)
-      osc.stop(now + idx * 0.14 + 0.135)
-    })
-
-    window.setTimeout(() => {
-      void ctx.close().catch(() => {})
-    }, 1000)
-  } catch {
-    // AudioContext may be blocked before first user interaction
-  }
-}
-
 export async function triggerFraudPushNotification(alert: FraudAlertDto): Promise<void> {
   if (typeof window === "undefined" || !("Notification" in window)) return
   if (Notification.permission !== "granted") return
@@ -150,6 +114,7 @@ export async function triggerFraudPushNotification(alert: FraudAlertDto): Promis
           icon: "/icon-192x192.png",
           badge: "/icon-96x96.png",
           tag: `corder-fraud-${alert.id}`,
+          silent: false,
           data: { alertId: alert.id, tab: "security" },
         })
         return
@@ -159,6 +124,7 @@ export async function triggerFraudPushNotification(alert: FraudAlertDto): Promis
       body,
       icon: "/icon-192x192.png",
       tag: `corder-fraud-${alert.id}`,
+      silent: false,
     })
   } catch {
     // Fallback ignored if notification fails

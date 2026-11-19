@@ -3,12 +3,12 @@ import { useBossStore } from "@/lib/boss-store"
 import type { FraudAlertDto, FraudAlertStatus, FraudSeverity } from "@/lib/types"
 import { formatIstanbulDateTime, formatMoney, sumMoney } from "@/lib/format"
 import {
-  FRAUD_ALGORITHMS, playFraudAlertChime,
+  FRAUD_ALGORITHMS,
   requestBrowserNotificationPermission, triggerFraudPushNotification,
 } from "@/lib/fraud-notifier"
 import { PaginationBar } from "./ui/pagination-bar"
 import {
-  ShieldAlert, Bell, BellOff, Volume2, CheckCircle2, Eye,
+  ShieldAlert, Bell, BellOff, CheckCircle2, Eye,
   XCircle, AlertTriangle, Clock, Building2, User, Cpu, MessageSquare, Trash2,
 } from "lucide-react"
 
@@ -142,23 +142,22 @@ export function SecurityFraudTab() {
   }
 
   const handleTestPushAndSound = async () => {
-    playFraudAlertChime("critical")
     const perm = await requestBrowserNotificationPermission()
     if (perm === "granted") {
       await triggerFraudPushNotification({
         id: `test-${Date.now()}`,
         ruleKey: "POST_PRINT_VOID_DISCOUNT",
         title: "Fiş Basımı Sonrası İptal / İskonto (Test)",
-        description: "Push ve sesli güvenlik uyarısı sistemi aktif ve sorunsuz çalışıyor.",
+        description: "Standart Push güvenlik bildirimi sistemi aktif ve sorunsuz çalışıyor.",
         severity: "critical",
         status: "open",
         amountImpact: 450,
         branchName: "Test Şube",
         createdAt: new Date().toISOString(),
       })
-      showToast("Sesli alarm ve tarayıcı Push bildirimi gönderildi")
+      showToast("Test Push bildirimi gönderildi")
     } else {
-      showToast("Sesli alarm çalındı (tarayıcı bildirim izni verilmedi)")
+      showToast("Push bildirimi için tarayıcı bildirim izni verilmedi", "error")
     }
   }
 
@@ -221,7 +220,7 @@ export function SecurityFraudTab() {
               }`}
             >
               {pushSoundEnabled ? <Bell className="h-4 w-4 text-emerald-600" /> : <BellOff className="h-4 w-4 text-[#86868b]" />}
-              Push &amp; Sesli Uyarı: {pushSoundEnabled ? "Açık" : "Kapalı"}
+              Push Bildirimi: {pushSoundEnabled ? "Açık" : "Kapalı"}
             </button>
 
             <button
@@ -229,8 +228,8 @@ export function SecurityFraudTab() {
               onClick={() => void handleTestPushAndSound()}
               className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#e5e5ea] bg-[#f9f9fb] px-3 text-[12px] font-medium text-[#1d1d1f] hover:bg-[#f0f0f5]"
             >
-              <Volume2 className="h-3.5 w-3.5 text-[#e63462]" />
-              Sesi &amp; Bildirimi Test Et
+              <Bell className="h-3.5 w-3.5 text-[#e63462]" />
+              Push Bildirimini Test Et
             </button>
           </div>
         </div>

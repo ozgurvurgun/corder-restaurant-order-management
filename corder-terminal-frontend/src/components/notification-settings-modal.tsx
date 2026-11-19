@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react"
-import { Bell, Volume2, VolumeX, Check, X, ShieldCheck } from "lucide-react"
+import { Bell, Check, X, ShieldCheck } from "lucide-react"
 import {
   getTerminalNotificationPrefs,
   getTerminalPushPermissionStatus,
-  playTerminalWaiterChime,
   requestTerminalPushPermission,
   saveTerminalNotificationPrefs,
+  triggerTerminalPushNotification,
   type ActiveWaiterCall,
   type TerminalNotificationPrefs,
 } from "@/lib/terminal-notifications"
@@ -83,7 +83,23 @@ export function TerminalNotificationSettingsModal(props: {
     const status = await requestTerminalPushPermission()
     setPushPerm(status)
     if (status === "granted") {
-      updatePref({ browserPushEnabled: !prefs.browserPushEnabled || true })
+      updatePref({ browserPushEnabled: true })
+    }
+  }
+
+  const handleTestPush = async () => {
+    let status = getTerminalPushPermissionStatus()
+    if (status !== "granted") {
+      status = await requestTerminalPushPermission()
+      setPushPerm(status)
+    }
+    if (status === "granted") {
+      updatePref({ browserPushEnabled: true })
+      triggerTerminalPushNotification(
+        "🔔 Masa 1 (Salon) — Garson Çağırıyor!",
+        "Standart Push bildirimi aktif.",
+        `corder-terminal-test-${Date.now()}`
+      )
     }
   }
 
@@ -91,7 +107,7 @@ export function TerminalNotificationSettingsModal(props: {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Bildirim & Ses Ayarları"
+      aria-label="Push Bildirim Ayarları"
       className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
       onClick={onClose}
     >
@@ -102,7 +118,7 @@ export function TerminalNotificationSettingsModal(props: {
         <div className="px-4 py-3.5 bg-[#e63462] text-white flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Bell className="h-5 w-5" />
-            <h2 className="text-[16px] font-semibold">Bildirim & Ses Ayarları</h2>
+            <h2 className="text-[16px] font-semibold">Push Bildirim Ayarları</h2>
           </div>
           <button
             type="button"
@@ -135,62 +151,9 @@ export function TerminalNotificationSettingsModal(props: {
             </button>
           </div>
 
-          <div className="flex items-center justify-between gap-3 pt-3 border-t border-border">
-            <div>
-              <p className="text-[14px] font-semibold">Sesli Zil Uyarısı</p>
-              <p className="text-[12px] text-muted-foreground">
-                Çağrı geldiğinde sesli uyarı çal
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => updatePref({ soundEnabled: !prefs.soundEnabled })}
-              className={`px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-colors ${
-                prefs.soundEnabled
-                  ? "bg-emerald-600 text-white"
-                  : "bg-muted text-muted-foreground"
-              }`}
-            >
-              {prefs.soundEnabled ? "Açık" : "Kapalı"}
-            </button>
-          </div>
-
-          <div className="pt-3 border-t border-border space-y-2">
+          <div className="pt-3 border-t border-border space-y-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-[14px] font-semibold flex items-center gap-1.5">
-                {prefs.volume > 0 ? (
-                  <Volume2 className="h-4 w-4 text-[#e63462]" />
-                ) : (
-                  <VolumeX className="h-4 w-4 text-muted-foreground" />
-                )}
-                Ses Seviyesi
-              </span>
-              <span className="text-[13px] font-bold text-[#e63462]">
-                %{Math.round(prefs.volume * 100)}
-              </span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={Math.round(prefs.volume * 100)}
-              onChange={(e) => updatePref({ volume: Number(e.target.value) / 100 })}
-              className="w-full accent-[#e63462] cursor-pointer"
-            />
-            <button
-              type="button"
-              onClick={() => playTerminalWaiterChime(prefs.volume)}
-              className="w-full py-2.5 px-3 rounded-xl bg-muted hover:bg-muted/80 text-card-foreground font-semibold text-[13px] flex items-center justify-center gap-2 active:scale-[0.99] transition-all"
-            >
-              <Volume2 className="h-4 w-4 text-[#e63462]" />
-              <span>Test Sesi Çal</span>
-            </button>
-          </div>
-
-          <div className="pt-3 border-t border-border space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[13px] font-semibold">Tarayıcı / PWA Bildirimleri</span>
+              <span className="text-[13px] font-semibold">Standart Push Bildirimleri</span>
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                 {pushPerm === "granted"
                   ? prefs.browserPushEnabled
@@ -203,6 +166,9 @@ export function TerminalNotificationSettingsModal(props: {
                       : "İzin Bekliyor"}
               </span>
             </div>
+            <p className="text-[11px] text-muted-foreground">
+              Çağrılar cihazın standart Push bildirimi ve sistem bildirim sesi ile iletilir.
+            </p>
             <button
               type="button"
               onClick={() => {
@@ -218,10 +184,19 @@ export function TerminalNotificationSettingsModal(props: {
               <span>
                 {pushPerm === "granted"
                   ? prefs.browserPushEnabled
-                    ? "Tarayıcı / PWA Bildirimini Kapat"
-                    : "Tarayıcı / PWA Bildirimini Aç"
-                  : "Tarayıcı / PWA Bildirim İzni"}
+                    ? "Push Bildirimini Kapat"
+                    : "Push Bildirimini Aç"
+                  : "Push Bildirim İzni Ver"}
               </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void handleTestPush()}
+              className="w-full py-2.5 px-3 rounded-xl bg-muted hover:bg-muted/80 text-card-foreground font-semibold text-[13px] flex items-center justify-center gap-2 active:scale-[0.99] transition-all"
+            >
+              <Bell className="h-4 w-4 text-[#e63462]" />
+              <span>Test Push Bildirimi Gönder</span>
             </button>
           </div>
 

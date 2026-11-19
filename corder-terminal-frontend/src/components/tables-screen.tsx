@@ -76,8 +76,8 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
             type="button"
             onClick={() => setNotifSettingsOpen(true)}
             className="p-2 relative active:opacity-60"
-            aria-label="Bildirim & Ses Ayarları"
-            title="Bildirim & Ses Ayarları"
+            aria-label="Push Bildirim Ayarları"
+            title="Push Bildirim Ayarları"
           >
             <Bell className="h-[20px] w-[20px]" />
             {waiterCalls.length > 0 && (

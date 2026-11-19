@@ -11,8 +11,6 @@ import { computeDiscountMinorUnits, fromMinorUnits, toMinorUnits } from "../form
 import { mapOrder } from "../mappers/orders-tables.mapper"
 import {
   getNotificationPrefs,
-  playSecurityAlertChime,
-  playWaiterCallChime,
   showBrowserNotification,
 } from "../notification-sound"
 import { showPanelToast } from "@/components/panel/panel-toast"
@@ -151,9 +149,8 @@ export function usePanelSocket(params: {
           ...prev,
         ]
       })
-      playWaiterCallChime()
       showPanelToast(title, "info")
-      showBrowserNotification(title, message)
+      showBrowserNotification(title, message, notifId)
     }
 
     const handleFraudAlert = (payload: {
@@ -181,9 +178,8 @@ export function usePanelSocket(params: {
           ...prev,
         ]
       })
-      playSecurityAlertChime()
       showPanelToast(title, "error")
-      showBrowserNotification(title, message)
+      showBrowserNotification(title, message, notifId)
     }
 
     socket.on("connect", handleConnect)
