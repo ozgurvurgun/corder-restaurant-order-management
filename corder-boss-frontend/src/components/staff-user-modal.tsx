@@ -10,7 +10,7 @@ import {
 import { StaffPermissionOverrides } from "./staff-permission-overrides"
 import { StaffShiftRestrictionFields } from "./staff-shift-restriction-fields"
 import { CustomSelect } from "./ui/custom-inputs"
-import { PasswordInputWithGenerator } from "./ui/password-input"
+import { CopyEmailButton, PasswordInputWithGenerator } from "./ui/password-input"
 import { Monitor, KeyRound, AlertCircle, X } from "lucide-react"
 
 interface StaffUserModalProps {
@@ -326,6 +326,7 @@ export function StaffUserModal({
                     >
                       @{mailDomain}
                     </span>
+                    <CopyEmailButton email={`${email || "sehmus"}@${mailDomain}`} variant="addon" />
                   </div>
                 </div>
                 <div>

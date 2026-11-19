@@ -23,7 +23,7 @@ interface TablesScreenProps {
 type FilterMode = "all" | "open" | "number"
 
 export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
-  const { tables, currentUser, isLoading, refreshData, waiterCalls } = useApp()
+  const { tables, currentUser, isLoading, refreshData } = useApp()
   const { showToast } = useToast()
   const [activeSection, setActiveSection] = useState<string>(ALL_SECTIONS)
   const [filterMode, setFilterMode] = useState<FilterMode>("all")
@@ -74,18 +74,6 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
           <h1 className="text-[17px] font-semibold tracking-tight">Corder</h1>
         </div>
         <div className="flex items-center gap-1 -mr-2">
-          <button
-            type="button"
-            onClick={() => setNotifSettingsOpen(true)}
-            className="p-2 relative active:opacity-60"
-            aria-label="Push Bildirim Ayarları"
-            title="Push Bildirim Ayarları"
-          >
-            <Bell className="h-[20px] w-[20px]" />
-            {waiterCalls.length > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-amber-300 ring-2 ring-[#e63462]" />
-            )}
-          </button>
           <button
             type="button"
             onClick={() => setMenuOpen(!menuOpen)}

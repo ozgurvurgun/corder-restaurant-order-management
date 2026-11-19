@@ -9,6 +9,7 @@ import { TerminalGeofenceBossCard } from "./terminal-geofence-boss-card"
 import { CustomSelect } from "./ui/custom-inputs"
 import { useConfirm } from "./ui/confirm-dialog"
 import { PaginationBar } from "./ui/pagination-bar"
+import { CopyEmailButton } from "./ui/password-input"
 import {
   Users,
   Plus,
@@ -259,7 +260,9 @@ export function StaffUsersTab() {
                           <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-[#86868b]">
                             {u.email && (
                               <span className="flex items-center gap-1">
-                                <Mail className="h-3 w-3" /> {u.email}
+                                <Mail className="h-3 w-3" />
+                                <span>{u.email}</span>
+                                <CopyEmailButton email={u.email} />
                               </span>
                             )}
                             {u.phone && (

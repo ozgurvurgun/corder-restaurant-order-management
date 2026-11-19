@@ -1,5 +1,45 @@
 import { useState } from "react"
-import { Eye, EyeOff, KeyRound } from "lucide-react"
+import { Check, Copy, Eye, EyeOff, KeyRound } from "lucide-react"
+
+export function CopyEmailButton({
+  email,
+  variant = "inline",
+}: {
+  email?: string | null
+  variant?: "inline" | "addon"
+}) {
+  const [copied, setCopied] = useState(false)
+  const clean = (email ?? "").trim()
+  if (!clean) return null
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (typeof navigator === "undefined" || !navigator.clipboard) return
+    void navigator.clipboard.writeText(clean).then(() => {
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1800)
+    })
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title={`E-postayı kopyala (${clean})`}
+      className={
+        variant === "addon"
+          ? "inline-flex items-center justify-center border-l border-[#e5e5ea] bg-[#ededf2] hover:bg-[#e2e2e9] px-2.5 text-[#636366] hover:text-[#1d1d1f] transition-colors cursor-pointer"
+          : "inline-flex h-5 w-5 items-center justify-center rounded-md text-[#86868b] hover:bg-[#e8e8ed] hover:text-[#1d1d1f] transition-colors cursor-pointer flex-shrink-0"
+      }
+    >
+      {copied ? (
+        <Check className={variant === "addon" ? "h-3.5 w-3.5 text-emerald-600" : "h-3 w-3 text-emerald-600"} />
+      ) : (
+        <Copy className={variant === "addon" ? "h-3.5 w-3.5" : "h-3 w-3"} />
+      )}
+    </button>
+  )
+}
 
 const UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ"
 const LOWER = "abcdefghijkmnpqrstuvwxyz"

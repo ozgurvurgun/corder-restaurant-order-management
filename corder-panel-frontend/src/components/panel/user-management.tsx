@@ -11,6 +11,7 @@ import { StaffAccountModal } from "./users/staff-account-modal"
 import { RolePermissionsMatrix } from "./users/role-permissions-matrix"
 import { TerminalGeofenceCard } from "./settings/terminal-geofence-card"
 import { PaginationBar } from "@/components/ui/pagination-bar"
+import { CopyEmailButton } from "@/components/ui/password-input"
 import {
   Plus,
   Pencil,
@@ -219,8 +220,9 @@ export default function UserManagement() {
                                 {user.name}
                               </span>
                               {user.email && (
-                                <span className="text-[11px] text-[#86868b] block">
-                                  {user.email}
+                                <span className="inline-flex items-center gap-1 text-[11px] text-[#86868b]">
+                                  <span>{user.email}</span>
+                                  <CopyEmailButton email={user.email} />
                                 </span>
                               )}
                             </div>

@@ -3,6 +3,7 @@ import { useAdminStore } from "@/lib/store"
 import { formatIstanbulDate } from "@/lib/money"
 import type { BossTier, RootAdmin } from "@/lib/types"
 import { BossFormModal } from "@/components/BossFormModal"
+import { CopyEmailInlineButton } from "@/components/CorderEmailInput"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import { PaginationBar } from "@/components/ui/pagination-bar"
 import {
@@ -229,7 +230,8 @@ export function BossesPage() {
                   <div className="mt-3.5 space-y-1.5 text-[12px] text-[#636366]">
                     <div className="flex items-center gap-2">
                       <Mail className="h-3.5 w-3.5 text-[#86868b]" />
-                      <span>{boss.email}</span>
+                      <span className="truncate">{boss.email}</span>
+                      <CopyEmailInlineButton email={boss.email} />
                     </div>
                     {boss.phone && (
                       <div className="flex items-center gap-2">

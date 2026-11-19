@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { UserPlus, Link2, Crown, Building2, Pencil, Unlink, Trash2 } from "lucide-react"
 import type { BossTier, RootAdmin } from "@/lib/types"
 import { useAdminStore } from "@/lib/store"
-import { CorderEmailInput } from "@/components/CorderEmailInput"
+import { CorderEmailInput, CopyEmailInlineButton } from "@/components/CorderEmailInput"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import { CustomSelect } from "@/components/ui/custom-inputs"
 import { PasswordInputWithGenerator } from "@/components/ui/password-input"
@@ -243,7 +243,10 @@ export function RootAdminsSection({
                       </span>
                     )}
                   </div>
-                  <p className="text-[12px] text-[#636366] mt-0.5">{admin.email}</p>
+                  <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-[#636366]">
+                    <span>{admin.email}</span>
+                    <CopyEmailInlineButton email={admin.email} />
+                  </div>
                   {admin.phone && (
                     <p className="text-[11px] text-[#86868b] mt-0.5">{admin.phone}</p>
                   )}

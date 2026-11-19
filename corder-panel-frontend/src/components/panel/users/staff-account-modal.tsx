@@ -11,7 +11,7 @@ import { usePanelAuth } from "@/lib/panel-auth"
 import { usePanelStore } from "@/lib/panel-store"
 import type { PanelUser, PanelUserRole } from "@/lib/panel-types"
 import { CustomSelect } from "@/components/ui/custom-inputs"
-import { PasswordInputWithGenerator } from "@/components/ui/password-input"
+import { CopyEmailButton, PasswordInputWithGenerator } from "@/components/ui/password-input"
 import { StaffShiftRestrictionFields } from "./staff-shift-restriction-fields"
 import { usePanelToast } from "../panel-toast"
 import { Sliders, X } from "lucide-react"
@@ -351,6 +351,7 @@ export function StaffAccountModal({
                 >
                   @{mailDomain}
                 </span>
+                <CopyEmailButton email={`${formEmail || "personel"}@${mailDomain}`} variant="addon" />
               </div>
             </div>
             <div>

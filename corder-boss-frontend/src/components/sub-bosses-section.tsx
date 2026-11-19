@@ -10,7 +10,7 @@ import {
 import { Building2, Crown, Plus, X } from "lucide-react"
 import { CustomSelect } from "./ui/custom-inputs"
 import { useConfirm } from "./ui/confirm-dialog"
-import { PasswordInputWithGenerator } from "./ui/password-input"
+import { CopyEmailButton, PasswordInputWithGenerator } from "./ui/password-input"
 import { PaginationBar } from "./ui/pagination-bar"
 
 export function SubBossesSection() {
@@ -156,7 +156,10 @@ export function SubBossesSection() {
                             : "Şube / Franchise Boss"}
                       </span>
                     </div>
-                    <p className="text-[11px] text-[#86868b] mt-0.5">{sb.email}</p>
+                    <div className="mt-0.5 flex items-center gap-1 text-[11px] text-[#86868b]">
+                      <span>{sb.email}</span>
+                      <CopyEmailButton email={sb.email} />
+                    </div>
                     <div className="mt-1.5 flex flex-wrap gap-1">
                       {sb.branches.map((br) => (
                         <span
@@ -257,6 +260,7 @@ export function SubBossesSection() {
                     >
                       @{subBossDomain}
                     </span>
+                    <CopyEmailButton email={`${sbEmail || "sube"}@${subBossDomain}`} variant="addon" />
                   </div>
                 </div>
                 <div>

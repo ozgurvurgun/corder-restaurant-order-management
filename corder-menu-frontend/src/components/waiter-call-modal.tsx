@@ -1,10 +1,37 @@
 import { useState, useEffect } from "react"
-import { ConciergeBell, Bell, CreditCard, CheckCircle2, X, Loader2 } from "lucide-react"
+import { CreditCard, CheckCircle2, X, Loader2 } from "lucide-react"
 import {
   callWaiter,
   type MenuTableContext,
   type WaiterCallRequestType,
 } from "@/lib/api"
+
+function WaiterIcon({ className = "w-6 h-6" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      {/* Garson başı */}
+      <circle cx="9.5" cy="6.5" r="3" />
+      {/* Garson gövdesi */}
+      <path d="M4 20v-1.8A4.2 4.2 0 0 1 8.2 14h2.6a4.2 4.2 0 0 1 4.2 4.2V20" />
+      {/* Papyon */}
+      <path d="M8 15.6l1.5 1 1.5-1v1.8l-1.5-1-1.5 1z" fill="currentColor" />
+      {/* Tepsi tutan kol & servis kubbesi (cloche) */}
+      <path d="M14.5 15.5l2.8-2.5H20" />
+      <path d="M14.5 10.5h7" />
+      <path d="M15.5 10.5a2.5 2.5 0 0 1 5 0" />
+      <circle cx="18" cy="7.5" r="0.6" fill="currentColor" />
+    </svg>
+  )
+}
 
 const QUICK_NOTES = ["Su", "Peçete", "Menü", "Çatal / Bıçak", "Küllük / Temizlik"]
 const COOLDOWN_SECONDS = 30
@@ -126,12 +153,15 @@ export function WaiterCallWidget(props: {
             </span>
           </>
         ) : (
-          <>
-            <ConciergeBell className="w-6 h-6 flex-shrink-0" />
+          <div className="flex flex-col items-center justify-center leading-none">
+            <WaiterIcon className="w-5 h-5 flex-shrink-0" />
+            <span className="mt-0.5 text-[8.5px] font-extrabold tracking-tight">
+              Garson
+            </span>
             <span
-              className={`absolute top-3 right-3 w-2 h-2 rounded-full animate-pulse ${pulseDotClass}`}
+              className={`absolute top-2.5 right-2.5 w-2 h-2 rounded-full animate-pulse ${pulseDotClass}`}
             />
-          </>
+          </div>
         )}
       </button>
 
@@ -226,7 +256,7 @@ export function WaiterCallWidget(props: {
                             : "border-stone-100 bg-stone-50 text-stone-700 hover:border-stone-200"
                       }`}
                     >
-                      <Bell className="w-6 h-6" />
+                      <WaiterIcon className="w-6 h-6" />
                       <span className="font-bold text-sm">Garson Çağır</span>
                     </button>
                     <button
