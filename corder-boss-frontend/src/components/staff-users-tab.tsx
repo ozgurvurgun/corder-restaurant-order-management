@@ -5,6 +5,7 @@ import type { StaffMemberDto } from "@/lib/types"
 import { getRoleDisplayName } from "@/lib/permission-labels"
 import { StaffUserModal } from "./staff-user-modal"
 import { SubBossesSection } from "./sub-bosses-section"
+import { TerminalGeofenceBossCard } from "./terminal-geofence-boss-card"
 import { CustomSelect } from "./ui/custom-inputs"
 import { useConfirm } from "./ui/confirm-dialog"
 import { PaginationBar } from "./ui/pagination-bar"
@@ -19,6 +20,7 @@ import {
   Mail,
   Phone,
   Building2,
+  Clock,
 } from "lucide-react"
 
 export function StaffUsersTab() {
@@ -74,6 +76,10 @@ export function StaffUsersTab() {
     revokedPermissions: string[]
     maxDiscountPercentOverride: number | null
     maxDiscountAmountOverride: number | null
+    shiftRestrictionEnabled?: boolean
+    shiftStartTime?: string | null
+    shiftEndTime?: string | null
+    shiftCutoffOffsetMinutes?: number
   }) => {
     if (!effectiveBranchId) return
     setSubmitting(true)
@@ -124,6 +130,7 @@ export function StaffUsersTab() {
   return (
     <div className="space-y-4">
       <SubBossesSection />
+      <TerminalGeofenceBossCard />
 
       {/* Branch Staff & Merchant Panel Users */}
       <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-4">
@@ -312,6 +319,14 @@ export function StaffUsersTab() {
                           ? ` (Maks ${u.limits.maxDiscountAmount} ₺)`
                           : ""}
                       </span>
+                      {u.shiftRestrictionEnabled &&
+                        u.shiftStartTime &&
+                        (u.effectiveShiftEndTime || u.shiftEndTime) && (
+                          <span className="inline-flex items-center gap-1 rounded-lg bg-purple-50 px-2.5 py-1 text-[11px] font-semibold text-purple-700">
+                            <Clock className="h-3 w-3" />
+                            Mesai: {u.shiftStartTime} - {u.effectiveShiftEndTime || u.shiftEndTime}
+                          </span>
+                        )}
                     </div>
                   </div>
                 )

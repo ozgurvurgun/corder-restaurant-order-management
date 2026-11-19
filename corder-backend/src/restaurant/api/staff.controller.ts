@@ -45,10 +45,18 @@ export class StaffController {
   ) {
     const ip = extractClientIp(req);
     this.rateLimiter.consumePinAttempt(ip, restaurantId, dto.staffId);
+    const rawHeaderLat = req.headers['x-terminal-lat'];
+    const rawHeaderLng = req.headers['x-terminal-lng'];
+    const headerLat = rawHeaderLat != null ? Number(Array.isArray(rawHeaderLat) ? rawHeaderLat[0] : rawHeaderLat) : NaN;
+    const headerLng = rawHeaderLng != null ? Number(Array.isArray(rawHeaderLng) ? rawHeaderLng[0] : rawHeaderLng) : NaN;
+    const latitude = dto.latitude ?? (Number.isFinite(headerLat) ? headerLat : null);
+    const longitude = dto.longitude ?? (Number.isFinite(headerLng) ? headerLng : null);
+
     const result = await this.staffService.verifyPin(
       restaurantId,
       dto.pin,
       dto.staffId,
+      { latitude, longitude },
     );
     this.rateLimiter.resetPinAttempts(ip, restaurantId, dto.staffId);
     return result;

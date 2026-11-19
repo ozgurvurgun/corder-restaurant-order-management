@@ -57,3 +57,4 @@ export class PlatformNotificationEntity {
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }
+

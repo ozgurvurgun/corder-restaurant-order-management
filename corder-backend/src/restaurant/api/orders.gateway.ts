@@ -260,4 +260,14 @@ export class OrdersGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         .emit('platform:notification', payload);
     }
   }
+
+  emitStaffSessionUpdated(restaurantId: string, staffId?: string) {
+    if (!this.server) return;
+    this.server
+      .to(getRestaurantRoom(restaurantId))
+      .emit('staff:session-updated', {
+        restaurantId,
+        staffId: staffId ?? null,
+      });
+  }
 }

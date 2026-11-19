@@ -1,14 +1,12 @@
 import { useEffect, type MutableRefObject } from "react"
-import { api, getStaffSession, getToken } from "./api"
-import type { TerminalOrderItem, TerminalUser } from "./types"
+import { acquireTerminalCoords, api, getStaffSession, getToken } from "./api"
+import { computeClientHaversineMeters } from "./terminal-geofence"
+import type { TerminalOrderItem, TerminalStaffMember, TerminalUser } from "./types"
 import type { ActiveWaiterCall } from "./terminal-notifications"
 import { useTerminalApiSync } from "./use-terminal-api-sync"
 
 export const CARTS_STORAGE_KEY = "terminal_carts_v1"
 export const LOCKED_TABLE_STORAGE_KEY = "terminal_locked_table_id"
-// Shared POS tablets sit idle while waiters talk to guests / use merchant on another device.
-// 90s was kicking staff back to PIN select during normal floor work.
-const STAFF_IDLE_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes inactivity auto-lock
 const LOCK_HEARTBEAT_MS = 45_000 // Refresh 120s server lock every 45s while active
 
 export function loadStoredCarts(): Record<string, TerminalOrderItem[]> {
@@ -35,6 +33,7 @@ export function saveStoredCarts(carts: Record<string, TerminalOrderItem[]>) {
 export function useTerminalLifecycle(params: {
   isLoggedIn: boolean
   currentUser: TerminalUser | null
+  users?: TerminalStaffMember[]
   selectedTableId: string | null
   lockedTableIdRef: MutableRefObject<string | null>
   lastActivityRef: MutableRefObject<number>
@@ -48,9 +47,9 @@ export function useTerminalLifecycle(params: {
   const {
     isLoggedIn,
     currentUser,
+    users = [],
     selectedTableId,
     lockedTableIdRef,
-    lastActivityRef,
     setIsOffline,
     refreshData,
     refreshLiveState,
@@ -122,28 +121,88 @@ export function useTerminalLifecycle(params: {
     }
   }, [isLoggedIn, currentUser, selectedTableId, lockedTableIdRef])
 
-  // Auto-lock staff session after 90s of inactivity or when staff session expires
+  // Shift cutoff & Geofence live watchdog (replaces blind 5-minute idle lock)
   useEffect(() => {
     if (!isLoggedIn || !currentUser) return
-    lastActivityRef.current = Date.now()
-    const markActivity = () => {
-      lastActivityRef.current = Date.now()
+
+    const activeMember = users.find((u) => u.id === currentUser.id)
+    if (activeMember && activeMember.isWithinShift === false) {
+      try {
+        sessionStorage.setItem(
+          "terminal_staff_kick_notice",
+          activeMember.shiftBlockReason ||
+            "Mesai erişim süreniz sona erdiği için oturumunuz otomatik olarak kapatıldı."
+        )
+      } catch {}
+      logout()
+      return
     }
-    window.addEventListener("pointerdown", markActivity, { passive: true })
-    window.addEventListener("keydown", markActivity, { passive: true })
-    window.addEventListener("touchstart", markActivity, { passive: true })
-    window.addEventListener("scroll", markActivity, { passive: true, capture: true })
-    const timerId = window.setInterval(() => {
-      if (!getStaffSession() || Date.now() - lastActivityRef.current >= STAFF_IDLE_TIMEOUT_MS) {
+
+    const checkSessionAndShift = () => {
+      if (!getStaffSession()) {
+        try {
+          sessionStorage.setItem(
+            "terminal_staff_kick_notice",
+            "Mesai erişim süreniz sona erdiği için oturumunuz otomatik olarak kapatıldı."
+          )
+        } catch {}
         logout()
       }
-    }, 10_000)
-    return () => {
-      window.removeEventListener("pointerdown", markActivity)
-      window.removeEventListener("keydown", markActivity)
-      window.removeEventListener("touchstart", markActivity)
-      window.removeEventListener("scroll", markActivity, true)
-      window.clearInterval(timerId)
     }
-  }, [isLoggedIn, currentUser, logout, lastActivityRef])
+
+    const checkGeofence = async () => {
+      const sample = activeMember ?? users[0]
+      if (
+        !sample?.terminalLocationRestrictionEnabled ||
+        sample.locationLatitude == null ||
+        sample.locationLongitude == null
+      ) {
+        return
+      }
+      const coords = await acquireTerminalCoords(true)
+      if (coords.latitude == null || coords.longitude == null) {
+        try {
+          sessionStorage.setItem(
+            "terminal_staff_kick_notice",
+            "Bu işletmede konum doğrulaması zorunludur. Konum (GPS) izni kapalı olduğu için oturumunuz kapatıldı."
+          )
+        } catch {}
+        logout()
+        return
+      }
+      const allowedRadius = Math.max(20, Number(sample.locationRadiusMeters || 150))
+      const dist = computeClientHaversineMeters(
+        Number(sample.locationLatitude),
+        Number(sample.locationLongitude),
+        coords.latitude,
+        coords.longitude
+      )
+      if (dist > allowedRadius) {
+        try {
+          sessionStorage.setItem(
+            "terminal_staff_kick_notice",
+            `Restoran konumundan uzaklaştığınız için terminal oturumunuz kapatıldı (Mesafeniz: ${dist} m, İzin verilen: ${allowedRadius} m).`
+          )
+        } catch {}
+        logout()
+      }
+    }
+
+    void checkGeofence()
+    const shiftTimerId = window.setInterval(checkSessionAndShift, 4_000)
+    const geoTimerId = window.setInterval(() => void checkGeofence(), 25_000)
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        checkSessionAndShift()
+        void checkGeofence()
+      }
+    }
+    document.addEventListener("visibilitychange", onVisible)
+
+    return () => {
+      window.clearInterval(shiftTimerId)
+      window.clearInterval(geoTimerId)
+      document.removeEventListener("visibilitychange", onVisible)
+    }
+  }, [isLoggedIn, currentUser, users, logout])
 }

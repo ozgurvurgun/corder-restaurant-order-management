@@ -1,69 +1,43 @@
 import { useCallback } from "react"
 import type {
-  AuditLog,
-  Branch,
-  PanelNotification,
-  PanelUser,
-  PrinterConfig,
-  PrinterDepartment,
-  RestaurantSettings,
+  AuditLog, Branch, PanelNotification, PanelUser, PrinterConfig, PrinterDepartment, RestaurantSettings,
 } from "../panel-types"
 import { api } from "../api"
 import { formatTitleCase } from "../format"
 import { showPanelToast } from "@/components/panel/panel-toast"
 import {
-  genId,
-  getDismissedNotifIds,
-  getReadNotifIds,
-  saveAppearanceSettings,
-  saveDismissedNotifIds,
-  saveNotifsClearedAt,
-  saveReadNotifIds,
+  genId, getDismissedNotifIds, getReadNotifIds, saveAppearanceSettings,
+  saveDismissedNotifIds, saveNotifsClearedAt, saveReadNotifIds,
 } from "./panel-local-storage"
 import type { LogActivityFn } from "./panel-store-context"
 
 type StateSetter<T> = (v: T | ((prev: T) => T)) => void
 
 function mapStaffDtoToPanelUser(dto: {
-  id: string
-  name: string
-  email?: string | null
-  phone?: string
-  role: string
-  roleLabel?: string
-  roleColor?: string
-  hasPin?: boolean
-  hasPassword?: boolean
-  canAccessPanel?: boolean
-  canAccessTerminal?: boolean
-  permissions?: string[]
-  grantedPermissions?: string[]
-  revokedPermissions?: string[]
-  maxDiscountPercentOverride?: number | null
-  maxDiscountAmountOverride?: number | null
+  id: string; name: string; email?: string | null; phone?: string; role: string
+  roleLabel?: string; roleColor?: string; hasPin?: boolean; hasPassword?: boolean
+  canAccessPanel?: boolean; canAccessTerminal?: boolean; permissions?: string[]
+  grantedPermissions?: string[]; revokedPermissions?: string[]
+  maxDiscountPercentOverride?: number | null; maxDiscountAmountOverride?: number | null
+  shiftRestrictionEnabled?: boolean; shiftStartTime?: string | null; shiftEndTime?: string | null
+  shiftCutoffOffsetMinutes?: number; effectiveShiftEndTime?: string | null
   limits?: { maxDiscountPercent: number; maxDiscountAmount: number | null }
-  isActive: boolean
-  createdAt?: string
+  isActive: boolean; createdAt?: string
 }): PanelUser {
   return {
-    id: dto.id,
-    name: formatTitleCase(dto.name),
-    email: dto.email ?? undefined,
-    phone: dto.phone,
-    role: dto.role,
-    roleLabel: dto.roleLabel,
-    roleColor: dto.roleColor,
-    hasPin: dto.hasPin,
-    hasPassword: dto.hasPassword,
-    canAccessPanel: dto.canAccessPanel,
-    canAccessTerminal: dto.canAccessTerminal,
-    permissions: dto.permissions,
-    grantedPermissions: dto.grantedPermissions ?? [],
+    id: dto.id, name: formatTitleCase(dto.name), email: dto.email ?? undefined, phone: dto.phone,
+    role: dto.role, roleLabel: dto.roleLabel, roleColor: dto.roleColor,
+    hasPin: dto.hasPin, hasPassword: dto.hasPassword,
+    canAccessPanel: dto.canAccessPanel, canAccessTerminal: dto.canAccessTerminal,
+    permissions: dto.permissions, grantedPermissions: dto.grantedPermissions ?? [],
     revokedPermissions: dto.revokedPermissions ?? [],
     maxDiscountPercentOverride: dto.maxDiscountPercentOverride ?? null,
     maxDiscountAmountOverride: dto.maxDiscountAmountOverride ?? null,
-    limits: dto.limits,
-    active: dto.isActive,
+    shiftRestrictionEnabled: Boolean(dto.shiftRestrictionEnabled),
+    shiftStartTime: dto.shiftStartTime ?? null, shiftEndTime: dto.shiftEndTime ?? null,
+    shiftCutoffOffsetMinutes: Number(dto.shiftCutoffOffsetMinutes ?? 0),
+    effectiveShiftEndTime: dto.effectiveShiftEndTime ?? null,
+    limits: dto.limits, active: dto.isActive,
     createdAt: dto.createdAt ? new Date(dto.createdAt) : new Date(),
   }
 }
@@ -142,6 +116,10 @@ export function useSystemActions(params: {
           ...(u.revokedPermissions !== undefined ? { revokedPermissions: u.revokedPermissions } : {}),
           ...(u.maxDiscountPercentOverride !== undefined ? { maxDiscountPercentOverride: u.maxDiscountPercentOverride } : {}),
           ...(u.maxDiscountAmountOverride !== undefined ? { maxDiscountAmountOverride: u.maxDiscountAmountOverride } : {}),
+          ...(u.shiftRestrictionEnabled !== undefined ? { shiftRestrictionEnabled: u.shiftRestrictionEnabled } : {}),
+          ...(u.shiftStartTime !== undefined ? { shiftStartTime: u.shiftStartTime } : {}),
+          ...(u.shiftEndTime !== undefined ? { shiftEndTime: u.shiftEndTime } : {}),
+          ...(u.shiftCutoffOffsetMinutes !== undefined ? { shiftCutoffOffsetMinutes: u.shiftCutoffOffsetMinutes } : {}),
         })
         .then((created) => {
           const mapped = mapStaffDtoToPanelUser(created)
@@ -180,6 +158,10 @@ export function useSystemActions(params: {
       }
       if (data.maxDiscountPercentOverride !== undefined) payload.maxDiscountPercentOverride = data.maxDiscountPercentOverride
       if (data.maxDiscountAmountOverride !== undefined) payload.maxDiscountAmountOverride = data.maxDiscountAmountOverride
+      if (data.shiftRestrictionEnabled !== undefined) payload.shiftRestrictionEnabled = data.shiftRestrictionEnabled
+      if (data.shiftStartTime !== undefined) payload.shiftStartTime = data.shiftStartTime
+      if (data.shiftEndTime !== undefined) payload.shiftEndTime = data.shiftEndTime
+      if (data.shiftCutoffOffsetMinutes !== undefined) payload.shiftCutoffOffsetMinutes = data.shiftCutoffOffsetMinutes
 
       api.staff
         .update(token, id, payload)
@@ -226,7 +208,7 @@ export function useSystemActions(params: {
         }
       }
       if (!token) return
-      const serverFields = ["name", "logoUrl", "address", "phone", "taxId", "whatsapp", "instagram", "facebook", "website", "workingHours", "menuTemplate"] as const
+      const serverFields = ["name", "logoUrl", "address", "phone", "taxId", "whatsapp", "instagram", "facebook", "website", "workingHours", "menuTemplate", "terminalLocationRestrictionEnabled", "locationLatitude", "locationLongitude", "locationRadiusMeters"] as const
       if (!serverFields.some((k) => s[k] !== undefined || k in s)) return
       api.restaurant
         .updateSettings(token, {
@@ -241,6 +223,10 @@ export function useSystemActions(params: {
           ...("website" in s ? { website: s.website ?? null } : {}),
           ...("workingHours" in s ? { workingHours: s.workingHours ?? null } : {}),
           ...(s.menuTemplate !== undefined ? { menuTemplate: s.menuTemplate } : {}),
+          ...(s.terminalLocationRestrictionEnabled !== undefined ? { terminalLocationRestrictionEnabled: s.terminalLocationRestrictionEnabled } : {}),
+          ...("locationLatitude" in s ? { locationLatitude: s.locationLatitude ?? null } : {}),
+          ...("locationLongitude" in s ? { locationLongitude: s.locationLongitude ?? null } : {}),
+          ...(s.locationRadiusMeters !== undefined ? { locationRadiusMeters: s.locationRadiusMeters } : {}),
         })
         .then(() => {
           logActivity({ action: "settings_updated", category: "settings", details: "Restoran ayarları güncellendi", metadata: { fields: Object.keys(s) } })

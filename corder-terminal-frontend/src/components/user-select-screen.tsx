@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect } from "react"
-import { AlertCircle, Check, ChevronLeft, ChevronRight, Delete, Lock, LogOut, RefreshCw, User } from "lucide-react"
+import { AlertCircle, Check, ChevronLeft, ChevronRight, Clock, Delete, Lock, LogOut, MapPin, RefreshCw, User } from "lucide-react"
 import { useApp } from "@/lib/store"
+import { acquireTerminalCoords } from "@/lib/api"
+import type { TerminalStaffMember } from "@/lib/types"
 import { useToast } from "@/components/ios-toast"
 
 interface UserSelectScreenProps {
@@ -18,20 +20,47 @@ export function UserSelectScreen({ onSelect }: UserSelectScreenProps) {
   const [error, setError] = useState("")
   const [shake, setShake] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [kickNotice, setKickNotice] = useState<string | null>(null)
 
   const selectedUser = users.find((u) => u.id === selectedUserId) ?? null
+  const locationRestrictionActive = Boolean(users[0]?.terminalLocationRestrictionEnabled)
+
+  useEffect(() => {
+    try {
+      const notice = sessionStorage.getItem("terminal_staff_kick_notice")
+      if (notice) {
+        setKickNotice(notice)
+        showToast(notice, "error")
+        sessionStorage.removeItem("terminal_staff_kick_notice")
+      }
+    } catch {}
+  }, [showToast])
+
+  useEffect(() => {
+    if (locationRestrictionActive) {
+      void acquireTerminalCoords(false)
+    }
+  }, [locationRestrictionActive])
 
   const triggerShake = useCallback(() => {
     setShake(true)
     setTimeout(() => setShake(false), 500)
   }, [])
 
-  const handleUserTap = (userId: string, hasPin: boolean) => {
-    if (!hasPin) {
+  const handleUserTap = (user: TerminalStaffMember) => {
+    if (!user.hasPin) {
       showToast("Bu personel için PIN tanımlanmamış. Panelden PIN atayın.", "error")
       return
     }
-    setSelectedUserId(userId)
+    if (user.shiftRestrictionEnabled && user.isWithinShift === false) {
+      showToast(
+        user.shiftBlockReason ||
+          `Mesai saatleriniz dışında terminale giriş yapamazsınız (${user.effectiveStartTime} - ${user.effectiveEndTime}).`,
+        "error"
+      )
+      return
+    }
+    setSelectedUserId(user.id)
     setPin("")
     setError("")
   }
@@ -251,6 +280,20 @@ export function UserSelectScreen({ onSelect }: UserSelectScreenProps) {
         <h1 className="text-[32px] font-bold text-white leading-tight">
           Kullanıcı Seçin
         </h1>
+        {locationRestrictionActive && (
+          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-white/15 backdrop-blur-xl px-3 py-1 text-[12px] font-medium text-white/90">
+            <MapPin className="h-3.5 w-3.5 text-amber-300" />
+            <span>
+              Konum Koruması Aktif ({users[0]?.locationRadiusMeters || 150} m yarıçap)
+            </span>
+          </div>
+        )}
+        {kickNotice && (
+          <div className="mt-3 rounded-2xl bg-red-950/75 border border-red-400/60 p-3.5 text-white text-[13px] leading-snug flex items-start gap-2.5">
+            <AlertCircle className="h-4 w-4 text-red-300 flex-shrink-0 mt-0.5" />
+            <span>{kickNotice}</span>
+          </div>
+        )}
       </div>
 
       <div className="px-5 flex flex-col gap-3 flex-1 overflow-y-auto pb-4">
@@ -278,37 +321,59 @@ export function UserSelectScreen({ onSelect }: UserSelectScreenProps) {
             </p>
           </div>
         ) : (
-          users.map((user) => (
-            <button
-              key={user.id}
-              type="button"
-              onClick={() => handleUserTap(user.id, user.hasPin)}
-              className={`flex items-center gap-4 w-full bg-white/12 backdrop-blur-xl rounded-2xl p-4 active:bg-white/20 transition-all cursor-pointer ${
-                !user.hasPin ? "opacity-65" : ""
-              }`}
-            >
-              <div
-                className="h-11 w-11 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center flex-shrink-0 shadow-sm"
-                style={user.roleColor ? { background: user.roleColor } : undefined}
+          users.map((user) => {
+            const isOutOfShift =
+              Boolean(user.shiftRestrictionEnabled) && user.isWithinShift === false
+            return (
+              <button
+                key={user.id}
+                type="button"
+                onClick={() => handleUserTap(user)}
+                className={`flex items-center gap-4 w-full bg-white/12 backdrop-blur-xl rounded-2xl p-4 active:bg-white/20 transition-all cursor-pointer ${
+                  !user.hasPin || isOutOfShift ? "opacity-65" : ""
+                }`}
               >
-                <User className="h-5 w-5 text-white" />
-              </div>
-              <div className="flex-1 text-left">
-                <span className="text-white font-semibold text-[17px] block">
-                  {user.name}
-                </span>
-                <span className="text-white/60 text-[12px] flex items-center gap-1.5 mt-0.5">
-                  <Lock className="w-3 h-3" />
-                  {!user.hasPin
-                    ? `${user.roleLabel ? `${user.roleLabel} • ` : ""}PIN tanımlanmamış`
-                    : user.roleLabel
-                      ? `${user.roleLabel} • PIN korumalı`
-                      : "PIN korumalı"}
-                </span>
-              </div>
-              <ChevronRight className="h-5 w-5 text-white/40" />
-            </button>
-          ))
+                <div
+                  className="h-11 w-11 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center flex-shrink-0 shadow-sm"
+                  style={user.roleColor ? { background: user.roleColor } : undefined}
+                >
+                  <User className="h-5 w-5 text-white" />
+                </div>
+                <div className="flex-1 text-left">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-white font-semibold text-[17px]">
+                      {user.name}
+                    </span>
+                    {user.shiftRestrictionEnabled &&
+                      user.effectiveStartTime &&
+                      user.effectiveEndTime && (
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            isOutOfShift
+                              ? "bg-red-950/80 text-red-200 border border-red-400/50"
+                              : "bg-emerald-950/60 text-emerald-200 border border-emerald-400/40"
+                          }`}
+                        >
+                          <Clock className="h-2.5 w-2.5" />
+                          {isOutOfShift
+                            ? `Mesai Dışı (${user.effectiveStartTime} - ${user.effectiveEndTime})`
+                            : `Mesai: ${user.effectiveStartTime} - ${user.effectiveEndTime}`}
+                        </span>
+                      )}
+                  </div>
+                  <span className="text-white/60 text-[12px] flex items-center gap-1.5 mt-0.5">
+                    <Lock className="w-3 h-3" />
+                    {!user.hasPin
+                      ? `${user.roleLabel ? `${user.roleLabel} • ` : ""}PIN tanımlanmamış`
+                      : user.roleLabel
+                        ? `${user.roleLabel} • PIN korumalı`
+                        : "PIN korumalı"}
+                  </span>
+                </div>
+                <ChevronRight className="h-5 w-5 text-white/40" />
+              </button>
+            )
+          })
         )}
       </div>
 

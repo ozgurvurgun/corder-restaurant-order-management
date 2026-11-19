@@ -1,5 +1,7 @@
 import type { PaymentMethod, StaffRole, TableDiscount, TerminalStaffMember } from "./types"
+import { acquireTerminalCoords, getCachedTerminalCoords } from "./terminal-geofence"
 
+export { acquireTerminalCoords, getCachedTerminalCoords }
 export type { PaymentMethod, StaffRole, TableDiscount, TerminalStaffMember }
 
 export const getBase = () => (import.meta.env.VITE_API_URL as string) ?? ""
@@ -64,17 +66,9 @@ export function setRestaurant(restaurant: { id: string; name: string; slug: stri
 }
 
 export interface StaffSession {
-  staffId: string
-  name: string
-  role: StaffRole
-  roleLabel?: string
-  permissions?: string[]
-  limits?: {
-    maxDiscountPercent: number
-    maxDiscountAmount: number | null
-  }
-  staffToken: string
-  expiresAt: number
+  staffId: string; name: string; role: StaffRole; roleLabel?: string
+  permissions?: string[]; limits?: { maxDiscountPercent: number; maxDiscountAmount: number | null }
+  staffToken: string; expiresAt: number; shiftAccessUntil?: string | null; effectiveEndTime?: string | null
 }
 
 export interface CloseCheckBody {
@@ -135,11 +129,20 @@ export function getStaffSession(): StaffSession | null {
 }
 
 export function setStaffSession(session: Omit<StaffSession, "expiresAt">): StaffSession {
+  const defaultExpiresAt = Date.now() + STAFF_SESSION_MS
+  const shiftUntilMs =
+    session.shiftAccessUntil && !Number.isNaN(new Date(session.shiftAccessUntil).getTime())
+      ? new Date(session.shiftAccessUntil).getTime()
+      : null
+  const expiresAt =
+    shiftUntilMs && shiftUntilMs > Date.now()
+      ? Math.min(defaultExpiresAt, shiftUntilMs)
+      : defaultExpiresAt
   const data: StaffSession = {
     ...session,
     role: normalizeStaffRole(session.role),
     permissions: Array.isArray(session.permissions) ? session.permissions : [],
-    expiresAt: Date.now() + STAFF_SESSION_MS,
+    expiresAt,
   }
   localStorage.setItem(STAFF_SESSION_KEY, JSON.stringify(data))
   return data
@@ -154,6 +157,8 @@ export function isStaffAuthError(status: number, message: unknown): boolean {
   const lower = message.toLowerCase()
   return (
     lower.includes("personel") ||
+    lower.includes("mesai") ||
+    lower.includes("konum") ||
     lower.includes("staff") ||
     lower.includes("pin") ||
     lower.includes("actor session") ||
@@ -182,6 +187,11 @@ async function request<T>(
       if (staffSession?.staffToken) {
         headers["X-Staff-Token"] = staffSession.staffToken
       }
+      const coords = getCachedTerminalCoords()
+      if (coords) {
+        headers["X-Terminal-Lat"] = String(coords.latitude)
+        headers["X-Terminal-Lng"] = String(coords.longitude)
+      }
     }
   }
   const res = await fetch(url, { ...init, headers })
@@ -196,6 +206,11 @@ async function request<T>(
     }
     if (res.status === 401 && token && !skipAuthExpired) {
       if (isStaffAuthError(res.status, message)) {
+        if (typeof message === "string" && message.trim()) {
+          try {
+            sessionStorage.setItem("terminal_staff_kick_notice", message.trim())
+          } catch {}
+        }
         staffExpiredHandler?.()
       } else {
         notifyAuthExpired(typeof message === "string" ? message : null)
@@ -397,7 +412,12 @@ export const api = {
         token,
         skipStaffToken: true,
       }),
-    verifyPin: (token: string, pin: string, staffId?: string) =>
+    verifyPin: (
+      token: string,
+      pin: string,
+      staffId?: string,
+      coords?: { latitude?: number | null; longitude?: number | null }
+    ) =>
       request<{
         staffId: string
         name: string
@@ -409,69 +429,45 @@ export const api = {
           maxDiscountAmount: number | null
         }
         staffToken: string
+        shiftAccessUntil?: string | null
+        effectiveEndTime?: string | null
       }>("/restaurant/staff/verify-pin", {
         method: "POST",
         token,
         skipAuthExpired: true,
         skipStaffToken: true,
-        body: JSON.stringify(staffId ? { pin, staffId } : { pin }),
+        body: JSON.stringify({
+          pin,
+          ...(staffId ? { staffId } : {}),
+          ...(coords?.latitude != null ? { latitude: coords.latitude } : {}),
+          ...(coords?.longitude != null ? { longitude: coords.longitude } : {}),
+        }),
       }),
   },
 }
 
 export interface RawTableDto {
-  id: string
-  name: string
-  section: string
-  status: string
-  capacity?: number
-  discount?: TableDiscount | null
-  sessionStaffId?: string | null
-  sessionStaffName?: string | null
-  sessionLockedAt?: string | null
+  id: string; name: string; section: string; status: string; capacity?: number
+  discount?: TableDiscount | null; sessionStaffId?: string | null
+  sessionStaffName?: string | null; sessionLockedAt?: string | null
 }
 
 export interface OrderItemDto {
-  id: string
-  productId: string
-  productName: string
-  price: number
-  quantity: number
-  note?: string
-  status: string
-  createdAt: string
+  id: string; productId: string; productName: string; price: number
+  quantity: number; note?: string; status: string; createdAt: string
 }
 
 export interface OrderDto {
-  id: string
-  tableId: string
-  userId: string | null
-  userName?: string | null
-  status: string
-  items: OrderItemDto[]
-  createdAt: string
-  updatedAt: string
-  mergedFrom?: string | null
+  id: string; tableId: string; userId: string | null; userName?: string | null
+  status: string; items: OrderItemDto[]; createdAt: string; updatedAt: string; mergedFrom?: string | null
 }
 
 export type MenuCategoryTree = {
-  id: string
-  name: string
-  slug: string
-  products: {
-    id: string
-    name: string
-    description?: string
-    price: number
-    imageUrl?: string
-    inStock: boolean
-  }[]
+  id: string; name: string; slug: string
+  products: { id: string; name: string; description?: string; price: number; imageUrl?: string; inStock: boolean }[]
   children?: MenuCategoryTree[]
 }
 
 export interface MenuBusinessDto {
-  id: string
-  name: string
-  slug: string
-  categories: MenuCategoryTree[]
+  id: string; name: string; slug: string; categories: MenuCategoryTree[]
 }

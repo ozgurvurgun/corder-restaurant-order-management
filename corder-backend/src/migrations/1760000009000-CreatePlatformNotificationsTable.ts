@@ -38,3 +38,4 @@ export class CreatePlatformNotificationsTable1760000009000
     await queryRunner.query(`DROP TABLE IF EXISTS "platform_notifications"`);
   }
 }
+

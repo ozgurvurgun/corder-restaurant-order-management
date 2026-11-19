@@ -223,6 +223,11 @@ export function mapApiStaffToPanelUser(s: {
   revokedPermissions?: string[]
   maxDiscountPercentOverride?: number | null
   maxDiscountAmountOverride?: number | null
+  shiftRestrictionEnabled?: boolean
+  shiftStartTime?: string | null
+  shiftEndTime?: string | null
+  shiftCutoffOffsetMinutes?: number
+  effectiveShiftEndTime?: string | null
   limits?: {
     maxDiscountPercent: number
     maxDiscountAmount: number | null
@@ -246,6 +251,11 @@ export function mapApiStaffToPanelUser(s: {
     revokedPermissions: s.revokedPermissions ?? [],
     maxDiscountPercentOverride: s.maxDiscountPercentOverride ?? null,
     maxDiscountAmountOverride: s.maxDiscountAmountOverride ?? null,
+    shiftRestrictionEnabled: Boolean(s.shiftRestrictionEnabled),
+    shiftStartTime: s.shiftStartTime ?? null,
+    shiftEndTime: s.shiftEndTime ?? null,
+    shiftCutoffOffsetMinutes: Number(s.shiftCutoffOffsetMinutes ?? 0),
+    effectiveShiftEndTime: s.effectiveShiftEndTime ?? null,
     limits: s.limits,
     active: s.isActive,
     createdAt: new Date(s.createdAt),

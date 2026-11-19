@@ -58,6 +58,7 @@ export function useTerminalApiSync(params: {
     socket.on("orders:moved", syncLive)
     socket.on("orders:updated", syncLive)
     socket.on("tables:presence", () => void pullTables())
+    socket.on("staff:session-updated", () => void refreshData())
 
     socket.on("waiter:called", (payload: unknown) => {
       const call = normalizeWaiterCallPayload(payload)

@@ -149,6 +149,11 @@ export interface StaffMemberDto {
   }
   maxDiscountPercentOverride: number | null
   maxDiscountAmountOverride: number | null
+  shiftRestrictionEnabled?: boolean
+  shiftStartTime?: string | null
+  shiftEndTime?: string | null
+  shiftCutoffOffsetMinutes?: number
+  effectiveShiftEndTime?: string | null
   createdAt: string
 }
 

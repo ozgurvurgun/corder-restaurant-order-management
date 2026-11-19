@@ -142,6 +142,22 @@ export class RestaurantEntity {
   @Column({ name: 'menu_template', type: 'varchar', length: 40, default: 'classic' })
   menuTemplate: RestaurantMenuTemplate;
 
+  @Column({
+    name: 'terminal_location_restriction_enabled',
+    type: 'boolean',
+    default: false,
+  })
+  terminalLocationRestrictionEnabled: boolean;
+
+  @Column({ name: 'location_latitude', type: 'double precision', nullable: true })
+  locationLatitude: number | null;
+
+  @Column({ name: 'location_longitude', type: 'double precision', nullable: true })
+  locationLongitude: number | null;
+
+  @Column({ name: 'location_radius_meters', type: 'integer', default: 150 })
+  locationRadiusMeters: number;
+
   @Column({ name: 'notifications_cleared_at', type: 'timestamptz', nullable: true })
   notificationsClearedAt?: Date | null;
 

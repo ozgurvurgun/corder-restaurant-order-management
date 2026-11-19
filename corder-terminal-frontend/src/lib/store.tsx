@@ -284,6 +284,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   useTerminalLifecycle({
     isLoggedIn,
     currentUser,
+    users,
     selectedTableId,
     lockedTableIdRef,
     lastActivityRef,

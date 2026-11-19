@@ -49,3 +49,4 @@ export class PlatformNotificationsController {
     return this.notificationsService.remove(id);
   }
 }
+

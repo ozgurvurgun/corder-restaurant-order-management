@@ -9,6 +9,7 @@ import type {
 import { getRoleDisplayName } from "@/lib/permission-labels"
 import { StaffAccountModal } from "./users/staff-account-modal"
 import { RolePermissionsMatrix } from "./users/role-permissions-matrix"
+import { TerminalGeofenceCard } from "./settings/terminal-geofence-card"
 import { PaginationBar } from "@/components/ui/pagination-bar"
 import {
   Plus,
@@ -19,6 +20,7 @@ import {
   Lock,
   Monitor,
   Smartphone,
+  Clock,
 } from "lucide-react"
 
 const ROLE_COLORS: Record<string, string> = {
@@ -149,6 +151,8 @@ export default function UserManagement() {
       <div className="flex-1 overflow-auto p-5">
         {activeTab === "staff" ? (
           <div className="w-full space-y-4">
+            <TerminalGeofenceCard />
+
             {canManageStaff && (showAdd || editingUser) && (
               <StaffAccountModal
                 key={editingUser?.id ?? "new"}
@@ -241,6 +245,14 @@ export default function UserManagement() {
                                 <Smartphone className="w-2.5 h-2.5" /> Terminal
                               </span>
                             )}
+                            {user.shiftRestrictionEnabled &&
+                              user.shiftStartTime &&
+                              (user.effectiveShiftEndTime || user.shiftEndTime) && (
+                                <span className="inline-flex items-center gap-1 rounded bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700">
+                                  <Clock className="w-2.5 h-2.5" />
+                                  Mesai: {user.shiftStartTime} - {user.effectiveShiftEndTime || user.shiftEndTime}
+                                </span>
+                              )}
                             {user.permissions && (
                               <span className="rounded bg-[#f5f5f7] px-2 py-0.5 text-[10px] font-medium text-[#86868b]">
                                 {user.permissions.length} yetki • Maks %

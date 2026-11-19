@@ -1,7 +1,11 @@
 import {
+  IsBoolean,
   IsIn,
+  IsNumber,
   IsOptional,
   IsString,
+  Max,
+  Min,
   MinLength,
   ValidateIf,
 } from 'class-validator';
@@ -64,4 +68,28 @@ export class UpdateRestaurantSettingsDto {
   @IsOptional()
   @IsIn(RESTAURANT_MENU_TEMPLATES)
   menuTemplate?: RestaurantMenuTemplate;
+
+  @IsOptional()
+  @IsBoolean()
+  terminalLocationRestrictionEnabled?: boolean;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  locationLatitude?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  locationLongitude?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(20)
+  @Max(10000)
+  locationRadiusMeters?: number;
 }

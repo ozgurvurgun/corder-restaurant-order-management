@@ -9,12 +9,17 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import type { Request } from 'express';
 import { RestaurantStaffEntity } from '../domain/restaurant-staff.entity';
+import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 import {
   EffectivePolicyLimits,
   PERMISSION_KEYS,
   PermissionKey,
 } from '../domain/permissions.catalog';
 import { computeSecretFingerprint } from '../domain/services/billing-suspension.policy';
+import {
+  evaluateRestaurantGeofenceAccess,
+  evaluateStaffShiftAccess,
+} from '../domain/services/terminal-access.policy';
 import { RolesService } from './roles.service';
 import {
   DEFAULT_JWT_EXPIRES_IN,
@@ -56,16 +61,21 @@ export class StaffSessionService {
     private readonly config: ConfigService,
     @InjectRepository(RestaurantStaffEntity)
     private readonly staffRepo: Repository<RestaurantStaffEntity>,
+    @InjectRepository(RestaurantEntity)
+    private readonly restaurantRepo: Repository<RestaurantEntity>,
     private readonly rolesService: RolesService,
   ) {}
 
-  signStaffToken(staff: {
-    id: string;
-    restaurantId: string;
-    name: string;
-    role: string;
-    pinHash?: string | null;
-  }): string {
+  signStaffToken(
+    staff: {
+      id: string;
+      restaurantId: string;
+      name: string;
+      role: string;
+      pinHash?: string | null;
+    },
+    maxTtlSeconds?: number | null,
+  ): string {
     const pinFp = computeSecretFingerprint(staff.pinHash);
     const payload: StaffSessionTokenPayload = {
       typ: 'staff_session',
@@ -75,9 +85,14 @@ export class StaffSessionService {
       role: staff.role,
       ...(pinFp ? { pinFp } : {}),
     };
+    const defaultExp = this.config.get<string>('JWT_EXPIRES_IN', DEFAULT_JWT_EXPIRES_IN);
+    const expiresIn =
+      maxTtlSeconds != null && Number.isFinite(maxTtlSeconds) && maxTtlSeconds > 0
+        ? Math.max(5, Math.min(43200, Math.floor(maxTtlSeconds)))
+        : defaultExp;
     return this.jwt.sign(payload, {
       secret: requireConfigSecret(this.config, 'JWT_SECRET'),
-      expiresIn: this.config.get<string>('JWT_EXPIRES_IN', DEFAULT_JWT_EXPIRES_IN),
+      expiresIn,
     });
   }
 
@@ -90,7 +105,7 @@ export class StaffSessionService {
     if (!token) {
       throw new UnauthorizedException('Staff PIN verification is required');
     }
-    return this.verifyToken(token, restaurantId);
+    return this.verifyToken(token, restaurantId, req);
   }
 
   async resolveOptionalFromRequest(
@@ -100,7 +115,7 @@ export class StaffSessionService {
     const raw = req.headers['x-staff-token'];
     const token = Array.isArray(raw) ? raw[0]?.trim() : raw?.trim();
     if (!token) return null;
-    return this.verifyToken(token, restaurantId);
+    return this.verifyToken(token, restaurantId, req);
   }
 
   async resolveActorContext(
@@ -193,9 +208,27 @@ export class StaffSessionService {
     return actor;
   }
 
+  private extractClientCoords(req?: Request): {
+    latitude: number | null;
+    longitude: number | null;
+  } {
+    if (!req?.headers) return { latitude: null, longitude: null };
+    const rawLat = req.headers['x-terminal-lat'];
+    const rawLng = req.headers['x-terminal-lng'];
+    const latStr = Array.isArray(rawLat) ? rawLat[0] : rawLat;
+    const lngStr = Array.isArray(rawLng) ? rawLng[0] : rawLng;
+    const lat = latStr != null && latStr !== '' ? Number(latStr) : NaN;
+    const lng = lngStr != null && lngStr !== '' ? Number(lngStr) : NaN;
+    return {
+      latitude: Number.isFinite(lat) ? lat : null,
+      longitude: Number.isFinite(lng) ? lng : null,
+    };
+  }
+
   private async verifyToken(
     token: string,
     restaurantId: string,
+    req?: Request,
   ): Promise<VerifiedStaffIdentity> {
     let payload: StaffSessionTokenPayload;
     try {
@@ -203,7 +236,7 @@ export class StaffSessionService {
         secret: requireConfigSecret(this.config, 'JWT_SECRET'),
       });
     } catch {
-      throw new UnauthorizedException('Invalid or expired staff session');
+      throw new UnauthorizedException('Personel PIN oturum süreniz sona erdi. Lütfen tekrar giriş yapın.');
     }
     if (
       payload.typ !== 'staff_session' ||
@@ -212,9 +245,21 @@ export class StaffSessionService {
     ) {
       throw new UnauthorizedException('Invalid staff session');
     }
-    const staff = await this.staffRepo.findOne({
-      where: { id: payload.sub, restaurantId, isActive: true },
-    });
+    const [staff, restaurant] = await Promise.all([
+      this.staffRepo.findOne({
+        where: { id: payload.sub, restaurantId, isActive: true },
+      }),
+      this.restaurantRepo.findOne({
+        where: { id: restaurantId },
+        select: {
+          id: true,
+          terminalLocationRestrictionEnabled: true,
+          locationLatitude: true,
+          locationLongitude: true,
+          locationRadiusMeters: true,
+        },
+      }),
+    ]);
     if (!staff || !staff.pinHash) {
       throw new UnauthorizedException('Staff member not found or PIN disabled');
     }
@@ -228,6 +273,24 @@ export class StaffSessionService {
     if (!resolved.canAccessTerminal) {
       throw new UnauthorizedException('Terminal access is disabled for this user');
     }
+
+    const shiftEval = evaluateStaffShiftAccess(staff);
+    if (!shiftEval.allowed) {
+      throw new UnauthorizedException(
+        shiftEval.reason || 'Personel mesai süreniz sona erdiği için terminal erişiminiz kapatıldı.',
+      );
+    }
+
+    if (restaurant?.terminalLocationRestrictionEnabled) {
+      const coords = this.extractClientCoords(req);
+      const geoEval = evaluateRestaurantGeofenceAccess(restaurant, coords);
+      if (!geoEval.allowed) {
+        throw new UnauthorizedException(
+          geoEval.reason || 'Personel konum doğrulaması başarısız olduğu için terminal erişiminiz kapatıldı.',
+        );
+      }
+    }
+
     return {
       staffId: staff.id,
       name: staff.name,

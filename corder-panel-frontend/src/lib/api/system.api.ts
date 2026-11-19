@@ -129,6 +129,11 @@ export interface StaffApiItemDto {
   revokedPermissions?: string[]
   maxDiscountPercentOverride?: number | null
   maxDiscountAmountOverride?: number | null
+  shiftRestrictionEnabled?: boolean
+  shiftStartTime?: string | null
+  shiftEndTime?: string | null
+  shiftCutoffOffsetMinutes?: number
+  effectiveShiftEndTime?: string | null
   limits?: {
     maxDiscountPercent: number
     maxDiscountAmount: number | null
@@ -154,6 +159,10 @@ export const staffApi = {
       revokedPermissions?: string[]
       maxDiscountPercentOverride?: number | null
       maxDiscountAmountOverride?: number | null
+      shiftRestrictionEnabled?: boolean
+      shiftStartTime?: string | null
+      shiftEndTime?: string | null
+      shiftCutoffOffsetMinutes?: number | null
     },
   ) =>
     request<StaffApiItemDto>("/restaurant/staff", {
@@ -178,6 +187,10 @@ export const staffApi = {
       revokedPermissions?: string[]
       maxDiscountPercentOverride?: number | null
       maxDiscountAmountOverride?: number | null
+      shiftRestrictionEnabled?: boolean
+      shiftStartTime?: string | null
+      shiftEndTime?: string | null
+      shiftCutoffOffsetMinutes?: number | null
     },
   ) =>
     request<StaffApiItemDto>(`/restaurant/staff/${id}`, {

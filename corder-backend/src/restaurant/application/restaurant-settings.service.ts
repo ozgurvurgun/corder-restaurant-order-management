@@ -13,6 +13,7 @@ import {
   computeRestaurantBillingSummary,
   toPaymentRecordDto,
 } from '../../platform/domain/subscription-billing.policy';
+import { OrdersGateway } from '../api/orders.gateway';
 
 export interface RestaurantSettingsDto {
   name: string;
@@ -27,6 +28,10 @@ export interface RestaurantSettingsDto {
   workingHours?: string | null;
   logoUrl?: string | null;
   menuTemplate?: RestaurantMenuTemplate;
+  terminalLocationRestrictionEnabled?: boolean;
+  locationLatitude?: number | null;
+  locationLongitude?: number | null;
+  locationRadiusMeters?: number;
 }
 
 export interface MerchantBillingInfoDto {
@@ -85,6 +90,7 @@ export class RestaurantSettingsService {
     private readonly billingConfigRepo: Repository<PlatformBillingConfigEntity>,
     @InjectRepository(RestaurantSubscriptionPaymentEntity)
     private readonly paymentRepo: Repository<RestaurantSubscriptionPaymentEntity>,
+    private readonly ordersGateway: OrdersGateway,
   ) {}
 
   async get(restaurantId: string): Promise<RestaurantSettingsDto> {
@@ -105,6 +111,10 @@ export class RestaurantSettingsService {
       workingHours: r.workingHours,
       logoUrl: r.logoUrl ?? null,
       menuTemplate: (r.menuTemplate as RestaurantMenuTemplate) || 'classic',
+      terminalLocationRestrictionEnabled: Boolean(r.terminalLocationRestrictionEnabled),
+      locationLatitude: r.locationLatitude != null ? Number(r.locationLatitude) : null,
+      locationLongitude: r.locationLongitude != null ? Number(r.locationLongitude) : null,
+      locationRadiusMeters: Number(r.locationRadiusMeters || 150),
     };
   }
 
@@ -222,7 +232,38 @@ export class RestaurantSettingsService {
       }
       r.menuTemplate = dto.menuTemplate;
     }
+    let geofenceChanged = false;
+    if (dto.terminalLocationRestrictionEnabled !== undefined) {
+      r.terminalLocationRestrictionEnabled = Boolean(
+        dto.terminalLocationRestrictionEnabled,
+      );
+      geofenceChanged = true;
+    }
+    if (dto.locationLatitude !== undefined) {
+      r.locationLatitude =
+        dto.locationLatitude != null && Number.isFinite(Number(dto.locationLatitude))
+          ? Number(dto.locationLatitude)
+          : null;
+      geofenceChanged = true;
+    }
+    if (dto.locationLongitude !== undefined) {
+      r.locationLongitude =
+        dto.locationLongitude != null && Number.isFinite(Number(dto.locationLongitude))
+          ? Number(dto.locationLongitude)
+          : null;
+      geofenceChanged = true;
+    }
+    if (dto.locationRadiusMeters !== undefined) {
+      r.locationRadiusMeters = Math.max(
+        20,
+        Math.min(10000, Math.round(Number(dto.locationRadiusMeters) || 150)),
+      );
+      geofenceChanged = true;
+    }
     await this.repo.save(r);
+    if (geofenceChanged) {
+      this.ordersGateway.emitStaffSessionUpdated(restaurantId);
+    }
     return this.get(restaurantId);
   }
 }

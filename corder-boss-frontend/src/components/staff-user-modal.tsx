@@ -8,6 +8,7 @@ import {
   sanitizeCorderEmailLocalPartInput,
 } from "@/lib/corder-email"
 import { StaffPermissionOverrides } from "./staff-permission-overrides"
+import { StaffShiftRestrictionFields } from "./staff-shift-restriction-fields"
 import { CustomSelect } from "./ui/custom-inputs"
 import { PasswordInputWithGenerator } from "./ui/password-input"
 import { Monitor, KeyRound, AlertCircle, X } from "lucide-react"
@@ -33,6 +34,10 @@ interface StaffUserModalProps {
     revokedPermissions: string[]
     maxDiscountPercentOverride: number | null
     maxDiscountAmountOverride: number | null
+    shiftRestrictionEnabled?: boolean
+    shiftStartTime?: string | null
+    shiftEndTime?: string | null
+    shiftCutoffOffsetMinutes?: number
   }) => Promise<void>
 }
 
@@ -85,6 +90,18 @@ export function StaffUserModal({
   )
   const [maxDiscountAmtOverride, setMaxDiscountAmtOverride] = useState<string>(
     editingUser?.maxDiscountAmountOverride != null ? String(editingUser.maxDiscountAmountOverride) : ""
+  )
+  const [shiftRestrictionEnabled, setShiftRestrictionEnabled] = useState(
+    Boolean(editingUser?.shiftRestrictionEnabled)
+  )
+  const [shiftStartTime, setShiftStartTime] = useState(
+    editingUser?.shiftStartTime || "09:00"
+  )
+  const [shiftEndTime, setShiftEndTime] = useState(
+    editingUser?.shiftEndTime || "21:00"
+  )
+  const [shiftCutoffOffsetMinutes, setShiftCutoffOffsetMinutes] = useState<number>(
+    Number(editingUser?.shiftCutoffOffsetMinutes ?? -30)
   )
   const [showCustomPerms, setShowCustomPerms] = useState(
     Boolean(
@@ -200,6 +217,10 @@ export function StaffUserModal({
         maxDiscountPctOverride.trim() !== "" ? Number(maxDiscountPctOverride) : null,
       maxDiscountAmountOverride:
         maxDiscountAmtOverride.trim() !== "" ? Number(maxDiscountAmtOverride) : null,
+      shiftRestrictionEnabled,
+      shiftStartTime: shiftRestrictionEnabled ? shiftStartTime : null,
+      shiftEndTime: shiftRestrictionEnabled ? shiftEndTime : null,
+      shiftCutoffOffsetMinutes: shiftRestrictionEnabled ? shiftCutoffOffsetMinutes : 0,
     })
   }
 
@@ -360,6 +381,19 @@ export function StaffUserModal({
               </div>
             )}
           </div>
+
+          {canAccessTerminal && (
+            <StaffShiftRestrictionFields
+              enabled={shiftRestrictionEnabled}
+              startTime={shiftStartTime}
+              endTime={shiftEndTime}
+              cutoffOffsetMinutes={shiftCutoffOffsetMinutes}
+              onChangeEnabled={setShiftRestrictionEnabled}
+              onChangeStartTime={setShiftStartTime}
+              onChangeEndTime={setShiftEndTime}
+              onChangeCutoffOffsetMinutes={setShiftCutoffOffsetMinutes}
+            />
+          )}
 
           <StaffPermissionOverrides
             catalog={catalog}

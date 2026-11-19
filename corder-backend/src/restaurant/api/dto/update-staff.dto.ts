@@ -77,4 +77,24 @@ export class UpdateStaffDto {
   @IsNumber()
   @Min(0)
   maxDiscountAmountOverride?: number | null;
+
+  @IsOptional()
+  @IsBoolean()
+  shiftRestrictionEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(8)
+  shiftStartTime?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(8)
+  shiftEndTime?: string | null;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-720)
+  @Max(720)
+  shiftCutoffOffsetMinutes?: number | null;
 }

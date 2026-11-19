@@ -30,6 +30,18 @@ export interface TerminalStaffMember {
   roleLabel?: string
   roleColor?: string
   hasPin: boolean
+  shiftRestrictionEnabled?: boolean
+  shiftStartTime?: string | null
+  shiftEndTime?: string | null
+  shiftCutoffOffsetMinutes?: number
+  effectiveStartTime?: string | null
+  effectiveEndTime?: string | null
+  isWithinShift?: boolean
+  shiftBlockReason?: string | null
+  terminalLocationRestrictionEnabled?: boolean
+  locationLatitude?: number | null
+  locationLongitude?: number | null
+  locationRadiusMeters?: number
 }
 
 export interface TerminalUser {

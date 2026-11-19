@@ -327,6 +327,10 @@ export interface RestaurantSettingsDto {
   website?: string | null
   workingHours?: string | null
   menuTemplate?: MenuTemplateId | string | null
+  terminalLocationRestrictionEnabled?: boolean
+  locationLatitude?: number | null
+  locationLongitude?: number | null
+  locationRadiusMeters?: number
 }
 
 export interface FraudAlertDto {

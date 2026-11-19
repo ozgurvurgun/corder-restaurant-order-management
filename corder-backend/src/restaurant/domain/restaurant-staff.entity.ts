@@ -85,6 +85,18 @@ export class RestaurantStaffEntity {
   })
   maxDiscountAmountOverride: string | null;
 
+  @Column({ name: 'shift_restriction_enabled', type: 'boolean', default: false })
+  shiftRestrictionEnabled: boolean;
+
+  @Column({ name: 'shift_start_time', type: 'varchar', length: 8, nullable: true })
+  shiftStartTime: string | null;
+
+  @Column({ name: 'shift_end_time', type: 'varchar', length: 8, nullable: true })
+  shiftEndTime: string | null;
+
+  @Column({ name: 'shift_cutoff_offset_minutes', type: 'integer', default: 0 })
+  shiftCutoffOffsetMinutes: number;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

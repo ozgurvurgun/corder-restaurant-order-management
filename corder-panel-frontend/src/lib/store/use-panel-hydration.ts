@@ -95,6 +95,10 @@ export function usePanelHydration(params: {
           website: s.website ?? undefined,
           workingHours: s.workingHours ?? undefined,
           menuTemplate: (s.menuTemplate as MenuTemplateId) || "classic",
+          terminalLocationRestrictionEnabled: Boolean(s.terminalLocationRestrictionEnabled),
+          locationLatitude: s.locationLatitude ?? null,
+          locationLongitude: s.locationLongitude ?? null,
+          locationRadiusMeters: Number(s.locationRadiusMeters || 150),
         }))
       })
       .catch(console.error)

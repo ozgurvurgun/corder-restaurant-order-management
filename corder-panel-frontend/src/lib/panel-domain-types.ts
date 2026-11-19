@@ -194,6 +194,10 @@ export interface RestaurantSettings {
   website?: string
   workingHours?: string
   menuTemplate?: MenuTemplateId
+  terminalLocationRestrictionEnabled?: boolean
+  locationLatitude?: number | null
+  locationLongitude?: number | null
+  locationRadiusMeters?: number
   fontSize?: "small" | "medium" | "large"
   tableCardSize?: "compact" | "normal" | "large"
   showProductImages?: boolean

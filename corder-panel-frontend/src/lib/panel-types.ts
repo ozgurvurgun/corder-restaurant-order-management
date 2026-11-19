@@ -38,6 +38,11 @@ export interface PanelUser {
   revokedPermissions?: string[]
   maxDiscountPercentOverride?: number | null
   maxDiscountAmountOverride?: number | null
+  shiftRestrictionEnabled?: boolean
+  shiftStartTime?: string | null
+  shiftEndTime?: string | null
+  shiftCutoffOffsetMinutes?: number
+  effectiveShiftEndTime?: string | null
   limits?: {
     maxDiscountPercent: number
     maxDiscountAmount: number | null

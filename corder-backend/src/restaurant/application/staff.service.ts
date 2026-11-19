@@ -20,6 +20,11 @@ import {
 } from '../domain/permissions.catalog';
 import { RolesService } from './roles.service';
 import { StaffSessionService } from './staff-session.service';
+import { OrdersGateway } from '../api/orders.gateway';
+import {
+  evaluateRestaurantGeofenceAccess,
+  evaluateStaffShiftAccess,
+} from '../domain/services/terminal-access.policy';
 import { CreateStaffDto } from '../api/dto/create-staff.dto';
 import { UpdateStaffDto } from '../api/dto/update-staff.dto';
 import { normalizeStorageText } from '../../common/text/text-normalizer';
@@ -28,44 +33,32 @@ import { formatCanonicalCorderEmail } from '../../common/text/corder-email.polic
 const DUMMY_PIN_HASH = bcrypt.hashSync('00000000', 10);
 
 export interface StaffMutationActor {
-  id?: string;
-  sub?: string;
-  role?: string;
-  isBoss?: boolean;
-  permissions?: PermissionKey[];
-  limits?: EffectivePolicyLimits;
+  id?: string; sub?: string; role?: string; isBoss?: boolean;
+  permissions?: PermissionKey[]; limits?: EffectivePolicyLimits;
 }
 
 export interface StaffPublicDto {
-  id: string;
-  restaurantId: string;
-  name: string;
-  email: string | null;
-  role: string;
-  roleLabel: string;
-  roleColor: string;
-  phone?: string;
-  isActive: boolean;
-  canAccessPanel: boolean;
-  canAccessTerminal: boolean;
-  hasPin: boolean;
-  hasPassword: boolean;
-  permissions: PermissionKey[];
-  grantedPermissions: PermissionKey[];
-  revokedPermissions: PermissionKey[];
+  id: string; restaurantId: string; name: string; email: string | null;
+  role: string; roleLabel: string; roleColor: string; phone?: string;
+  isActive: boolean; canAccessPanel: boolean; canAccessTerminal: boolean;
+  hasPin: boolean; hasPassword: boolean;
+  permissions: PermissionKey[]; grantedPermissions: PermissionKey[]; revokedPermissions: PermissionKey[];
   limits: EffectivePolicyLimits;
-  maxDiscountPercentOverride: number | null;
-  maxDiscountAmountOverride: number | null;
+  maxDiscountPercentOverride: number | null; maxDiscountAmountOverride: number | null;
+  shiftRestrictionEnabled: boolean; shiftStartTime: string | null; shiftEndTime: string | null;
+  shiftCutoffOffsetMinutes: number; effectiveShiftEndTime: string | null;
   createdAt: string;
 }
 
 export interface TerminalStaffMemberDto {
-  id: string;
-  name: string;
-  role: string;
-  roleLabel: string;
-  roleColor: string;
-  hasPin: boolean;
+  id: string; name: string; role: string; roleLabel: string; roleColor: string; hasPin: boolean;
+  shiftRestrictionEnabled: boolean; shiftStartTime: string | null; shiftEndTime: string | null;
+  shiftCutoffOffsetMinutes: number; effectiveStartTime: string | null; effectiveEndTime: string | null;
+  isWithinShift: boolean; shiftBlockReason: string | null;
+  terminalLocationRestrictionEnabled?: boolean;
+  locationLatitude?: number | null;
+  locationLongitude?: number | null;
+  locationRadiusMeters?: number;
 }
 
 @Injectable()
@@ -77,6 +70,7 @@ export class StaffService {
     private readonly restaurantRepo: Repository<RestaurantEntity>,
     private readonly staffSession: StaffSessionService,
     private readonly rolesService: RolesService,
+    private readonly ordersGateway: OrdersGateway,
   ) {}
 
   private async resolveCanonicalStaffEmail(
@@ -102,51 +96,38 @@ export class StaffService {
     preloadedRoles?: RestaurantRoleEntity[],
   ): Promise<StaffPublicDto> {
     const resolved = await this.rolesService.resolveForStaff(s, preloadedRoles);
+    const shiftEval = evaluateStaffShiftAccess(s);
     return {
-      id: s.id,
-      restaurantId: s.restaurantId,
-      name: s.name,
-      email: s.email ?? null,
-      role: resolved.roleKey,
-      roleLabel: resolved.roleLabel,
-      roleColor: resolved.roleColor,
-      phone: s.phone ?? undefined,
-      isActive: s.isActive,
-      canAccessPanel: resolved.canAccessPanel,
-      canAccessTerminal: resolved.canAccessTerminal,
-      hasPin: Boolean(s.pinHash),
-      hasPassword: Boolean(s.passwordHash),
+      id: s.id, restaurantId: s.restaurantId, name: s.name, email: s.email ?? null,
+      role: resolved.roleKey, roleLabel: resolved.roleLabel, roleColor: resolved.roleColor,
+      phone: s.phone ?? undefined, isActive: s.isActive,
+      canAccessPanel: resolved.canAccessPanel, canAccessTerminal: resolved.canAccessTerminal,
+      hasPin: Boolean(s.pinHash), hasPassword: Boolean(s.passwordHash),
       permissions: resolved.permissions,
       grantedPermissions: sanitizePermissionKeys(s.grantedPermissions),
       revokedPermissions: sanitizePermissionKeys(s.revokedPermissions),
       limits: resolved.limits,
-      maxDiscountPercentOverride:
-        s.maxDiscountPercentOverride != null ? Number(s.maxDiscountPercentOverride) : null,
-      maxDiscountAmountOverride:
-        s.maxDiscountAmountOverride != null ? Number(s.maxDiscountAmountOverride) : null,
+      maxDiscountPercentOverride: s.maxDiscountPercentOverride != null ? Number(s.maxDiscountPercentOverride) : null,
+      maxDiscountAmountOverride: s.maxDiscountAmountOverride != null ? Number(s.maxDiscountAmountOverride) : null,
+      shiftRestrictionEnabled: Boolean(s.shiftRestrictionEnabled),
+      shiftStartTime: s.shiftStartTime ?? null, shiftEndTime: s.shiftEndTime ?? null,
+      shiftCutoffOffsetMinutes: Number(s.shiftCutoffOffsetMinutes ?? 0),
+      effectiveShiftEndTime: shiftEval.effectiveEndTime,
       createdAt: s.createdAt.toISOString(),
     };
   }
 
   async list(restaurantId: string): Promise<StaffPublicDto[]> {
     const roles = await this.rolesService.ensureDefaultRoles(restaurantId);
-    const list = await this.staffRepo.find({
-      where: { restaurantId },
-      order: { createdAt: 'ASC' },
-    });
+    const list = await this.staffRepo.find({ where: { restaurantId }, order: { createdAt: 'ASC' } });
     return Promise.all(list.map((s) => this.toPublicDto(s, roles)));
   }
 
-  private async assertUniqueEmail(
-    email: string,
-    excludeStaffId?: string,
-  ): Promise<void> {
+  private async assertUniqueEmail(email: string, excludeStaffId?: string): Promise<void> {
     const normalized = email.toLowerCase().trim();
     const existing = await this.staffRepo.findOne({ where: { email: normalized } });
     if (existing && existing.id !== excludeStaffId) {
-      throw new ConflictException(
-        'This email address is already in use by another user',
-      );
+      throw new ConflictException('This email address is already in use by another user');
     }
   }
 
@@ -158,39 +139,21 @@ export class StaffService {
       maxDiscountAmountOverride?: number | null;
     },
   ): void {
-    if (!actor || actor.isBoss || actor.role === 'root') {
-      return;
-    }
+    if (!actor || actor.isBoss || actor.role === 'root') return;
     const actorPerms = new Set<PermissionKey>(actor.permissions ?? []);
-    if (actorPerms.has('roles.manage')) {
-      return;
-    }
-    const requestedPerms = sanitizePermissionKeys(params.grantedPermissions);
-    for (const perm of requestedPerms) {
+    if (actorPerms.has('roles.manage')) return;
+    for (const perm of sanitizePermissionKeys(params.grantedPermissions)) {
       if (!actorPerms.has(perm)) {
-        throw new ForbiddenException(
-          `You cannot grant a permission that your own account does not possess (${perm})`,
-        );
+        throw new ForbiddenException(`You cannot grant a permission that your own account does not possess (${perm})`);
       }
     }
     const maxPct = actor.limits?.maxDiscountPercent ?? 0;
-    if (
-      params.maxDiscountPercentOverride != null &&
-      Number(params.maxDiscountPercentOverride) > maxPct
-    ) {
-      throw new ForbiddenException(
-        `You cannot set a discount percentage limit higher than your own (${maxPct}%)`,
-      );
+    if (params.maxDiscountPercentOverride != null && Number(params.maxDiscountPercentOverride) > maxPct) {
+      throw new ForbiddenException(`You cannot set a discount percentage limit higher than your own (${maxPct}%)`);
     }
     const maxAmt = actor.limits?.maxDiscountAmount;
-    if (
-      maxAmt != null &&
-      params.maxDiscountAmountOverride != null &&
-      Number(params.maxDiscountAmountOverride) > maxAmt
-    ) {
-      throw new ForbiddenException(
-        `You cannot set a discount amount limit higher than your own (${maxAmt})`,
-      );
+    if (maxAmt != null && params.maxDiscountAmountOverride != null && Number(params.maxDiscountAmountOverride) > maxAmt) {
+      throw new ForbiddenException(`You cannot set a discount amount limit higher than your own (${maxAmt})`);
     }
   }
 
@@ -259,6 +222,11 @@ export class StaffService {
         dto.maxDiscountAmountOverride != null && Number(dto.maxDiscountAmountOverride) >= 0
           ? String(Number(dto.maxDiscountAmountOverride))
           : null,
+      shiftRestrictionEnabled: Boolean(dto.shiftRestrictionEnabled),
+      shiftStartTime: dto.shiftStartTime?.trim() || null,
+      shiftEndTime: dto.shiftEndTime?.trim() || null,
+      shiftCutoffOffsetMinutes:
+        dto.shiftCutoffOffsetMinutes != null ? Math.round(Number(dto.shiftCutoffOffsetMinutes) || 0) : 0,
     });
     const saved = await this.staffRepo.save(staff);
     return this.toPublicDto(saved);
@@ -354,6 +322,19 @@ export class StaffService {
           ? String(Number(dto.maxDiscountAmountOverride))
           : null;
     }
+    if (dto.shiftRestrictionEnabled !== undefined) {
+      staff.shiftRestrictionEnabled = Boolean(dto.shiftRestrictionEnabled);
+    }
+    if (dto.shiftStartTime !== undefined) {
+      staff.shiftStartTime = dto.shiftStartTime?.trim() || null;
+    }
+    if (dto.shiftEndTime !== undefined) {
+      staff.shiftEndTime = dto.shiftEndTime?.trim() || null;
+    }
+    if (dto.shiftCutoffOffsetMinutes !== undefined) {
+      staff.shiftCutoffOffsetMinutes =
+        dto.shiftCutoffOffsetMinutes != null ? Math.round(Number(dto.shiftCutoffOffsetMinutes) || 0) : 0;
+    }
 
     if (staff.canAccessPanel && (!staff.email || !staff.passwordHash)) {
       throw new BadRequestException(
@@ -365,6 +346,7 @@ export class StaffService {
     }
 
     const saved = await this.staffRepo.save(staff);
+    this.ordersGateway.emitStaffSessionUpdated(restaurantId, saved.id);
     return this.toPublicDto(saved);
   }
 
@@ -382,15 +364,29 @@ export class StaffService {
   }
 
   async listTerminalUsers(restaurantId: string): Promise<TerminalStaffMemberDto[]> {
-    const roles = await this.rolesService.ensureDefaultRoles(restaurantId);
-    const list = await this.staffRepo.find({
-      where: { restaurantId, isActive: true },
-      order: { createdAt: 'ASC' },
-    });
+    const [roles, list, rest] = await Promise.all([
+      this.rolesService.ensureDefaultRoles(restaurantId),
+      this.staffRepo.find({ where: { restaurantId, isActive: true }, order: { createdAt: 'ASC' } }),
+      this.restaurantRepo.findOne({
+        where: { id: restaurantId },
+        select: {
+          id: true,
+          terminalLocationRestrictionEnabled: true,
+          locationLatitude: true,
+          locationLongitude: true,
+          locationRadiusMeters: true,
+        },
+      }),
+    ]);
+    const locEnabled = Boolean(rest?.terminalLocationRestrictionEnabled);
+    const locLat = rest?.locationLatitude != null ? Number(rest.locationLatitude) : null;
+    const locLng = rest?.locationLongitude != null ? Number(rest.locationLongitude) : null;
+    const locRad = Number(rest?.locationRadiusMeters || 150);
     const result: TerminalStaffMemberDto[] = [];
     for (const member of list) {
       const resolved = await this.rolesService.resolveForStaff(member, roles);
       if (!resolved.canAccessTerminal) continue;
+      const shiftEval = evaluateStaffShiftAccess(member);
       result.push({
         id: member.id,
         name: member.name,
@@ -398,6 +394,18 @@ export class StaffService {
         roleLabel: resolved.roleLabel,
         roleColor: resolved.roleColor,
         hasPin: Boolean(member.pinHash),
+        shiftRestrictionEnabled: Boolean(member.shiftRestrictionEnabled),
+        shiftStartTime: member.shiftStartTime ?? null,
+        shiftEndTime: member.shiftEndTime ?? null,
+        shiftCutoffOffsetMinutes: Number(member.shiftCutoffOffsetMinutes ?? 0),
+        effectiveStartTime: shiftEval.effectiveStartTime,
+        effectiveEndTime: shiftEval.effectiveEndTime,
+        isWithinShift: shiftEval.allowed,
+        shiftBlockReason: shiftEval.reason ?? null,
+        terminalLocationRestrictionEnabled: locEnabled,
+        locationLatitude: locLat,
+        locationLongitude: locLng,
+        locationRadiusMeters: locRad,
       });
     }
     return result;
@@ -407,6 +415,7 @@ export class StaffService {
     restaurantId: string,
     pin: string,
     staffId?: string,
+    clientCoords?: { latitude?: number | null; longitude?: number | null } | null,
   ): Promise<{
     staffId: string;
     name: string;
@@ -415,15 +424,30 @@ export class StaffService {
     permissions: PermissionKey[];
     limits: EffectivePolicyLimits;
     staffToken: string;
+    shiftAccessUntil: string | null;
+    effectiveEndTime: string | null;
   }> {
+    const restaurant = await this.restaurantRepo.findOne({
+      where: { id: restaurantId },
+      select: {
+        id: true,
+        terminalLocationRestrictionEnabled: true,
+        locationLatitude: true,
+        locationLongitude: true,
+        locationRadiusMeters: true,
+      },
+    });
+    if (restaurant?.terminalLocationRestrictionEnabled) {
+      const geoEval = evaluateRestaurantGeofenceAccess(restaurant, clientCoords);
+      if (!geoEval.allowed) {
+        throw new UnauthorizedException(geoEval.reason);
+      }
+    }
+
     const trimmed = pin.trim();
     const activeStaff = staffId
-      ? await this.staffRepo.find({
-          where: { id: staffId, restaurantId, isActive: true },
-        })
-      : await this.staffRepo.find({
-          where: { restaurantId, isActive: true },
-        });
+      ? await this.staffRepo.find({ where: { id: staffId, restaurantId, isActive: true } })
+      : await this.staffRepo.find({ where: { restaurantId, isActive: true } });
     let comparedAny = false;
     for (const member of activeStaff) {
       if (!member.pinHash) continue;
@@ -431,17 +455,22 @@ export class StaffService {
       if (await bcrypt.compare(trimmed, member.pinHash)) {
         const resolved = await this.rolesService.resolveForStaff(member);
         if (!resolved.canAccessTerminal) {
-          throw new UnauthorizedException(
-            'Terminal access is disabled for this user',
-          );
+          throw new UnauthorizedException('Terminal access is disabled for this user');
         }
-        const staffToken = this.staffSession.signStaffToken({
-          id: member.id,
-          restaurantId,
-          name: member.name,
-          role: resolved.roleKey,
-          pinHash: member.pinHash,
-        });
+        const shiftEval = evaluateStaffShiftAccess(member);
+        if (!shiftEval.allowed) {
+          throw new UnauthorizedException(shiftEval.reason);
+        }
+        const staffToken = this.staffSession.signStaffToken(
+          {
+            id: member.id,
+            restaurantId,
+            name: member.name,
+            role: resolved.roleKey,
+            pinHash: member.pinHash,
+          },
+          shiftEval.remainingSeconds,
+        );
         return {
           staffId: member.id,
           name: member.name,
@@ -450,6 +479,8 @@ export class StaffService {
           permissions: resolved.permissions,
           limits: resolved.limits,
           staffToken,
+          shiftAccessUntil: shiftEval.shiftAccessUntilIso,
+          effectiveEndTime: shiftEval.effectiveEndTime,
         };
       }
     }

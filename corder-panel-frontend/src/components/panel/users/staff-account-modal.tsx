@@ -12,6 +12,7 @@ import { usePanelStore } from "@/lib/panel-store"
 import type { PanelUser, PanelUserRole } from "@/lib/panel-types"
 import { CustomSelect } from "@/components/ui/custom-inputs"
 import { PasswordInputWithGenerator } from "@/components/ui/password-input"
+import { StaffShiftRestrictionFields } from "./staff-shift-restriction-fields"
 import { usePanelToast } from "../panel-toast"
 import { Sliders, X } from "lucide-react"
 
@@ -62,30 +63,27 @@ export function StaffAccountModal({
   const [formRevokedPerms, setFormRevokedPerms] = useState<string[]>([])
   const [formMaxPctOverride, setFormMaxPctOverride] = useState<string>("")
   const [formMaxAmtOverride, setFormMaxAmtOverride] = useState<string>("")
+  const [formShiftRestrictionEnabled, setFormShiftRestrictionEnabled] = useState(false)
+  const [formShiftStartTime, setFormShiftStartTime] = useState("09:00")
+  const [formShiftEndTime, setFormShiftEndTime] = useState("21:00")
+  const [formShiftCutoffOffset, setFormShiftCutoffOffset] = useState<number>(-30)
 
   useEffect(() => {
     if (!editingUser) {
-      setFormName("")
-      setFormRole("waiter")
-      setFormPhone("")
-      setFormPin("")
-      setFormEmail("")
-      setFormPassword("")
-      setFormCanAccessPanel(false)
-      setFormCanAccessTerminal(true)
-      setShowStaffPermOverrides(false)
-      setFormGrantedPerms([])
-      setFormRevokedPerms([])
-      setFormMaxPctOverride("")
-      setFormMaxAmtOverride("")
+      setFormName(""); setFormRole("waiter"); setFormPhone(""); setFormPin("")
+      setFormEmail(""); setFormPassword(""); setFormCanAccessPanel(false)
+      setFormCanAccessTerminal(true); setShowStaffPermOverrides(false)
+      setFormGrantedPerms([]); setFormRevokedPerms([])
+      setFormMaxPctOverride(""); setFormMaxAmtOverride("")
+      setFormShiftRestrictionEnabled(false)
+      setFormShiftStartTime("09:00"); setFormShiftEndTime("21:00"); setFormShiftCutoffOffset(-30)
       return
     }
     setFormName(editingUser.name)
     setFormRole(editingUser.role === "root" ? "branch_manager" : editingUser.role)
     setFormPhone(editingUser.phone || "")
     setFormEmail(extractCorderEmailLocalPart(editingUser.email))
-    setFormPassword("")
-    setFormPin("")
+    setFormPassword(""); setFormPin("")
     setFormCanAccessPanel(Boolean(editingUser.canAccessPanel || editingUser.email))
     setFormCanAccessTerminal(editingUser.canAccessTerminal ?? true)
     setFormGrantedPerms(editingUser.grantedPermissions ?? [])
@@ -96,6 +94,10 @@ export function StaffAccountModal({
     setFormMaxAmtOverride(
       editingUser.maxDiscountAmountOverride != null ? String(editingUser.maxDiscountAmountOverride) : ""
     )
+    setFormShiftRestrictionEnabled(Boolean(editingUser.shiftRestrictionEnabled))
+    setFormShiftStartTime(editingUser.shiftStartTime || "09:00")
+    setFormShiftEndTime(editingUser.shiftEndTime || "21:00")
+    setFormShiftCutoffOffset(Number(editingUser.shiftCutoffOffsetMinutes ?? -30))
     setShowStaffPermOverrides(
       (editingUser.grantedPermissions?.length ?? 0) > 0 ||
         (editingUser.revokedPermissions?.length ?? 0) > 0 ||
@@ -177,6 +179,10 @@ export function StaffAccountModal({
         revokedPermissions: formRevokedPerms,
         maxDiscountPercentOverride,
         maxDiscountAmountOverride,
+        shiftRestrictionEnabled: formShiftRestrictionEnabled,
+        shiftStartTime: formShiftRestrictionEnabled ? formShiftStartTime : null,
+        shiftEndTime: formShiftRestrictionEnabled ? formShiftEndTime : null,
+        shiftCutoffOffsetMinutes: formShiftRestrictionEnabled ? formShiftCutoffOffset : 0,
       })
       onClose()
       return
@@ -195,6 +201,10 @@ export function StaffAccountModal({
       revokedPermissions: formRevokedPerms,
       maxDiscountPercentOverride,
       maxDiscountAmountOverride,
+      shiftRestrictionEnabled: formShiftRestrictionEnabled,
+      shiftStartTime: formShiftRestrictionEnabled ? formShiftStartTime : null,
+      shiftEndTime: formShiftRestrictionEnabled ? formShiftEndTime : null,
+      shiftCutoffOffsetMinutes: formShiftRestrictionEnabled ? formShiftCutoffOffset : 0,
       active: true,
     })
     onClose()
@@ -358,6 +368,18 @@ export function StaffAccountModal({
               />
             </div>
           </>
+        )}
+        {formCanAccessTerminal && (
+          <StaffShiftRestrictionFields
+            enabled={formShiftRestrictionEnabled}
+            startTime={formShiftStartTime}
+            endTime={formShiftEndTime}
+            cutoffOffsetMinutes={formShiftCutoffOffset}
+            onChangeEnabled={setFormShiftRestrictionEnabled}
+            onChangeStartTime={setFormShiftStartTime}
+            onChangeEndTime={setFormShiftEndTime}
+            onChangeCutoffOffsetMinutes={setFormShiftCutoffOffset}
+          />
         )}
       </div>
 

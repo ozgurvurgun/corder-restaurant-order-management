@@ -6,6 +6,7 @@ import type {
   TerminalUser,
 } from "./types"
 import {
+  acquireTerminalCoords,
   api,
   clearStaffSession,
   clearToken,
@@ -179,7 +180,8 @@ export function useTerminalSessionActions(params: {
       const token = getToken()
       if (!token) return { ok: false, error: "Restoran oturumu gerekli" }
       try {
-        const res = await api.staff.verifyPin(token, pin, staffId)
+        const coords = await acquireTerminalCoords(false)
+        const res = await api.staff.verifyPin(token, pin, staffId, coords)
         const session = {
           staffId: res.staffId,
           name: res.name,
@@ -188,6 +190,8 @@ export function useTerminalSessionActions(params: {
           permissions: res.permissions,
           limits: res.limits,
           staffToken: res.staffToken,
+          shiftAccessUntil: res.shiftAccessUntil ?? null,
+          effectiveEndTime: res.effectiveEndTime ?? null,
         }
         setStaffSession(session)
         lastActivityRef.current = Date.now()
