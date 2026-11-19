@@ -98,6 +98,11 @@ export function usePanelSocket(params: {
 
     const handleOrdersMoved = () => void refreshPosRef.current?.()
     const handleOrdersUpdated = () => void refreshPosRef.current?.()
+    const handlePrintersUpdated = () => {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("corder:printers-updated"))
+      }
+    }
     const handleTablesPresence = (
       presenceMap: Record<string, { staffId: string; staffName: string }>,
     ) => {
@@ -235,6 +240,7 @@ export function usePanelSocket(params: {
     socket.on("order:created", handleOrderCreated)
     socket.on("orders:moved", handleOrdersMoved)
     socket.on("orders:updated", handleOrdersUpdated)
+    socket.on("printers:updated", handlePrintersUpdated)
     socket.on("tables:presence", handleTablesPresence)
     socket.on("waiter:called", handleWaiterCalled)
     socket.on("fraud:alert", handleFraudAlert)
@@ -247,6 +253,7 @@ export function usePanelSocket(params: {
       socket.off("order:created", handleOrderCreated)
       socket.off("orders:moved", handleOrdersMoved)
       socket.off("orders:updated", handleOrdersUpdated)
+      socket.off("printers:updated", handlePrintersUpdated)
       socket.off("tables:presence", handleTablesPresence)
       socket.off("waiter:called", handleWaiterCalled)
       socket.off("fraud:alert", handleFraudAlert)

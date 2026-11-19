@@ -64,12 +64,22 @@ export class PrintAgentController {
   @Get('context')
   @UseGuards(PrintAgentGuard)
   async getAgentContext(@Req() req: PrintAgentRequest) {
+    await this.touchHeartbeat(req.printAgentRestaurantId);
     return this.buildContext(req.printAgentRestaurantId);
+  }
+
+  @Post('logout')
+  @UseGuards(PrintAgentGuard)
+  async logout(@Req() req: PrintAgentRequest) {
+    await this.printersService.markAgentLoggedOut(req.printAgentRestaurantId);
+    this.ordersGateway.emitPrintersUpdated(req.printAgentRestaurantId);
+    return { ok: true };
   }
 
   @Get('pending-kitchen-orders')
   @UseGuards(PrintAgentGuard)
-  pendingKitchen(@Req() req: PrintAgentRequest) {
+  async pendingKitchen(@Req() req: PrintAgentRequest) {
+    await this.touchHeartbeat(req.printAgentRestaurantId);
     return this.orders.findPendingKitchenPrints(req.printAgentRestaurantId);
   }
 
@@ -79,6 +89,7 @@ export class PrintAgentController {
     @Param('orderId', new ParseUUIDPipe()) orderId: string,
     @Req() req: PrintAgentRequest,
   ) {
+    await this.touchHeartbeat(req.printAgentRestaurantId);
     const res = await this.orders.markKitchenTicketPrinted(req.printAgentRestaurantId, orderId);
     this.ordersGateway.emitOrdersUpdated(req.printAgentRestaurantId);
     return res;
@@ -86,16 +97,18 @@ export class PrintAgentController {
 
   @Get('pending-print-jobs')
   @UseGuards(PrintAgentGuard)
-  pendingPrintJobs(@Req() req: PrintAgentRequest) {
+  async pendingPrintJobs(@Req() req: PrintAgentRequest) {
+    await this.touchHeartbeat(req.printAgentRestaurantId);
     return this.orders.findPendingPrintJobs(req.printAgentRestaurantId);
   }
 
   @Patch('print-jobs/:jobId/printed')
   @UseGuards(PrintAgentGuard)
-  printJobPrinted(
+  async printJobPrinted(
     @Param('jobId', new ParseUUIDPipe()) jobId: string,
     @Req() req: PrintAgentRequest,
   ) {
+    await this.touchHeartbeat(req.printAgentRestaurantId);
     return this.orders.markPrintJobPrinted(req.printAgentRestaurantId, jobId);
   }
 
@@ -127,6 +140,14 @@ export class PrintAgentController {
     );
     this.ordersGateway.emitPrintersUpdated(req.printAgentRestaurantId);
     return { ok: true, printers };
+  }
+
+  private async touchHeartbeat(restaurantId: string): Promise<void> {
+    const becameOnline =
+      await this.printersService.recordAgentHttpHeartbeat(restaurantId);
+    if (becameOnline) {
+      this.ordersGateway.emitPrintersUpdated(restaurantId);
+    }
   }
 
   private async buildContext(restaurantId: string) {

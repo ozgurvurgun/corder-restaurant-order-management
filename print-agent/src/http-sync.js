@@ -271,6 +271,18 @@ async function pushPrintersToBackend(config, settings) {
   }
 }
 
+async function logoutPrintAgent(config) {
+  const base = httpBaseUrl(config)
+  if (!base || (!config?.agentToken && !config?.refreshToken)) return false
+  const url = `${base}/restaurant/print-agent/logout`
+  try {
+    const res = await authorizedFetch(config, url, { method: "POST" })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 module.exports = {
   httpBaseUrl,
   ackKitchenPrinted,
@@ -278,6 +290,7 @@ module.exports = {
   fetchPendingKitchenOrders,
   fetchPendingPrintJobs,
   loginPrintAgent,
+  logoutPrintAgent,
   refreshAgentSession,
   fetchAgentContext,
   pushPrintersToBackend,

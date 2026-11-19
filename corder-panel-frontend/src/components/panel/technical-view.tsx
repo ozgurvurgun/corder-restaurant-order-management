@@ -79,6 +79,29 @@ export default function TechnicalView() {
   }, [storePrinters])
 
   useEffect(() => {
+    if (activeTab !== "printers" || !token) return
+    api.printers
+      .list(token)
+      .then((prs) => {
+        setLocalPrinters(
+          prs.map((p) => ({
+            id: p.id,
+            name: p.name,
+            type: p.type,
+            connection: p.connection,
+            ipAddress: p.ipAddress ?? undefined,
+            port: p.port ?? undefined,
+            department: p.department ?? undefined,
+            status: p.status,
+            paperWidth: p.paperWidth === 58 ? 58 : 80,
+            autoCut: p.autoCut,
+          })),
+        )
+      })
+      .catch(() => undefined)
+  }, [activeTab, token])
+
+  useEffect(() => {
     setAuditPage(1)
   }, [auditFilter, datePreset, fromDate, toDate])
 

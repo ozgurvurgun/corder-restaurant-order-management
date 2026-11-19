@@ -106,6 +106,28 @@ export function usePanelHydration(params: {
 
   useEffect(() => {
     if (!token) return
+    const syncPrintersOnly = () => {
+      api.technical
+        .listPrinters(token)
+        .then((prs) => {
+          setPrinters(
+            prs.map((p) => ({
+              id: p.id,
+              name: p.name,
+              type: p.type,
+              connection: p.connection,
+              ipAddress: p.ipAddress ?? undefined,
+              port: p.port ?? undefined,
+              department: p.department ?? undefined,
+              status: p.status,
+              paperWidth: p.paperWidth === 58 ? 58 : 80,
+              autoCut: p.autoCut,
+            })),
+          )
+        })
+        .catch(() => undefined)
+    }
+
     void Promise.all([
       api.technical
         .listAuditLogs(token, { limit: 1000 })
@@ -141,5 +163,10 @@ export function usePanelHydration(params: {
         )
       })
       .catch(console.error)
+
+    window.addEventListener("corder:printers-updated", syncPrintersOnly)
+    return () => {
+      window.removeEventListener("corder:printers-updated", syncPrintersOnly)
+    }
   }, [token, restaurantId, setAuditLogs, setPrinters])
 }

@@ -7,18 +7,96 @@ import { UpdatePrinterDto } from '../api/dto/update-printer.dto';
 
 export { CreatePrinterDto, UpdatePrinterDto };
 
+const AGENT_HEARTBEAT_TTL_MS = 15_000;
+
 @Injectable()
 export class PrintersService {
+  private readonly connectedAgentSockets = new Map<string, Set<string>>();
+  private readonly lastHttpHeartbeatMs = new Map<string, number>();
+
   constructor(
     @InjectRepository(PrinterConfigEntity)
     private readonly repo: Repository<PrinterConfigEntity>,
   ) {}
 
-  list(restaurantId: string) {
-    return this.repo.find({
+  isAgentOnline(restaurantId: string): boolean {
+    const sockets = this.connectedAgentSockets.get(restaurantId);
+    if (sockets && sockets.size > 0) {
+      return true;
+    }
+    const lastHeartbeat = this.lastHttpHeartbeatMs.get(restaurantId) ?? 0;
+    return lastHeartbeat > 0 && Date.now() - lastHeartbeat <= AGENT_HEARTBEAT_TTL_MS;
+  }
+
+  async registerAgentSocket(restaurantId: string, socketId: string): Promise<void> {
+    let set = this.connectedAgentSockets.get(restaurantId);
+    if (!set) {
+      set = new Set<string>();
+      this.connectedAgentSockets.set(restaurantId, set);
+    }
+    set.add(socketId);
+    this.lastHttpHeartbeatMs.set(restaurantId, Date.now());
+    await this.repo
+      .update({ restaurantId }, { status: 'online', updatedAt: new Date() })
+      .catch(() => undefined);
+  }
+
+  async unregisterAgentSocket(restaurantId: string, socketId: string): Promise<boolean> {
+    const set = this.connectedAgentSockets.get(restaurantId);
+    if (set) {
+      set.delete(socketId);
+      if (set.size === 0) {
+        this.connectedAgentSockets.delete(restaurantId);
+      }
+    }
+    const remainingSockets = this.connectedAgentSockets.get(restaurantId)?.size ?? 0;
+    if (remainingSockets === 0) {
+      this.lastHttpHeartbeatMs.delete(restaurantId);
+      await this.repo
+        .update({ restaurantId }, { status: 'offline', updatedAt: new Date() })
+        .catch(() => undefined);
+      return true;
+    }
+    return false;
+  }
+
+  async recordAgentHttpHeartbeat(restaurantId: string): Promise<boolean> {
+    const wasOnline = this.isAgentOnline(restaurantId);
+    this.lastHttpHeartbeatMs.set(restaurantId, Date.now());
+    if (!wasOnline) {
+      await this.repo
+        .update({ restaurantId }, { status: 'online', updatedAt: new Date() })
+        .catch(() => undefined);
+      return true;
+    }
+    return false;
+  }
+
+  async markAgentLoggedOut(restaurantId: string): Promise<void> {
+    this.connectedAgentSockets.delete(restaurantId);
+    this.lastHttpHeartbeatMs.delete(restaurantId);
+    await this.repo
+      .update({ restaurantId }, { status: 'offline', updatedAt: new Date() })
+      .catch(() => undefined);
+  }
+
+  async list(restaurantId: string): Promise<PrinterConfigEntity[]> {
+    const rows = await this.repo.find({
       where: { restaurantId },
       order: { createdAt: 'DESC' },
     });
+    const online = this.isAgentOnline(restaurantId);
+    const liveStatus = online ? 'online' : 'offline';
+    const needsDbSync = rows.some((r) => r.status !== liveStatus);
+    if (needsDbSync) {
+      void this.repo
+        .update({ restaurantId }, { status: liveStatus })
+        .catch(() => undefined);
+    }
+    for (const row of rows) {
+      row.status = liveStatus;
+    }
+    return rows;
   }
 
   async create(restaurantId: string, dto: CreatePrinterDto) {
@@ -28,11 +106,15 @@ export class PrintersService {
       name: dto.name.trim(),
       type: dto.type.trim(),
       connection,
-      ipAddress: connection === 'network' ? (dto.ipAddress?.trim() || null) : (dto.ipAddress?.trim() || null),
+      ipAddress:
+        connection === 'network'
+          ? dto.ipAddress?.trim() || null
+          : dto.ipAddress?.trim() || null,
       port: connection === 'network' ? (dto.port ?? 9100) : (dto.port ?? null),
       department: dto.department?.trim() || null,
       paperWidth: dto.paperWidth ?? 80,
       autoCut: dto.autoCut ?? true,
+      status: this.isAgentOnline(restaurantId) ? 'online' : 'offline',
     });
     return this.repo.save(entity);
   }
@@ -49,7 +131,7 @@ export class PrintersService {
       connection: nextConnection,
       ipAddress:
         dto.ipAddress !== undefined
-          ? (dto.ipAddress?.trim() || null)
+          ? dto.ipAddress?.trim() || null
           : nextConnection !== 'network' && dto.connection !== undefined
             ? null
             : existing.ipAddress,
@@ -60,7 +142,9 @@ export class PrintersService {
             ? null
             : existing.port,
       department:
-        dto.department !== undefined ? (dto.department?.trim() || null) : existing.department,
+        dto.department !== undefined
+          ? dto.department?.trim() || null
+          : existing.department,
       status: dto.status ?? existing.status,
       paperWidth: dto.paperWidth ?? existing.paperWidth,
       autoCut: dto.autoCut ?? existing.autoCut,
@@ -96,6 +180,7 @@ export class PrintersService {
       defaultKitchenPrinterId?: string;
     },
   ): Promise<PrinterConfigEntity[]> {
+    this.lastHttpHeartbeatMs.set(restaurantId, Date.now());
     const incoming = Array.isArray(body?.printers) ? body.printers : [];
     const receiptId = (body?.receiptPrinterId ?? '').trim();
     const uuidRe =
@@ -125,8 +210,9 @@ export class PrintersService {
           : (p.systemPrinterName?.trim() || 'USB').slice(0, 100);
         const port = isNetwork ? Number(p.port) || 9100 : null;
         const paperWidth = Number(p.paperWidth) === 58 ? 58 : 80;
-        const department =
-          (p.department?.trim() || (isReceipt ? 'Kasa' : 'Mutfak')).slice(0, 100);
+        const department = (
+          p.department?.trim() || (isReceipt ? 'Kasa' : 'Mutfak')
+        ).slice(0, 100);
         const autoCut = p.autoCut !== false;
 
         let match =
@@ -185,5 +271,3 @@ export class PrintersService {
     });
   }
 }
-
-

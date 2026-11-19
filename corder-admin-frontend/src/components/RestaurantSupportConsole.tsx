@@ -25,14 +25,14 @@ const ROLE_LABELS: Record<string, string> = {
 
 function normalizeDiagnostics(raw: RestaurantDiagnosticsDto | null) {
   const d = (raw ?? {}) as Record<string, any>
-  const tablesObj = d.tables ?? {}
+  const tablesObj = d.tablesSummary ?? d.tables ?? {}
   const ordersObj = d.orders ?? {}
   const revObj = d.revenue ?? {}
   const shiftObj = d.openShift ?? d.shift ?? d.activeShift ?? null
   const menuObj = d.menu ?? {}
   const pqObj = d.printQueue ?? {}
-  const creditObj = d.credit ?? d.cari ?? d.openAccounts ?? {}
-  const secRaw = d.securityAlerts
+  const creditObj = d.ledgerSummary ?? d.credit ?? d.cari ?? d.openAccounts ?? {}
+  const secRaw = d.securityAlerts ?? d.recentFraudAlerts
 
   const totalTables = Number(tablesObj.total ?? d.totalTables ?? 0)
   const occupiedTables = Number(tablesObj.occupied ?? d.occupiedTables ?? 0)
@@ -43,16 +43,19 @@ function normalizeDiagnostics(raw: RestaurantDiagnosticsDto | null) {
       d.emptyTables ??
       Math.max(0, totalTables - occupiedTables - reservedTables)
   )
-  const securityAlertsCount = Array.isArray(secRaw)
-    ? secRaw.length
-    : Number(
-        secRaw?.openCount ??
-          secRaw?.totalCount ??
-          secRaw?.count ??
-          d.openSecurityAlertsCount ??
-          d.securityAlertsCount ??
-          0
-      )
+  const securityAlertsCount = Number(
+    d.openFraudAlertsCount ??
+      d.openSecurityAlertsCount ??
+      d.securityAlertsCount ??
+      (Array.isArray(secRaw)
+        ? secRaw.length
+        : secRaw?.openCount ?? secRaw?.totalCount ?? secRaw?.count ?? 0)
+  )
+  const staffList = Array.isArray(d.staffMembers)
+    ? (d.staffMembers as RestaurantDiagnosticsStaffDto[])
+    : Array.isArray(d.staff)
+      ? (d.staff as RestaurantDiagnosticsStaffDto[])
+      : []
 
   return {
     totalTables,
@@ -78,12 +81,23 @@ function normalizeDiagnostics(raw: RestaurantDiagnosticsDto | null) {
       pqObj.pending ?? pqObj.total ?? d.pendingPrintJobsCount ?? d.pendingPrintJobs ?? 0
     ),
     openCreditCount: Number(
-      creditObj.openAccountsCount ?? creditObj.accountsCount ?? creditObj.count ?? d.openCreditAccountsCount ?? 0
+      creditObj.customerCount ??
+        creditObj.openAccountsCount ??
+        creditObj.accountsCount ??
+        creditObj.count ??
+        d.openCreditAccountsCount ??
+        0
     ),
-    openCreditDebt: Number(creditObj.totalDebt ?? creditObj.totalBalance ?? d.openCreditTotalDebt ?? 0),
+    openCreditDebt: Number(
+      creditObj.totalReceivable ??
+        creditObj.totalDebt ??
+        creditObj.totalBalance ??
+        d.openCreditTotalDebt ??
+        0
+    ),
     securityAlertsCount,
     printers: Array.isArray(d.printers) ? d.printers : [],
-    staff: Array.isArray(d.staff) ? (d.staff as RestaurantDiagnosticsStaffDto[]) : [],
+    staff: staffList,
   }
 }
 
@@ -337,8 +351,8 @@ export function RestaurantSupportConsole({
                           <CheckCircle2 className="h-3 w-3" /> Çevrimiçi
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                          <AlertTriangle className="h-3 w-3" /> {p.status || "Çevrimdışı"}
+                        <span className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">
+                          <AlertTriangle className="h-3 w-3" /> Çevrimdışı
                         </span>
                       )}
                     </td>

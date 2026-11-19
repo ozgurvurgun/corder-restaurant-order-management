@@ -231,6 +231,7 @@ import {
     ProductService,
     CashShiftService,
     FraudDetectionService,
+    PrintersService,
     OrdersGateway,
   ],
 })

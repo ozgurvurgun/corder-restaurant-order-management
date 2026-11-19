@@ -24,6 +24,7 @@ import { OrderStatusPolicy } from '../../restaurant/domain/services/order-status
 import { computeIstanbulDateBoundaries } from '../../restaurant/domain/services/boss-overview.policy';
 import { SESSION_LOCK_STALE_MS } from '../../restaurant/application/table.service';
 import { FraudDetectionService } from '../../restaurant/application/fraud-detection.service';
+import { PrintersService } from '../../restaurant/application/printers.service';
 import { serializeCashShift } from '../../restaurant/application/orders/order.mapper';
 import { OrdersGateway } from '../../restaurant/api/orders.gateway';
 import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
@@ -47,6 +48,7 @@ export class PlatformSupportService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly fraudService: FraudDetectionService,
+    private readonly printersService: PrintersService,
     private readonly ordersGateway: OrdersGateway,
   ) {}
 
@@ -112,10 +114,7 @@ export class PlatformSupportService {
         where: { restaurantId },
         select: ['id'],
       }),
-      em.find(PrinterConfigEntity, {
-        where: { restaurantId },
-        order: { createdAt: 'DESC' },
-      }),
+      this.printersService.list(restaurantId),
       em.find(RestaurantStaffEntity, {
         where: { restaurantId },
         order: { createdAt: 'ASC' },
@@ -196,6 +195,26 @@ export class PlatformSupportService {
       };
     };
 
+    const tablesSummary = {
+      total: tables.length,
+      occupied,
+      empty,
+      reserved,
+      checkout,
+      lockedSessionsCount,
+    };
+    const serializedStaff = staffMembers.map((s) => ({
+      id: s.id,
+      name: s.name,
+      email: s.email,
+      role: s.role,
+      phone: s.phone,
+      isActive: s.isActive,
+      canAccessPanel: s.canAccessPanel,
+      canAccessTerminal: s.canAccessTerminal,
+      createdAt: s.createdAt.toISOString(),
+    }));
+
     return {
       restaurant: {
         id: restaurant.id,
@@ -207,14 +226,8 @@ export class PlatformSupportService {
         isAccessSuspended: Boolean(restaurant.isAccessSuspended),
         logoUrl: restaurant.logoUrl ?? null,
       },
-      tablesSummary: {
-        total: tables.length,
-        occupied,
-        empty,
-        reserved,
-        checkout,
-        lockedSessionsCount,
-      },
+      tablesSummary,
+      tables: tablesSummary,
       activeOrdersCount,
       todayRevenue: fromMinorUnits(todayRevenueMinor),
       totalRevenue: fromMinorUnits(totalRevenueMinor),
@@ -235,18 +248,10 @@ export class PlatformSupportService {
       })),
       pendingPrintJobsCount: pendingJobsCount + pendingKitchenCount,
       unacknowledgedWaiterCallsCount: unackWaiterCallsCount,
-      staffMembers: staffMembers.map((s) => ({
-        id: s.id,
-        name: s.name,
-        email: s.email,
-        role: s.role,
-        phone: s.phone,
-        isActive: s.isActive,
-        canAccessPanel: s.canAccessPanel,
-        canAccessTerminal: s.canAccessTerminal,
-        createdAt: s.createdAt.toISOString(),
-      })),
+      staffMembers: serializedStaff,
+      staff: serializedStaff,
       openFraudAlertsCount,
+      openSecurityAlertsCount: openFraudAlertsCount,
       recentFraudAlerts: fraudAlerts
         .slice(0, 10)
         .map((a) => this.fraudService.serializeAlert(a)),

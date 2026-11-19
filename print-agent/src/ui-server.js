@@ -16,7 +16,12 @@ const {
   discoverNetworkPrinters,
   testTcpPrinterConnection,
 } = require("./printer-discovery")
-const { loginPrintAgent, fetchAgentContext, pushPrintersToBackend } = require("./http-sync")
+const {
+  loginPrintAgent,
+  logoutPrintAgent,
+  fetchAgentContext,
+  pushPrintersToBackend,
+} = require("./http-sync")
 const { applyAutoStartSetting } = require("./autostart")
 const { buildTestTicket } = require("./escpos")
 const { printBytes } = require("./printers")
@@ -258,6 +263,8 @@ function createUiServer({ store, agent }) {
       }
 
       if (method === "POST" && pathname === "/api/logout") {
+        const current = loadSettings()
+        await logoutPrintAgent(buildRuntimeConfig(current)).catch(() => false)
         const { publicSettings } = applyAndReload({
           authToken: "",
           refreshToken: "",

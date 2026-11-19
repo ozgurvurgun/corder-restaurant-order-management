@@ -18,6 +18,7 @@ import {
   VerifiedSocketPrincipal,
 } from '../application/restaurant-session-validator.service';
 import { TableService } from '../application/table.service';
+import { PrintersService } from '../application/printers.service';
 import { buildCorsOptions } from '../../common/security/cors.config';
 import { requireConfigSecret } from '../../common/security/env.validation';
 
@@ -83,6 +84,7 @@ export class OrdersGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     private readonly config: ConfigService,
     private readonly sessionValidator: RestaurantSessionValidatorService,
     private readonly tableService: TableService,
+    private readonly printersService: PrintersService,
   ) {}
 
   afterInit(server: Server): void {
@@ -174,6 +176,11 @@ export class OrdersGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       client.join(getRestaurantRoom(verified.restaurantId));
       if (verified.role === 'print_agent') {
         client.join(getPrintAgentRoom(verified.restaurantId));
+        await this.printersService.registerAgentSocket(
+          verified.restaurantId,
+          client.id,
+        );
+        this.emitPrintersUpdated(verified.restaurantId);
       }
       if (verified.expMs !== null) {
         this.scheduleSocketExpiry(client, verified.expMs);
@@ -189,6 +196,20 @@ export class OrdersGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 
   handleDisconnect(client: Socket): void {
     this.clearSocketExpiry(client.id);
+    if (
+      client.data?.role === 'print_agent' &&
+      typeof client.data?.restaurantId === 'string'
+    ) {
+      const restId = client.data.restaurantId;
+      void this.printersService
+        .unregisterAgentSocket(restId, client.id)
+        .then((wentOffline) => {
+          if (wentOffline) {
+            this.emitPrintersUpdated(restId);
+          }
+        })
+        .catch(() => undefined);
+    }
   }
 
   async emitTableSessionPresence(restaurantId: string): Promise<void> {
