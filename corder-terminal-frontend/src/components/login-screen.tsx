@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Utensils, Phone } from "lucide-react"
+import { Phone } from "lucide-react"
 import { useApp } from "@/lib/store"
 import { translateApiError } from "@/lib/format"
 import { useToast } from "@/components/ios-toast"
@@ -48,8 +48,12 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
     <div className="min-h-dvh flex flex-col items-center justify-between bg-gradient-to-b from-[#e63462] via-[#c62a6b] to-[#7b2d8e] px-6 py-12 safe-top safe-bottom">
       <div className="flex-1 flex flex-col items-center justify-center w-full max-w-sm gap-10">
         <div className="flex flex-col items-center gap-2">
-          <div className="w-20 h-20 rounded-[22px] bg-white/15 backdrop-blur-xl flex items-center justify-center shadow-lg">
-            <Utensils className="w-10 h-10 text-white" />
+          <div className="w-20 h-20 rounded-[22px] bg-white/15 backdrop-blur-xl flex items-center justify-center shadow-lg overflow-hidden">
+            <img
+              src="/corder-logo.png"
+              alt="Corder Terminal"
+              className="w-full h-full object-cover"
+            />
           </div>
           <h1 className="text-[28px] font-bold text-white tracking-tight mt-3">
             Corder Terminal

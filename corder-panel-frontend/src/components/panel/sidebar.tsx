@@ -5,7 +5,6 @@ import {
   Users,
   BarChart3,
   Settings,
-  Utensils,
   Wallet,
   Warehouse,
   Wrench,
@@ -177,9 +176,11 @@ export default function PanelSidebar({
       {/* App header */}
       <div className="px-5 pt-5 pb-3 flex flex-col gap-2.5">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-[#e63462] flex items-center justify-center">
-            <Utensils className="w-4 h-4 text-white" />
-          </div>
+          <img
+            src="/corder-logo.png"
+            alt="Corder"
+            className="w-8 h-8 rounded-lg object-cover shadow-sm flex-shrink-0"
+          />
           <div className="min-w-0 flex-1">
             <h1 className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white leading-tight truncate">
               {currentBusiness?.name || settings.name || "Corder"}

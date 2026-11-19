@@ -66,9 +66,11 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
         style={{ minHeight: 44 }}
       >
         <div className="flex items-center gap-2.5 py-2.5">
-          <div className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center">
-            <UtensilsCrossed className="h-4 w-4" />
-          </div>
+          <img
+            src="/corder-logo.png"
+            alt="Corder"
+            className="w-7 h-7 rounded-lg object-cover shadow-xs"
+          />
           <h1 className="text-[17px] font-semibold tracking-tight">Corder</h1>
         </div>
         <div className="flex items-center gap-1 -mr-2">
