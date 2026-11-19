@@ -76,7 +76,7 @@ export function ContactPopover(props: {
 
   return (
     <>
-      <div className={`fixed ${hasWaiterCall ? "bottom-24" : "bottom-6"} right-6 z-30 transition-all duration-200`}>
+      <div className={`fixed ${hasWaiterCall ? "bottom-24" : "bottom-6"} right-6 z-[70] transition-all duration-200`}>
         <div
           role="dialog"
           aria-label="İletişim Bilgileri"
@@ -202,7 +202,7 @@ export function ContactPopover(props: {
       </div>
       {showContact && (
         <div
-          className="fixed inset-0 z-20 bg-black/25 backdrop-blur-[2px]"
+          className="fixed inset-0 z-[60] bg-black/25 backdrop-blur-[3px]"
           onClick={onClose}
         />
       )}
