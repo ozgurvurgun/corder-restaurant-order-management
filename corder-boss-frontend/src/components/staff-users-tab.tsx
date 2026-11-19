@@ -115,6 +115,24 @@ export function StaffUsersTab() {
     }
   }
 
+  const handleToggleTerminalAccess = async (u: StaffMemberDto) => {
+    if (!effectiveBranchId) return
+    const nextAccess = !u.canAccessTerminal
+    try {
+      await bossApi.staff.update(effectiveBranchId, u.id, {
+        canAccessTerminal: nextAccess,
+      })
+      await refreshBranchDetails(effectiveBranchId)
+      showToast(
+        nextAccess
+          ? `${u.name} el terminali erişimi açıldı`
+          : `${u.name} el terminalinden anında düşürüldü ve girişi kapatıldı`
+      )
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Güncellenemedi", "error")
+    }
+  }
+
   const handleDelete = async (u: StaffMemberDto) => {
     if (!effectiveBranchId) return
     if (!(await confirm(`${u.name} kullanıcısını silmek istediğinize emin misiniz?`))) return
@@ -253,7 +271,37 @@ export function StaffUsersTab() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+                        <div
+                          onClick={() => void handleToggleTerminalAccess(u)}
+                          title={
+                            u.canAccessTerminal
+                              ? "Terminalden Anında Düşür & Erişimi Kapat"
+                              : "El Terminali Erişimini Aç"
+                          }
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-[#e5e5ea] bg-white px-2.5 py-1 cursor-pointer select-none"
+                        >
+                          <Smartphone
+                            className={`h-3.5 w-3.5 ${
+                              u.canAccessTerminal ? "text-[#e63462]" : "text-[#86868b]"
+                            }`}
+                          />
+                          <span className="text-[11px] font-semibold text-[#1d1d1f]">
+                            Terminal
+                          </span>
+                          <button
+                            type="button"
+                            className={`h-5 w-9 flex-shrink-0 rounded-full p-0.5 transition-colors ${
+                              u.canAccessTerminal ? "bg-[#e63462]" : "bg-[#d1d1d6]"
+                            }`}
+                          >
+                            <div
+                              className={`h-4 w-4 rounded-full bg-white transition-transform ${
+                                u.canAccessTerminal ? "translate-x-4" : "translate-x-0"
+                              }`}
+                            />
+                          </button>
+                        </div>
                         <button
                           type="button"
                           onClick={() => void handleToggleActive(u)}

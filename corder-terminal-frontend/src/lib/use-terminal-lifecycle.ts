@@ -34,6 +34,7 @@ export function useTerminalLifecycle(params: {
   isLoggedIn: boolean
   currentUser: TerminalUser | null
   users?: TerminalStaffMember[]
+  usersLoaded?: boolean
   selectedTableId: string | null
   lockedTableIdRef: MutableRefObject<string | null>
   lastActivityRef: MutableRefObject<number>
@@ -48,6 +49,7 @@ export function useTerminalLifecycle(params: {
     isLoggedIn,
     currentUser,
     users = [],
+    usersLoaded = false,
     selectedTableId,
     lockedTableIdRef,
     setIsOffline,
@@ -126,6 +128,16 @@ export function useTerminalLifecycle(params: {
     if (!isLoggedIn || !currentUser) return
 
     const activeMember = users.find((u) => u.id === currentUser.id)
+    if (usersLoaded && !activeMember) {
+      try {
+        sessionStorage.setItem(
+          "terminal_staff_kick_notice",
+          "Terminal erişim yetkiniz yönetici tarafından kapatıldığı için oturumunuz anında sonlandırıldı."
+        )
+      } catch {}
+      logout()
+      return
+    }
     if (activeMember && activeMember.isWithinShift === false) {
       try {
         sessionStorage.setItem(
@@ -204,5 +216,5 @@ export function useTerminalLifecycle(params: {
       window.clearInterval(geoTimerId)
       document.removeEventListener("visibilitychange", onVisible)
     }
-  }, [isLoggedIn, currentUser, users, logout])
+  }, [isLoggedIn, currentUser, users, usersLoaded, logout])
 }

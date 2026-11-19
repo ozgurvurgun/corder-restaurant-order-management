@@ -114,6 +114,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     mapSessionToTerminalUser(getStaffSession())
   )
   const [users, setUsers] = useState<TerminalStaffMember[]>([])
+  const [usersLoaded, setUsersLoaded] = useState(false)
   const [usersError, setUsersError] = useState<string | null>(null)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isOffline, setIsOffline] = useState<boolean>(() =>
@@ -230,6 +231,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       setRawOrders(ordersRes)
       if (staffUsersRes) {
         setUsers(staffUsersRes.map((u) => ({ ...u, name: formatTitleCase(u.name) })))
+        setUsersLoaded(true)
       }
       if (menuRes) {
         const mapped = mapMenuTreeToCategoriesAndProducts(menuRes.categories)
@@ -285,6 +287,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     isLoggedIn,
     currentUser,
     users,
+    usersLoaded,
     selectedTableId,
     lockedTableIdRef,
     lastActivityRef,

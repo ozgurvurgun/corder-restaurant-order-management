@@ -361,6 +361,7 @@ export class StaffService {
     }
     const result = await this.staffRepo.delete({ id, restaurantId });
     if (result.affected === 0) throw new NotFoundException('Staff not found');
+    this.ordersGateway.emitStaffSessionUpdated(restaurantId, id);
   }
 
   async listTerminalUsers(restaurantId: string): Promise<TerminalStaffMemberDto[]> {

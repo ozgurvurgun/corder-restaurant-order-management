@@ -182,6 +182,9 @@ export default function UserManagement() {
                       İletişim
                     </th>
                     <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
+                      El Terminali Erişimi
+                    </th>
+                    <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
                       Durum
                     </th>
                     <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide w-[160px]">
@@ -274,6 +277,57 @@ export default function UserManagement() {
                               <p className="text-[#d1d1d6]">-</p>
                             )}
                           </div>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {user.isRoot || !canManageStaff ? (
+                            <span
+                              className={`text-[11px] font-medium px-2.5 py-1 rounded-full ${
+                                user.canAccessTerminal !== false
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : "bg-[#f5f5f7] text-[#86868b]"
+                              }`}
+                            >
+                              {user.canAccessTerminal !== false ? "Açık" : "Kapalı"}
+                            </span>
+                          ) : (
+                            <div className="inline-flex items-center gap-2">
+                              <button
+                                type="button"
+                                title={
+                                  user.canAccessTerminal !== false
+                                    ? "Terminalden Anında Düşür & Erişimi Kapat"
+                                    : "El Terminali Erişimini Aç"
+                                }
+                                onClick={() =>
+                                  updateUser(user.id, {
+                                    canAccessTerminal: !(user.canAccessTerminal !== false),
+                                  })
+                                }
+                                className={`h-5 w-9 flex-shrink-0 rounded-full p-0.5 transition-colors ${
+                                  user.canAccessTerminal !== false
+                                    ? "bg-[#e63462]"
+                                    : "bg-[#d1d1d6]"
+                                }`}
+                              >
+                                <div
+                                  className={`h-4 w-4 rounded-full bg-white transition-transform ${
+                                    user.canAccessTerminal !== false
+                                      ? "translate-x-4"
+                                      : "translate-x-0"
+                                  }`}
+                                />
+                              </button>
+                              <span
+                                className={`text-[11px] font-semibold ${
+                                  user.canAccessTerminal !== false
+                                    ? "text-emerald-700"
+                                    : "text-[#86868b]"
+                                }`}
+                              >
+                                {user.canAccessTerminal !== false ? "Açık" : "Düşürüldü"}
+                              </span>
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-center">
                           {user.isRoot || !canManageStaff ? (

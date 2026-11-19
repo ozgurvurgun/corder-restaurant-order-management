@@ -175,7 +175,19 @@ export function useSystemActions(params: {
             details: `Kullanıcı güncellendi: ${updated.name}`,
             metadata: { userId: id, fields: Object.keys(payload) },
           })
-          showPanelToast("Kullanıcı güncellendi", "success")
+          const onlyTerminalToggled =
+            Object.keys(payload).length === 1 &&
+            payload.canAccessTerminal !== undefined
+          if (onlyTerminalToggled) {
+            showPanelToast(
+              payload.canAccessTerminal
+                ? `${updated.name} el terminali erişimi açıldı`
+                : `${updated.name} el terminalinden anında düşürüldü ve girişi kapatıldı`,
+              payload.canAccessTerminal ? "success" : "info",
+            )
+          } else {
+            showPanelToast("Kullanıcı güncellendi", "success")
+          }
         })
         .catch((err) => showPanelToast(err instanceof Error ? err.message : "Kullanıcı güncellenemedi", "error"))
     },
