@@ -461,6 +461,6 @@ SET
   END
 WHERE is_system = true
   AND key IN ('branch_manager', 'shift_supervisor', 'cashier', 'head_waiter', 'waiter', 'runner', 'inventory_manager', 'accountant')
-  AND name IN ('Branch Manager', 'Shift Supervisor', 'Cashier', 'Head Waiter', 'Waiter', 'Runner / Busser', 'Inventory Manager', 'Accountant');
+  AND name IN ('Branch Manager', 'Shift Supervisor', 'Cashier', 'Head Waiter', 'Waiter', 'Runner', 'Runner / Busser', 'Inventory Manager', 'Accountant');
 
 COMMIT;
