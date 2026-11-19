@@ -20,7 +20,6 @@ import {
   Users,
   BarChart3,
   Utensils,
-  Crown,
   Building2,
   LogOut,
 } from "lucide-react"
@@ -86,9 +85,11 @@ function BossShell() {
       <aside className="hidden md:flex w-[240px] h-full flex-col border-r border-[#d1d1d6]/60 bg-[#f5f5f7]/80 backdrop-blur-2xl flex-shrink-0 select-none">
         <div className="px-5 pt-5 pb-3 flex flex-col gap-2.5">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#e63462] flex items-center justify-center">
-              <Crown className="w-4 h-4 text-white" />
-            </div>
+            <img
+              src="/corder-logo.png"
+              alt="Corder Boss"
+              className="w-8 h-8 rounded-lg object-cover shadow-sm flex-shrink-0"
+            />
             <div className="min-w-0 flex-1">
               <h1 className="text-[13px] font-semibold text-[#1d1d1f] leading-tight truncate">
                 {selectedBranchId === "ALL"

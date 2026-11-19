@@ -451,9 +451,8 @@ export class RestaurantAuthService {
       owned.find((r) => r.id === restaurantId) ??
       owned[0];
     if (!current) throw new NotFoundException('Active restaurant branch not found');
-    if (isRestaurantPaymentSuspended(current) && !(await this.hasOpenCashShift(current.id))) {
-      const cfg = await this.loadBillingConfig();
-      throw new UnauthorizedException(buildPaymentSuspendedErrorMessage(current.name, cfg));
+    if (isRestaurantPaymentSuspended(current)) {
+      throw new UnauthorizedException(buildPaymentSuspendedErrorMessage(current.name));
     }
     return {
       restaurant: toBranchSummaryDto(current),
@@ -468,12 +467,8 @@ export class RestaurantAuthService {
       relations: ['restaurant'],
     });
     if (!staff || !staff.restaurant) throw new UnauthorizedException('Staff user not found');
-    if (
-      isRestaurantPaymentSuspended(staff.restaurant) &&
-      !(await this.hasOpenCashShift(staff.restaurant.id))
-    ) {
-      const cfg = await this.loadBillingConfig();
-      throw new UnauthorizedException(buildPaymentSuspendedErrorMessage(staff.restaurant.name, cfg));
+    if (isRestaurantPaymentSuspended(staff.restaurant)) {
+      throw new UnauthorizedException(buildPaymentSuspendedErrorMessage(staff.restaurant.name));
     }
     const resolved = await this.rolesService.resolveForStaff(staff);
     const summary = toBranchSummaryDto(staff.restaurant);
@@ -483,9 +478,8 @@ export class RestaurantAuthService {
   private async getTerminalSessionProfile(restaurantId: string) {
     const rest = await this.restaurantRepo.findOne({ where: { id: restaurantId } });
     if (!rest) throw new NotFoundException('Restaurant not found');
-    if (isRestaurantPaymentSuspended(rest) && !(await this.hasOpenCashShift(rest.id))) {
-      const cfg = await this.loadBillingConfig();
-      throw new UnauthorizedException(buildPaymentSuspendedErrorMessage(rest.name, cfg));
+    if (isRestaurantPaymentSuspended(rest)) {
+      throw new UnauthorizedException(buildPaymentSuspendedErrorMessage(rest.name));
     }
     const summary = toBranchSummaryDto(rest);
     return { restaurant: summary, restaurants: [summary], user: buildTerminalUserDto(rest) };

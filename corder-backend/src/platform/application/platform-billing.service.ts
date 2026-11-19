@@ -16,6 +16,8 @@ import {
   normalizeAndSortPeriods,
 } from '../domain/subscription-billing.policy';
 import { CashShiftEntity } from '../../restaurant/domain/cash-shift.entity';
+import { OrdersGateway } from '../../restaurant/api/orders.gateway';
+import { buildPaymentSuspendedErrorMessage } from '../../restaurant/domain/services/billing-suspension.policy';
 import {
   RecordRestaurantPaymentDto,
   UpdatePlatformBillingConfigDto,
@@ -52,6 +54,7 @@ export class PlatformBillingService {
     @InjectRepository(RestaurantSubscriptionPaymentEntity)
     private readonly paymentRepo: Repository<RestaurantSubscriptionPaymentEntity>,
     private readonly restaurantService: RestaurantService,
+    private readonly ordersGateway: OrdersGateway,
   ) {}
 
   private async hasOpenCashShift(restaurantId: string): Promise<boolean> {
@@ -268,6 +271,10 @@ export class PlatformBillingService {
     }
     await this.repo.save(entity);
     await this.restaurantService.syncPersistedBillingSummary(id);
+    this.ordersGateway.emitAuthExpired(
+      id,
+      buildPaymentSuspendedErrorMessage(entity.name),
+    );
     return this.restaurantService.findOneEnriched(entity.id);
   }
 
@@ -332,6 +339,10 @@ export class PlatformBillingService {
         r.suspensionReason = 'payment_overdue';
         r.suspendedAt = now;
         await this.repo.save(r);
+        this.ordersGateway.emitAuthExpired(
+          r.id,
+          buildPaymentSuspendedErrorMessage(r.name),
+        );
         suspendedCount += 1;
       }
     }

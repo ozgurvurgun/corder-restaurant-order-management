@@ -120,6 +120,15 @@ export function translateApiError(raw: unknown, fallback = "İşlem gerçekleşt
   if (!trimmed) return fallback
   const lower = trimmed.toLowerCase()
 
+  if (
+    lower.includes("access suspended") ||
+    lower.includes("unpaid subscription") ||
+    lower.includes("iban:")
+  ) {
+    const branchMatch = trimmed.match(/for "([^"]+)"/i)
+    const branchText = branchMatch?.[1] ? `${branchMatch[1]} işletmesi` : "İşletmeniz"
+    return `${branchText} için abonelik ödemesi tamamlanmadığından sistem erişimi geçici olarak durdurulmuştur. Lütfen Corder yönetimi ile iletişime geçin.`
+  }
   if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed")) {
     return "Sunucuya bağlanılamadı. İnternet bağlantınızı kontrol edin."
   }

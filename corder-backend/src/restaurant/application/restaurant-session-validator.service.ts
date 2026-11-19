@@ -42,22 +42,16 @@ export class RestaurantSessionValidatorService {
     private readonly authService: RestaurantAuthService,
   ) {}
 
-  private async assertBranchActiveAndUnsuspended(
+  private assertBranchActiveAndUnsuspended(
     restaurant: Pick<
       RestaurantEntity,
       'id' | 'name' | 'status' | 'isAccessSuspended' | 'billingStatus'
     >,
-    opts: { isBillingInspectionRoute: boolean; isOpeningNewShift: boolean },
-  ): Promise<void> {
-    if (!opts.isBillingInspectionRoute && isRestaurantPaymentSuspended(restaurant)) {
-      const hasOpenShift =
-        !opts.isOpeningNewShift && (await this.authService.hasOpenCashShift(restaurant.id));
-      if (!hasOpenShift) {
-        const cfg = await this.authService.loadBillingConfig();
-        throw new UnauthorizedException(
-          buildPaymentSuspendedErrorMessage(restaurant.name, cfg),
-        );
-      }
+  ): void {
+    if (isRestaurantPaymentSuspended(restaurant)) {
+      throw new UnauthorizedException(
+        buildPaymentSuspendedErrorMessage(restaurant.name),
+      );
     }
     if (restaurant.status !== 'active') {
       throw new UnauthorizedException('Restaurant is not active');
@@ -97,7 +91,7 @@ export class RestaurantSessionValidatorService {
       throw new UnauthorizedException('Restaurant not found');
     }
 
-    await this.assertBranchActiveAndUnsuspended(restaurant, ctx);
+    this.assertBranchActiveAndUnsuspended(restaurant);
 
     if (payload.role === 'staff') {
       return this.validateHttpStaffPrincipal(payload, restaurant);
@@ -155,7 +149,7 @@ export class RestaurantSessionValidatorService {
       throw new UnauthorizedException('You do not have access to this branch');
     }
 
-    await this.assertBranchActiveAndUnsuspended(targetRestaurant, ctx);
+    this.assertBranchActiveAndUnsuspended(targetRestaurant);
 
     const tier = admin.bossTier || 'franchise_owner';
     return {
@@ -295,10 +289,7 @@ export class RestaurantSessionValidatorService {
     if (!activeRestaurant || activeRestaurant.status !== 'active') {
       return null;
     }
-    if (
-      isRestaurantPaymentSuspended(activeRestaurant) &&
-      !(await this.authService.hasOpenCashShift(targetRestId))
-    ) {
+    if (isRestaurantPaymentSuspended(activeRestaurant)) {
       return null;
     }
 

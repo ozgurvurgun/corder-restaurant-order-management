@@ -6,7 +6,7 @@ import {
   type PanelOrder,
   type PanelTable,
 } from "../panel-types"
-import { clearToken, getBase, type OrderDto } from "../api"
+import { notifyAuthExpired, getBase, type OrderDto } from "../api"
 import { computeDiscountMinorUnits, fromMinorUnits, toMinorUnits } from "../format"
 import { mapOrder } from "../mappers/orders-tables.mapper"
 import {
@@ -114,7 +114,8 @@ export function usePanelSocket(params: {
       )
     }
 
-    const handleAuthExpired = () => clearToken()
+    const handleAuthExpired = (payload?: { reason?: string }) =>
+      notifyAuthExpired(payload?.reason)
 
     const handleWaiterCalled = (payload: {
       id?: string

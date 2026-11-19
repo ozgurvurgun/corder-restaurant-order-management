@@ -62,13 +62,9 @@ export class PrintAgentGuard implements CanActivate {
         billingStatus: true,
       },
     });
-    if (
-      isRestaurantPaymentSuspended(restaurant) &&
-      (!restaurant || !(await this.authService.hasOpenCashShift(restaurant.id)))
-    ) {
-      const cfg = await this.authService.loadBillingConfig();
+    if (isRestaurantPaymentSuspended(restaurant)) {
       throw new UnauthorizedException(
-        buildPaymentSuspendedErrorMessage(restaurant?.name, cfg),
+        buildPaymentSuspendedErrorMessage(restaurant?.name),
       );
     }
     if (

@@ -1,21 +1,6 @@
 import { useState, useEffect } from "react"
 import { useBossStore } from "@/lib/boss-store"
-import {
-  Crown,
-  Eye,
-  EyeOff,
-  LogIn,
-  ShieldCheck,
-  Smartphone,
-  Building2,
-  Download,
-  Ban,
-} from "lucide-react"
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
-}
+import { Eye, EyeOff, LogIn, Ban } from "lucide-react"
 
 export function BossLogin() {
   const { login } = useBossStore()
@@ -24,16 +9,15 @@ export function BossLogin() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
-  const [showIosGuide, setShowIosGuide] = useState(false)
 
   useEffect(() => {
-    const handler = (e: Event) => {
-      e.preventDefault()
-      setDeferredPrompt(e as BeforeInstallPromptEvent)
-    }
-    window.addEventListener("beforeinstallprompt", handler)
-    return () => window.removeEventListener("beforeinstallprompt", handler)
+    try {
+      const notice = sessionStorage.getItem("boss_suspended_notice")
+      if (notice) {
+        setError(notice)
+        sessionStorage.removeItem("boss_suspended_notice")
+      }
+    } catch {}
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -51,17 +35,9 @@ export function BossLogin() {
     }
   }
 
-  const handleInstallPwa = async () => {
-    if (deferredPrompt) {
-      await deferredPrompt.prompt()
-      await deferredPrompt.userChoice
-      setDeferredPrompt(null)
-    } else {
-      setShowIosGuide(true)
-    }
-  }
-
   const isSuspendedError =
+    error.toLowerCase().includes("abonelik ödemesi") ||
+    error.toLowerCase().includes("geçici olarak durdurulmuştur") ||
     error.toLowerCase().includes("ödeme alınmadığı") ||
     error.toLowerCase().includes("access suspended")
 
@@ -69,24 +45,17 @@ export function BossLogin() {
     <div className="min-h-dvh bg-gradient-to-br from-[#f5f5f7] to-[#e8e8ed] flex items-center justify-center p-4">
       <div className="w-full max-w-[430px]">
         <div className="text-center mb-7">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-[#e63462] rounded-2xl mb-3.5 shadow-lg">
-            <Crown className="w-8 h-8 text-white" />
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-[#e63462] rounded-2xl mb-3.5 shadow-lg overflow-hidden">
+            <img
+              src="/corder-logo.png"
+              alt="Corder Boss"
+              className="w-full h-full object-cover"
+            />
           </div>
           <h1 className="text-[24px] font-semibold text-[#1d1d1f]">Corder Boss</h1>
           <p className="text-[13px] text-[#86868b] mt-1">
             Çok şubeli restoran, yetki ve canlı ciro yönetim paneli
           </p>
-          <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-            <span className="inline-flex items-center gap-1 rounded-lg bg-white/80 border border-[#d1d1d6]/60 px-2.5 py-1 text-[11px] font-medium text-[#636366]">
-              <Building2 className="h-3 w-3 text-[#e63462]" /> Çoklu Şube
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-lg bg-white/80 border border-[#d1d1d6]/60 px-2.5 py-1 text-[11px] font-medium text-[#636366]">
-              <ShieldCheck className="h-3 w-3 text-[#e63462]" /> 48 Granüler Yetki
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-lg bg-white/80 border border-[#d1d1d6]/60 px-2.5 py-1 text-[11px] font-medium text-[#636366]">
-              <Smartphone className="h-3 w-3 text-[#e63462]" /> Mobil &amp; Web
-            </span>
-          </div>
         </div>
 
         <form
@@ -110,7 +79,7 @@ export function BossLogin() {
                 </div>
                 <div className="space-y-1">
                   <h3 className="text-[13px] font-semibold text-[#c91c12]">
-                    Ödeme Alınmadığı İçin Erişim Durduruldu
+                    Erişim Geçici Olarak Durduruldu
                   </h3>
                   <p className="text-[12px] leading-relaxed text-[#1d1d1f]">
                     {error}
@@ -171,26 +140,6 @@ export function BossLogin() {
             <LogIn className="w-4 h-4" />
             {loading ? "Giriş yapılıyor..." : "Giriş Yap"}
           </button>
-
-          <div className="mt-5 border-t border-[#e5e5ea] pt-4">
-            <button
-              type="button"
-              onClick={() => void handleInstallPwa()}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#f5f5f7] py-2.5 text-[12px] font-medium text-[#1d1d1f] hover:bg-[#e8e8ed] transition-colors"
-            >
-              <Download className="h-3.5 w-3.5 text-[#e63462]" />
-              Ana Ekrana Uygulama Olarak Ekle (PWA)
-            </button>
-            {showIosGuide && (
-              <p className="mt-2 rounded-xl bg-[#fef3f5] p-3 text-[11px] text-[#1d1d1f] leading-relaxed">
-                <span className="font-semibold">Kurulum:</span> Tarayıcınızın menüsünden{" "}
-                <span className="font-medium text-[#e63462]">Paylaş / Menü</span> butonuna
-                dokunun ve{" "}
-                <span className="font-medium text-[#e63462]">&ldquo;Ana Ekrana Ekle&rdquo;</span>{" "}
-                seçeneğini seçin.
-              </p>
-            )}
-          </div>
         </form>
       </div>
     </div>

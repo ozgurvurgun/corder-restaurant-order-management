@@ -1,6 +1,7 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Utensils, Phone } from "lucide-react"
 import { useApp } from "@/lib/store"
+import { translateApiError } from "@/lib/format"
 import { useToast } from "@/components/ios-toast"
 
 interface LoginScreenProps {
@@ -13,15 +14,35 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
+  const [suspendedNotice, setSuspendedNotice] = useState<string | null>(null)
+
+  useEffect(() => {
+    try {
+      const notice = sessionStorage.getItem("terminal_suspended_notice")
+      if (notice) {
+        setSuspendedNotice(translateApiError(notice))
+        sessionStorage.removeItem("terminal_suspended_notice")
+      }
+    } catch {}
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email?.trim() || !password) return
+    setSuspendedNotice(null)
     setLoading(true)
     const success = await login(email.trim(), password)
     setLoading(false)
     if (success) onLogin()
   }
+
+  const displayError = error || suspendedNotice
+  const isSuspended =
+    Boolean(displayError) &&
+    (displayError!.toLowerCase().includes("abonelik ödemesi") ||
+      displayError!.toLowerCase().includes("geçici olarak durdurulmuştur") ||
+      displayError!.toLowerCase().includes("ödeme alınmadığı") ||
+      displayError!.toLowerCase().includes("access suspended"))
 
   return (
     <div className="min-h-dvh flex flex-col items-center justify-between bg-gradient-to-b from-[#e63462] via-[#c62a6b] to-[#7b2d8e] px-6 py-12 safe-top safe-bottom">
@@ -55,22 +76,20 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
             />
           </div>
 
-          {error && (
+          {displayError && (
             <div
               className={`rounded-2xl py-3 px-4 text-center backdrop-blur-xl ${
-                error.toLowerCase().includes("ödeme alınmadığı") ||
-                error.toLowerCase().includes("access suspended")
+                isSuspended
                   ? "bg-red-950/80 border-2 border-red-400/80 text-white"
                   : "bg-white/10 text-white/90"
               }`}
             >
-              {(error.toLowerCase().includes("ödeme alınmadığı") ||
-                error.toLowerCase().includes("access suspended")) && (
+              {isSuspended && (
                 <p className="text-[14px] font-extrabold text-red-200 mb-1">
-                  Ödeme Alınmadığı İçin Erişim Durduruldu
+                  Erişim Geçici Olarak Durduruldu
                 </p>
               )}
-              <p className="text-[13px] leading-relaxed">{error}</p>
+              <p className="text-[13px] leading-relaxed">{displayError}</p>
             </div>
           )}
 

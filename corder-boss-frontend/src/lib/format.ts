@@ -189,12 +189,14 @@ const ERROR_TRANSLATIONS: Array<[RegExp, string | ((m: RegExpMatchArray) => stri
 export function localizeApiError(raw: string): string {
   const trimmed = raw.trim()
   if (!trimmed) return "Beklenmeyen bir sunucu hatası oluştu."
-  if (trimmed.toUpperCase().includes("ACCESS SUSPENDED DUE TO UNPAID SUBSCRIPTION")) {
+  if (
+    trimmed.toUpperCase().includes("ACCESS SUSPENDED") ||
+    trimmed.toUpperCase().includes("IBAN:") ||
+    trimmed.includes("Payment Account:")
+  ) {
     const branchMatch = trimmed.match(/for "([^"]+)"/i)
-    const ibanMatch = trimmed.match(/Payment Account:\s*(.+)$/i)
-    const branchPart = branchMatch?.[1] ? `"${branchMatch[1]}" şubesi` : "İşletmeniz"
-    const ibanPart = ibanMatch?.[1] ? ` Ödeme Bilgileri: ${ibanMatch[1]}` : ""
-    return `ÖDEME ALINMADIĞI İÇİN ERİŞİM DURDURULDU: ${branchPart} için aylık abonelik ödemesi alınamadığından sistem erişimi geçici olarak durdurulmuştur. Lütfen ödemeyi tamamlayarak sağlayıcınızla iletişime geçin.${ibanPart}`
+    const branchPart = branchMatch?.[1] ? `${branchMatch[1]} işletmesi` : "İşletmeniz"
+    return `${branchPart} için abonelik ödemesi tamamlanmadığından sistem erişimi geçici olarak durdurulmuştur. Lütfen Corder yönetimi ile iletişime geçin.`
   }
   for (const [pattern, replacement] of ERROR_TRANSLATIONS) {
     const match = trimmed.match(pattern)

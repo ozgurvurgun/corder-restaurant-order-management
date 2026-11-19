@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { usePanelAuth } from "@/lib/panel-auth"
-import { Eye, EyeOff, LogIn, Store, Ban, Copy, Check } from "lucide-react"
+import { Eye, EyeOff, LogIn, Ban } from "lucide-react"
 
 export default function PanelLogin() {
   const { login } = usePanelAuth()
@@ -9,7 +9,6 @@ export default function PanelLogin() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
-  const [copiedIban, setCopiedIban] = useState(false)
 
   useEffect(() => {
     try {
@@ -35,29 +34,22 @@ export default function PanelLogin() {
   }
 
   const isPaymentSuspendedError =
+    error.toLowerCase().includes("abonelik ödemesi") ||
+    error.toLowerCase().includes("geçici olarak durdurulmuştur") ||
     error.toLowerCase().includes("ödeme alınmadığı") ||
-    error.includes("ÖDEME ALINMADIĞI İÇİN") ||
     error.toLowerCase().includes("access suspended") ||
     error.toLowerCase().includes("unpaid subscription")
-
-  const ibanMatch = error.match(/TR[0-9 ]{20,34}/i)
-  const extractedIban = ibanMatch ? ibanMatch[0].trim() : null
-
-  const handleCopyIban = async () => {
-    if (!extractedIban) return
-    try {
-      await navigator.clipboard.writeText(extractedIban)
-      setCopiedIban(true)
-      window.setTimeout(() => setCopiedIban(false), 2500)
-    } catch {}
-  }
 
   return (
     <div className="min-h-dvh bg-gradient-to-br from-[#f5f5f7] to-[#e8e8ed] flex items-center justify-center p-4">
       <div className="w-full max-w-[430px]">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-[#e63462] rounded-2xl mb-4 shadow-lg">
-            <Store className="w-10 h-10 text-white" />
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-[#e63462] rounded-2xl mb-4 shadow-lg overflow-hidden">
+            <img
+              src="/corder-logo.png"
+              alt="Corder Panel"
+              className="w-full h-full object-cover"
+            />
           </div>
           <h1 className="text-[28px] font-bold text-[#1d1d1f]">Corder Panel</h1>
           <p className="text-[15px] text-[#86868b] mt-1">
@@ -70,35 +62,18 @@ export default function PanelLogin() {
           className="bg-white rounded-2xl shadow-xl p-8 border border-[#e5e5ea]"
         >
           {error && isPaymentSuspendedError ? (
-            <div className="mb-5 rounded-2xl border-2 border-[#ff3b30]/40 bg-[#ff3b30]/10 p-4 text-left">
+            <div className="mb-5 rounded-2xl border border-[#ff3b30]/35 bg-[#ff3b30]/10 p-4 text-left">
               <div className="flex items-start gap-3">
                 <div className="rounded-xl bg-[#ff3b30] p-2 text-white flex-shrink-0">
-                  <Ban className="w-5 h-5" />
+                  <Ban className="w-4 h-4" />
                 </div>
-                <div className="space-y-1.5">
-                  <h3 className="text-[14px] font-extrabold text-[#c91c12]">
-                    Ödeme Alınmadığı İçin Erişim Durduruldu
+                <div className="space-y-1">
+                  <h3 className="text-[13px] font-bold text-[#c91c12]">
+                    Erişim Geçici Olarak Durduruldu
                   </h3>
                   <p className="text-[12px] leading-relaxed text-[#1d1d1f] font-medium">
                     {error}
                   </p>
-                  {extractedIban && (
-                    <button
-                      type="button"
-                      onClick={() => void handleCopyIban()}
-                      className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-[#1d1d1f] px-3 py-1.5 text-[11px] font-bold text-white hover:bg-black/80"
-                    >
-                      {copiedIban ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-400" /> IBAN Kopyalandı
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" /> IBAN Kopyala ({extractedIban})
-                        </>
-                      )}
-                    </button>
-                  )}
                 </div>
               </div>
             </div>
@@ -164,10 +139,6 @@ export default function PanelLogin() {
             )}
           </button>
         </form>
-
-        <p className="text-center text-[12px] text-[#86868b] mt-6">
-          Marka Sahibi (HQ), Şube / Franchise Boss veya yetkili Şube Yöneticisi hesabınızla giriş yapabilirsiniz.
-        </p>
       </div>
     </div>
   )

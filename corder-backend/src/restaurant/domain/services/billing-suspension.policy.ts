@@ -86,18 +86,10 @@ export function isRestaurantPaymentSuspended(
 
 export function buildPaymentSuspendedErrorMessage(
   restaurantName?: string | null,
-  billingConfig?: {
-    receiverName?: string | null;
-    iban?: string | null;
-    bankName?: string | null;
-    supportPhone?: string | null;
-  } | null,
+  _billingConfig?: unknown,
 ): string {
-  const branchText = restaurantName ? `"${restaurantName}"` : 'your business';
-  const ibanDetails = billingConfig?.iban
-    ? ` Payment Account: ${billingConfig.receiverName || ''} (${billingConfig.bankName || 'Bank'}) - IBAN: ${billingConfig.iban}${billingConfig.supportPhone ? ` | Support: ${billingConfig.supportPhone}` : ''}.`
-    : '';
-  return `ACCESS SUSPENDED DUE TO UNPAID SUBSCRIPTION: System access for ${branchText} has been suspended because the monthly subscription fee has not been received. Please complete the payment and contact your service provider to restore access.${ibanDetails}`;
+  const branchText = restaurantName ? `${restaurantName} işletmesi` : 'İşletmeniz';
+  return `${branchText} için abonelik ödemesi tamamlanmadığından sistem erişimi geçici olarak durdurulmuştur. Lütfen Corder yönetimi ile iletişime geçin.`;
 }
 
 export function getBossRoleLabel(tier?: BossTier): string {

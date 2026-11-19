@@ -8,6 +8,42 @@ export function setAuthExpiredHandler(handler: (() => void) | null) {
   authExpiredHandler = handler
 }
 
+export function isSuspendedErrorMessage(msg?: string | null): boolean {
+  if (!msg) return false
+  const lower = msg.toLowerCase()
+  return (
+    lower.includes("abonelik ödemesi") ||
+    lower.includes("geçici olarak durdurulmuştur") ||
+    lower.includes("ödeme alınmadığı") ||
+    lower.includes("access suspended") ||
+    lower.includes("unpaid subscription")
+  )
+}
+
+export function sanitizeSuspendedMessage(raw: string): string {
+  const trimmed = raw.trim()
+  if (
+    trimmed.toUpperCase().includes("ACCESS SUSPENDED") ||
+    trimmed.toUpperCase().includes("IBAN:") ||
+    trimmed.includes("Payment Account:")
+  ) {
+    const branchMatch = trimmed.match(/for "([^"]+)"/i)
+    const branchText = branchMatch?.[1] ? `${branchMatch[1]} işletmesi` : "İşletmeniz"
+    return `${branchText} için abonelik ödemesi tamamlanmadığından sistem erişimi geçici olarak durdurulmuştur. Lütfen Corder yönetimi ile iletişime geçin.`
+  }
+  return trimmed
+}
+
+export function notifyAuthExpired(reason?: string | null) {
+  if (reason && isSuspendedErrorMessage(reason)) {
+    try {
+      sessionStorage.setItem("panel_suspended_notice", sanitizeSuspendedMessage(reason))
+    } catch {}
+  }
+  clearToken()
+  authExpiredHandler?.()
+}
+
 export function isJwtExpired(token: string): boolean {
   try {
     const parts = token.split(".")
@@ -130,6 +166,10 @@ function localizeApiError(message: string, status: number): string {
   const trimmed = message.trim()
   const lower = trimmed.toLowerCase()
 
+  if (isSuspendedErrorMessage(trimmed)) {
+    return sanitizeSuspendedMessage(trimmed)
+  }
+
   if (status === 403) {
     if (lower.includes("maximum percentage discount limit")) {
       return `İndirim oranı yetki limitinizi aşıyor (${trimmed})`
@@ -216,16 +256,7 @@ export async function request<T>(
       message = Array.isArray(j.message) ? j.message.join(", ") : (j.message ?? body)
     } catch {}
     if (res.status === 401 && token) {
-      if (
-        message &&
-        (message.includes("ÖDEME ALINMADIĞI İÇİN") ||
-          message.toLowerCase().includes("access suspended"))
-      ) {
-        try {
-          sessionStorage.setItem("panel_suspended_notice", message)
-        } catch {}
-      }
-      authExpiredHandler?.()
+      notifyAuthExpired(message)
     }
     throw new Error(localizeApiError(message || res.statusText, res.status))
   }

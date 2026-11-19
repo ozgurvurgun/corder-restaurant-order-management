@@ -9,7 +9,10 @@ import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Injectable } from '@nestjs/common';
-import { RestaurantTokenPayload } from '../domain/services/billing-suspension.policy';
+import {
+  buildPaymentSuspendedErrorMessage,
+  RestaurantTokenPayload,
+} from '../domain/services/billing-suspension.policy';
 import {
   RestaurantSessionValidatorService,
   VerifiedSocketPrincipal,
@@ -226,5 +229,14 @@ export class OrdersGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 
   emitPrintJob(restaurantId: string, payload: PrintJobSocketPayload) {
     this.server.to(getPrintAgentRoom(restaurantId)).emit('order.print_job', payload);
+  }
+
+  emitAuthExpired(restaurantId: string, reason?: string) {
+    if (!this.server) return;
+    const room = getRestaurantRoom(restaurantId);
+    this.server.to(room).emit('auth:expired', {
+      reason: reason || buildPaymentSuspendedErrorMessage(),
+    });
+    this.server.in(room).disconnectSockets(true);
   }
 }

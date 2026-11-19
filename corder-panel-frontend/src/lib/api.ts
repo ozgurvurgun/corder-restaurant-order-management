@@ -1,6 +1,7 @@
 export {
   getBase,
   setAuthExpiredHandler,
+  notifyAuthExpired,
   getToken,
   setToken,
   getSessionUser,

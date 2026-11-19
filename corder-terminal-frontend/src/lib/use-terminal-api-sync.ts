@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react"
 import { io, type Socket } from "socket.io-client"
-import { getBase, getToken } from "./api"
+import { getBase, getToken, notifyAuthExpired } from "./api"
 import {
   getTerminalNotificationPrefs,
   normalizeWaiterCallPayload,
@@ -50,6 +50,10 @@ export function useTerminalApiSync(params: {
     socketRef.current = socket
 
     const syncLive = () => void refreshLiveState()
+    const handleAuthExpired = (payload?: { reason?: string }) =>
+      notifyAuthExpired(payload?.reason)
+
+    socket.on("auth:expired", handleAuthExpired)
     socket.on("order:created", syncLive)
     socket.on("orders:moved", syncLive)
     socket.on("orders:updated", syncLive)

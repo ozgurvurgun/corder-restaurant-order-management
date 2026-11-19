@@ -24,6 +24,8 @@ import {
   formatCanonicalCorderEmail,
   toCorderEmailTenantSlug,
 } from '../../common/text/corder-email.policy';
+import { OrdersGateway } from '../../restaurant/api/orders.gateway';
+import { buildPaymentSuspendedErrorMessage } from '../../restaurant/domain/services/billing-suspension.policy';
 
 export function getCurrentBillingPeriod(now = new Date()): string {
   return dateToIstanbulPeriod(now);
@@ -50,6 +52,7 @@ export class RestaurantService {
     private readonly paymentRepo: Repository<RestaurantSubscriptionPaymentEntity>,
     @InjectRepository(PlatformBillingConfigEntity)
     private readonly billingConfigRepo: Repository<PlatformBillingConfigEntity>,
+    private readonly ordersGateway: OrdersGateway,
   ) {}
 
   private async assertUniqueTerminalEmail(
@@ -478,6 +481,9 @@ export class RestaurantService {
     const saved = await this.repo.save(entity);
     await this.syncPersistedBillingSummary(saved.id);
     await this.autoLinkBrandOwners(saved);
+    if (saved.isAccessSuspended || saved.status !== 'active') {
+      this.ordersGateway.emitAuthExpired(saved.id, buildPaymentSuspendedErrorMessage(saved.name));
+    }
     return this.findOneEnriched(saved.id);
   }
 

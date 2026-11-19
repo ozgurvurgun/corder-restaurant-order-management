@@ -11,6 +11,25 @@ export function setAuthExpiredHandler(handler: (() => void) | null) {
   authExpiredHandler = handler
 }
 
+export function notifyAuthExpired(reason?: string | null) {
+  if (reason && typeof reason === "string") {
+    const lower = reason.toLowerCase()
+    if (
+      lower.includes("abonelik ödemesi") ||
+      lower.includes("geçici olarak durdurulmuştur") ||
+      lower.includes("ödeme alınmadığı") ||
+      lower.includes("access suspended")
+    ) {
+      try {
+        sessionStorage.setItem("terminal_suspended_notice", reason)
+      } catch {}
+    }
+  }
+  clearToken()
+  clearStaffSession()
+  authExpiredHandler?.()
+}
+
 export function setStaffExpiredHandler(handler: (() => void) | null) {
   staffExpiredHandler = handler
 }
@@ -179,7 +198,7 @@ async function request<T>(
       if (isStaffAuthError(res.status, message)) {
         staffExpiredHandler?.()
       } else {
-        authExpiredHandler?.()
+        notifyAuthExpired(typeof message === "string" ? message : null)
       }
     }
     throw new Error(message || res.statusText)
@@ -257,7 +276,7 @@ export const api = {
           if (isStaffAuthError(res.status, message)) {
             staffExpiredHandler?.()
           } else {
-            authExpiredHandler?.()
+            notifyAuthExpired(typeof message === "string" ? message : null)
           }
         }
         throw new Error(message || "Kilitleme başarısız")

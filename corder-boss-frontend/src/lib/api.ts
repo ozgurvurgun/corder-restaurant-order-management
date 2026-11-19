@@ -1,54 +1,29 @@
 import type {
-  AuditCategory,
-  AuditLogDto,
-  BossOverviewResponse,
-  BranchSummary,
-  CatalogCategoryDto,
-  CatalogProductDto,
-  FraudAlertDto,
-  FraudAlertStatus,
-  FraudSeverity,
-  LiveOrderDto,
-  LiveTableDto,
-  PermissionCatalogResponse,
-  RoleDefinition,
-  StaffMemberDto,
-  SubBossItemDto,
+  AuditCategory, AuditLogDto, BossOverviewResponse, BranchSummary,
+  CatalogCategoryDto, CatalogProductDto, FraudAlertDto, FraudAlertStatus,
+  FraudSeverity, LiveOrderDto, LiveTableDto, PermissionCatalogResponse,
+  RoleDefinition, StaffMemberDto, SubBossItemDto,
 } from "./types"
 import { localizeApiError } from "./format"
 
 const rawEnvUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim()
-const BASE =
-  rawEnvUrl !== undefined ? rawEnvUrl.replace(/\/+$/, "") : "http://localhost:4000"
+const BASE = rawEnvUrl !== undefined ? rawEnvUrl.replace(/\/+$/, "") : "http://localhost:4000"
 
 const BOSS_TOKEN_KEY = "corder-boss-token"
 const BOSS_USER_KEY = "corder-boss-user"
 const BOSS_BRANCHES_KEY = "corder-boss-branches"
 const BOSS_ACTIVE_BRANCH_KEY = "corder-boss-active-branch"
-
 export const BOSS_UNAUTHORIZED_EVENT = "corder:boss-unauthorized"
 
 export interface StoredBossUser {
-  id: string
-  name: string
-  email: string
-  phone?: string | null
-  roleLabel: string
-  bossTier?: string
-  brandName?: string | null
+  id: string; name: string; email: string; phone?: string | null
+  roleLabel: string; bossTier?: string; brandName?: string | null
 }
 
 export interface BossAuthUserResponse {
-  id: string
-  email: string
-  name: string
-  phone?: string | null
-  role: string
-  staffRole: string
-  roleLabel: string
-  isBoss: boolean
-  bossTier?: string
-  brandName?: string | null
+  id: string; email: string; name: string; phone?: string | null
+  role: string; staffRole: string; roleLabel: string; isBoss: boolean
+  bossTier?: string; brandName?: string | null
 }
 
 export function getApiBase(): string {
@@ -68,7 +43,20 @@ export function isJwtExpired(token: string): boolean {
   }
 }
 
-export function notifyUnauthorized() {
+export function notifyUnauthorized(reason?: string | null) {
+  if (reason && typeof reason === "string") {
+    const lower = reason.toLowerCase()
+    if (
+      lower.includes("abonelik ödemesi") ||
+      lower.includes("geçici olarak durdurulmuştur") ||
+      lower.includes("ödeme alınmadığı") ||
+      lower.includes("access suspended")
+    ) {
+      try {
+        sessionStorage.setItem("boss_suspended_notice", localizeApiError(reason))
+      } catch {}
+    }
+  }
   clearBossSession()
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(BOSS_UNAUTHORIZED_EVENT))
@@ -189,8 +177,10 @@ async function bossFetch<T>(
     },
   })
   if (res.status === 401) {
-    notifyUnauthorized()
-    throw new Error("Oturum süresi doldu, lütfen tekrar giriş yapın.")
+    const text = await res.text()
+    const msg = extractErrorMessage(text, "Oturum süresi doldu, lütfen tekrar giriş yapın.")
+    notifyUnauthorized(msg)
+    throw new Error(msg)
   }
   if (!res.ok) {
     const text = await res.text()

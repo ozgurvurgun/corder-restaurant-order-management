@@ -4,7 +4,7 @@ import {
 import { io, type Socket } from "socket.io-client"
 import {
   BOSS_UNAUTHORIZED_EVENT, bossApi, clearBossSession, getApiBase, getBossToken,
-  getStoredActiveBranchId, getStoredBossUser, getStoredBranches, setBossSession,
+  getStoredActiveBranchId, getStoredBossUser, getStoredBranches, notifyUnauthorized, setBossSession,
   setBossToken, setStoredActiveBranchId, setStoredBranches, type StoredBossUser,
 } from "./api"
 import { formatTitleCase } from "./format"
@@ -417,6 +417,10 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
         }))
       )
     }
+    const onAuthExpired = (payload?: { reason?: string }) => {
+      notifyUnauthorized(payload?.reason)
+    }
+    socket.on("auth:expired", onAuthExpired)
     socket.on("order:created", scheduleLiveRefresh)
     socket.on("orders:moved", scheduleLiveRefresh)
     socket.on("orders:updated", scheduleLiveRefresh)

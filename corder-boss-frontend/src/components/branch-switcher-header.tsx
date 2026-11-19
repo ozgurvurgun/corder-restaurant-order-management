@@ -8,7 +8,6 @@ import {
   LogOut,
   RefreshCw,
   Check,
-  Smartphone,
   X,
 } from "lucide-react"
 
@@ -33,19 +32,17 @@ export function BranchSwitcherHeader({ activeTab = "dashboard" }: { activeTab?: 
     logout,
   } = useBossStore()
   const [openSheet, setOpenSheet] = useState(false)
-  const [showPwaInfo, setShowPwaInfo] = useState(false)
 
   useEffect(() => {
-    if (!openSheet && !showPwaInfo) return
+    if (!openSheet) return
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setOpenSheet(false)
-        setShowPwaInfo(false)
       }
     }
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [openSheet, showPwaInfo])
+  }, [openSheet])
 
   const currentLabel =
     selectedBranchId === "ALL"
@@ -78,15 +75,6 @@ export function BranchSwitcherHeader({ activeTab = "dashboard" }: { activeTab?: 
               {currentLabel}
             </span>
             <ChevronDown className="h-3.5 w-3.5 flex-shrink-0 text-[#86868b]" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowPwaInfo(true)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#e5e5ea] bg-[#f5f5f7]/70 text-[#636366] hover:bg-[#f5f5f7] hover:text-[#1d1d1f] transition-colors"
-            title="PWA Uygulama Kurulumu"
-          >
-            <Smartphone className="h-4 w-4 text-[#e63462]" />
           </button>
 
           <button
@@ -214,58 +202,6 @@ export function BranchSwitcherHeader({ activeTab = "dashboard" }: { activeTab?: 
                   </button>
                 )
               })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* PWA Install Modal */}
-      {showPwaInfo && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs"
-          onClick={() => setShowPwaInfo(false)}
-        >
-          <div
-            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-[#e5e5ea]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#e63462]/10 text-[#e63462]">
-                  <Smartphone className="h-4 w-4" />
-                </div>
-                <div>
-                  <h4 className="text-[14px] font-semibold text-[#1d1d1f]">
-                    Corder Boss Mobil PWA
-                  </h4>
-                  <p className="text-[11px] text-[#86868b]">Ana Ekrana Kurulum</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowPwaInfo(false)}
-                className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#f5f5f7]"
-              >
-                <X className="h-3.5 w-3.5 text-[#86868b]" />
-              </button>
-            </div>
-            <div className="space-y-2.5 text-[12px] text-[#1d1d1f] leading-relaxed">
-              <p className="rounded-xl bg-[#f5f5f7] p-3">
-                <span className="font-semibold">iPhone / iOS (Safari):</span> Alt bardaki{" "}
-                <span className="font-medium text-[#e63462]">Paylaş</span> simgesine
-                dokunun ve{" "}
-                <span className="font-medium text-[#e63462]">
-                  &ldquo;Ana Ekrana Ekle&rdquo;
-                </span>{" "}
-                seçeneğini seçin.
-              </p>
-              <p className="rounded-xl bg-[#f5f5f7] p-3">
-                <span className="font-semibold">Android (Chrome):</span> Sağ üstteki üç nokta
-                menüsünden{" "}
-                <span className="font-medium text-[#e63462]">
-                  &ldquo;Ana ekrana ekle / Uygulamayı yükle&rdquo;
-                </span>{" "}
-                seçeneğine dokunun.
-              </p>
             </div>
           </div>
         </div>
