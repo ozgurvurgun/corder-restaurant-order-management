@@ -1,6 +1,6 @@
 import {
   Entity,
-  PrimaryColumn,
+  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
   ManyToOne,
@@ -14,7 +14,7 @@ export type PrintJobType = 'receipt' | 'kitchen_cancel';
 @Entity('print_jobs')
 @Index(['restaurantId', 'printedAt', 'createdAt'])
 export class PrintJobEntity {
-  @PrimaryColumn('uuid')
+  @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({ name: 'restaurant_id' })

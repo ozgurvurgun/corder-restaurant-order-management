@@ -7,6 +7,7 @@ import {
   Index,
 } from 'typeorm';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
+import { numericColumnTransformer } from '../../common/database/numeric-column.transformer';
 import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
 
 export interface CheckSettlementShiftUpdate {
@@ -26,8 +27,8 @@ export interface CheckSettlementShiftDiff {
 }
 
 @Entity('cash_shifts')
-@Index(['restaurantId'])
 @Index(['restaurantId', 'status'])
+@Index('IDX_cash_shifts_restaurant_opened_at', ['restaurantId', 'openedAt'])
 @Index('IDX_cash_shifts_one_open_per_restaurant', ['restaurantId'], {
   unique: true,
   where: `"status" = 'open'`,
@@ -58,34 +59,97 @@ export class CashShiftEntity {
   @Column({ name: 'status', type: 'varchar', length: 20, default: 'open' })
   status: string;
 
-  @Column({ name: 'opening_balance', type: 'numeric', precision: 12, scale: 2, default: 0 })
+  @Column({
+    name: 'opening_balance',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericColumnTransformer,
+  })
   openingBalance: number;
 
-  @Column({ name: 'closing_balance', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  @Column({
+    name: 'closing_balance',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+    transformer: numericColumnTransformer,
+  })
   closingBalance: number | null;
 
   @Column({ name: 'notes', type: 'text', nullable: true })
   notes: string | null;
 
-  @Column({ name: 'cash_in', type: 'numeric', precision: 12, scale: 2, default: 0 })
+  @Column({
+    name: 'cash_in',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericColumnTransformer,
+  })
   cashIn: number;
 
-  @Column({ name: 'cash_out', type: 'numeric', precision: 12, scale: 2, default: 0 })
+  @Column({
+    name: 'cash_out',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericColumnTransformer,
+  })
   cashOut: number;
 
-  @Column({ name: 'total_revenue', type: 'numeric', precision: 12, scale: 2, default: 0 })
+  @Column({
+    name: 'total_revenue',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericColumnTransformer,
+  })
   totalRevenue: number;
 
-  @Column({ name: 'total_cash', type: 'numeric', precision: 12, scale: 2, default: 0 })
+  @Column({
+    name: 'total_cash',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericColumnTransformer,
+  })
   totalCash: number;
 
-  @Column({ name: 'total_card', type: 'numeric', precision: 12, scale: 2, default: 0 })
+  @Column({
+    name: 'total_card',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericColumnTransformer,
+  })
   totalCard: number;
 
-  @Column({ name: 'total_meal_card', type: 'numeric', precision: 12, scale: 2, default: 0 })
+  @Column({
+    name: 'total_meal_card',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericColumnTransformer,
+  })
   totalMealCard: number;
 
-  @Column({ name: 'total_multinet', type: 'numeric', precision: 12, scale: 2, default: 0 })
+  @Column({
+    name: 'total_multinet',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericColumnTransformer,
+  })
   totalMultinet: number;
 
   @Column({ name: 'transaction_count', type: 'integer', default: 0 })
@@ -128,6 +192,11 @@ export class CashShiftEntity {
     );
   }
 
+  /**
+   * Records a non-cash debt/open-account collection on the active shift.
+   * Note: `totalRevenue` is recognized at check-settlement time (`recordCheckSettlement`),
+   * whereas debt collections update the tender-specific collection totals and transaction count.
+   */
   recordNonCashCollection(
     paymentMethod: 'credit-card' | 'meal-card' | 'multinet',
     amountMinorUnits: number,

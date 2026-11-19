@@ -9,7 +9,7 @@ import {
   Zap,
 } from "lucide-react"
 import type { PanelCategory } from "@/lib/panel-types"
-import { orderedCategoryList } from "@/lib/panel-api-sync"
+import { orderedCategoryList } from "@/lib/mappers/catalog-inventory.mapper"
 import { CustomSelect } from "@/components/ui/custom-inputs"
 
 export function categoryDepth(cats: PanelCategory[], id: string): number {

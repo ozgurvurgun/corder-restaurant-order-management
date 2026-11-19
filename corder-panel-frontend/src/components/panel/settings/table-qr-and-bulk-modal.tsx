@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react"
 import type { PanelSection, PanelTable } from "@/lib/panel-types"
+import { escapeHtml, generateQrDataUri } from "@/lib/qr-svg"
 import { showPanelToast } from "../panel-toast"
 import {
   getBrowserNotificationPermission,
@@ -163,8 +164,11 @@ export function TableQrCodesModal(props: {
   const { restaurantName, restaurantSlug, tables, onClose } = props
   const slug = restaurantSlug || "restoran"
   const generalMenuUrl = `https://menu.corders.uk/?restaurant=${encodeURIComponent(slug)}`
-  const buildTableUrl = (t: PanelTable) =>
-    `https://menu.corders.uk/?restaurant=${encodeURIComponent(slug)}&t=${encodeURIComponent(t.qrToken || t.id)}`
+  const buildTableUrl = (t: PanelTable): string | null => {
+    const token = t.qrToken?.trim()
+    if (!token) return null
+    return `https://menu.corders.uk/?restaurant=${encodeURIComponent(slug)}&t=${encodeURIComponent(token)}`
+  }
 
   const copyUrl = (url: string, label: string) => {
     void navigator.clipboard?.writeText(url)
@@ -172,16 +176,25 @@ export function TableQrCodesModal(props: {
   }
 
   const handlePrintAllQrCodes = () => {
+    const printable = tables
+      .map((t) => ({ table: t, url: buildTableUrl(t) }))
+      .filter((item): item is { table: PanelTable; url: string } => Boolean(item.url))
+    if (printable.length === 0) {
+      showPanelToast("Yazdırılacak imzalı QR kodlu masa bulunamadı", "error")
+      return
+    }
     const win = window.open("", "_blank")
     if (!win) return
-    const cardsHtml = tables
-      .map((t) => {
-        const url = buildTableUrl(t)
-        const qrImg = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(url)}`
-        return `<div class="card"><div class="brand">${restaurantName || "Restoran"}</div><div class="section">${t.section}</div><div class="table">${t.name}</div><img src="${qrImg}" alt="${t.name}" width="160" height="160" /><div class="hint">Menüyü görmek ve garson çağırmak için okutun</div></div>`
+    const safeBrand = escapeHtml(restaurantName || "Restoran")
+    const cardsHtml = printable
+      .map(({ table: t, url }) => {
+        const qrImg = generateQrDataUri(url, 220, 2)
+        const safeSection = escapeHtml(t.section)
+        const safeName = escapeHtml(t.name)
+        return `<div class="card"><div class="brand">${safeBrand}</div><div class="section">${safeSection}</div><div class="table">${safeName}</div><img src="${qrImg}" alt="${safeName}" width="160" height="160" /><div class="hint">Menüyü görmek ve garson çağırmak için okutun</div></div>`
       })
       .join("")
-    win.document.write(`<!DOCTYPE html><html lang="tr"><head><meta charset="utf-8"/><title>Masa QR Kodları - ${restaurantName}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:20px;color:#1d1d1f}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.card{border:1.5px solid #d1d1d6;border-radius:16px;padding:16px;text-align:center;page-break-inside:avoid}.brand{font-size:12px;font-weight:600;color:#86868b}.section{font-size:11px;color:#e63462;font-weight:600;margin-top:2px}.table{font-size:20px;font-weight:800;margin:4px 0 10px}.hint{font-size:10px;color:#636366;margin-top:8px}</style></head><body><div class="grid">${cardsHtml}</div><script>window.onload=()=>setTimeout(()=>window.print(),400);</script></body></html>`)
+    win.document.write(`<!DOCTYPE html><html lang="tr"><head><meta charset="utf-8"/><title>Masa QR Kodları - ${safeBrand}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:20px;color:#1d1d1f}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.card{border:1.5px solid #d1d1d6;border-radius:16px;padding:16px;text-align:center;page-break-inside:avoid}.brand{font-size:12px;font-weight:600;color:#86868b}.section{font-size:11px;color:#e63462;font-weight:600;margin-top:2px}.table{font-size:20px;font-weight:800;margin:4px 0 10px}.hint{font-size:10px;color:#636366;margin-top:8px}</style></head><body><div class="grid">${cardsHtml}</div><script>window.onload=()=>setTimeout(()=>window.print(),200);</script></body></html>`)
     win.document.close()
   }
 
@@ -249,16 +262,22 @@ export function TableQrCodesModal(props: {
                     <tr key={t.id} className={`border-b border-[#f0f0f0] ${idx % 2 === 1 ? "bg-[#fafafa]" : ""}`}>
                       <td className="px-4 py-2 text-[13px] font-semibold text-[#1d1d1f]">{t.name}</td>
                       <td className="px-4 py-2 text-[12px] text-[#86868b]">{t.section}</td>
-                      <td className="px-4 py-2 text-[11px] font-mono text-[#636366] max-w-[280px] truncate">{url}</td>
+                      <td className="px-4 py-2 text-[11px] font-mono text-[#636366] max-w-[280px] truncate">
+                        {url ?? "İmzalı QR anahtarı bekleniyor"}
+                      </td>
                       <td className="px-4 py-2 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button type="button" onClick={() => copyUrl(url, t.name)} className="h-[26px] px-2.5 rounded bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[11px] font-medium text-[#1d1d1f] flex items-center gap-1">
-                            <Copy className="w-3 h-3" /> Kopyala
-                          </button>
-                          <a href={url} target="_blank" rel="noreferrer" className="h-[26px] px-2 rounded bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[11px] font-medium text-[#1d1d1f] flex items-center">
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        </div>
+                        {url ? (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button type="button" onClick={() => copyUrl(url, t.name)} className="h-[26px] px-2.5 rounded bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[11px] font-medium text-[#1d1d1f] flex items-center gap-1">
+                              <Copy className="w-3 h-3" /> Kopyala
+                            </button>
+                            <a href={url} target="_blank" rel="noreferrer" className="h-[26px] px-2 rounded bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[11px] font-medium text-[#1d1d1f] flex items-center">
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-[#86868b]">-</span>
+                        )}
                       </td>
                     </tr>
                   )

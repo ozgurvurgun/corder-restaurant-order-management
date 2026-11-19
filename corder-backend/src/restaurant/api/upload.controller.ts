@@ -45,7 +45,11 @@ function tenantPrefix(user: RestaurantUser): string {
 
 @Controller('restaurant/upload')
 @UseGuards(RestaurantJwtGuard, PanelRootGuard)
-@RequirePermissions('catalog.manage_products', 'catalog.manage_campaigns')
+@RequirePermissions(
+  'catalog.manage_products',
+  'catalog.manage_campaigns',
+  'system.manage_settings',
+)
 export class UploadController {
   private readonly logger = new Logger(UploadController.name);
 
@@ -102,27 +106,6 @@ export class UploadController {
         return { url };
       } catch (err: unknown) {
         this.logger.error('R2 upload failed', err instanceof Error ? err.stack : err);
-        const e = err as { name?: string; message?: string };
-        const name = e.name ?? '';
-        const msg = e.message ?? '';
-        if (name === 'AccessDenied' || /access denied/i.test(msg)) {
-          throw new ForbiddenException(
-            'R2 access denied: API token must have Object Read & Write permissions for this bucket.',
-          );
-        }
-        if (name === 'InvalidAccessKeyId' || name === 'SignatureDoesNotMatch') {
-          throw new BadRequestException(
-            'Invalid R2 credentials; please verify R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY.',
-          );
-        }
-        if (name === 'NoSuchBucket' || /no such bucket/i.test(msg)) {
-          throw new BadRequestException(
-            'R2 bucket not found: verify R2_BUCKET_NAME and account ID.',
-          );
-        }
-        if (process.env.UPLOAD_DEBUG === 'true') {
-          throw new InternalServerErrorException(`${name}: ${msg}`);
-        }
         throw new InternalServerErrorException('File upload failed');
       }
     }

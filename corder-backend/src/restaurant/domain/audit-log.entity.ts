@@ -24,6 +24,11 @@ export type AuditCategory =
 
 @Entity('restaurant_audit_logs')
 @Index(['restaurantId', 'createdAt'])
+@Index('IDX_audit_logs_restaurant_category_created', [
+  'restaurantId',
+  'category',
+  'createdAt',
+])
 export class AuditLogEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

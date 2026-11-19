@@ -14,9 +14,12 @@ import {
 import { BossOverviewService } from '../application/boss-overview.service';
 import { BossHierarchyService } from '../application/boss-hierarchy.service';
 import { FraudDetectionService } from '../application/fraud-detection.service';
-import { FraudAlertStatus } from '../domain/fraud-alert.entity';
 import { SyncRolesDto } from './dto/sync-roles.dto';
 import { CreateSubBossDto } from './dto/create-sub-boss.dto';
+import {
+  BulkDeleteFraudAlertsDto,
+  UpdateFraudAlertStatusDto,
+} from './dto/fraud-alert.dto';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
 import { BossOnly, PanelRootGuard } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
@@ -111,11 +114,7 @@ export class BossController {
     @RestaurantUser()
     user: { sub: string; name?: string; role?: string; isBoss?: boolean },
     @Param('id', ParseUUIDPipe) id: string,
-    @Body()
-    body: {
-      status: FraudAlertStatus;
-      resolutionNote?: string;
-    },
+    @Body() body: UpdateFraudAlertStatusDto,
   ) {
     this.assertBossActor(user, 'Only Boss accounts can update multi-branch fraud alerts');
     const ownedBranches = await this.bossHierarchy.loadBossOwnedBranches(user.sub);
@@ -145,13 +144,7 @@ export class BossController {
   async bulkDeleteFraudAlerts(
     @RestaurantUser()
     user: { sub: string; role?: string; isBoss?: boolean },
-    @Body()
-    body: {
-      ids?: string[];
-      deleteAll?: boolean;
-      onlyResolved?: boolean;
-      branchId?: string;
-    },
+    @Body() body: BulkDeleteFraudAlertsDto,
   ) {
     this.assertBossActor(user, 'Only Boss accounts can bulk-delete fraud alerts');
     const ownedBranches = await this.bossHierarchy.loadBossOwnedBranches(user.sub);

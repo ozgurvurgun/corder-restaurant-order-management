@@ -264,7 +264,7 @@ export class StaffSessionService {
       throw new UnauthorizedException('Staff member not found or PIN disabled');
     }
     if (
-      payload.pinFp &&
+      !payload.pinFp ||
       payload.pinFp !== computeSecretFingerprint(staff.pinHash)
     ) {
       throw new UnauthorizedException('Staff PIN has been changed; please sign in again');

@@ -1,8 +1,9 @@
 import {
+  ArrayMaxSize,
   IsArray,
   IsDateString,
-  IsEnum,
   IsIn,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
@@ -11,7 +12,12 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { PAYMENT_METHODS, CloseCheckMethod } from './close-check.dto';
+import {
+  PAYMENT_METHODS,
+  SPLIT_PAYMENT_METHODS,
+  CloseCheckMethod,
+  CloseCheckSplitMethod,
+} from './close-check.dto';
 
 export class CompletedOrderItemDto {
   @IsString()
@@ -27,7 +33,7 @@ export class CompletedOrderItemDto {
   @Min(0)
   price!: number;
 
-  @IsNumber()
+  @IsInt()
   @Min(1)
   quantity!: number;
 
@@ -69,6 +75,7 @@ export class CompletedOrderDto {
   userName?: string;
 
   @IsArray()
+  @ArrayMaxSize(200)
   @ValidateNested({ each: true })
   @Type(() => CompletedOrderItemDto)
   items!: CompletedOrderItemDto[];
@@ -88,8 +95,8 @@ export class CompletedOrderDto {
 }
 
 export class CompletedPaymentSplitDto {
-  @IsString()
-  method!: string;
+  @IsIn(SPLIT_PAYMENT_METHODS)
+  method!: CloseCheckSplitMethod;
 
   @IsNumber()
   @Min(0)
@@ -135,6 +142,7 @@ export class CompletedPaymentDto {
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(50)
   @ValidateNested({ each: true })
   @Type(() => CompletedPaymentSplitDto)
   splitDetails?: CompletedPaymentSplitDto[];
@@ -167,6 +175,7 @@ export class CompletedPaymentDto {
 /** Completed check adjustment - totals are recalculated on the server in minor units. */
 export class UpdateCompletedOrderDto {
   @IsArray()
+  @ArrayMaxSize(200)
   @ValidateNested({ each: true })
   @Type(() => CompletedOrderDto)
   orders!: CompletedOrderDto[];

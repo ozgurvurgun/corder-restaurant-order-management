@@ -21,6 +21,7 @@ import {
   type PanelSessionUser,
 } from "./api"
 import { formatTitleCase } from "./format"
+import { showPanelToast } from "@/components/panel/panel-toast"
 
 export interface Business {
   id: string
@@ -163,22 +164,32 @@ export function PanelAuthProvider({ children }: { children: ReactNode }) {
         setTokenState(res.accessToken)
         setCurrentBusiness(toBusiness(res.restaurant))
         setBusinesses(res.restaurants.map(toBusiness))
-      } catch {
-        const target = businesses.find((b) => b.id === branchId)
-        if (target) {
-          setRestaurant(target)
-          setCurrentBusiness(target)
-        }
+      } catch (err) {
+        showPanelToast(
+          err instanceof Error ? err.message : "Şube değiştirilemedi",
+          "error",
+        )
+        throw err
       }
     },
-    [token, businesses]
+    [token]
   )
 
   useEffect(() => {
     setAuthExpiredHandler(() => {
       logout()
     })
-    return () => setAuthExpiredHandler(null)
+    const onStaffSessionUpdated = (e: Event) => {
+      const custom = e as CustomEvent<PanelSessionUser | undefined>
+      if (custom.detail) {
+        setSessionUserState(custom.detail)
+      }
+    }
+    window.addEventListener("corder:staff-session-updated", onStaffSessionUpdated)
+    return () => {
+      setAuthExpiredHandler(null)
+      window.removeEventListener("corder:staff-session-updated", onStaffSessionUpdated)
+    }
   }, [logout])
 
   const isBoss = Boolean(

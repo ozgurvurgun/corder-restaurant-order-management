@@ -296,6 +296,44 @@ export class CompletedOrdersService {
     return saved;
   }
 
+  private async findShiftCoveringClosedOrder(
+    em: EntityManager,
+    restaurantId: string,
+    closedAt: Date,
+  ): Promise<CashShiftEntity | null> {
+    if (typeof em.createQueryBuilder === 'function') {
+      const matched = await em
+        .createQueryBuilder(CashShiftEntity, 'shift')
+        .setLock('pessimistic_write')
+        .where('shift.restaurant_id = :restaurantId', { restaurantId })
+        .andWhere('shift.opened_at <= :closedAt', { closedAt })
+        .andWhere('(shift.closed_at IS NULL OR shift.closed_at >= :closedAt)', {
+          closedAt,
+        })
+        .orderBy('shift.opened_at', 'DESC')
+        .getOne();
+      if (matched) return matched;
+    } else if (typeof em.find === 'function') {
+      const candidates = await em.find(CashShiftEntity, {
+        where: { restaurantId },
+        order: { openedAt: 'DESC' },
+        lock: { mode: 'pessimistic_write' },
+      });
+      const matched = candidates.find(
+        (s) =>
+          s.openedAt <= closedAt &&
+          (s.closedAt == null || s.closedAt >= closedAt),
+      );
+      if (matched) return matched;
+    }
+
+    return em.findOne(CashShiftEntity, {
+      where: { restaurantId, status: 'open' },
+      order: { openedAt: 'DESC' },
+      lock: { mode: 'pessimistic_write' },
+    });
+  }
+
   private async reconcileActiveShiftIfNeeded(
     em: EntityManager,
     restaurantId: string,
@@ -305,16 +343,16 @@ export class CompletedOrdersService {
     prevBreakdown: ReturnType<typeof CheckSettlementPolicy.computeMethodBreakdownMinorUnits>,
     actorName: string,
   ): Promise<void> {
-    const openShift = await em.findOne(CashShiftEntity, {
-      where: { restaurantId, status: 'open' },
-      order: { openedAt: 'DESC' },
-      lock: { mode: 'pessimistic_write' },
-    });
-    if (!openShift || row.closedAt < openShift.openedAt) {
+    const targetShift = await this.findShiftCoveringClosedOrder(
+      em,
+      restaurantId,
+      row.closedAt,
+    );
+    if (!targetShift) {
       return;
     }
 
-    openShift.adjustSettlementDiff({
+    targetShift.adjustSettlementDiff({
       netDiffMinorUnits: settlement.netMinorUnits - prevNetMinor,
       cashDiffMinorUnits: settlement.cashMinorUnits - prevBreakdown.cashMinorUnits,
       cardDiffMinorUnits: settlement.cardMinorUnits - prevBreakdown.cardMinorUnits,
@@ -330,7 +368,7 @@ export class CompletedOrdersService {
       const existingSaleTx = await em.findOne(CashTransactionEntity, {
         where: {
           restaurantId,
-          shiftId: openShift.id,
+          shiftId: targetShift.id,
           type: 'sale',
           reference: row.id,
         },
@@ -352,7 +390,7 @@ export class CompletedOrdersService {
       } else if (settlement.cashMinorUnits > 0 && cashDeltaMinor > 0) {
         const tx = em.create(CashTransactionEntity, {
           restaurantId,
-          shiftId: openShift.id,
+          shiftId: targetShift.id,
           type: 'sale',
           amount: fromMinorUnits(cashDeltaMinor),
           description: `${row.tableName} - completed check adjustment`,
@@ -363,6 +401,6 @@ export class CompletedOrdersService {
       }
     }
 
-    await em.save(CashShiftEntity, openShift);
+    await em.save(CashShiftEntity, targetShift);
   }
 }

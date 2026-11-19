@@ -8,14 +8,17 @@ export type PermissionCategory =
   | "reports_system"
 
 export type AuditCategory =
+  | "auth"
   | "order"
-  | "table"
   | "payment"
-  | "cash"
-  | "stock"
   | "product"
-  | "staff"
-  | "system"
+  | "user"
+  | "settings"
+  | "stock"
+  | "cash-register"
+  | "register"
+  | "shift"
+  | "table"
 
 export type FraudSeverity = "critical" | "high" | "medium" | "low"
 

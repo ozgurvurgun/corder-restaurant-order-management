@@ -350,14 +350,7 @@ export async function fetchMenu(
   const timeoutId = setTimeout(() => controller.abort(), 12_000)
 
   try {
-    let res = await fetch(url, { signal: controller.signal })
-    if (res.status === 404) {
-      const slugUrl = `${base}/menu/${q}${cleanToken ? `?t=${encodeURIComponent(cleanToken)}` : ""}`
-      const altRes = await fetch(slugUrl, { signal: controller.signal }).catch(() => null)
-      if (altRes && altRes.ok) {
-        res = altRes
-      }
-    }
+    const res = await fetch(url, { signal: controller.signal })
     if (!res.ok) {
       const text = await res.text()
       let message = text
@@ -389,14 +382,7 @@ export async function fetchMenu(
       }
       throw new MenuFetchError("Menü yüklenirken bir sorun oluştu.", "network")
     }
-    let rawData = (await res.json()) as MenuResponse
-    if (cleanToken && rawData.tableContext === undefined) {
-      const slugUrl = `${base}/menu/${q}?t=${encodeURIComponent(cleanToken)}`
-      const altRes = await fetch(slugUrl, { signal: controller.signal }).catch(() => null)
-      if (altRes && altRes.ok) {
-        rawData = (await altRes.json()) as MenuResponse
-      }
-    }
+    const rawData = (await res.json()) as MenuResponse
     const data = normalizeMenuResponse(rawData, cleanToken)
     writeCachedMenu(cacheKey, data)
     return data

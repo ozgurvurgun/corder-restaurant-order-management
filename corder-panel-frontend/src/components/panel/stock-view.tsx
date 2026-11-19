@@ -36,6 +36,7 @@ export default function StockView() {
     startInventoryCount,
     updateInventoryItem,
     completeInventoryCount,
+    cancelInventoryCount,
     currentUser,
     products,
     categories,
@@ -340,6 +341,7 @@ export default function StockView() {
               startInventoryCount={startInventoryCount}
               updateInventoryItem={updateInventoryItem}
               completeInventoryCount={completeInventoryCount}
+              cancelInventoryCount={cancelInventoryCount}
             />
           )}
 

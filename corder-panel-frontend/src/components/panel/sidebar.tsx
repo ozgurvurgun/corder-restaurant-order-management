@@ -197,7 +197,7 @@ export default function PanelSidebar({
             <Building2 className="w-3.5 h-3.5 text-[#e63462] flex-shrink-0" />
             <CustomSelect
               value={currentBusiness?.id ?? ""}
-              onChange={(e) => void switchBusiness(e.target.value)}
+              onChange={(e) => void switchBusiness(e.target.value).catch(() => {})}
               className="w-full bg-transparent text-[11px] font-semibold text-[#1d1d1f]"
             >
               {businesses.map((b) => (

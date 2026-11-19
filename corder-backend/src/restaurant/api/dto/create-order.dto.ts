@@ -1,10 +1,12 @@
 import {
+  ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsInt,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   Min,
   ValidateNested,
@@ -17,6 +19,7 @@ export class CreateOrderItemDto {
 
   @IsInt()
   @Min(1)
+  @Max(1000)
   quantity: number;
 
   @IsOptional()
@@ -31,6 +34,7 @@ export class CreateOrderDto {
 
   @IsArray()
   @ArrayMinSize(1)
+  @ArrayMaxSize(200)
   @ValidateNested({ each: true })
   @Type(() => CreateOrderItemDto)
   items: CreateOrderItemDto[];

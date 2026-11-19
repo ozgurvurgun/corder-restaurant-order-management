@@ -6,6 +6,8 @@ export class AddEnterpriseFeaturesAndFraudAlerts1760000007000
   name = 'AddEnterpriseFeaturesAndFraudAlerts1760000007000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"');
+
     await queryRunner.query(`
       ALTER TABLE "restaurants"
         ADD COLUMN IF NOT EXISTS "logo_url" character varying(500),

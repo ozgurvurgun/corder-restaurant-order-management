@@ -18,6 +18,7 @@ import { RestaurantAuthService } from '../application/restaurant-auth.service';
 import { OrdersGateway } from './orders.gateway';
 import { PrintAgentGuard, type PrintAgentRequest } from '../infrastructure/print-agent.guard';
 import { PrintAgentLoginDto, PrintAgentRefreshDto } from './dto/print-agent-login.dto';
+import { SyncPrintersDto } from './dto/sync-printers.dto';
 import {
   extractClientIp,
   LoginRateLimiterService,
@@ -68,6 +69,14 @@ export class PrintAgentController {
     return this.buildContext(req.printAgentRestaurantId);
   }
 
+  async getContext(reqOrRestaurantId: PrintAgentRequest | string) {
+    const restaurantId =
+      typeof reqOrRestaurantId === 'string'
+        ? reqOrRestaurantId
+        : reqOrRestaurantId.printAgentRestaurantId;
+    return this.buildContext(restaurantId);
+  }
+
   @Post('logout')
   @UseGuards(PrintAgentGuard)
   async logout(@Req() req: PrintAgentRequest) {
@@ -116,29 +125,12 @@ export class PrintAgentController {
   @UseGuards(PrintAgentGuard)
   async syncPrinters(
     @Req() req: PrintAgentRequest,
-    @Body()
-    body: {
-      printers?: Array<{
-        id?: string;
-        name: string;
-        mode?: string;
-        host?: string;
-        port?: number;
-        systemPrinterName?: string;
-        paperWidth?: number;
-        role?: string;
-        department?: string | null;
-        autoCut?: boolean;
-      }>;
-      receiptPrinterId?: string;
-      defaultKitchenPrinterId?: string;
-    },
+    @Body() body: SyncPrintersDto,
   ) {
     const printers = await this.printersService.syncFromPrintAgent(
       req.printAgentRestaurantId,
       body ?? {},
     );
-    this.ordersGateway.emitPrintersUpdated(req.printAgentRestaurantId);
     return { ok: true, printers };
   }
 
@@ -175,6 +167,7 @@ export class PrintAgentController {
         type: p.type,
         connection: p.connection,
         ipAddress: p.ipAddress ?? null,
+        systemPrinterName: p.connection === 'usb' ? (p.ipAddress ?? null) : null,
         port: p.port ?? null,
         department: p.department ?? null,
         paperWidth: p.paperWidth,

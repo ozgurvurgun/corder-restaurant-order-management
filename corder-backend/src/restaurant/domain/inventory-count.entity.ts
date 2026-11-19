@@ -9,8 +9,23 @@ import {
 } from 'typeorm';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 
+export interface InventoryCountItem {
+  materialId: string;
+  materialName: string;
+  expectedStock: number;
+  actualStock: number;
+  difference: number;
+  isCounted?: boolean;
+}
+
 @Entity('inventory_counts')
 @Index(['restaurantId', 'createdAt'])
+@Index('IDX_inventory_counts_restaurant_status', ['restaurantId', 'status'])
+@Index(
+  'UQ_inventory_counts_one_in_progress_per_restaurant',
+  ['restaurantId'],
+  { unique: true, where: `"status" = 'in-progress'` },
+)
 export class InventoryCountEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -29,13 +44,7 @@ export class InventoryCountEntity {
   countedBy: string;
 
   @Column({ type: 'jsonb' })
-  items: {
-    materialId: string;
-    materialName: string;
-    expectedStock: number;
-    actualStock: number;
-    difference: number;
-  }[];
+  items: InventoryCountItem[];
 
   @Column({ type: 'varchar', length: 32 })
   status: 'in-progress' | 'completed';
@@ -43,7 +52,7 @@ export class InventoryCountEntity {
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }
 

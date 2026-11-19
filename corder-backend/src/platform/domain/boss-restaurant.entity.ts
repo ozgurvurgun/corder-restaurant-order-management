@@ -34,7 +34,7 @@ export class BossRestaurantEntity {
   @Column({ name: 'title', type: 'varchar', length: 80, default: 'Owner' })
   title: string;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }
 

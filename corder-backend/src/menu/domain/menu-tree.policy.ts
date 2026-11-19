@@ -19,10 +19,21 @@ export interface MenuCategoryTreeDto {
 }
 
 export function isCampaignValidNow(
-  validUntil: Date | null | undefined,
-  now: Date,
+  validUntil: Date | string | null | undefined,
+  now: Date = new Date(),
 ): boolean {
   if (!validUntil) return true;
+  if (typeof validUntil === 'string') {
+    const trimmed = validUntil.trim();
+    if (!trimmed) return true;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      const [y, m, d] = trimmed.split('-').map(Number);
+      const endOfDayIstanbulMs = Date.UTC(y, m - 1, d, 20, 59, 59, 999);
+      return endOfDayIstanbulMs >= now.getTime();
+    }
+    const parsed = new Date(trimmed);
+    return isCampaignValidNow(parsed, now);
+  }
   const ts = validUntil.getTime();
   if (Number.isNaN(ts)) return false;
   if (

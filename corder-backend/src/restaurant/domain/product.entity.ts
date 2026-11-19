@@ -8,9 +8,11 @@ import {
   Index,
 } from 'typeorm';
 import { CategoryEntity } from './category.entity';
+import { numericColumnTransformer } from '../../common/database/numeric-column.transformer';
 
 @Entity('products')
 @Index(['categoryId'])
+@Index('IDX_products_category_order', ['categoryId', 'order'])
 export class ProductEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -28,10 +30,23 @@ export class ProductEntity {
   @Column({ type: 'text', nullable: true })
   description: string | null;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    transformer: numericColumnTransformer,
+  })
   price: number;
 
-  @Column({ name: 'cost_price', type: 'numeric', precision: 10, scale: 2, nullable: true, default: null })
+  @Column({
+    name: 'cost_price',
+    type: 'numeric',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    default: null,
+    transformer: numericColumnTransformer,
+  })
   costPrice: number | null;
 
   @Column({ name: 'image_url', type: 'varchar', length: 512, nullable: true })
@@ -47,6 +62,6 @@ export class ProductEntity {
   @Column({ type: 'jsonb', nullable: true })
   ingredients: { materialId: string; quantity: number; unit?: string }[] | null;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }

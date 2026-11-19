@@ -2,7 +2,15 @@ import { createHmac, timingSafeEqual } from 'crypto';
 
 export class TableQrTokenPolicy {
   private static getSecret(): string {
-    return process.env.JWT_SECRET?.trim() || 'corder-table-qr-secret';
+    const secret =
+      process.env.TABLE_QR_SECRET?.trim() || process.env.JWT_SECRET?.trim();
+    if (secret) return secret;
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'TABLE_QR_SECRET or JWT_SECRET must be configured in production',
+      );
+    }
+    return 'corder-table-qr-secret';
   }
 
   static generateToken(restaurantId: string, tableId: string): string {

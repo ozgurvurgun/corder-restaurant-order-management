@@ -11,6 +11,7 @@ import { PermissionKey } from '../domain/permissions.catalog';
 
 export const REQUIRED_PERMISSIONS_KEY = 'corder:required_permissions';
 export const BOSS_ONLY_KEY = 'corder:boss_only';
+export const ALLOW_TERMINAL_STAFF_KEY = 'corder:allow_terminal_staff';
 
 /**
  * Requires the actor to have AT LEAST ONE of the specified permissions
@@ -23,6 +24,12 @@ export const RequirePermissions = (...permissions: PermissionKey[]) =>
  * Restricts an endpoint strictly to the Business Owner / Boss ('root').
  */
 export const BossOnly = () => SetMetadata(BOSS_ONLY_KEY, true);
+
+/**
+ * Marks a route as also callable by a POS Terminal JWT ('terminal'),
+ * where the controller handler verifies the `x-staff-token` staff PIN session.
+ */
+export const AllowTerminalStaff = () => SetMetadata(ALLOW_TERMINAL_STAFF_KEY, true);
 
 /**
  * Enforces Boss ('root') or authorized Merchant Panel Staff ('staff') permissions.
@@ -52,24 +59,32 @@ export class PanelRootGuard implements CanActivate {
       return true;
     }
 
-    if (user.role !== 'staff') {
-      throw new ForbiddenException('Merchant panel access is required for this action');
-    }
-
     const bossOnly = this.reflector.getAllAndOverride<boolean>(BOSS_ONLY_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
-    const explicitPermissions = this.reflector.getAllAndOverride<PermissionKey[]>(
-      REQUIRED_PERMISSIONS_KEY,
-      [context.getHandler(), context.getClass()],
-    );
-
-    if (bossOnly && (!explicitPermissions || explicitPermissions.length === 0)) {
+    if (bossOnly) {
       throw new ForbiddenException(
         'This action can only be performed by the Business Owner (Boss).',
       );
     }
+
+    const allowTerminalStaff = this.reflector.getAllAndOverride<boolean>(
+      ALLOW_TERMINAL_STAFF_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+    if (user.role === 'terminal' && allowTerminalStaff) {
+      return true;
+    }
+
+    if (user.role !== 'staff') {
+      throw new ForbiddenException('Merchant panel access is required for this action');
+    }
+
+    const explicitPermissions = this.reflector.getAllAndOverride<PermissionKey[]>(
+      REQUIRED_PERMISSIONS_KEY,
+      [context.getHandler(), context.getClass()],
+    );
 
     if (!explicitPermissions || explicitPermissions.length === 0) {
       throw new ForbiddenException('Insufficient permissions for this resource');

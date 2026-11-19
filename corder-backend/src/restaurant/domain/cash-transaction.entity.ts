@@ -9,10 +9,12 @@ import {
 } from 'typeorm';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 import { CashShiftEntity } from './cash-shift.entity';
+import { numericColumnTransformer } from '../../common/database/numeric-column.transformer';
 
 @Entity('cash_transactions')
-@Index(['restaurantId'])
 @Index(['restaurantId', 'shiftId'])
+@Index('IDX_cash_transactions_restaurant_created', ['restaurantId', 'createdAt'])
+@Index('IDX_cash_transactions_shift_created', ['shiftId', 'createdAt'])
 export class CashTransactionEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -34,7 +36,13 @@ export class CashTransactionEntity {
   @Column({ name: 'type', type: 'varchar', length: 20 })
   type: string;
 
-  @Column({ name: 'amount', type: 'numeric', precision: 12, scale: 2 })
+  @Column({
+    name: 'amount',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    transformer: numericColumnTransformer,
+  })
   amount: number;
 
   @Column({ name: 'description', type: 'text' })

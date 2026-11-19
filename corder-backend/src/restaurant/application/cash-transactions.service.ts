@@ -1,9 +1,10 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CashTransactionEntity } from '../domain/cash-transaction.entity';
 import { CashShiftEntity } from '../domain/cash-shift.entity';
 import { CashShiftService } from './cash-shift.service';
+import { FraudDetectionService } from './fraud-detection.service';
 import { CreateCashTransactionDto } from '../api/dto/create-cash-transaction.dto';
 import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
 import { serializeCashTransaction } from './orders/order.mapper';
@@ -16,6 +17,8 @@ export class CashTransactionsService {
     @InjectRepository(CashTransactionEntity)
     private readonly repo: Repository<CashTransactionEntity>,
     private readonly shifts: CashShiftService,
+    @Optional()
+    private readonly fraudDetection?: FraudDetectionService,
   ) {}
 
   async create(
@@ -32,7 +35,7 @@ export class CashTransactionsService {
       throw new BadRequestException('Description is required.');
     }
 
-    return this.repo.manager.transaction(async (em) => {
+    const result = await this.repo.manager.transaction(async (em) => {
       const shift = await em.findOne(CashShiftEntity, {
         where: { restaurantId, status: 'open' },
         order: { openedAt: 'DESC' },
@@ -60,6 +63,8 @@ export class CashTransactionsService {
 
       return { transaction: savedTx, shift: savedShift };
     });
+    void this.fraudDetection?.analyzeRestaurantAnomalies(restaurantId).catch(() => undefined);
+    return result;
   }
 
   async listForShift(restaurantId: string, shiftId: string) {

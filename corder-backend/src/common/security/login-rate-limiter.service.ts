@@ -46,26 +46,33 @@ export class LoginRateLimiterService {
   }
 
   consumePinAttempt(ip: string, restaurantId: string, staffId?: string): void {
-    const ipKey = `pin:${ip}:${restaurantId}`;
-    this.consume(ipKey, WINDOW_MS, MAX_ATTEMPTS_PER_WINDOW);
-
     const normalizedStaffId = staffId?.trim().toLowerCase();
     if (normalizedStaffId) {
-      const staffKey = `pin:staff:${restaurantId}:${normalizedStaffId}`;
+      const staffLockMsg =
+        'Too many failed PIN attempts for this staff member. Please wait 5 minutes and try again.';
       this.consume(
-        staffKey,
+        `pin:staff:${restaurantId}:${normalizedStaffId}`,
         PIN_STAFF_WINDOW_MS,
         MAX_PIN_ATTEMPTS_PER_STAFF,
-        'Too many failed PIN attempts for this staff member. Please wait 5 minutes and try again.',
+        staffLockMsg,
+      );
+      this.consume(
+        `pin:ip-staff:${ip}:${restaurantId}:${normalizedStaffId}`,
+        PIN_STAFF_WINDOW_MS,
+        MAX_PIN_ATTEMPTS_PER_STAFF,
+        staffLockMsg,
       );
     }
+
+    const ipKey = `pin:ip:${ip}:${restaurantId}`;
+    this.consume(ipKey, WINDOW_MS, MAX_ATTEMPTS_PER_WINDOW);
   }
 
   resetPinAttempts(ip: string, restaurantId: string, staffId?: string): void {
-    this.buckets.delete(`pin:${ip}:${restaurantId}`);
     const normalizedStaffId = staffId?.trim().toLowerCase();
     if (normalizedStaffId) {
       this.buckets.delete(`pin:staff:${restaurantId}:${normalizedStaffId}`);
+      this.buckets.delete(`pin:ip-staff:${ip}:${restaurantId}:${normalizedStaffId}`);
     }
   }
 

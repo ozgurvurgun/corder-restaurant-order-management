@@ -1,5 +1,9 @@
 import type { CancelledItem, CloseCheckSplitMethod } from "./panel-types"
 
+export function itemCountsTowardBill(i: { status: string }): boolean {
+  return i.status !== "cancelled" && i.status !== "ledger" && i.status !== "paid"
+}
+
 export interface PanelSplitSharePayment {
   shareIndex: number
   method: CloseCheckSplitMethod
@@ -51,7 +55,7 @@ export interface PurchaseOrder {
   id: string
   supplierId: string
   supplierName: string
-  items: { materialId: string; materialName: string; quantity: number; unitCost: number }[]
+  items: { materialId: string; materialName: string; quantity: number; unitCost: number; receivedQuantity?: number }[]
   totalAmount: number
   status: "draft" | "ordered" | "received" | "cancelled"
   notes?: string
@@ -64,7 +68,7 @@ export interface InventoryCount {
   id: string
   date: Date
   countedBy: string
-  items: { materialId: string; materialName: string; expectedStock: number; actualStock: number; difference: number }[]
+  items: { materialId: string; materialName: string; expectedStock: number; actualStock: number; difference: number; isCounted?: boolean }[]
   status: "in-progress" | "completed"
   notes?: string
 }

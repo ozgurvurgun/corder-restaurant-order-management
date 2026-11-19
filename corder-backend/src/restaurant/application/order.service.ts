@@ -107,12 +107,14 @@ export class OrderService {
     lines: { itemId: string; quantity?: number }[],
     ledgerCustomerId: string,
     staffName: string,
+    actorStaffId?: string | null,
   ): Promise<{ ok: true; amount: number }> {
     return this.orderLedgerUseCase.assignItemsToLedger(
       restaurantId,
       lines,
       ledgerCustomerId,
       staffName,
+      actorStaffId,
     );
   }
 
@@ -120,8 +122,14 @@ export class OrderService {
     restaurantId: string,
     itemId: string,
     actorName: string,
+    actorStaffId?: string | null,
   ): Promise<{ ok: true; amount: number }> {
-    return this.orderLedgerUseCase.revertLedgerOrderItem(restaurantId, itemId, actorName);
+    return this.orderLedgerUseCase.revertLedgerOrderItem(
+      restaurantId,
+      itemId,
+      actorName,
+      actorStaffId,
+    );
   }
 
   findPendingKitchenPrints(restaurantId: string): Promise<Record<string, unknown>[]> {

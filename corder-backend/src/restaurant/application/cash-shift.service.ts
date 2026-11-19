@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, DataSource, Repository } from 'typeorm';
@@ -9,6 +9,7 @@ import { CompletedOrderEntity } from '../domain/completed-order.entity';
 import { PrintJobEntity } from '../domain/print-job.entity';
 import { CheckSettlementPolicy } from '../domain/services/check-settlement.policy';
 import { OrdersGateway, PrintJobSocketPayload } from '../api/orders.gateway';
+import { FraudDetectionService } from './fraud-detection.service';
 import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
 import { serializeCashShift } from './orders/order.mapper';
 
@@ -21,6 +22,8 @@ export class CashShiftService {
     private readonly repo: Repository<CashShiftEntity>,
     private readonly dataSource: DataSource,
     private readonly ordersGateway: OrdersGateway,
+    @Optional()
+    private readonly fraudDetection?: FraudDetectionService,
   ) {}
 
   async getCurrent(restaurantId: string): Promise<CashShiftEntity | null> {
@@ -82,7 +85,7 @@ export class CashShiftService {
     notes?: string,
   ): Promise<CashShiftEntity> {
     const closingMinorUnits = Math.max(0, toMinorUnits(closingBalance));
-    return this.dataSource.transaction(async (em) => {
+    const closedShift = await this.dataSource.transaction(async (em) => {
       const shift = await em.findOne(CashShiftEntity, {
         where: { id, restaurantId },
         lock: { mode: 'pessimistic_write' },
@@ -94,6 +97,8 @@ export class CashShiftService {
       shift.closeShift(closedBy, closingMinorUnits, notes);
       return em.save(CashShiftEntity, shift);
     });
+    void this.fraudDetection?.analyzeRestaurantAnomalies(restaurantId).catch(() => undefined);
+    return closedShift;
   }
 
   async list(restaurantId: string, limit = 50): Promise<CashShiftEntity[]> {

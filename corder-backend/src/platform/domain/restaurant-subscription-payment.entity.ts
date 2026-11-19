@@ -4,8 +4,11 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
   Index,
 } from 'typeorm';
+import { RestaurantEntity } from './restaurant.entity';
 
 export type SubscriptionPaymentMethod =
   | 'bank_transfer'
@@ -22,6 +25,10 @@ export class RestaurantSubscriptionPaymentEntity {
 
   @Column({ name: 'restaurant_id', type: 'uuid' })
   restaurantId: string;
+
+  @ManyToOne(() => RestaurantEntity, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'restaurant_id' })
+  restaurant?: RestaurantEntity;
 
   /** Actual date/time the payment was received/collected. */
   @Column({ name: 'paid_at', type: 'timestamptz' })

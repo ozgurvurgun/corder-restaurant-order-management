@@ -3,6 +3,10 @@ import { OrderItemEntity } from '../order-item.entity';
 
 export class OrderStatusPolicy {
   static isItemOnActiveBill(status: string): boolean {
+    return status !== 'cancelled' && status !== 'ledger' && status !== 'paid';
+  }
+
+  static isItemPrintableForKitchen(status: string): boolean {
     return status !== 'cancelled' && status !== 'ledger';
   }
 
@@ -29,6 +33,9 @@ export class OrderStatusPolicy {
     }
     if (item.status === 'ledger') {
       throw new BadRequestException('Cannot transfer a ledger-assigned order item');
+    }
+    if (item.status === 'paid') {
+      throw new BadRequestException('Cannot transfer an already paid order item');
     }
   }
 }

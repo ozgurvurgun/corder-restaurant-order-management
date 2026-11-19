@@ -6,7 +6,11 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
-import { InventoryCountEntity } from '../domain/inventory-count.entity';
+import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
+import {
+  InventoryCountEntity,
+  InventoryCountItem,
+} from '../domain/inventory-count.entity';
 import { StockMaterialEntity } from '../domain/stock-material.entity';
 import { StockMovementsService } from './stock-movements.service';
 
@@ -30,6 +34,14 @@ export class InventoryCountsService {
 
   async start(restaurantId: string, countedBy: string) {
     return this.dataSource.transaction(async (em) => {
+      const restaurant = await em.findOne(RestaurantEntity, {
+        where: { id: restaurantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!restaurant) {
+        throw new NotFoundException('Restaurant not found.');
+      }
+
       const existingInProgress = await em.findOne(InventoryCountEntity, {
         where: { restaurantId, status: 'in-progress' },
         lock: { mode: 'pessimistic_write' },
@@ -44,7 +56,7 @@ export class InventoryCountsService {
         where: { restaurantId },
         order: { name: 'ASC' },
       });
-      const items = materials.map((m) => {
+      const items: InventoryCountItem[] = materials.map((m) => {
         const stock = Number(Number(m.currentStock ?? 0).toFixed(3));
         return {
           materialId: m.id,
@@ -52,6 +64,7 @@ export class InventoryCountsService {
           expectedStock: stock,
           actualStock: stock,
           difference: 0,
+          isCounted: false,
         };
       });
       const entity = em.create(InventoryCountEntity, {
@@ -66,19 +79,27 @@ export class InventoryCountsService {
     });
   }
 
-  async updateItem(
+  async updateItems(
     restaurantId: string,
     countId: string,
-    materialId: string,
-    actual: number,
+    updates: { materialId: string; actual: number }[],
   ) {
-    const actualNum = Number(actual);
-    if (!Number.isFinite(actualNum) || actualNum < 0) {
+    if (!Array.isArray(updates) || updates.length === 0) {
       throw new BadRequestException(
-        'Inventory count quantity must be a non-negative number.',
+        'At least one inventory count item update is required.',
       );
     }
-    const safeActual = Number(actualNum.toFixed(3));
+
+    const updateMap = new Map<string, number>();
+    for (const u of updates) {
+      const actualNum = Number(u.actual);
+      if (!Number.isFinite(actualNum) || actualNum < 0) {
+        throw new BadRequestException(
+          'Inventory count quantity must be a non-negative number.',
+        );
+      }
+      updateMap.set(u.materialId, Number(actualNum.toFixed(3)));
+    }
 
     return this.dataSource.transaction(async (em) => {
       const count = await em.findOne(InventoryCountEntity, {
@@ -92,30 +113,37 @@ export class InventoryCountsService {
         );
       }
 
-      const material = await em.findOne(StockMaterialEntity, {
-        where: { id: materialId, restaurantId },
+      const targetIds = [...updateMap.keys()];
+      const materials = await em.find(StockMaterialEntity, {
+        where: { id: In(targetIds), restaurantId },
       });
-      if (!material) {
+      const materialById = new Map(materials.map((m) => [m.id, m]));
+      if (targetIds.some((id) => !materialById.has(id))) {
         throw new NotFoundException('Stock material not found.');
       }
 
-      const liveExpected = Number(Number(material.currentStock ?? 0).toFixed(3));
-      let found = false;
-      const items = count.items.map((it) => {
-        if (it.materialId === materialId) {
-          found = true;
+      const matchedIds = new Set<string>();
+      const items: InventoryCountItem[] = count.items.map((it) => {
+        if (updateMap.has(it.materialId)) {
+          const material = materialById.get(it.materialId)!;
+          const safeActual = updateMap.get(it.materialId)!;
+          const liveExpected = Number(
+            Number(material.currentStock ?? 0).toFixed(3),
+          );
+          matchedIds.add(it.materialId);
           return {
             ...it,
             materialName: material.name,
             expectedStock: liveExpected,
             actualStock: safeActual,
             difference: Number((safeActual - liveExpected).toFixed(3)),
+            isCounted: true,
           };
         }
         return it;
       });
 
-      if (!found) {
+      if (matchedIds.size !== targetIds.length) {
         throw new NotFoundException(
           'Stock material not found in this inventory count.',
         );
@@ -123,6 +151,34 @@ export class InventoryCountsService {
 
       count.items = items;
       return em.save(InventoryCountEntity, count);
+    });
+  }
+
+  async updateItem(
+    restaurantId: string,
+    countId: string,
+    materialId: string,
+    actual: number,
+  ) {
+    return this.updateItems(restaurantId, countId, [{ materialId, actual }]);
+  }
+
+  async cancel(restaurantId: string, countId: string) {
+    return this.dataSource.transaction(async (em) => {
+      const count = await em.findOne(InventoryCountEntity, {
+        where: { id: countId, restaurantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!count) {
+        throw new NotFoundException('Inventory count record not found.');
+      }
+      if (count.status !== 'in-progress') {
+        throw new BadRequestException(
+          'Only in-progress inventory counts can be cancelled.',
+        );
+      }
+      await em.remove(InventoryCountEntity, count);
+      return { ok: true, id: countId };
     });
   }
 
@@ -148,7 +204,7 @@ export class InventoryCountsService {
         : [];
       const materialById = new Map(lockedMaterials.map((m) => [m.id, m]));
 
-      const updatedItems: InventoryCountEntity['items'] = [];
+      const updatedItems: InventoryCountItem[] = [];
 
       for (const item of count.items) {
         const material = materialById.get(item.materialId);
@@ -156,22 +212,25 @@ export class InventoryCountsService {
         const liveExpected = Number(
           Number(material.currentStock ?? 0).toFixed(3),
         );
-        const actualStock = Math.max(
-          0,
-          Number(Number(item.actualStock ?? 0).toFixed(3)),
-        );
-        const diff = Number((actualStock - liveExpected).toFixed(3));
+        const isCounted = item.isCounted === true;
+        const actualStock = isCounted
+          ? Math.max(0, Number(Number(item.actualStock ?? 0).toFixed(3)))
+          : liveExpected;
+        const diff = isCounted
+          ? Number((actualStock - liveExpected).toFixed(3))
+          : 0;
         updatedItems.push({
           materialId: material.id,
           materialName: material.name,
           expectedStock: liveExpected,
           actualStock,
           difference: diff,
+          isCounted,
         });
       }
 
       const sortedAdjustments = [...updatedItems]
-        .filter((i) => i.difference !== 0)
+        .filter((i) => i.isCounted === true && i.difference !== 0)
         .sort((a, b) => a.materialId.localeCompare(b.materialId));
 
       for (const item of sortedAdjustments) {

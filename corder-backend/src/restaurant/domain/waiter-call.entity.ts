@@ -8,11 +8,22 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
+import { TableEntity } from './table.entity';
 
 export type WaiterCallRequestType = 'waiter' | 'bill';
 
 @Entity('waiter_calls')
 @Index(['restaurantId', 'createdAt'])
+@Index('IDX_waiter_calls_restaurant_table_created', [
+  'restaurantId',
+  'tableId',
+  'createdAt',
+])
+@Index('IDX_waiter_calls_restaurant_ack_created', [
+  'restaurantId',
+  'acknowledged',
+  'createdAt',
+])
 export class WaiterCallEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -26,6 +37,10 @@ export class WaiterCallEntity {
 
   @Column({ name: 'table_id', type: 'uuid' })
   tableId!: string;
+
+  @ManyToOne(() => TableEntity, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'table_id' })
+  table?: TableEntity;
 
   @Column({ name: 'table_name', type: 'varchar', length: 120 })
   tableName!: string;

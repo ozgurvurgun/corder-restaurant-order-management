@@ -10,9 +10,9 @@ import {
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 import { StockMaterialEntity } from './stock-material.entity';
 import { SupplierEntity } from './supplier.entity';
+import { numericColumnTransformer } from '../../common/database/numeric-column.transformer';
 
 @Entity('stock_movements')
-@Index(['restaurantId', 'materialId'])
 @Index(['restaurantId', 'materialId', 'createdAt'])
 export class StockMovementEntity {
   @PrimaryGeneratedColumn('uuid')
@@ -25,10 +25,10 @@ export class StockMovementEntity {
   @JoinColumn({ name: 'restaurant_id' })
   restaurant: RestaurantEntity;
 
-  @Column({ name: 'material_id' })
+  @Column({ name: 'material_id', type: 'uuid', nullable: true })
   materialId: string;
 
-  @ManyToOne(() => StockMaterialEntity, { onDelete: 'CASCADE' })
+  @ManyToOne(() => StockMaterialEntity, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'material_id' })
   material: StockMaterialEntity;
 
@@ -38,19 +38,50 @@ export class StockMovementEntity {
   @Column({ type: 'varchar', length: 32 })
   type: 'in' | 'out' | 'waste' | 'count-adjustment';
 
-  @Column({ type: 'decimal', precision: 12, scale: 3 })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 3,
+    transformer: numericColumnTransformer,
+  })
   quantity: number;
 
-  @Column({ name: 'previous_stock', type: 'decimal', precision: 12, scale: 3 })
+  @Column({
+    name: 'previous_stock',
+    type: 'decimal',
+    precision: 12,
+    scale: 3,
+    transformer: numericColumnTransformer,
+  })
   previousStock: number;
 
-  @Column({ name: 'new_stock', type: 'decimal', precision: 12, scale: 3 })
+  @Column({
+    name: 'new_stock',
+    type: 'decimal',
+    precision: 12,
+    scale: 3,
+    transformer: numericColumnTransformer,
+  })
   newStock: number;
 
-  @Column({ name: 'unit_cost', type: 'decimal', precision: 12, scale: 4, nullable: true })
+  @Column({
+    name: 'unit_cost',
+    type: 'decimal',
+    precision: 12,
+    scale: 4,
+    nullable: true,
+    transformer: numericColumnTransformer,
+  })
   unitCost: number | null;
 
-  @Column({ name: 'total_cost', type: 'decimal', precision: 12, scale: 4, nullable: true })
+  @Column({
+    name: 'total_cost',
+    type: 'decimal',
+    precision: 12,
+    scale: 4,
+    nullable: true,
+    transformer: numericColumnTransformer,
+  })
   totalCost: number | null;
 
   @Column({ name: 'supplier_id', type: 'uuid', nullable: true })
@@ -66,7 +97,7 @@ export class StockMovementEntity {
   @Column({ name: 'created_by' })
   createdBy: string;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }
 

@@ -10,8 +10,10 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const outDir = join(rootDir, 'dist-test');
+const distTestDir = join(rootDir, 'dist-test');
 const tscBin = join(rootDir, 'node_modules', 'typescript', 'bin', 'tsc');
+
+rmSync(distTestDir, { recursive: true, force: true });
 
 const compileResult = spawnSync(
   process.execPath,
@@ -37,7 +39,7 @@ function collectTestFiles(dir, acc = []) {
 }
 
 const filters = process.argv.slice(2).filter((arg) => !arg.startsWith('-'));
-let testFiles = collectTestFiles(outDir).sort();
+let testFiles = collectTestFiles(distTestDir).sort();
 
 if (filters.length > 0) {
   testFiles = testFiles.filter((file) =>

@@ -92,20 +92,27 @@ function decryptSecret(stored) {
   return clean
 }
 
-function mapBackendPrinters(backendPrinters = []) {
+function mapBackendPrinters(backendPrinters = [], localPrinters = []) {
   return backendPrinters
     .filter((p) => p && p.name)
-    .map((p, idx) => {
+    .map((p) => {
       const isNetwork =
         p.connection === "network" ||
         p.connection === "ethernet" ||
         (!p.connection && Boolean(p.ipAddress))
+      const existing = Array.isArray(localPrinters)
+        ? localPrinters.find(
+            (lp) =>
+              (lp.id && p.id && lp.id === p.id) ||
+              (lp.name && lp.name.toLowerCase() === String(p.name).trim().toLowerCase()),
+          )
+        : null
       return {
-        id: p.id || `p-cloud-${idx + 1}`,
+        id: p.id || crypto.randomUUID(),
         name: String(p.name).trim(),
         type: String(p.type || "thermal").trim(),
         mode: isNetwork ? "network" : "system",
-        systemPrinterName: isNetwork ? "" : String(p.name).trim(),
+        systemPrinterName: isNetwork ? "" : String(p.systemPrinterName || p.ipAddress || existing?.systemPrinterName || p.name).trim(),
         host: isNetwork ? String(p.ipAddress || "127.0.0.1").trim() : "127.0.0.1",
         port: isNetwork ? Number(p.port) || 9100 : 9100,
         department: p.department ? String(p.department).trim() : null,
@@ -117,7 +124,7 @@ function mapBackendPrinters(backendPrinters = []) {
 }
 
 function mergePrintersWithBackend(localPrinters = [], backendPrinters = []) {
-  const mappedCloud = mapBackendPrinters(backendPrinters)
+  const mappedCloud = mapBackendPrinters(backendPrinters, localPrinters)
   if (!localPrinters.length) return mappedCloud
   if (!mappedCloud.length) return localPrinters
 
@@ -130,13 +137,22 @@ function mergePrintersWithBackend(localPrinters = [], backendPrinters = []) {
       const existing = result[existingIdx]
       result[existingIdx] = {
         ...existing,
+        id: cp.id || existing.id,
         type: cp.type || existing.type,
         department: cp.department ?? existing.department ?? null,
         paperWidth: cp.paperWidth || existing.paperWidth,
         autoCut: cp.autoCut,
         ...(cp.mode === "network" && cp.host && cp.host !== "127.0.0.1"
           ? { mode: "network", host: cp.host, port: cp.port, systemPrinterName: "" }
-          : {}),
+          : {
+              systemPrinterName: String(
+                (existing.systemPrinterName && existing.systemPrinterName !== existing.name
+                  ? existing.systemPrinterName
+                  : cp.systemPrinterName) ||
+                  existing.systemPrinterName ||
+                  cp.name,
+              ).trim(),
+            }),
       }
     } else {
       result.push(cp)
@@ -312,14 +328,6 @@ function buildRuntimeConfig(settingsInput) {
       categoriesById[cat.id] = cat
     }
   }
-  const categoryPrinterRoutes = {}
-  const categoryNetworkRoutes = {}
-  for (const [cid, pid] of Object.entries(settings.categoryRoutes || {})) {
-    const p = printersById[pid]
-    if (!p) continue
-    if (p.mode === "network") categoryNetworkRoutes[cid] = `${p.host}:${p.port}`
-    else if (p.systemPrinterName) categoryPrinterRoutes[cid] = p.systemPrinterName
-  }
 
   return {
     ...baseConfig,
@@ -334,10 +342,9 @@ function buildRuntimeConfig(settingsInput) {
     restaurantName: settings.restaurantName,
     autoStartOnBoot: settings.autoStartOnBoot !== false,
     printerMode: defaultKitchenPrinter?.mode === "network" ? "network_raw" : "system",
-    printerName: defaultKitchenPrinter?.systemPrinterName || defaultKitchenPrinter?.name || "KITCHEN",
+    printerName: defaultKitchenPrinter?.systemPrinterName || defaultKitchenPrinter?.name || "",
     printerHost: defaultKitchenPrinter?.host || "127.0.0.1",
     printerPort: Number(defaultKitchenPrinter?.port) || 9100,
-    managementReceiptPrinter: receiptPrinter?.systemPrinterName || receiptPrinter?.name || "",
     printFooterLine: settings.printFooterLine || "",
     printTicketStamp: settings.printTicketStamp || "",
     printUsbDrainMs: Number(settings.printUsbDrainMs ?? baseConfig.printUsbDrainMs),
@@ -355,8 +362,6 @@ function buildRuntimeConfig(settingsInput) {
     categoryRoutes: settings.categoryRoutes || {},
     categoryParentMap,
     categoriesById,
-    categoryPrinterRoutes,
-    categoryNetworkRoutes,
   }
 }
 

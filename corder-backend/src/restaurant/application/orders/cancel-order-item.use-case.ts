@@ -43,8 +43,21 @@ export class CancelOrderItemUseCase {
       });
       if (!itemProbe) throw new NotFoundException('Order item not found');
 
-      const order = await em.findOne(OrderEntity, {
+      const orderProbe = await em.findOne(OrderEntity, {
         where: { id: itemProbe.orderId, restaurantId },
+        select: { id: true, tableId: true },
+      });
+      if (!orderProbe) throw new NotFoundException('Order not found');
+
+      const table = await em.findOne(TableEntity, {
+        where: { id: orderProbe.tableId, restaurantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!table) throw new NotFoundException('Table not found');
+      this.tableService.assertStaffMayUseTable(table, actorStaffId);
+
+      const order = await em.findOne(OrderEntity, {
+        where: { id: orderProbe.id, restaurantId },
         lock: { mode: 'pessimistic_write' },
       });
       if (!order) throw new NotFoundException('Order not found');
@@ -57,13 +70,6 @@ export class CancelOrderItemUseCase {
         lock: { mode: 'pessimistic_write' },
       });
       if (!item) throw new NotFoundException('Order item not found');
-
-      const table = await em.findOne(TableEntity, {
-        where: { id: order.tableId, restaurantId },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (!table) throw new NotFoundException('Table not found');
-      this.tableService.assertStaffMayUseTable(table, actorStaffId);
 
       const now = new Date();
       const taken = item.takeQuantity(quantity);

@@ -104,18 +104,15 @@ function resolveItemTarget(item, config, kind) {
 
   if (kind === "receipt") {
     if (config.receiptPrinterId === "none") return null
-    const receiptPrinter = config.receiptPrinter || config.defaultKitchenPrinter || null
+    const receiptPrinter =
+      (config.receiptPrinterId ? printersById[config.receiptPrinterId] : null) ||
+      config.receiptPrinter ||
+      config.defaultKitchenPrinter ||
+      null
     if (receiptPrinter) {
       return formatPrinterTarget(receiptPrinter)
     }
-    const mgmtName = String(config.managementReceiptPrinter || config.printerName || "").trim()
-    if (!mgmtName) return null
-    return {
-      groupKey: `cmd:${mgmtName}`,
-      targetPrinter: null,
-      targetPrinterName: mgmtName,
-      targetNetwork: null,
-    }
+    return null
   }
 
   const cid = item.categoryId || ""
@@ -128,30 +125,16 @@ function resolveItemTarget(item, config, kind) {
   if (!matchedPrinter && config.defaultKitchenPrinterId === "none") {
     return null
   }
-  const activePrinter = matchedPrinter || config.defaultKitchenPrinter || null
+  const defaultPrinter =
+    (config.defaultKitchenPrinterId ? printersById[config.defaultKitchenPrinterId] : null) ||
+    config.defaultKitchenPrinter ||
+    null
+  const activePrinter = matchedPrinter || defaultPrinter || null
   if (activePrinter) {
     return formatPrinterTarget(activePrinter)
   }
 
-  const legacyRoutes = config.categoryPrinterRoutes || {}
-  const legacyNetRoutes = config.categoryNetworkRoutes || {}
-  const defaultName = String(config.printerName || "KITCHEN").trim() || "KITCHEN"
-
-  let printerName = defaultName
-  let network = null
-  if (cid && legacyRoutes[cid]) {
-    printerName = String(legacyRoutes[cid]).trim() || printerName
-  }
-  if (cid && legacyNetRoutes[cid]) {
-    network = String(legacyNetRoutes[cid]).trim()
-  }
-  const groupKey = network ? `net:${network}` : `cmd:${printerName}`
-  return {
-    groupKey,
-    targetPrinter: null,
-    targetPrinterName: network ? null : printerName,
-    targetNetwork: network,
-  }
+  return null
 }
 
 /**

@@ -9,6 +9,9 @@ import { PrintJobEntity } from '../../domain/print-job.entity';
 import { OrderStatusPolicy } from '../../domain/services/order-status.policy';
 import { serializeOrder } from './order.mapper';
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 @Injectable()
 export class OrderQueryService {
   constructor(
@@ -28,7 +31,13 @@ export class OrderQueryService {
     items: Array<{ productId?: string; categoryId?: string }>,
     restaurantId: string,
   ): Promise<void> {
-    const ids = [...new Set(items.map((i) => i.productId).filter(Boolean))] as string[];
+    const ids = [
+      ...new Set(
+        items
+          .map((i) => (typeof i.productId === 'string' ? i.productId.trim() : ''))
+          .filter((id) => UUID_RE.test(id)),
+      ),
+    ];
     if (!ids.length) return;
     const products = await this.productRepo.find({
       where: { id: In(ids) },
@@ -41,7 +50,7 @@ export class OrderQueryService {
       }
     }
     for (const item of items) {
-      const pid = item.productId;
+      const pid = typeof item.productId === 'string' ? item.productId.trim() : '';
       if (pid && categoryByProductId.has(pid)) {
         item.categoryId = categoryByProductId.get(pid);
       }
@@ -56,7 +65,7 @@ export class OrderQueryService {
       ...new Set(
         userIds
           .map((x) => (typeof x === 'string' ? x.trim() : ''))
-          .filter((x): x is string => Boolean(x)),
+          .filter((x): x is string => UUID_RE.test(x)),
       ),
     ];
     if (!ids.length) return new Map();
@@ -136,7 +145,7 @@ export class OrderQueryService {
     const orders = await this.orderRepo.find({
       where: {
         restaurantId,
-        status: 'active',
+        status: In(['active', 'closed']),
         kitchenTicketPrintedAt: IsNull(),
         createdAt: MoreThanOrEqual(cutoff),
       },
@@ -154,7 +163,7 @@ export class OrderQueryService {
     const out: Record<string, unknown>[] = [];
     for (const order of orders) {
       const items =
-        order.items?.filter((i) => OrderStatusPolicy.isItemOnActiveBill(i.status)) ?? [];
+        order.items?.filter((i) => OrderStatusPolicy.isItemPrintableForKitchen(i.status)) ?? [];
       if (!items.length) {
         emptyOrderIdsToMark.push(order.id);
         continue;

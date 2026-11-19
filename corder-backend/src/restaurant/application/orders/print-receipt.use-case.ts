@@ -143,7 +143,7 @@ export class PrintReceiptUseCase {
         : [];
       for (const rawItem of snapItems) {
         const status = typeof rawItem.status === 'string' ? rawItem.status : 'served';
-        if (status === 'cancelled' || status === 'ledger') continue;
+        if (!OrderStatusPolicy.isItemOnActiveBill(status)) continue;
         const quantity = Number(rawItem.quantity) || 0;
         if (quantity <= 0) continue;
         extracted.push({

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
   OnModuleDestroy,
   OnModuleInit,
@@ -39,6 +40,7 @@ const VALID_APPS: Set<PlatformNotificationTargetApp> = new Set([
 export class PlatformNotificationsService
   implements OnModuleInit, OnModuleDestroy
 {
+  private readonly logger = new Logger(PlatformNotificationsService.name);
   private schedulerTimer: NodeJS.Timeout | null = null;
   private isProcessingDue = false;
 
@@ -86,8 +88,10 @@ export class PlatformNotificationsService
         const saved = await this.notifRepo.save(notif);
         await this.dispatchNotification(saved);
       }
-    } catch {
-      // Ignore transient scheduler errors
+    } catch (err) {
+      this.logger.warn(
+        `Scheduled notification processing failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     } finally {
       this.isProcessingDue = false;
     }
@@ -135,48 +139,79 @@ export class PlatformNotificationsService
     });
   }
 
+  private formatNotification(
+    n: PlatformNotificationEntity,
+    restById: Map<string, { id: string; name: string; slug: string }>,
+  ) {
+    const targetIds = Array.isArray(n.targetRestaurantIds)
+      ? n.targetRestaurantIds
+      : [];
+    const targetRestaurants = targetIds
+      .map((id) => restById.get(id))
+      .filter(
+        (r): r is { id: string; name: string; slug: string } => Boolean(r),
+      );
+    return {
+      id: n.id,
+      title: n.title,
+      message: n.message,
+      level: n.level,
+      targetApps: Array.isArray(n.targetApps)
+        ? n.targetApps
+        : ['merchant', 'boss'],
+      targetRestaurantIds: targetIds,
+      targetRestaurants,
+      isAllRestaurants: targetIds.length === 0,
+      scheduledAt: n.scheduledAt ? n.scheduledAt.toISOString() : null,
+      sentAt: n.sentAt ? n.sentAt.toISOString() : null,
+      status: n.status,
+      createdBy: n.createdBy,
+      createdAt: (n.createdAt ?? new Date()).toISOString(),
+    };
+  }
+
+  private async formatSingleNotification(n: PlatformNotificationEntity) {
+    const targetIds = Array.isArray(n.targetRestaurantIds)
+      ? n.targetRestaurantIds
+      : [];
+    const restaurants =
+      targetIds.length > 0
+        ? await this.restaurantRepo.find({
+            where: { id: In(targetIds) },
+            select: { id: true, name: true, slug: true },
+          })
+        : [];
+    const restById = new Map(
+      restaurants.map((r) => [r.id, { id: r.id, name: r.name, slug: r.slug }]),
+    );
+    return this.formatNotification(n, restById);
+  }
+
   async listAll() {
-    const [notifications, restaurants] = await Promise.all([
-      this.notifRepo.find({
-        order: { createdAt: 'DESC' },
-        take: 200,
-      }),
-      this.restaurantRepo.find({
-        select: { id: true, name: true, slug: true },
-      }),
-    ]);
+    const notifications = await this.notifRepo.find({
+      order: { createdAt: 'DESC' },
+      take: 200,
+    });
+    const referencedRestIds = Array.from(
+      new Set(
+        notifications.flatMap((n) =>
+          Array.isArray(n.targetRestaurantIds) ? n.targetRestaurantIds : [],
+        ),
+      ),
+    );
+    const restaurants =
+      referencedRestIds.length > 0
+        ? await this.restaurantRepo.find({
+            where: { id: In(referencedRestIds) },
+            select: { id: true, name: true, slug: true },
+          })
+        : [];
 
     const restById = new Map(
       restaurants.map((r) => [r.id, { id: r.id, name: r.name, slug: r.slug }]),
     );
 
-    return notifications.map((n) => {
-      const targetIds = Array.isArray(n.targetRestaurantIds)
-        ? n.targetRestaurantIds
-        : [];
-      const targetRestaurants = targetIds
-        .map((id) => restById.get(id))
-        .filter(
-          (r): r is { id: string; name: string; slug: string } => Boolean(r),
-        );
-      return {
-        id: n.id,
-        title: n.title,
-        message: n.message,
-        level: n.level,
-        targetApps: Array.isArray(n.targetApps)
-          ? n.targetApps
-          : ['merchant', 'boss'],
-        targetRestaurantIds: targetIds,
-        targetRestaurants,
-        isAllRestaurants: targetIds.length === 0,
-        scheduledAt: n.scheduledAt ? n.scheduledAt.toISOString() : null,
-        sentAt: n.sentAt ? n.sentAt.toISOString() : null,
-        status: n.status,
-        createdBy: n.createdBy,
-        createdAt: n.createdAt.toISOString(),
-      };
-    });
+    return notifications.map((n) => this.formatNotification(n, restById));
   }
 
   async create(
@@ -254,8 +289,7 @@ export class PlatformNotificationsService
       await this.dispatchNotification(saved);
     }
 
-    const list = await this.listAll();
-    return list.find((item) => item.id === saved.id) ?? saved;
+    return this.formatSingleNotification(saved);
   }
 
   async sendNow(id: string) {
@@ -268,8 +302,7 @@ export class PlatformNotificationsService
     const saved = await this.notifRepo.save(entity);
     await this.dispatchNotification(saved);
 
-    const list = await this.listAll();
-    return list.find((item) => item.id === saved.id) ?? saved;
+    return this.formatSingleNotification(saved);
   }
 
   async remove(id: string) {

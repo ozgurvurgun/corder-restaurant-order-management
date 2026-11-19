@@ -5,6 +5,7 @@ import { TrendingUp, ShoppingCart, Ban, Percent, Clock, Receipt, Download, Print
 import { HistoryTab } from "./reports/completed-orders-tab"
 import { HourlyDensityTab, PeriodComparisonTab, ProductTrendsTab, useReportAnalyticsData, WaitersTab } from "./reports/analytics-tabs"
 import { ISTANBUL_TZ, computeDateFilterBounds, formatCurrency, formatIstanbulDateTime, fromMinorUnits, getIstanbulYmd, toMinorUnits } from "@/lib/format"
+import { escapeHtml } from "@/lib/qr-svg"
 import { computeReportForClosedTables } from "@/lib/store/panel-local-storage"
 import { CustomDatePicker, CustomSelect } from "@/components/ui/custom-inputs"
 
@@ -234,18 +235,33 @@ export default function ReportsView() {
   const handlePrintPdf = () => {
     const printWindow = window.open("", "_blank")
     if (!printWindow) return
+    const safeTitleName = escapeHtml(settings.name || "Corder POS")
+    const safeHeaderName = escapeHtml(settings.name || "Restoran")
+    const safeGeneratedAt = escapeHtml(formatIstanbulDateTime(new Date()))
     const rowsHtml = filteredClosedTables
       .map(
         (ct) => `
         <tr>
-          <td>${ct.tableName}</td>
-          <td>${ct.waiter}</td>
-          <td style="text-align:right">₺${formatCurrency(ct.totalAmount)}</td>
-          <td style="text-align:right">₺${formatCurrency(ct.discountAmount)}</td>
-          <td style="text-align:right;font-weight:bold">₺${formatCurrency(ct.netAmount)}</td>
-          <td>${PAYMENT_METHOD_LABELS[ct.payment.method] || ct.payment.method}</td>
-          <td>${formatIstanbulDateTime(ct.closedAt)}</td>
+          <td>${escapeHtml(ct.tableName)}</td>
+          <td>${escapeHtml(ct.waiter)}</td>
+          <td style="text-align:right">₺${escapeHtml(formatCurrency(ct.totalAmount))}</td>
+          <td style="text-align:right">₺${escapeHtml(formatCurrency(ct.discountAmount))}</td>
+          <td style="text-align:right;font-weight:bold">₺${escapeHtml(formatCurrency(ct.netAmount))}</td>
+          <td>${escapeHtml(PAYMENT_METHOD_LABELS[ct.payment.method] || ct.payment.method)}</td>
+          <td>${escapeHtml(formatIstanbulDateTime(ct.closedAt))}</td>
         </tr>`,
+      )
+      .join("")
+    const topProductsHtml = filteredReport.topProducts
+      .map(
+        (p) =>
+          `<tr><td>${escapeHtml(p.name)}</td><td style="text-align:right">${escapeHtml(p.quantity)}</td><td style="text-align:right">₺${escapeHtml(formatCurrency(p.revenue))}</td></tr>`,
+      )
+      .join("")
+    const paymentMethodsHtml = filteredReport.paymentBreakdown
+      .map(
+        (p) =>
+          `<tr><td>${escapeHtml(PAYMENT_METHOD_LABELS[p.method] || p.method)}</td><td style="text-align:right">${escapeHtml(p.count)}</td><td style="text-align:right">₺${escapeHtml(formatCurrency(p.total))}</td></tr>`,
       )
       .join("")
     printWindow.document.write(`
@@ -253,30 +269,34 @@ export default function ReportsView() {
       <html lang="tr">
         <head>
           <meta charset="utf-8" />
-          <title>Rapor - ${settings.name || "Corder POS"}</title>
+          <title>Rapor - ${safeTitleName}</title>
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; color: #1d1d1f; }
             h1 { font-size: 18px; margin: 0 0 4px; }
+            h2 { font-size: 14px; margin: 18px 0 8px; }
             p.sub { font-size: 12px; color: #666; margin: 0 0 16px; }
             .cards { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
             .card { border: 1px solid #ddd; border-radius: 8px; padding: 10px 14px; min-width: 120px; }
             .card .lbl { font-size: 11px; color: #666; }
             .card .val { font-size: 16px; font-weight: bold; margin-top: 4px; }
-            table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 16px; }
             th, td { border-bottom: 1px solid #eee; padding: 6px 8px; text-align: left; }
             th { background: #f5f5f7; font-weight: 600; }
           </style>
         </head>
         <body>
-          <h1>${settings.name || "Restoran"} - Satış Raporu</h1>
-          <p class="sub">Oluşturulma: ${formatIstanbulDateTime(new Date())}</p>
+          <h1>${safeHeaderName} - Satış Raporu</h1>
+          <p class="sub">Oluşturulma: ${safeGeneratedAt}</p>
           <div class="cards">
-            <div class="card"><div class="lbl">Toplam Ciro</div><div class="val">₺${formatCurrency(filteredReport.totalRevenue)}</div></div>
-            <div class="card"><div class="lbl">Sipariş Sayısı</div><div class="val">${filteredReport.totalOrders}</div></div>
-            <div class="card"><div class="lbl">Kapanan Masa</div><div class="val">${filteredReport.totalTables}</div></div>
-            <div class="card"><div class="lbl">İptal Tutarı</div><div class="val">₺${formatCurrency(filteredReport.cancelledAmount)}</div></div>
-            <div class="card"><div class="lbl">İndirim Tutarı</div><div class="val">₺${formatCurrency(filteredReport.discountAmount)}</div></div>
+            <div class="card"><div class="lbl">Toplam Ciro</div><div class="val">₺${escapeHtml(formatCurrency(filteredReport.totalRevenue))}</div></div>
+            <div class="card"><div class="lbl">Sipariş Sayısı</div><div class="val">${escapeHtml(filteredReport.totalOrders)}</div></div>
+            <div class="card"><div class="lbl">Kapanan Masa</div><div class="val">${escapeHtml(filteredReport.totalTables)}</div></div>
+            <div class="card"><div class="lbl">İptal Tutarı</div><div class="val">₺${escapeHtml(formatCurrency(filteredReport.cancelledAmount))}</div></div>
+            <div class="card"><div class="lbl">İndirim Tutarı</div><div class="val">₺${escapeHtml(formatCurrency(filteredReport.discountAmount))}</div></div>
           </div>
+          ${paymentMethodsHtml ? `<h2>Ödeme Yöntemi Dağılımı</h2><table><thead><tr><th>Ödeme Yöntemi</th><th style="text-align:right">İşlem</th><th style="text-align:right">Toplam</th></tr></thead><tbody>${paymentMethodsHtml}</tbody></table>` : ""}
+          ${topProductsHtml ? `<h2>En Çok Satan Ürünler</h2><table><thead><tr><th>Ürün</th><th style="text-align:right">Adet</th><th style="text-align:right">Ciro</th></tr></thead><tbody>${topProductsHtml}</tbody></table>` : ""}
+          <h2>Kapanan Masalar</h2>
           <table>
             <thead>
               <tr>

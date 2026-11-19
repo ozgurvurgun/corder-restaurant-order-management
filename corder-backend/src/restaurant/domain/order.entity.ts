@@ -28,10 +28,10 @@ export class OrderEntity {
   @JoinColumn({ name: 'restaurant_id' })
   restaurant: RestaurantEntity;
 
-  @Column({ name: 'table_id' })
+  @Column({ name: 'table_id', type: 'uuid', nullable: true })
   tableId: string;
 
-  @ManyToOne(() => TableEntity, { onDelete: 'CASCADE' })
+  @ManyToOne(() => TableEntity, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'table_id' })
   table: TableEntity;
 
@@ -48,10 +48,10 @@ export class OrderEntity {
   @OneToMany(() => OrderItemEntity, (i) => i.order, { cascade: true })
   items: OrderItemEntity[];
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 
   /** Source table name when the product line was moved from another table (new check label). */

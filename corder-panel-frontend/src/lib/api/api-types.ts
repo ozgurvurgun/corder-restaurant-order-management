@@ -432,6 +432,7 @@ export interface PurchaseOrderItemDto {
   materialName: string
   quantity: number
   unitCost: number
+  receivedQuantity?: number
 }
 
 export interface PurchaseOrderDto {
@@ -454,6 +455,7 @@ export interface InventoryCountItemDto {
   expectedStock: number
   actualStock: number
   difference: number
+  isCounted?: boolean
 }
 
 export interface InventoryCountDto {

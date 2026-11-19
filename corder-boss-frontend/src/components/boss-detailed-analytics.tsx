@@ -40,35 +40,39 @@ export function BossDetailedAnalytics({
 
   const metrics = useMemo(() => {
     const branches = filteredBranches
+    const isBranchSubset =
+      branches.length !== (overview?.branches?.length ?? 0)
+    const consolidated = !isBranchSubset ? overview?.consolidated : undefined
+
     const netRevenue = sumMoney(...branches.map((b) => b.todayRevenue))
     const todayOrderCount = branches.reduce((s, b) => s + b.todayOrderCount, 0)
     const discountTotal =
-      overview?.consolidated?.discountTotal ??
+      consolidated?.discountTotal ??
       sumMoney(...branches.map((b) => b.todayDiscountTotal))
     const cancelledCount =
-      overview?.consolidated?.cancelledCount ??
+      consolidated?.cancelledCount ??
       branches.reduce((s, b) => s + b.todayCancelCount, 0)
     const cancelAmount = sumMoney(...branches.map((b) => b.todayCancelAmount))
     const grossRevenue =
-      overview?.consolidated?.grossRevenue ??
+      consolidated?.grossRevenue ??
       sumMoney(netRevenue, discountTotal, cancelAmount)
     const discountRatePct =
-      overview?.consolidated?.discountRatePct ??
+      consolidated?.discountRatePct ??
       (grossRevenue > 0 ? Number(((discountTotal / grossRevenue) * 100).toFixed(1)) : 0)
     const cancelRatePct =
-      overview?.consolidated?.cancelRatePct ??
+      consolidated?.cancelRatePct ??
       (grossRevenue > 0 ? Number(((cancelAmount / grossRevenue) * 100).toFixed(1)) : 0)
     const occupiedTables = branches.reduce((s, b) => s + b.occupiedTableCount, 0)
     const totalTables = branches.reduce((s, b) => s + b.totalTableCount, 0)
     const openChecksTotal = sumMoney(...branches.map((b) => b.openChecksTotal))
     const openLedgerTotal =
-      overview?.consolidated?.openLedgerTotal ??
+      consolidated?.openLedgerTotal ??
       sumMoney(...branches.map((b) => b.openLedgerBalance))
     const averageOrderValue =
-      overview?.consolidated?.averageOrderValue ??
+      consolidated?.averageOrderValue ??
       (todayOrderCount > 0 ? Number((netRevenue / todayOrderCount).toFixed(2)) : 0)
     const revenuePerTable =
-      overview?.consolidated?.revenuePerTable ??
+      consolidated?.revenuePerTable ??
       (totalTables > 0 ? Number((netRevenue / totalTables).toFixed(2)) : 0)
     const occupancyPct =
       totalTables > 0 ? Math.round((occupiedTables / totalTables) * 100) : 0
@@ -81,15 +85,20 @@ export function BossDetailedAnalytics({
       ledger: sumMoney(...branches.map((b) => b.paymentBreakdown.ledger)),
     }
 
-    const openAlerts = fraudAlerts.filter(
-      (a) => a.status === "open" || a.status === "investigating"
-    )
-    const fraudOpenCount = overview?.fraudSummary?.openCount ?? openAlerts.length
+    const branchIdSet = new Set(branches.map((b) => b.id))
+    const openAlerts = fraudAlerts.filter((a) => {
+      if (a.status !== "open" && a.status !== "investigating") return false
+      if (!isBranchSubset) return true
+      const alertBranchId = a.branchId ?? a.restaurantId
+      return alertBranchId ? branchIdSet.has(alertBranchId) : true
+    })
+    const fraudSummary = !isBranchSubset ? overview?.fraudSummary : undefined
+    const fraudOpenCount = fraudSummary?.openCount ?? openAlerts.length
     const fraudCriticalCount =
-      overview?.fraudSummary?.criticalCount ??
+      fraudSummary?.criticalCount ??
       openAlerts.filter((a) => a.severity === "critical" || a.severity === "high").length
     const fraudImpact =
-      overview?.fraudSummary?.totalAmountImpact ??
+      fraudSummary?.totalAmountImpact ??
       openAlerts.reduce((s, a) => sumMoney(s, a.amountImpact), 0)
 
     return {
@@ -163,8 +172,15 @@ export function BossDetailedAnalytics({
   )
 
   const shiftSummaries: ShiftSummaryDto[] = useMemo(() => {
+    const isBranchSubset =
+      filteredBranches.length !== (overview?.branches?.length ?? 0)
+    const allowedNames = new Set(filteredBranches.map((b) => b.name))
     if (overview?.shiftSummaries && overview.shiftSummaries.length > 0) {
-      return overview.shiftSummaries
+      return isBranchSubset
+        ? overview.shiftSummaries.filter(
+            (sh) => !sh.branchName || allowedNames.has(sh.branchName),
+          )
+        : overview.shiftSummaries
     }
     return filteredBranches
       .filter((b) => b.activeShift !== null)

@@ -81,6 +81,8 @@ export class ProductService {
     >();
     for (const row of candidateRows) {
       const mat = materialById.get(row.materialId)!;
+      RecipeStockPolicy.assertUnitsCompatible(row.unit, mat.unit, mat.name);
+
       const existing = mergedByMaterial.get(row.materialId);
       if (existing) {
         const targetUnit = existing.unit ?? mat.unit;
@@ -89,9 +91,9 @@ export class ProductService {
           row.unit ?? mat.unit,
           targetUnit,
         );
-        existing.quantity = Number((existing.quantity + converted).toFixed(3));
+        existing.quantity = Number((existing.quantity + converted).toFixed(4));
       } else {
-        const qty = Number(row.quantity.toFixed(3));
+        const qty = Number(row.quantity.toFixed(4));
         if (qty > 0) {
           mergedByMaterial.set(row.materialId, {
             materialId: row.materialId,
@@ -194,21 +196,23 @@ export class ProductService {
     if (uniqueIds.length === 0) {
       return this.findByRestaurant(restaurantId);
     }
-    const products = await this.repo
-      .createQueryBuilder('p')
-      .innerJoin('p.category', 'c')
-      .where('c.restaurant_id = :restaurantId', { restaurantId })
-      .andWhere('p.id IN (:...ids)', { ids: uniqueIds })
-      .getMany();
-    const existingIds = new Set(products.map((p) => p.id));
-    const orderedIds = uniqueIds.filter((id) => existingIds.has(id));
-    if (orderedIds.length > 0) {
-      await this.dataSource.transaction(async (em) => {
-        for (let i = 0; i < orderedIds.length; i++) {
-          await em.update(ProductEntity, { id: orderedIds[i] }, { order: i + 1 });
-        }
-      });
-    }
+    await this.dataSource.transaction(async (em) => {
+      const txRepo =
+        typeof em.getRepository === 'function'
+          ? em.getRepository(ProductEntity)
+          : this.repo;
+      const products = await txRepo
+        .createQueryBuilder('p')
+        .innerJoin('p.category', 'c')
+        .where('c.restaurant_id = :restaurantId', { restaurantId })
+        .andWhere('p.id IN (:...ids)', { ids: uniqueIds })
+        .getMany();
+      const existingIds = new Set(products.map((p) => p.id));
+      const orderedIds = uniqueIds.filter((id) => existingIds.has(id));
+      for (let i = 0; i < orderedIds.length; i++) {
+        await em.update(ProductEntity, { id: orderedIds[i] }, { order: i + 1 });
+      }
+    });
     return this.findByRestaurant(restaurantId);
   }
 }

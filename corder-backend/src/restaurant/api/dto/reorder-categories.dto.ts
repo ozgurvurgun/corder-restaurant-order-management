@@ -1,8 +1,16 @@
-import { ArrayMinSize, IsArray, IsOptional, IsUUID, ValidateIf } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsOptional,
+  IsUUID,
+  ValidateIf,
+} from 'class-validator';
 
 export class ReorderCategoriesDto {
   @IsArray()
   @ArrayMinSize(1)
+  @ArrayMaxSize(200)
   @IsUUID(undefined, { each: true })
   ids: string[];
 

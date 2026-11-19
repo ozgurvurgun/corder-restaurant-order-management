@@ -3,6 +3,7 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  ParseUUIDPipe,
   Post,
   Query,
   UseGuards,
@@ -59,7 +60,7 @@ export class CashTransactionsController {
   @RequirePermissions('cash.view', 'cash.view_history')
   async list(
     @RestaurantId() restaurantId: string,
-    @Query('shiftId') shiftId?: string,
+    @Query('shiftId', new ParseUUIDPipe({ optional: true })) shiftId?: string,
   ) {
     if (shiftId) {
       return this.service.listForShift(restaurantId, shiftId);

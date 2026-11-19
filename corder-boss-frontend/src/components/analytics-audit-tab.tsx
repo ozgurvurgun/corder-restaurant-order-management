@@ -27,11 +27,13 @@ const AUDIT_CATEGORIES: Array<AuditCategory | "ALL"> = [
   "order",
   "table",
   "payment",
-  "cash",
+  "cash-register",
+  "shift",
   "stock",
   "product",
-  "staff",
-  "system",
+  "user",
+  "settings",
+  "auth",
 ]
 
 export function AnalyticsAuditTab() {
@@ -91,7 +93,11 @@ export function AnalyticsAuditTab() {
     }
     const base = overview?.recentAudits ?? []
     if (auditCategory === "ALL") return base
-    return base.filter((a) => a.category === auditCategory)
+    return base.filter(
+      (a) =>
+        a.category === auditCategory ||
+        (auditCategory === "cash-register" && a.category === "register"),
+    )
   }, [selectedBranchId, branchAudits, effectiveBranch?.name, overview?.recentAudits, auditCategory])
 
   const pagedAudits = useMemo(() => {

@@ -1,13 +1,18 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
+  forwardRef,
+  Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RestaurantRoleEntity } from '../domain/restaurant-role.entity';
 import { RestaurantStaffEntity } from '../domain/restaurant-staff.entity';
+import { OrdersGateway } from '../api/orders.gateway';
 import {
   DEFAULT_ROLE_TEMPLATES,
   EffectivePolicyLimits,
@@ -22,6 +27,113 @@ import {
 } from '../domain/permissions.catalog';
 import { CreateRoleDto } from '../api/dto/create-role.dto';
 import { UpdateRoleDto } from '../api/dto/update-role.dto';
+
+export interface RolePolicyActor {
+  id?: string;
+  sub?: string;
+  role?: string;
+  isBoss?: boolean;
+  permissions?: PermissionKey[];
+  limits?: EffectivePolicyLimits;
+}
+
+export function assertActorPolicyCeiling(
+  actor: RolePolicyActor | undefined,
+  targetPermissions: string[],
+  targetLimits: {
+    maxDiscountPercent?: number | null;
+    maxDiscountAmount?: number | null;
+  },
+): void {
+  if (!actor || actor.isBoss || actor.role === 'root' || actor.role === 'boss') {
+    return;
+  }
+  const actorPerms = new Set<PermissionKey>(actor.permissions ?? []);
+  for (const perm of sanitizePermissionKeys(targetPermissions)) {
+    if (!actorPerms.has(perm)) {
+      throw new ForbiddenException(
+        `You cannot grant a permission that your own account does not possess (${perm})`,
+      );
+    }
+  }
+  const actorMaxPct = Number(actor.limits?.maxDiscountPercent ?? 0);
+  if (
+    targetLimits.maxDiscountPercent != null &&
+    Number(targetLimits.maxDiscountPercent) > actorMaxPct
+  ) {
+    throw new ForbiddenException(
+      `You cannot set a discount percentage limit higher than your own (${actorMaxPct}%)`,
+    );
+  }
+  const actorMaxAmt = actor.limits?.maxDiscountAmount;
+  if (actorMaxAmt != null) {
+    if (
+      targetLimits.maxDiscountAmount == null ||
+      Number(targetLimits.maxDiscountAmount) > Number(actorMaxAmt)
+    ) {
+      throw new ForbiddenException(
+        `You cannot set a discount amount limit higher than your own (${actorMaxAmt})`,
+      );
+    }
+  }
+}
+
+export function assertActorCanGrantStaffPolicies(
+  actor: RolePolicyActor | undefined,
+  params: {
+    role?: string;
+    grantedPermissions?: string[];
+    revokedPermissions?: string[];
+    maxDiscountPercentOverride?: number | null;
+    maxDiscountAmountOverride?: number | null;
+  },
+  roleEntity?: RestaurantRoleEntity | null,
+): void {
+  if (!actor || actor.isBoss || actor.role === 'root' || actor.role === 'boss') return;
+  const hasTargetRole = Boolean(params.role?.trim() || roleEntity);
+  const tpl = hasTargetRole
+    ? getDefaultRoleTemplate(roleEntity?.key ?? params.role ?? 'waiter')
+    : null;
+  const rolePerms = roleEntity ? roleEntity.permissions : (tpl?.permissions ?? []);
+  const effectivePerms = resolveEffectivePermissions({
+    isBoss: false,
+    rolePermissions: rolePerms,
+    grantedPermissions: params.grantedPermissions,
+    revokedPermissions: params.revokedPermissions,
+  });
+  const allCheckedPerms = Array.from(
+    new Set([...effectivePerms, ...sanitizePermissionKeys(params.grantedPermissions)]),
+  );
+  const roleMaxPct = roleEntity
+    ? roleEntity.maxDiscountPercent
+    : (tpl?.maxDiscountPercent ?? 0);
+  const roleMaxAmt = roleEntity
+    ? roleEntity.maxDiscountAmount != null
+      ? Number(roleEntity.maxDiscountAmount)
+      : null
+    : (tpl?.maxDiscountAmount ?? 0);
+  const effectiveLimits = resolveEffectiveLimits({
+    isBoss: false,
+    roleMaxDiscountPercent: roleMaxPct,
+    roleMaxDiscountAmount: roleMaxAmt,
+    userMaxDiscountPercentOverride: params.maxDiscountPercentOverride,
+    userMaxDiscountAmountOverride: params.maxDiscountAmountOverride,
+  });
+  assertActorPolicyCeiling(actor, allCheckedPerms, {
+    maxDiscountPercent:
+      params.maxDiscountPercentOverride != null
+        ? Number(params.maxDiscountPercentOverride)
+        : hasTargetRole
+          ? effectiveLimits.maxDiscountPercent
+          : null,
+    maxDiscountAmount:
+      params.maxDiscountAmountOverride != null
+        ? Number(params.maxDiscountAmountOverride)
+        : hasTargetRole
+          ? effectiveLimits.maxDiscountAmount
+          : (actor.limits?.maxDiscountAmount ?? null),
+  });
+}
 
 export interface RolePublicDto {
   id: string;
@@ -79,6 +191,9 @@ export class RolesService {
     private readonly roleRepo: Repository<RestaurantRoleEntity>,
     @InjectRepository(RestaurantStaffEntity)
     private readonly staffRepo: Repository<RestaurantStaffEntity>,
+    @Optional()
+    @Inject(forwardRef(() => OrdersGateway))
+    private readonly ordersGateway?: OrdersGateway,
   ) {}
 
   getPermissionCatalog() {
@@ -157,14 +272,28 @@ export class RolesService {
     return role;
   }
 
-  async create(restaurantId: string, dto: CreateRoleDto): Promise<RolePublicDto> {
-    await this.ensureDefaultRoles(restaurantId);
+  async create(
+    restaurantId: string,
+    dto: CreateRoleDto,
+    actor?: RolePolicyActor,
+  ): Promise<RolePublicDto> {
     const name = (dto.name || '').trim();
     if (!name) throw new BadRequestException('Role name is required');
     const key = slugifyRoleKey(dto.key?.trim() || name);
     if (!key || key === 'boss' || key === 'root' || key === 'terminal') {
       throw new BadRequestException('Reserved or invalid role key');
     }
+    const permissions = sanitizePermissionKeys(dto.permissions);
+    const maxDiscountPercent = Math.max(0, Math.min(100, Number(dto.maxDiscountPercent ?? 0)));
+    const maxDiscountAmountNum =
+      dto.maxDiscountAmount != null && Number(dto.maxDiscountAmount) >= 0
+        ? Number(dto.maxDiscountAmount)
+        : null;
+    assertActorPolicyCeiling(actor, permissions, {
+      maxDiscountPercent,
+      maxDiscountAmount: maxDiscountAmountNum,
+    });
+    await this.ensureDefaultRoles(restaurantId);
     const existing = await this.roleRepo.findOne({ where: { restaurantId, key } });
     if (existing) {
       throw new ConflictException('A role with this key already exists in this branch');
@@ -179,12 +308,10 @@ export class RolesService {
       isSystem: false,
       canAccessPanel: Boolean(dto.canAccessPanel),
       canAccessTerminal: dto.canAccessTerminal ?? true,
-      permissions: sanitizePermissionKeys(dto.permissions),
-      maxDiscountPercent: Math.max(0, Math.min(100, Number(dto.maxDiscountPercent ?? 0))),
+      permissions,
+      maxDiscountPercent,
       maxDiscountAmount:
-        dto.maxDiscountAmount != null && Number(dto.maxDiscountAmount) >= 0
-          ? String(Number(dto.maxDiscountAmount))
-          : null,
+        maxDiscountAmountNum != null ? String(maxDiscountAmountNum) : null,
     });
     const saved = await this.roleRepo.save(entity);
     return serializeRole(saved);
@@ -194,6 +321,7 @@ export class RolesService {
     restaurantId: string,
     idOrKey: string,
     dto: UpdateRoleDto,
+    actor?: RolePolicyActor,
   ): Promise<RolePublicDto> {
     const role = await this.findByKeyOrId(restaurantId, idOrKey);
     if (dto.name != null && dto.name.trim()) {
@@ -226,16 +354,30 @@ export class RolesService {
           ? String(Number(dto.maxDiscountAmount))
           : null;
     }
+    assertActorPolicyCeiling(actor, role.permissions, {
+      maxDiscountPercent: role.maxDiscountPercent,
+      maxDiscountAmount:
+        role.maxDiscountAmount != null ? Number(role.maxDiscountAmount) : null,
+    });
     const saved = await this.roleRepo.save(role);
+    this.ordersGateway?.emitStaffSessionUpdated(restaurantId);
     return serializeRole(saved);
   }
 
-  async resetToDefault(restaurantId: string, idOrKey: string): Promise<RolePublicDto> {
+  async resetToDefault(
+    restaurantId: string,
+    idOrKey: string,
+    actor?: RolePolicyActor,
+  ): Promise<RolePublicDto> {
     const role = await this.findByKeyOrId(restaurantId, idOrKey);
     const tpl = DEFAULT_ROLE_TEMPLATES.find((t) => t.key === role.key);
     if (!tpl) {
       throw new BadRequestException('Only system role templates can be reset to default');
     }
+    assertActorPolicyCeiling(actor, tpl.permissions, {
+      maxDiscountPercent: tpl.maxDiscountPercent,
+      maxDiscountAmount: tpl.maxDiscountAmount,
+    });
     role.name = tpl.name;
     role.description = tpl.description;
     role.color = tpl.color;
@@ -246,7 +388,16 @@ export class RolesService {
     role.maxDiscountAmount =
       tpl.maxDiscountAmount != null ? String(tpl.maxDiscountAmount) : null;
     const saved = await this.roleRepo.save(role);
+    this.ordersGateway?.emitStaffSessionUpdated(restaurantId);
     return serializeRole(saved);
+  }
+
+  async reset(
+    restaurantId: string,
+    idOrKey: string,
+    actor?: RolePolicyActor,
+  ): Promise<RolePublicDto> {
+    return this.resetToDefault(restaurantId, idOrKey, actor);
   }
 
   async delete(restaurantId: string, idOrKey: string): Promise<void> {
@@ -263,6 +414,11 @@ export class RolesService {
       );
     }
     await this.roleRepo.remove(role);
+    this.ordersGateway?.emitStaffSessionUpdated(restaurantId);
+  }
+
+  async remove(restaurantId: string, idOrKey: string): Promise<void> {
+    return this.delete(restaurantId, idOrKey);
   }
 
   async resolveForStaff(
@@ -312,9 +468,12 @@ export class RolesService {
           : null,
     });
 
-    const canAccessPanel =
-      Boolean(staff.canAccessPanel) ||
-      Boolean(staff.email && staff.passwordHash && (roleEntity?.canAccessPanel ?? fallbackTpl.canAccessPanel));
+    const canAccessPanel = Boolean(
+      staff.canAccessPanel &&
+        staff.email &&
+        staff.passwordHash &&
+        (roleEntity?.canAccessPanel ?? fallbackTpl.canAccessPanel),
+    );
     const canAccessTerminal =
       staff.canAccessTerminal !== undefined
         ? Boolean(staff.canAccessTerminal)

@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
@@ -17,6 +18,7 @@ import { formatCanonicalCorderEmail } from '../../common/text/corder-email.polic
 import { ActorNameSyncService } from '../../common/text/actor-name-sync.service';
 import { RestaurantAuthService } from './restaurant-auth.service';
 import { RolesService } from './roles.service';
+import { OrdersGateway } from '../api/orders.gateway';
 
 export interface CreateOrAssignSubBossInput {
   name: string;
@@ -39,6 +41,7 @@ export class BossHierarchyService {
     private readonly authService: RestaurantAuthService,
     private readonly rolesService: RolesService,
     private readonly actorNameSync: ActorNameSyncService,
+    @Optional() private readonly ordersGateway?: OrdersGateway,
   ) {}
 
   async loadBossOwnedBranches(bossId: string): Promise<RestaurantEntity[]> {
@@ -256,6 +259,7 @@ export class BossHierarchyService {
     let syncedRoles = 0;
     for (const targetRestId of targets) {
       syncedRoles += await this.syncBranchRoles(targetRestId, sourceRoles);
+      this.ordersGateway?.emitStaffSessionUpdated(targetRestId);
     }
     return { syncedBranches: targets.length, syncedRoles };
   }

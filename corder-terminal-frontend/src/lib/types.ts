@@ -30,6 +30,11 @@ export interface TerminalStaffMember {
   roleLabel?: string
   roleColor?: string
   hasPin: boolean
+  permissions?: string[]
+  limits?: {
+    maxDiscountPercent: number
+    maxDiscountAmount: number | null
+  }
   shiftRestrictionEnabled?: boolean
   shiftStartTime?: string | null
   shiftEndTime?: string | null
@@ -107,6 +112,7 @@ export type OrderItemStatus =
   | "served"
   | "cancelled"
   | "ledger"
+  | "paid"
 
 export interface TerminalOrderItem {
   id: string

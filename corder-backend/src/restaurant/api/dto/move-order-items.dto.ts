@@ -1,5 +1,15 @@
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsInt, IsOptional, IsUUID, Min, ValidateNested } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsInt,
+  IsOptional,
+  IsUUID,
+  Max,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 
 export class MoveOrderItemLineDto {
   @IsUUID()
@@ -9,6 +19,7 @@ export class MoveOrderItemLineDto {
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Max(1000)
   quantity?: number;
 }
 
@@ -21,6 +32,7 @@ export class MoveOrderItemsDto {
 
   @IsArray()
   @ArrayMinSize(1)
+  @ArrayMaxSize(200)
   @ValidateNested({ each: true })
   @Type(() => MoveOrderItemLineDto)
   items!: MoveOrderItemLineDto[];

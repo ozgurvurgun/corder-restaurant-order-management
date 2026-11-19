@@ -9,6 +9,7 @@ import {
   Post,
   Query,
   Req,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
@@ -25,7 +26,11 @@ import { CancelOrderItemDto } from './dto/cancel-order-item.dto';
 import { AssignItemsToLedgerDto } from './dto/assign-items-to-ledger.dto';
 import { RevertLedgerItemDto } from './dto/revert-ledger-item.dto';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
-import { PanelRootGuard, RequirePermissions } from '../infrastructure/panel-root.guard';
+import {
+  AllowTerminalStaff,
+  PanelRootGuard,
+  RequirePermissions,
+} from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
 
@@ -40,28 +45,39 @@ interface JwtActorUser {
 }
 
 @Controller('restaurant/orders')
-@UseGuards(RestaurantJwtGuard)
+@UseGuards(RestaurantJwtGuard, PanelRootGuard)
 export class OrdersController {
   constructor(
     private readonly service: OrderService,
     private readonly staffSession: StaffSessionService,
   ) {}
 
-  private assertCanReadOrders(user?: {
-    role?: string;
-    isBoss?: boolean;
-    permissions?: PermissionKey[];
-  }): void {
+  private async assertCanReadOrders(
+    restaurantId: string,
+    user?: {
+      role?: string;
+      isBoss?: boolean;
+      permissions?: PermissionKey[];
+    },
+    req?: Request,
+  ): Promise<void> {
     if (!user) {
       throw new ForbiddenException('Session authentication is required');
     }
     if (user.role === 'print_agent') {
       throw new ForbiddenException('Print agent cannot access order endpoints');
     }
-    if (user.role === 'root' || user.isBoss || user.role === 'terminal') {
+    if (user.role === 'root' || user.isBoss) {
       return;
     }
-    const perms = user.permissions ?? [];
+    let perms = user.permissions ?? [];
+    if (user.role === 'terminal') {
+      if (!req) {
+        throw new UnauthorizedException('Staff PIN verification is required');
+      }
+      const staff = await this.staffSession.requireFromRequest(req, restaurantId);
+      perms = staff.permissions;
+    }
     if (
       !perms.includes('order.view') &&
       !perms.includes('order.create') &&
@@ -73,28 +89,33 @@ export class OrdersController {
   }
 
   @Get()
+  @AllowTerminalStaff()
   @RequirePermissions('order.view', 'order.create', 'billing.close_check', 'reports.view_operational')
-  findAll(
+  async findAll(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: JwtActorUser,
-    @Query('tableId') tableId?: string,
+    @Query('tableId', new ParseUUIDPipe({ optional: true })) tableId?: string,
+    @Req() req?: Request,
   ) {
-    this.assertCanReadOrders(user);
+    await this.assertCanReadOrders(restaurantId, user, req);
     return this.service.findByRestaurant(restaurantId, tableId);
   }
 
   @Get(':id')
+  @AllowTerminalStaff()
   @RequirePermissions('order.view', 'order.create', 'billing.close_check', 'reports.view_operational')
-  findOne(
+  async findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: JwtActorUser,
+    @Req() req?: Request,
   ) {
-    this.assertCanReadOrders(user);
+    await this.assertCanReadOrders(restaurantId, user, req);
     return this.service.findOne(id, restaurantId);
   }
 
   @Post()
+  @AllowTerminalStaff()
   @RequirePermissions('order.create')
   async create(
     @RestaurantId() restaurantId: string,
@@ -120,6 +141,7 @@ export class OrdersController {
   }
 
   @Post('move-items')
+  @AllowTerminalStaff()
   @RequirePermissions('order.move_items')
   async moveOrderItems(
     @RestaurantId() restaurantId: string,
@@ -143,6 +165,7 @@ export class OrdersController {
   }
 
   @Post('cancel-item')
+  @AllowTerminalStaff()
   @RequirePermissions('order.cancel_item')
   async cancelItem(
     @RestaurantId() restaurantId: string,
@@ -169,31 +192,64 @@ export class OrdersController {
   @Post('assign-to-ledger')
   @UseGuards(PanelRootGuard)
   @RequirePermissions('ledger.assign_order')
-  assignToLedger(
+  async assignToLedger(
     @RestaurantId() restaurantId: string,
     @Body() dto: AssignItemsToLedgerDto,
     @RestaurantUser() user: JwtActorUser,
+    @Req() req?: Request,
   ) {
+    const actor = req
+      ? await this.staffSession.assertActorPermission(
+          req,
+          restaurantId,
+          'ledger.assign_order',
+          user,
+        )
+      : {
+          actorId: user.id || user.sub,
+          actorName: user.name,
+          isBoss: user.role === 'root' || Boolean((user as { isBoss?: boolean }).isBoss),
+        };
     return this.service.assignItemsToLedger(
       restaurantId,
       dto.lines,
       dto.ledgerCustomerId,
-      user.name,
+      actor.actorName,
+      !actor.isBoss ? actor.actorId : null,
     );
   }
 
   @Post('revert-ledger-item')
   @UseGuards(PanelRootGuard)
   @RequirePermissions('ledger.revert_item')
-  revertLedgerItem(
+  async revertLedgerItem(
     @RestaurantId() restaurantId: string,
     @Body() dto: RevertLedgerItemDto,
     @RestaurantUser() user: JwtActorUser,
+    @Req() req?: Request,
   ) {
-    return this.service.revertLedgerOrderItem(restaurantId, dto.itemId, user.name);
+    const actor = req
+      ? await this.staffSession.assertActorPermission(
+          req,
+          restaurantId,
+          'ledger.revert_item',
+          user,
+        )
+      : {
+          actorId: user.id || user.sub,
+          actorName: user.name,
+          isBoss: user.role === 'root' || Boolean((user as { isBoss?: boolean }).isBoss),
+        };
+    return this.service.revertLedgerOrderItem(
+      restaurantId,
+      dto.itemId,
+      actor.actorName,
+      !actor.isBoss ? actor.actorId : null,
+    );
   }
 
   @Patch('move')
+  @AllowTerminalStaff()
   @RequirePermissions('table.move')
   async moveTable(
     @RestaurantId() restaurantId: string,
@@ -216,6 +272,7 @@ export class OrdersController {
   }
 
   @Post('close-check')
+  @AllowTerminalStaff()
   @RequirePermissions('billing.close_check', 'billing.split_bill', 'order.quick_sale')
   async closeCheck(
     @RestaurantId() restaurantId: string,
@@ -302,6 +359,7 @@ export class OrdersController {
   }
 
   @Post('print-receipt')
+  @AllowTerminalStaff()
   @RequirePermissions('order.print_receipt')
   async printReceipt(
     @RestaurantId() restaurantId: string,

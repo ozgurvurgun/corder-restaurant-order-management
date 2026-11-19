@@ -174,5 +174,10 @@ export const stockApi = {
         method: "POST",
         token,
       }),
+    cancel: (token: string, id: string) =>
+      request<{ ok: boolean; id: string }>(`/restaurant/inventory-counts/${id}`, {
+        method: "DELETE",
+        token,
+      }),
   },
 }

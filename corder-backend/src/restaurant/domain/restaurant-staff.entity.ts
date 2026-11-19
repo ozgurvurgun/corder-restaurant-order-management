@@ -23,9 +23,11 @@ export const STAFF_ROLES = [
 export type StaffRole = string;
 
 @Entity('restaurant_staff')
-@Index(['restaurantId'])
 @Index(['restaurantId', 'isActive'])
-@Index(['email'])
+@Index('UQ_restaurant_staff_email', ['email'], {
+  unique: true,
+  where: '"email" IS NOT NULL',
+})
 export class RestaurantStaffEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -97,6 +99,6 @@ export class RestaurantStaffEntity {
   @Column({ name: 'shift_cutoff_offset_minutes', type: 'integer', default: 0 })
   shiftCutoffOffsetMinutes: number;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }

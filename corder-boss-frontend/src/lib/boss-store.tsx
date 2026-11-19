@@ -5,7 +5,7 @@ import { io, type Socket } from "socket.io-client"
 import {
   BOSS_UNAUTHORIZED_EVENT, bossApi, clearBossSession, getApiBase, getBossToken,
   getStoredActiveBranchId, getStoredBossUser, getStoredBranches, notifyUnauthorized, setBossSession,
-  setBossToken, setStoredActiveBranchId, setStoredBranches, type StoredBossUser,
+  setStoredActiveBranchId, setStoredBranches, type StoredBossUser,
 } from "./api"
 import { formatTitleCase } from "./format"
 import {
@@ -82,9 +82,11 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
   const socketRef = useRef<Socket | null>(null)
   const toastTimerRef = useRef<number | null>(null)
   const liveRefreshTimerRef = useRef<number | null>(null)
-  const lastSwitchedBranchRef = useRef<string | null>(null)
   const seenAlertIdsRef = useRef<Set<string>>(new Set())
   const initialAlertsLoadedRef = useRef(false)
+  const effectiveBranchIdRef = useRef<string>("")
+  const selectedBranchIdRef = useRef<string>(selectedBranchId)
+  const pushSoundEnabledRef = useRef<boolean>(pushSoundEnabled)
 
   const showToast = useCallback((message: string, type: "success" | "error" = "success") => {
     if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current)
@@ -106,7 +108,6 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(liveRefreshTimerRef.current)
       liveRefreshTimerRef.current = null
     }
-    lastSwitchedBranchRef.current = null
     seenAlertIdsRef.current.clear()
     initialAlertsLoadedRef.current = false
     clearBossSession()
@@ -132,6 +133,11 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     () => (selectedBranchId && selectedBranchId !== "ALL" ? selectedBranchId : (branches[0]?.id ?? "")),
     [selectedBranchId, branches]
   )
+  useEffect(() => {
+    effectiveBranchIdRef.current = effectiveBranchId
+    selectedBranchIdRef.current = selectedBranchId
+    pushSoundEnabledRef.current = pushSoundEnabled
+  }, [effectiveBranchId, selectedBranchId, pushSoundEnabled])
   const effectiveBranch = useMemo(
     () => branches.find((b) => b.id === effectiveBranchId) ?? branches[0] ?? null,
     [branches, effectiveBranchId]
@@ -260,8 +266,6 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
         selectedBranchId && selectedBranchId !== "ALL" ? selectedBranchId : (branches[0]?.id ?? "")
       const nextEffective = id && id !== "ALL" ? id : (branches[0]?.id ?? "")
       if (prevEffective !== nextEffective) {
-        socketRef.current?.disconnect()
-        socketRef.current = null
         resetBranchScopedState()
       }
       setError(null)
@@ -321,15 +325,6 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     setError(null)
     try {
-      let targetBranchId = effectiveBranchId
-      if (targetBranchId && lastSwitchedBranchRef.current !== targetBranchId) {
-        const switched = await bossApi.auth.switchBranch(targetBranchId)
-        setBossToken(switched.accessToken)
-        setStoredBranches(switched.restaurants)
-        setBranches(switched.restaurants)
-        lastSwitchedBranchRef.current = targetBranchId
-        setTokenVersion((v) => v + 1)
-      }
       const [meRes, ovRes] = await Promise.all([
         bossApi.auth.me(),
         bossApi.overview.get(selectedBranchId),
@@ -347,7 +342,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
       setUser(u)
       setOverview(ovRes)
       void fetchFraudAlertsSilently(selectedBranchId)
-      targetBranchId =
+      const targetBranchId =
         selectedBranchId && selectedBranchId !== "ALL" ? selectedBranchId : (meRes.restaurants[0]?.id ?? "")
       if (targetBranchId) {
         void fetchPlatformNotifsSilently(targetBranchId)
@@ -362,7 +357,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false)
     }
-  }, [effectiveBranchId, selectedBranchId, refreshBranchDetails, fetchFraudAlertsSilently, fetchPlatformNotifsSilently, logout])
+  }, [selectedBranchId, refreshBranchDetails, fetchFraudAlertsSilently, fetchPlatformNotifsSilently, logout])
 
   useEffect(() => {
     if (!user?.id || !getBossToken()) return
@@ -371,10 +366,13 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const token = getBossToken()
-    if (!token || !effectiveBranchId || !user?.id) return
+    if (!token || !user?.id) return
     const socket = io(getApiBase() || undefined, {
       path: "/ws",
-      auth: { token, restaurantId: effectiveBranchId },
+      auth: {
+        token,
+        ...(effectiveBranchIdRef.current ? { restaurantId: effectiveBranchIdRef.current } : {}),
+      },
       transports: ["websocket", "polling"],
     })
     socketRef.current = socket
@@ -382,7 +380,9 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
       if (liveRefreshTimerRef.current !== null) window.clearTimeout(liveRefreshTimerRef.current)
       liveRefreshTimerRef.current = window.setTimeout(() => {
         liveRefreshTimerRef.current = null
-        void refreshLiveOperations(effectiveBranchId, selectedBranchId)
+        if (effectiveBranchIdRef.current) {
+          void refreshLiveOperations(effectiveBranchIdRef.current, selectedBranchIdRef.current)
+        }
       }, 250)
     }
     const onTablesPresence = (presenceMap?: Record<string, { staffId: string; staffName: string }>) => {
@@ -405,10 +405,16 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
         prev.some((n) => n.id === payload.id) ? prev : [{ ...payload, read: false }, ...prev]
       )
       showToast(`📢 ${payload.title}: ${payload.message}`, payload.level === "urgent" ? "error" : "success")
-      if (pushSoundEnabled) void triggerPlatformPushNotification(payload)
+      if (pushSoundEnabledRef.current) void triggerPlatformPushNotification(payload)
+    }
+    const onNotificationsUpdated = () => {
+      if (effectiveBranchIdRef.current) {
+        void fetchPlatformNotifsSilently(effectiveBranchIdRef.current)
+      }
     }
     socket.on("auth:expired", onAuthExpired)
     socket.on("platform:notification", onPlatformNotification)
+    socket.on("notifications:updated", onNotificationsUpdated)
     socket.on("order:created", scheduleLiveRefresh)
     socket.on("orders:moved", scheduleLiveRefresh)
     socket.on("orders:updated", scheduleLiveRefresh)
@@ -422,7 +428,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
       socket.disconnect()
       if (socketRef.current === socket) socketRef.current = null
     }
-  }, [effectiveBranchId, selectedBranchId, tokenVersion, user?.id, refreshLiveOperations, pushSoundEnabled, showToast])
+  }, [tokenVersion, user?.id, refreshLiveOperations, fetchPlatformNotifsSilently, showToast])
 
   const login = useCallback(async (email: string, password: string) => {
     try {
@@ -440,7 +446,6 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
         roleLabel: res.user.roleLabel || "İşletme Sahibi (Boss)",
         bossTier: res.user.bossTier, brandName: res.user.brandName,
       }
-      lastSwitchedBranchRef.current = res.restaurant?.id ?? res.restaurants[0]?.id ?? null
       setBossSession({ accessToken: res.accessToken, user: u, restaurants: res.restaurants, activeBranchId: initialBranch })
       setError(null)
       setUser(u)

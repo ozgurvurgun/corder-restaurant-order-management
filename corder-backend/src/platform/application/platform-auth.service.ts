@@ -2,9 +2,20 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { timingSafeEqual } from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import { PlatformAdminEntity } from '../domain/platform-admin.entity';
 import { computeSecretFingerprint } from '../../restaurant/domain/services/billing-suspension.policy';
+
+function timingSafeCodeMatches(candidate: string, expected?: string | null): boolean {
+  const cleanCandidate = (candidate ?? '').trim();
+  const cleanExpected = (expected ?? '').trim();
+  if (!cleanCandidate || !cleanExpected) return false;
+  const bufA = Buffer.from(cleanCandidate, 'utf8');
+  const bufB = Buffer.from(cleanExpected, 'utf8');
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
 
 export interface PlatformLoginInput {
   email?: string;
@@ -37,8 +48,7 @@ export class PlatformAuthService {
     if (!admin) return null;
     const ok = await bcrypt.compare(password, admin.passwordHash);
     if (ok) return admin;
-    const envCode = process.env.PLATFORM_ADMIN_AUTH_CODE?.trim();
-    if (envCode && password.trim() === envCode) {
+    if (timingSafeCodeMatches(password, process.env.PLATFORM_ADMIN_AUTH_CODE)) {
       return admin;
     }
     return null;
@@ -55,8 +65,8 @@ export class PlatformAuthService {
     const allAdmins = await this.repo.find({ order: { createdAt: 'ASC' } });
 
     const matchesEnv =
-      (Boolean(envAuthCode) && code === envAuthCode) ||
-      (Boolean(envPassword) && code === envPassword);
+      timingSafeCodeMatches(code, envAuthCode) ||
+      timingSafeCodeMatches(code, envPassword);
 
     if (matchesEnv) {
       if (allAdmins.length > 0) {

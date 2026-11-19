@@ -11,23 +11,30 @@ import {
   Patch,
   Post,
   Req,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { TableService } from '../application/table.service';
 import { StaffSessionService } from '../application/staff-session.service';
 import { EffectivePolicyLimits, PermissionKey } from '../domain/permissions.catalog';
+import { CheckSettlementPolicy } from '../domain/services/check-settlement.policy';
+import { computeDiscountMinorUnits } from '../../common/money/minor-units';
 import { BulkCreateTablesDto, CreateTableDto } from './dto/create-table.dto';
 import { UpdateTableDto } from './dto/update-table.dto';
 import { SessionLockDto } from './dto/session-lock.dto';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
-import { PanelRootGuard, RequirePermissions } from '../infrastructure/panel-root.guard';
+import {
+  AllowTerminalStaff,
+  PanelRootGuard,
+  RequirePermissions,
+} from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
 import { OrdersGateway } from './orders.gateway';
 
 @Controller('restaurant/tables')
-@UseGuards(RestaurantJwtGuard)
+@UseGuards(RestaurantJwtGuard, PanelRootGuard)
 export class TablesController {
   constructor(
     private readonly service: TableService,
@@ -35,21 +42,32 @@ export class TablesController {
     private readonly ordersGateway: OrdersGateway,
   ) {}
 
-  private assertCanReadTables(user?: {
-    role?: string;
-    isBoss?: boolean;
-    permissions?: PermissionKey[];
-  }): void {
+  private async assertCanReadTables(
+    restaurantId: string,
+    user?: {
+      role?: string;
+      isBoss?: boolean;
+      permissions?: PermissionKey[];
+    },
+    req?: Request,
+  ): Promise<void> {
     if (!user) {
       throw new ForbiddenException('Session authentication is required');
     }
     if (user.role === 'print_agent') {
       throw new ForbiddenException('Print agent cannot access table endpoints');
     }
-    if (user.role === 'root' || user.isBoss || user.role === 'terminal') {
+    if (user.role === 'root' || user.isBoss) {
       return;
     }
-    const perms = user.permissions ?? [];
+    let perms = user.permissions ?? [];
+    if (user.role === 'terminal') {
+      if (!req) {
+        throw new UnauthorizedException('Staff PIN verification is required');
+      }
+      const staff = await this.staffSession.requireFromRequest(req, restaurantId);
+      perms = staff.permissions;
+    }
     if (
       !perms.includes('order.view') &&
       !perms.includes('order.create') &&
@@ -62,26 +80,32 @@ export class TablesController {
 
   /** Declared first so it is not shadowed by `GET :id`. */
   @Get('presence')
+  @AllowTerminalStaff()
   @RequirePermissions('order.view', 'order.create', 'billing.close_check', 'system.manage_tables')
-  tablePresence(
+  async tablePresence(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { role?: string; isBoss?: boolean; permissions?: PermissionKey[] },
+    @Req() req?: Request,
   ) {
-    this.assertCanReadTables(user);
+    await this.assertCanReadTables(restaurantId, user, req);
     return this.service.buildSessionPresenceMap(restaurantId);
   }
 
   @Get()
+  @AllowTerminalStaff()
   @RequirePermissions('order.view', 'order.create', 'billing.close_check', 'system.manage_tables')
-  findAll(
+  async findAll(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { role?: string; isBoss?: boolean; permissions?: PermissionKey[] },
+    @Req() req?: Request,
   ) {
-    this.assertCanReadTables(user);
+    await this.assertCanReadTables(restaurantId, user, req);
     return this.service.findByRestaurant(restaurantId);
   }
 
   @Post(':id/session-lock')
+  @AllowTerminalStaff()
+  @RequirePermissions('order.view')
   async sessionLock(
     @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
@@ -117,6 +141,8 @@ export class TablesController {
   }
 
   @Post(':id/session-unlock')
+  @AllowTerminalStaff()
+  @RequirePermissions('order.view')
   async sessionUnlock(
     @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
@@ -131,13 +157,15 @@ export class TablesController {
   }
 
   @Get(':id')
+  @AllowTerminalStaff()
   @RequirePermissions('order.view', 'order.create', 'billing.close_check', 'system.manage_tables')
-  findOne(
+  async findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { role?: string; isBoss?: boolean; permissions?: PermissionKey[] },
+    @Req() req?: Request,
   ) {
-    this.assertCanReadTables(user);
+    await this.assertCanReadTables(restaurantId, user, req);
     return this.service.findOne(id, restaurantId);
   }
 
@@ -265,6 +293,18 @@ export class TablesController {
               `Maximum amount discount limit is ${user.limits.maxDiscountAmount} TL (entered: ${dto.discount.value} TL)`,
             );
           }
+          if (typeof this.service.getBillableSubtotalMinorUnits === 'function') {
+            const rawSubtotalMinor = await this.service.getBillableSubtotalMinorUnits(
+              restaurantId,
+              id,
+            );
+            CheckSettlementPolicy.assertDiscountAllowedForActor(
+              rawSubtotalMinor,
+              computeDiscountMinorUnits(rawSubtotalMinor, dto.discount),
+              dto.discount,
+              user,
+            );
+          }
         }
       }
     }
@@ -272,7 +312,7 @@ export class TablesController {
     if (dto.discount) {
       dto.discount.appliedBy = dto.discount.appliedBy?.trim() || user.name?.trim() || 'Sistem';
     }
-    const updated = await this.service.update(id, restaurantId, dto);
+    const updated = await this.service.update(id, restaurantId, dto, user);
     await this.ordersGateway.emitTableSessionPresence(restaurantId);
     this.ordersGateway.emitOrdersUpdated(restaurantId);
     return updated;

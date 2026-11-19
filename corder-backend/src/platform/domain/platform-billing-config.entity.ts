@@ -49,7 +49,7 @@ export class PlatformBillingConfigEntity {
   @Column({ name: 'payment_instructions', type: 'text', nullable: true })
   paymentInstructions: string | null;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 }
 

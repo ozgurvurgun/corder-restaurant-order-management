@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Min,
   MinLength,
 } from 'class-validator';
@@ -12,7 +13,7 @@ import {
   PrinterConnection,
   PrinterStatus,
 } from '../../domain/printer-config.entity';
-import { PRINTER_CONNECTIONS } from './create-printer.dto';
+import { PRINTER_CONNECTIONS, PRINTER_TYPES } from './create-printer.dto';
 
 const PRINTER_STATUSES: readonly PrinterStatus[] = [
   'online',
@@ -24,11 +25,11 @@ export class UpdatePrinterDto {
   @IsOptional()
   @IsString()
   @MinLength(1)
+  @MaxLength(100)
   name?: string;
 
   @IsOptional()
-  @IsString()
-  @MinLength(1)
+  @IsIn(PRINTER_TYPES)
   type?: string;
 
   @IsOptional()
@@ -37,6 +38,7 @@ export class UpdatePrinterDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   ipAddress?: string | null;
 
   @IsOptional()
@@ -47,6 +49,7 @@ export class UpdatePrinterDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   department?: string | null;
 
   @IsOptional()

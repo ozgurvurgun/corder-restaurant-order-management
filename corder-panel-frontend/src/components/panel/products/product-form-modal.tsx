@@ -1,7 +1,7 @@
 import { useEffect } from "react"
 import { AlertTriangle, X } from "lucide-react"
 import type { PanelCategory, PanelProduct } from "@/lib/panel-types"
-import { orderedCategoryList } from "@/lib/panel-api-sync"
+import { orderedCategoryList } from "@/lib/mappers/catalog-inventory.mapper"
 import { categoryDepth } from "./category-modals"
 import ImageUpload from "../image-upload"
 import { CustomSelect } from "@/components/ui/custom-inputs"

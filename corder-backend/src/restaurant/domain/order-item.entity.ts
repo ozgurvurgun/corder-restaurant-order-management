@@ -9,10 +9,10 @@ import {
 } from 'typeorm';
 import { BadRequestException } from '@nestjs/common';
 import { OrderEntity } from './order.entity';
+import { numericColumnTransformer } from '../../common/database/numeric-column.transformer';
 
 @Entity('order_items')
-@Index(['orderId'])
-@Index(['orderId', 'status'])
+@Index('IDX_order_items_order_status', ['orderId', 'status'])
 export class OrderItemEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -30,7 +30,12 @@ export class OrderItemEntity {
   @Column({ name: 'product_name' })
   productName: string;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    transformer: numericColumnTransformer,
+  })
   price: number;
 
   @Column({ type: 'int', default: 1 })
@@ -51,16 +56,19 @@ export class OrderItemEntity {
   @Column({ name: 'cancelled_at', type: 'timestamptz', nullable: true })
   cancelledAt: Date | null;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
   isBillable(): boolean {
-    return this.status !== 'cancelled' && this.status !== 'ledger';
+    return this.status !== 'cancelled' && this.status !== 'ledger' && this.status !== 'paid';
   }
 
   cancel(reason?: string | null, cancelledBy?: string | null, now: Date = new Date()): void {
     if (this.status === 'ledger') {
       throw new BadRequestException('Cannot cancel an order item assigned to ledger');
+    }
+    if (this.status === 'paid') {
+      throw new BadRequestException('Cannot cancel an already paid order item');
     }
     if (this.status === 'cancelled') {
       throw new BadRequestException('Order item is already cancelled');
@@ -81,6 +89,9 @@ export class OrderItemEntity {
     }
     if (this.status === 'ledger') {
       throw new BadRequestException('Order item is already assigned to ledger');
+    }
+    if (this.status === 'paid') {
+      throw new BadRequestException('Order item is already paid');
     }
     const available = this.quantity;
     const reqQ =
@@ -108,6 +119,9 @@ export class OrderItemEntity {
     }
     if (this.status === 'ledger') {
       throw new BadRequestException('Order item is already assigned to ledger');
+    }
+    if (this.status === 'paid') {
+      throw new BadRequestException('Order item is already paid');
     }
     const available = this.quantity;
     const reqQ =

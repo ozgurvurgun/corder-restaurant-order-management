@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { CategoryEntity } from '../domain/category.entity';
 import { CreateCategoryDto } from '../api/dto/create-category.dto';
 import { UpdateCategoryDto } from '../api/dto/update-category.dto';
@@ -210,30 +210,41 @@ export class CategoryService {
   ): Promise<CategoryEntity[]> {
     const ids = [...new Set(dto.ids)];
     if (!ids.length) return this.findByRestaurant(restaurantId);
-    const first = await this.repo.findOne({
-      where: { id: ids[0], restaurantId },
-    });
-    if (!first) throw new NotFoundException('Category not found');
-    let expectedParent: string | null;
-    if (dto.parentId === undefined) {
-      expectedParent = first.parentId ?? null;
-    } else if (dto.parentId === null || dto.parentId === '') {
-      expectedParent = null;
-    } else {
-      expectedParent = dto.parentId;
-    }
-    await this.assertParent(restaurantId, expectedParent);
-    for (const cid of ids) {
-      const c = await this.repo.findOne({ where: { id: cid, restaurantId } });
-      if (!c) throw new NotFoundException('Category not found');
-      const p = c.parentId ?? null;
-      if (p !== expectedParent) {
-        throw new BadRequestException(
-          'All categories must share the same parent',
-        );
-      }
-    }
     await this.dataSource.transaction(async (em) => {
+      const txRepo =
+        typeof em.getRepository === 'function'
+          ? em.getRepository(CategoryEntity)
+          : this.repo;
+      const rows = await txRepo.find({
+        where: { id: In(ids), restaurantId },
+      });
+      if (rows.length !== ids.length) {
+        throw new NotFoundException('Category not found');
+      }
+      const rowById = new Map(rows.map((r) => [r.id, r]));
+      const first = rowById.get(ids[0])!;
+      let expectedParent: string | null;
+      if (dto.parentId === undefined) {
+        expectedParent = first.parentId ?? null;
+      } else if (dto.parentId === null || dto.parentId === '') {
+        expectedParent = null;
+      } else {
+        expectedParent = dto.parentId;
+      }
+      if (expectedParent) {
+        const parent = await txRepo.findOne({
+          where: { id: expectedParent, restaurantId },
+        });
+        if (!parent) throw new NotFoundException('Parent category not found');
+      }
+      for (const cid of ids) {
+        const c = rowById.get(cid)!;
+        if ((c.parentId ?? null) !== expectedParent) {
+          throw new BadRequestException(
+            'All categories must share the same parent',
+          );
+        }
+      }
       for (let i = 0; i < ids.length; i++) {
         await em.update(
           CategoryEntity,

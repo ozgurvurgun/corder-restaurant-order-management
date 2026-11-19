@@ -12,7 +12,6 @@ import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 
 @Entity('restaurant_roles')
 @Index(['restaurantId', 'key'], { unique: true })
-@Index(['restaurantId'])
 export class RestaurantRoleEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -60,10 +59,10 @@ export class RestaurantRoleEntity {
   })
   maxDiscountAmount: string | null;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 }
 

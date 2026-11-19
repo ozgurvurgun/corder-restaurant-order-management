@@ -14,6 +14,15 @@ import { ProductEntity } from './product.entity';
 @Entity('categories')
 @Index(['restaurantId'])
 @Index(['parentId'])
+@Index('IDX_categories_restaurant_order', ['restaurantId', 'order'])
+@Index('UQ_categories_restaurant_root_slug', ['restaurantId', 'slug'], {
+  unique: true,
+  where: '"parent_id" IS NULL',
+})
+@Index('UQ_categories_restaurant_parent_slug', ['restaurantId', 'parentId', 'slug'], {
+  unique: true,
+  where: '"parent_id" IS NOT NULL',
+})
 export class CategoryEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -56,6 +65,6 @@ export class CategoryEntity {
   @OneToMany(() => ProductEntity, (p) => p.category)
   products: ProductEntity[];
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }

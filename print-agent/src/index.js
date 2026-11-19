@@ -31,7 +31,8 @@ async function startPrintAgentApp(options = {}) {
     config,
     store,
     printer,
-    onContextInvalidated: () => uiServer?.syncContextFromBackend?.(),
+    onContextInvalidated: (reason = "ws-printers-updated") =>
+      uiServer?.syncContextFromBackend?.(reason),
   })
   uiServer = createUiServer({ store, agent })
 

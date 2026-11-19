@@ -52,11 +52,16 @@ export class BossOverviewDetailsPolicy {
     const categoryNameById = new Map(categories.map((c) => [c.id, c.name]));
     const categoryNameByProductId = new Map<string, string>();
     const categoryNameByProductName = new Map<string, string>();
+    const productNameById = new Map<string, string>();
 
     for (const p of products) {
       const cName = categoryNameById.get(p.categoryId) || 'Diğer';
       categoryNameByProductId.set(p.id, cName);
       categoryNameByProductName.set(p.name.trim().toLowerCase(), cName);
+      const trimmedProdName = (p.name || '').trim();
+      if (trimmedProdName) {
+        productNameById.set(p.id, trimmedProdName);
+      }
     }
 
     const catStats = new Map<
@@ -87,25 +92,28 @@ export class BossOverviewDetailsPolicy {
           ).items ?? [];
         for (const item of sItems) {
           if (item.status === 'cancelled' || item.status === 'ledger') continue;
-          const pName = (item.productName || 'Ürün').trim();
+          const pName = (item.productName || 'Ürün').trim() || 'Ürün';
+          const pid = typeof item.productId === 'string' ? item.productId.trim() : '';
+          const resolvedProdName = (pid ? productNameById.get(pid) : undefined) || pName;
+          const prodKey = pid || pName;
           const qty = Math.max(0, Math.floor(Number(item.quantity || 1)));
           if (qty <= 0) continue;
           const lineMinor = toMinorUnits(item.price || 0) * qty;
           totalLinesMinor += lineMinor;
 
-          const curProd = prodStats.get(pName) ?? {
-            productName: pName,
+          const curProd = prodStats.get(prodKey) ?? {
+            productName: resolvedProdName,
             revenueMinor: 0,
             quantity: 0,
           };
+          curProd.productName = resolvedProdName;
           curProd.quantity += qty;
           curProd.revenueMinor += lineMinor;
-          prodStats.set(pName, curProd);
+          prodStats.set(prodKey, curProd);
 
           const catName =
-            (item.productId
-              ? categoryNameByProductId.get(item.productId)
-              : undefined) ||
+            (pid ? categoryNameByProductId.get(pid) : undefined) ||
+            categoryNameByProductName.get(resolvedProdName.toLowerCase()) ||
             categoryNameByProductName.get(pName.toLowerCase()) ||
             'Diğer';
           const curCat = catStats.get(catName) ?? {

@@ -6,16 +6,22 @@ import {
   Get,
   NotFoundException,
   Post,
+  Req,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, MoreThanOrEqual, Repository } from 'typeorm';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 import { PlatformNotificationEntity } from '../../platform/domain/platform-notification.entity';
 import { WaiterCallEntity } from '../domain/waiter-call.entity';
+import { computeIstanbulDateBoundaries } from '../domain/services/boss-overview.policy';
+import { StaffSessionService } from '../application/staff-session.service';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
+import { DismissNotificationsDto } from './dto/dismiss-notifications.dto';
 import { OrdersGateway } from './orders.gateway';
 
 @Controller('restaurant/notifications')
@@ -29,20 +35,84 @@ export class NotificationsController {
     @InjectRepository(PlatformNotificationEntity)
     private readonly platformNotifRepo: Repository<PlatformNotificationEntity>,
     private readonly ordersGateway: OrdersGateway,
+    private readonly staffSession?: StaffSessionService,
   ) {}
 
-  private assertNotPrintAgent(user?: { role?: string }): void {
+  private async assertAuthorizedActor(
+    restaurantId: string,
+    user?: { role?: string },
+    req?: Request,
+  ): Promise<void> {
     if (!user || user.role === 'print_agent') {
       throw new ForbiddenException('Unauthorized notification access');
     }
+    if (user.role === 'terminal') {
+      if (!this.staffSession || !req) {
+        throw new UnauthorizedException('Staff PIN verification is required');
+      }
+      await this.staffSession.requireFromRequest(req, restaurantId);
+    }
+  }
+
+  private async queryPlatformNotifications(
+    restaurantId: string,
+    role: string | undefined,
+    platformSince: Date,
+  ): Promise<PlatformNotificationEntity[]> {
+    if (role === 'terminal') {
+      return [];
+    }
+    const targetApps = role === 'staff' ? ['merchant'] : ['merchant', 'boss'];
+    if (typeof this.platformNotifRepo.createQueryBuilder === 'function') {
+      const qb = this.platformNotifRepo
+        .createQueryBuilder('pn')
+        .where('pn.status = :status', { status: 'sent' })
+        .andWhere('pn.sent_at >= :platformSince', { platformSince })
+        .andWhere(
+          "(pn.target_restaurant_ids = '[]'::jsonb OR pn.target_restaurant_ids @> :targetRestJson::jsonb)",
+          { targetRestJson: JSON.stringify([restaurantId]) },
+        );
+      if (targetApps.length === 1) {
+        qb.andWhere(
+          "(pn.target_apps = '[]'::jsonb OR pn.target_apps @> :targetAppJson::jsonb)",
+          { targetAppJson: JSON.stringify([targetApps[0]]) },
+        );
+      } else {
+        qb.andWhere(
+          "(pn.target_apps = '[]'::jsonb OR pn.target_apps @> :merchantAppJson::jsonb OR pn.target_apps @> :bossAppJson::jsonb)",
+          {
+            merchantAppJson: JSON.stringify(['merchant']),
+            bossAppJson: JSON.stringify(['boss']),
+          },
+        );
+      }
+      return qb.orderBy('pn.sent_at', 'DESC').take(50).getMany();
+    }
+    const rows = await this.platformNotifRepo.find({
+      where: {
+        status: 'sent',
+        sentAt: MoreThanOrEqual(platformSince),
+      },
+      order: { sentAt: 'DESC' },
+      take: 50,
+    });
+    return rows.filter((pn) => {
+      const restIds = Array.isArray(pn.targetRestaurantIds)
+        ? pn.targetRestaurantIds
+        : [];
+      if (restIds.length > 0 && !restIds.includes(restaurantId)) return false;
+      const apps = Array.isArray(pn.targetApps) ? pn.targetApps : [];
+      return apps.length === 0 || apps.some((a) => targetApps.includes(a));
+    });
   }
 
   @Get()
   async getState(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user?: { role?: string },
+    @Req() req?: Request,
   ) {
-    this.assertNotPrintAgent(user);
+    await this.assertAuthorizedActor(restaurantId, user, req);
     const restaurant = await this.restaurantRepo.findOne({
       where: { id: restaurantId },
     });
@@ -50,9 +120,8 @@ export class NotificationsController {
       throw new NotFoundException('Restaurant not found');
     }
 
-    const since =
-      restaurant.notificationsClearedAt ??
-      new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const { startOfToday } = computeIstanbulDateBoundaries(new Date());
+    const since = restaurant.notificationsClearedAt ?? startOfToday;
     const dismissedSet = new Set(restaurant.dismissedNotificationIds ?? []);
 
     const platformSince =
@@ -69,14 +138,7 @@ export class NotificationsController {
         order: { createdAt: 'DESC' },
         take: 50,
       }),
-      this.platformNotifRepo.find({
-        where: {
-          status: 'sent',
-          sentAt: MoreThanOrEqual(platformSince),
-        },
-        order: { sentAt: 'DESC' },
-        take: 50,
-      }),
+      this.queryPlatformNotifications(restaurantId, user?.role, platformSince),
     ]);
 
     const waiterCalls = calls
@@ -140,29 +202,80 @@ export class NotificationsController {
   async dismiss(
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { role?: string },
-    @Body() body: { ids?: string[] },
+    @Body() body: DismissNotificationsDto,
+    @Req() req?: Request,
   ) {
-    this.assertNotPrintAgent(user);
-    const restaurant = await this.restaurantRepo.findOne({
-      where: { id: restaurantId },
-    });
-    if (!restaurant) {
-      throw new NotFoundException('Restaurant not found');
-    }
-
+    await this.assertAuthorizedActor(restaurantId, user, req);
     const incomingIds = Array.isArray(body?.ids)
-      ? body.ids
-          .filter((id): id is string => typeof id === 'string')
-          .map((id) => id.trim())
-          .filter(Boolean)
+      ? Array.from(
+          new Set(
+            body.ids
+              .filter((id): id is string => typeof id === 'string')
+              .map((id) => id.trim())
+              .filter(Boolean),
+          ),
+        )
       : [];
 
-    const existing = Array.isArray(restaurant.dismissedNotificationIds)
-      ? restaurant.dismissedNotificationIds
-      : [];
-    const merged = Array.from(new Set([...existing, ...incomingIds])).slice(-500);
-    restaurant.dismissedNotificationIds = merged;
-    await this.restaurantRepo.save(restaurant);
+    let clearedAt: Date | null = null;
+    let merged: string[] = [];
+
+    if (typeof this.restaurantRepo.query === 'function') {
+      const rows = (await this.restaurantRepo.query(
+        `UPDATE restaurants
+         SET dismissed_notification_ids = COALESCE(
+           (
+             SELECT jsonb_agg(elem ORDER BY ord)
+             FROM (
+               SELECT elem, MIN(ord) AS ord
+               FROM jsonb_array_elements_text(
+                 COALESCE(dismissed_notification_ids, '[]'::jsonb) || $2::jsonb
+               ) WITH ORDINALITY AS t(elem, ord)
+               GROUP BY elem
+               ORDER BY MIN(ord) DESC
+               LIMIT 500
+             ) sub
+           ),
+           '[]'::jsonb
+         )
+         WHERE id = $1
+         RETURNING notifications_cleared_at AS "notificationsClearedAt",
+                   dismissed_notification_ids AS "dismissedNotificationIds"`,
+        [restaurantId, JSON.stringify(incomingIds)],
+      )) as Array<{
+        notificationsClearedAt?: Date | string | null;
+        dismissedNotificationIds?: string[] | null;
+      }>;
+      const updated = Array.isArray(rows) ? rows[0] : undefined;
+      if (!updated) {
+        throw new NotFoundException('Restaurant not found');
+      }
+      clearedAt = updated.notificationsClearedAt
+        ? new Date(updated.notificationsClearedAt)
+        : null;
+      merged = Array.isArray(updated.dismissedNotificationIds)
+        ? updated.dismissedNotificationIds
+        : [];
+    } else {
+      const restaurant = await this.restaurantRepo.findOne({
+        where: { id: restaurantId },
+        select: ['id', 'notificationsClearedAt', 'dismissedNotificationIds'],
+      });
+      if (!restaurant) {
+        throw new NotFoundException('Restaurant not found');
+      }
+      const existing = Array.isArray(restaurant.dismissedNotificationIds)
+        ? restaurant.dismissedNotificationIds
+        : [];
+      merged = Array.from(new Set([...existing, ...incomingIds])).slice(-500);
+      clearedAt = restaurant.notificationsClearedAt ?? null;
+      if (typeof this.restaurantRepo.update === 'function') {
+        await this.restaurantRepo.update(
+          { id: restaurantId },
+          { dismissedNotificationIds: merged },
+        );
+      }
+    }
 
     const uuidRe =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -179,9 +292,7 @@ export class NotificationsController {
     this.ordersGateway.emitNotificationsUpdated(restaurantId);
     return {
       ok: true,
-      clearedAt: restaurant.notificationsClearedAt
-        ? restaurant.notificationsClearedAt.toISOString()
-        : null,
+      clearedAt: clearedAt ? clearedAt.toISOString() : null,
       dismissedIds: merged,
     };
   }
@@ -191,24 +302,52 @@ export class NotificationsController {
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { role?: string },
   ) {
-    this.assertNotPrintAgent(user);
-    const restaurant = await this.restaurantRepo.findOne({
-      where: { id: restaurantId },
-    });
-    if (!restaurant) {
-      throw new NotFoundException('Restaurant not found');
+    if (!user || user.role === 'print_agent') {
+      throw new ForbiddenException('Unauthorized notification access');
+    }
+    if (user.role === 'terminal') {
+      throw new ForbiddenException(
+        'Branch-wide notification clearing is restricted to Merchant Panel and Boss users',
+      );
     }
 
     const now = new Date();
-    restaurant.notificationsClearedAt = now;
-    restaurant.dismissedNotificationIds = [];
-    await Promise.all([
-      this.restaurantRepo.save(restaurant),
-      this.waiterCallRepo.update(
+    if (typeof this.restaurantRepo.query === 'function') {
+      const rows = (await this.restaurantRepo.query(
+        `UPDATE restaurants SET notifications_cleared_at = $1, dismissed_notification_ids = '[]'::jsonb WHERE id = $2 RETURNING id`,
+        [now, restaurantId],
+      )) as Array<{ id: string }>;
+      if (!Array.isArray(rows) || rows.length === 0) {
+        throw new NotFoundException('Restaurant not found');
+      }
+      await this.waiterCallRepo.update(
         { restaurantId, acknowledged: false },
         { acknowledged: true },
-      ),
-    ]);
+      );
+    } else {
+      const restaurant = await this.restaurantRepo.findOne({
+        where: { id: restaurantId },
+        select: ['id'],
+      });
+      if (!restaurant) {
+        throw new NotFoundException('Restaurant not found');
+      }
+      await Promise.all([
+        typeof this.restaurantRepo.update === 'function'
+          ? this.restaurantRepo.update(
+              { id: restaurantId },
+              {
+                notificationsClearedAt: now,
+                dismissedNotificationIds: [],
+              },
+            )
+          : Promise.resolve(),
+        this.waiterCallRepo.update(
+          { restaurantId, acknowledged: false },
+          { acknowledged: true },
+        ),
+      ]);
+    }
 
     this.ordersGateway.emitNotificationsUpdated(restaurantId);
     return {

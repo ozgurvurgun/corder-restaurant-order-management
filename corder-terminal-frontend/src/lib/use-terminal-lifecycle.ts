@@ -44,6 +44,7 @@ export function useTerminalLifecycle(params: {
   pullTables: () => Promise<void>
   logout: () => void
   onWaiterCalled?: (call: ActiveWaiterCall) => void
+  onNotificationsUpdated?: () => Promise<void> | void
 }) {
   const {
     isLoggedIn,
@@ -58,6 +59,7 @@ export function useTerminalLifecycle(params: {
     pullTables,
     logout,
     onWaiterCalled,
+    onNotificationsUpdated,
   } = params
 
   useEffect(() => {
@@ -94,6 +96,7 @@ export function useTerminalLifecycle(params: {
     refreshLiveState,
     pullTables,
     onWaiterCalled,
+    onNotificationsUpdated,
   })
 
   // Keep server lock alive while waiter is working on a table & release on tab close

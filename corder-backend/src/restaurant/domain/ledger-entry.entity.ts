@@ -9,11 +9,18 @@ import {
 } from 'typeorm';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 import { LedgerCustomerEntity } from './ledger-customer.entity';
+import { TableEntity } from './table.entity';
+import { CompletedOrderEntity } from './completed-order.entity';
+import { numericColumnTransformer } from '../../common/database/numeric-column.transformer';
 
 @Entity('ledger_entries')
-@Index(['restaurantId'])
 @Index(['customerId'])
 @Index(['restaurantId', 'customerId', 'createdAt'])
+@Index(
+  'IDX_ledger_entries_restaurant_completed_order',
+  ['restaurantId', 'completedOrderId'],
+  { where: '"completed_order_id" IS NOT NULL' },
+)
 export class LedgerEntryEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -36,7 +43,12 @@ export class LedgerEntryEntity {
   @Column({ name: 'entry_type', type: 'varchar', length: 20 })
   entryType: 'debt' | 'payment' | 'credit';
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    transformer: numericColumnTransformer,
+  })
   amount: number;
 
   @Column({ type: 'text' })
@@ -45,11 +57,19 @@ export class LedgerEntryEntity {
   @Column({ name: 'table_id', type: 'uuid', nullable: true })
   tableId: string | null;
 
+  @ManyToOne(() => TableEntity, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'table_id' })
+  table?: TableEntity | null;
+
   @Column({ name: 'table_name', type: 'varchar', length: 255, nullable: true })
   tableName: string | null;
 
   @Column({ name: 'completed_order_id', type: 'uuid', nullable: true })
   completedOrderId: string | null;
+
+  @ManyToOne(() => CompletedOrderEntity, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'completed_order_id' })
+  completedOrder?: CompletedOrderEntity | null;
 
   @Column({ type: 'jsonb', nullable: true })
   snapshot: unknown | null;

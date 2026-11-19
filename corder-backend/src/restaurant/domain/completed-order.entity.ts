@@ -8,6 +8,7 @@ import {
   Index,
 } from 'typeorm';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
+import { numericColumnTransformer } from '../../common/database/numeric-column.transformer';
 
 @Entity('completed_orders')
 @Index(['restaurantId', 'closedAt'])
@@ -32,13 +33,32 @@ export class CompletedOrderEntity {
   @Column({ name: 'waiter', type: 'varchar', length: 255 })
   waiter: string;
 
-  @Column({ name: 'total_amount', type: 'decimal', precision: 12, scale: 2 })
+  @Column({
+    name: 'total_amount',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    transformer: numericColumnTransformer,
+  })
   totalAmount: number;
 
-  @Column({ name: 'discount_amount', type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({
+    name: 'discount_amount',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericColumnTransformer,
+  })
   discountAmount: number;
 
-  @Column({ name: 'net_amount', type: 'decimal', precision: 12, scale: 2 })
+  @Column({
+    name: 'net_amount',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    transformer: numericColumnTransformer,
+  })
   netAmount: number;
 
   @Column({ name: 'closed_by', type: 'varchar', length: 255 })
@@ -59,7 +79,14 @@ export class CompletedOrderEntity {
   @Column({ name: 'payment_discount', type: 'jsonb', nullable: true })
   paymentDiscount: unknown | null;
 
-  @Column({ name: 'payment_tip', type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({
+    name: 'payment_tip',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericColumnTransformer,
+  })
   paymentTip: number;
 
   @Column({ name: 'orders_snapshot', type: 'jsonb' })
@@ -68,7 +95,7 @@ export class CompletedOrderEntity {
   @Column({ name: 'payment_snapshot', type: 'jsonb' })
   paymentSnapshot: unknown;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }
 

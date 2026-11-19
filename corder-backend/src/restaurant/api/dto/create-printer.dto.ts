@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Min,
   MinLength,
 } from 'class-validator';
@@ -16,13 +17,15 @@ export const PRINTER_CONNECTIONS: readonly PrinterConnection[] = [
   'bluetooth',
 ];
 
+export const PRINTER_TYPES = ['receipt', 'kitchen', 'bar'] as const;
+
 export class CreatePrinterDto {
   @IsString()
   @MinLength(1)
+  @MaxLength(100)
   name!: string;
 
-  @IsString()
-  @MinLength(1)
+  @IsIn(PRINTER_TYPES)
   type!: string;
 
   @IsIn(PRINTER_CONNECTIONS)
@@ -30,6 +33,7 @@ export class CreatePrinterDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   ipAddress?: string;
 
   @IsOptional()
@@ -40,6 +44,7 @@ export class CreatePrinterDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   department?: string;
 
   @IsOptional()

@@ -171,7 +171,7 @@ function createUiServer({ store, agent }) {
     return { settings: saved, publicSettings: getPublicSettings(saved), runtimeConfig }
   }
 
-  const syncContextFromBackend = async () => {
+  const syncContextFromBackend = async (reason = "manual") => {
     const current = loadSettings()
     const runtimeConfig = buildRuntimeConfig(current)
     const ctx = await fetchAgentContext(runtimeConfig)
@@ -189,7 +189,9 @@ function createUiServer({ store, agent }) {
       printers: nextPrinters,
       categoryRoutes: nextRoutes,
     })
-    void pushPrintersToBackend(res.runtimeConfig, res.settings)
+    if (reason !== "ws-printers-updated") {
+      void pushPrintersToBackend(res.runtimeConfig, res.settings)
+    }
     return res
   }
 
@@ -287,7 +289,7 @@ function createUiServer({ store, agent }) {
       if (method === "POST" && pathname === "/api/printers") {
         const current = loadSettings()
         const printers = [...current.printers]
-        const incomingId = body.id ? String(body.id).trim() : `p-${Date.now().toString(36)}`
+        const incomingId = body.id ? String(body.id).trim() : crypto.randomUUID()
         const entry = {
           id: incomingId,
           name: String(body.name || body.systemPrinterName || body.host || "Printer").trim(),

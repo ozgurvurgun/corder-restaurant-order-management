@@ -57,7 +57,15 @@ WHERE o.user_id IS NULL
 UPDATE orders o
 SET user_id = ra.id
 FROM root_admins ra
+JOIN restaurants r
+  ON r.id = ra.restaurant_id
+  OR r.root_admin_id = ra.id
+  OR EXISTS (
+    SELECT 1 FROM boss_restaurants br WHERE br.boss_id = ra.id AND br.restaurant_id = r.id
+  )
+  OR (ra.boss_tier = 'brand_owner' AND ra.brand_name IS NOT NULL AND lower(btrim(r.brand_name)) = lower(btrim(ra.brand_name)))
 WHERE o.user_id IS NULL
+  AND o.restaurant_id = r.id
   AND pg_temp.tr_norm(o.user_display_name) = pg_temp.tr_norm(ra.name);
 
 UPDATE orders
@@ -174,19 +182,23 @@ WHERE oi.order_id = o.id
 
 UPDATE cash_shifts
 SET opened_by = pg_temp.tr_norm(opened_by),
-    closed_by = CASE WHEN closed_by IS NOT NULL THEN pg_temp.tr_norm(closed_by) ELSE NULL END;
+    closed_by = CASE WHEN closed_by IS NOT NULL THEN pg_temp.tr_norm(closed_by) ELSE NULL END
+WHERE opened_by IS DISTINCT FROM pg_temp.tr_norm(opened_by)
+   OR (closed_by IS NOT NULL AND closed_by IS DISTINCT FROM pg_temp.tr_norm(closed_by));
 
 UPDATE cash_shifts cs
 SET opened_by = a.current_name
 FROM actor_name_aliases a
 WHERE cs.restaurant_id = a.restaurant_id
-  AND cs.opened_by = a.old_name;
+  AND cs.opened_by = a.old_name
+  AND cs.opened_by IS DISTINCT FROM a.current_name;
 
 UPDATE cash_shifts cs
 SET closed_by = a.current_name
 FROM actor_name_aliases a
 WHERE cs.restaurant_id = a.restaurant_id
-  AND cs.closed_by = a.old_name;
+  AND cs.closed_by = a.old_name
+  AND cs.closed_by IS DISTINCT FROM a.current_name;
 
 UPDATE cash_transactions
 SET created_by = pg_temp.tr_norm(created_by)
@@ -196,7 +208,8 @@ UPDATE cash_transactions ct
 SET created_by = a.current_name
 FROM actor_name_aliases a
 WHERE ct.restaurant_id = a.restaurant_id
-  AND ct.created_by = a.old_name;
+  AND ct.created_by = a.old_name
+  AND ct.created_by IS DISTINCT FROM a.current_name;
 
 UPDATE stock_movements
 SET created_by = pg_temp.tr_norm(created_by)
@@ -206,7 +219,8 @@ UPDATE stock_movements sm
 SET created_by = a.current_name
 FROM actor_name_aliases a
 WHERE sm.restaurant_id = a.restaurant_id
-  AND sm.created_by = a.old_name;
+  AND sm.created_by = a.old_name
+  AND sm.created_by IS DISTINCT FROM a.current_name;
 
 UPDATE ledger_entries
 SET received_by = pg_temp.tr_norm(received_by)
@@ -216,7 +230,75 @@ UPDATE ledger_entries le
 SET received_by = a.current_name
 FROM actor_name_aliases a
 WHERE le.restaurant_id = a.restaurant_id
-  AND le.received_by = a.old_name;
+  AND le.received_by = a.old_name
+  AND le.received_by IS DISTINCT FROM a.current_name;
+
+UPDATE open_accounts
+SET created_by = pg_temp.tr_norm(created_by)
+WHERE created_by IS DISTINCT FROM pg_temp.tr_norm(created_by);
+
+UPDATE open_accounts oa
+SET created_by = a.current_name
+FROM actor_name_aliases a
+WHERE oa.restaurant_id = a.restaurant_id
+  AND oa.created_by = a.old_name
+  AND oa.created_by IS DISTINCT FROM a.current_name;
+
+UPDATE open_account_payments oap
+SET received_by = d.current_name
+FROM open_accounts oa, actor_current_directory d
+WHERE oap.open_account_id = oa.id
+  AND oap.received_by_user_id = d.actor_id
+  AND oa.restaurant_id = d.restaurant_id
+  AND oap.received_by IS DISTINCT FROM d.current_name;
+
+UPDATE open_account_payments
+SET received_by = pg_temp.tr_norm(received_by)
+WHERE received_by IS DISTINCT FROM pg_temp.tr_norm(received_by);
+
+UPDATE open_account_payments oap
+SET received_by = a.current_name
+FROM open_accounts oa, actor_name_aliases a
+WHERE oap.open_account_id = oa.id
+  AND oa.restaurant_id = a.restaurant_id
+  AND oap.received_by = a.old_name
+  AND oap.received_by IS DISTINCT FROM a.current_name;
+
+UPDATE inventory_counts
+SET counted_by = pg_temp.tr_norm(counted_by)
+WHERE counted_by IS DISTINCT FROM pg_temp.tr_norm(counted_by);
+
+UPDATE inventory_counts ic
+SET counted_by = a.current_name
+FROM actor_name_aliases a
+WHERE ic.restaurant_id = a.restaurant_id
+  AND ic.counted_by = a.old_name
+  AND ic.counted_by IS DISTINCT FROM a.current_name;
+
+UPDATE purchase_orders
+SET created_by = pg_temp.tr_norm(created_by)
+WHERE created_by IS DISTINCT FROM pg_temp.tr_norm(created_by);
+
+UPDATE purchase_orders po
+SET created_by = a.current_name
+FROM actor_name_aliases a
+WHERE po.restaurant_id = a.restaurant_id
+  AND po.created_by = a.old_name
+  AND po.created_by IS DISTINCT FROM a.current_name;
+
+UPDATE tables t
+SET discount = jsonb_set(t.discount, '{appliedBy}', to_jsonb(pg_temp.tr_norm(t.discount->>'appliedBy')))
+WHERE t.discount IS NOT NULL
+  AND (t.discount->>'appliedBy') IS NOT NULL
+  AND (t.discount->>'appliedBy') IS DISTINCT FROM pg_temp.tr_norm(t.discount->>'appliedBy');
+
+UPDATE tables t
+SET discount = jsonb_set(t.discount, '{appliedBy}', to_jsonb(a.current_name))
+FROM actor_name_aliases a
+WHERE t.restaurant_id = a.restaurant_id
+  AND t.discount IS NOT NULL
+  AND (t.discount->>'appliedBy') = a.old_name
+  AND (t.discount->>'appliedBy') IS DISTINCT FROM a.current_name;
 
 UPDATE restaurant_audit_logs
 SET user_name = pg_temp.tr_norm(user_name)
@@ -226,23 +308,28 @@ UPDATE restaurant_audit_logs al
 SET user_name = a.current_name
 FROM actor_name_aliases a
 WHERE al.restaurant_id = a.restaurant_id
-  AND al.user_name = a.old_name;
+  AND al.user_name = a.old_name
+  AND al.user_name IS DISTINCT FROM a.current_name;
 
 UPDATE fraud_alerts
 SET actor_name = CASE WHEN actor_name IS NOT NULL THEN pg_temp.tr_norm(actor_name) ELSE NULL END,
-    resolved_by = CASE WHEN resolved_by IS NOT NULL THEN pg_temp.tr_norm(resolved_by) ELSE NULL END;
+    resolved_by = CASE WHEN resolved_by IS NOT NULL THEN pg_temp.tr_norm(resolved_by) ELSE NULL END
+WHERE (actor_name IS NOT NULL AND actor_name IS DISTINCT FROM pg_temp.tr_norm(actor_name))
+   OR (resolved_by IS NOT NULL AND resolved_by IS DISTINCT FROM pg_temp.tr_norm(resolved_by));
 
 UPDATE fraud_alerts fa
 SET actor_name = a.current_name
 FROM actor_name_aliases a
 WHERE fa.restaurant_id = a.restaurant_id
-  AND fa.actor_name = a.old_name;
+  AND fa.actor_name = a.old_name
+  AND fa.actor_name IS DISTINCT FROM a.current_name;
 
 UPDATE fraud_alerts fa
 SET resolved_by = a.current_name
 FROM actor_name_aliases a
 WHERE fa.restaurant_id = a.restaurant_id
-  AND fa.resolved_by = a.old_name;
+  AND fa.resolved_by = a.old_name
+  AND fa.resolved_by IS DISTINCT FROM a.current_name;
 
 -- 8. Backfill completed_orders: normalize text and apply actor_name_aliases to waiter, closed_by, discounts, and orders_snapshot
 CREATE OR REPLACE FUNCTION pg_temp.resolve_actor_name(p_rest_id uuid, p_actor_id text, p_raw_name text) RETURNS text AS $$
@@ -274,58 +361,77 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-UPDATE completed_orders co
-SET
-  waiter = pg_temp.resolve_actor_name(co.restaurant_id, NULL, co.waiter),
-  closed_by = pg_temp.resolve_actor_name(co.restaurant_id, NULL, co.closed_by),
-  payment_discount = CASE
-    WHEN co.payment_discount IS NOT NULL
-    THEN jsonb_set(
-      co.payment_discount,
-      '{appliedBy}',
-      to_jsonb(pg_temp.resolve_actor_name(co.restaurant_id, NULL, COALESCE(co.payment_discount->>'appliedBy', co.closed_by)))
-    )
-    ELSE NULL
-  END,
-  payment_snapshot = CASE
-    WHEN (co.payment_snapshot->'discount') IS NOT NULL
-    THEN jsonb_set(
-      jsonb_set(
+WITH computed_completed_orders AS (
+  SELECT
+    co.id,
+    pg_temp.resolve_actor_name(co.restaurant_id, NULL, co.waiter) AS next_waiter,
+    pg_temp.resolve_actor_name(co.restaurant_id, NULL, co.closed_by) AS next_closed_by,
+    CASE
+      WHEN co.payment_discount IS NOT NULL
+      THEN jsonb_set(
+        co.payment_discount,
+        '{appliedBy}',
+        to_jsonb(pg_temp.resolve_actor_name(co.restaurant_id, NULL, COALESCE(co.payment_discount->>'appliedBy', co.closed_by)))
+      )
+      ELSE NULL
+    END AS next_payment_discount,
+    CASE
+      WHEN (co.payment_snapshot->'discount') IS NOT NULL
+      THEN jsonb_set(
+        jsonb_set(
+          co.payment_snapshot,
+          '{processedBy}',
+          to_jsonb(pg_temp.resolve_actor_name(co.restaurant_id, NULL, co.closed_by))
+        ),
+        '{discount,appliedBy}',
+        to_jsonb(pg_temp.resolve_actor_name(co.restaurant_id, NULL, COALESCE(co.payment_snapshot->'discount'->>'appliedBy', co.closed_by)))
+      )
+      ELSE jsonb_set(
         co.payment_snapshot,
         '{processedBy}',
         to_jsonb(pg_temp.resolve_actor_name(co.restaurant_id, NULL, co.closed_by))
-      ),
-      '{discount,appliedBy}',
-      to_jsonb(pg_temp.resolve_actor_name(co.restaurant_id, NULL, COALESCE(co.payment_snapshot->'discount'->>'appliedBy', co.closed_by)))
-    )
-    ELSE jsonb_set(
-      co.payment_snapshot,
-      '{processedBy}',
-      to_jsonb(pg_temp.resolve_actor_name(co.restaurant_id, NULL, co.closed_by))
-    )
-  END,
-  orders_snapshot = (
-    SELECT COALESCE(jsonb_agg(
-      jsonb_set(
-        ord,
-        '{userName}',
-        to_jsonb(pg_temp.resolve_actor_name(co.restaurant_id, ord->>'userId', ord->>'userName'))
-      ) || jsonb_build_object(
-        'items',
-        COALESCE((
-          SELECT jsonb_agg(
-            CASE
-              WHEN itm ? 'cancelledBy' AND (itm->>'cancelledBy') IS NOT NULL
-              THEN jsonb_set(itm, '{cancelledBy}', to_jsonb(pg_temp.resolve_actor_name(co.restaurant_id, NULL, itm->>'cancelledBy')))
-              ELSE itm
-            END
-          )
-          FROM jsonb_array_elements(COALESCE(ord->'items', '[]'::jsonb)) AS itm
-        ), '[]'::jsonb)
       )
-    ), '[]'::jsonb)
-    FROM jsonb_array_elements(co.orders_snapshot) AS ord
-  )
-WHERE jsonb_typeof(co.orders_snapshot) = 'array';
+    END AS next_payment_snapshot,
+    (
+      SELECT COALESCE(jsonb_agg(
+        jsonb_set(
+          ord,
+          '{userName}',
+          to_jsonb(pg_temp.resolve_actor_name(co.restaurant_id, ord->>'userId', ord->>'userName'))
+        ) || jsonb_build_object(
+          'items',
+          COALESCE((
+            SELECT jsonb_agg(
+              CASE
+                WHEN itm ? 'cancelledBy' AND (itm->>'cancelledBy') IS NOT NULL
+                THEN jsonb_set(itm, '{cancelledBy}', to_jsonb(pg_temp.resolve_actor_name(co.restaurant_id, NULL, itm->>'cancelledBy')))
+                ELSE itm
+              END
+            )
+            FROM jsonb_array_elements(COALESCE(ord->'items', '[]'::jsonb)) AS itm
+          ), '[]'::jsonb)
+        )
+      ), '[]'::jsonb)
+      FROM jsonb_array_elements(co.orders_snapshot) AS ord
+    ) AS next_orders_snapshot
+  FROM completed_orders co
+  WHERE jsonb_typeof(co.orders_snapshot) = 'array'
+)
+UPDATE completed_orders co
+SET
+  waiter = c.next_waiter,
+  closed_by = c.next_closed_by,
+  payment_discount = c.next_payment_discount,
+  payment_snapshot = c.next_payment_snapshot,
+  orders_snapshot = c.next_orders_snapshot
+FROM computed_completed_orders c
+WHERE co.id = c.id
+  AND (
+    co.waiter IS DISTINCT FROM c.next_waiter
+    OR co.closed_by IS DISTINCT FROM c.next_closed_by
+    OR co.payment_discount IS DISTINCT FROM c.next_payment_discount
+    OR co.payment_snapshot IS DISTINCT FROM c.next_payment_snapshot
+    OR co.orders_snapshot IS DISTINCT FROM c.next_orders_snapshot
+  );
 
 COMMIT;

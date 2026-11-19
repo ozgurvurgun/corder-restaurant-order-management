@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, In, Repository } from 'typeorm';
@@ -19,6 +19,7 @@ import { CloseCheckDto, CloseCheckOrderLineDto, CloseCheckWalkInItemDto } from '
 import { OrdersGateway } from '../../api/orders.gateway';
 import { LedgerService } from '../ledger.service';
 import { StockMovementsService } from '../stock-movements.service';
+import { SESSION_LOCK_STALE_MS, TableService } from '../table.service';
 import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
 import {
   buildClosedOrderSnapshot,
@@ -58,12 +59,14 @@ export class CloseCheckUseCase {
     private readonly ordersGateway: OrdersGateway,
     private readonly ledgerService: LedgerService,
     private readonly stockMovementsService: StockMovementsService,
+    @Optional()
+    private readonly tableService?: TableService,
   ) {}
 
   async execute(
     restaurantId: string,
     dto: CloseCheckDto,
-    actor: { id: string; name: string } & SettlementActorPolicy,
+    actor: { id: string; name: string; staffId?: string | null } & SettlementActorPolicy,
   ) {
     const hasTable = Boolean(dto.tableId?.trim());
     const hasWalkInItems = Boolean(dto.items && dto.items.length > 0);
@@ -88,16 +91,25 @@ export class CloseCheckUseCase {
       const now = new Date();
       const actorId = (actor.id || '').trim() || restaurantId;
       const actorName = (actor.name || '').trim() || 'Register';
+      const actorStaffId = !actor.isBoss
+        ? ((actor.staffId !== undefined ? actor.staffId : actor.id) || '').trim() || null
+        : null;
 
       const billContext = hasTable
-        ? await this.loadTableBillContext(em, restaurantId, dto.tableId!, dto.lines, actorId, actorName, now)
+        ? await this.loadTableBillContext(em, restaurantId, dto.tableId!, dto.lines, actorId, actorName, actorStaffId, now)
         : await this.buildWalkInBillContext(em, restaurantId, dto.items!, actorId, actorName, now);
 
-      const effectiveDiscount = dto.discount
+      const sourceDiscount =
+        dto.discount !== undefined
+          ? dto.discount
+          : !hasPartialLines
+            ? (billContext.table?.discount ?? null)
+            : null;
+      const effectiveDiscount = sourceDiscount
         ? {
-            ...dto.discount,
+            ...sourceDiscount,
             appliedBy:
-              dto.discount.appliedBy?.trim() ||
+              sourceDiscount.appliedBy?.trim() ||
               billContext.table?.discount?.appliedBy?.trim() ||
               actorName,
           }
@@ -110,7 +122,7 @@ export class CloseCheckUseCase {
       });
 
       CheckSettlementPolicy.assertDiscountAllowedForActor(
-        settlement.rawTotalMinorUnits, settlement.discountMinorUnits, dto.discount, actor,
+        settlement.rawTotalMinorUnits, settlement.discountMinorUnits, effectiveDiscount, actor,
       );
 
       const ledgerCustomer = await this.resolveLedgerCustomer(em, restaurantId, dto, settlement);
@@ -133,7 +145,7 @@ export class CloseCheckUseCase {
             restaurantId,
             billContext,
             settlement.discountMinorUnits,
-            dto.discount ?? null,
+            effectiveDiscount,
             now,
           )
         : true;
@@ -171,20 +183,37 @@ export class CloseCheckUseCase {
 
   private async loadTableBillContext(
     em: EntityManager, restaurantId: string, tableId: string,
-    requestedLines: CloseCheckOrderLineDto[] | undefined, actorId: string, actorName: string, now: Date,
+    requestedLines: CloseCheckOrderLineDto[] | undefined, actorId: string, actorName: string,
+    actorStaffId: string | null, now: Date,
   ): Promise<BillContext> {
     const table = await em.findOne(TableEntity, { where: { id: tableId, restaurantId }, lock: { mode: 'pessimistic_write' } });
     if (!table) throw new NotFoundException('Table not found');
+    if (actorStaffId) {
+      if (this.tableService) {
+        const prevStatus = table.status;
+        if (prevStatus === 'checkout') table.status = 'occupied';
+        try {
+          this.tableService.assertStaffMayUseTable(table, actorStaffId);
+        } finally {
+          table.status = prevStatus;
+        }
+      } else if (table.isLockedByOther(actorStaffId, SESSION_LOCK_STALE_MS)) {
+        const holder = (table.sessionStaffName ?? 'Waiter').trim() || 'Waiter';
+        throw new ForbiddenException(`Table is currently being served by ${holder}`);
+      }
+    }
 
     const activeOrders = await em.find(OrderEntity, {
-      where: { restaurantId, tableId: table.id, status: 'active' }, order: { createdAt: 'ASC' }, lock: { mode: 'pessimistic_write' },
+      where: { restaurantId, tableId: table.id, status: 'active' }, order: { id: 'ASC' }, lock: { mode: 'pessimistic_write' },
     });
     if (!activeOrders.length) throw new BadRequestException('No active orders found on this table');
+    activeOrders.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
     const activeOrderIds = activeOrders.map((o) => o.id);
     const orderItems = await em.find(OrderItemEntity, {
-      where: { orderId: In(activeOrderIds) }, order: { createdAt: 'ASC' }, lock: { mode: 'pessimistic_write' },
+      where: { orderId: In(activeOrderIds) }, order: { id: 'ASC' }, lock: { mode: 'pessimistic_write' },
     });
+    orderItems.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     const itemsByOrderId = new Map<string, OrderItemEntity[]>();
     for (const item of orderItems) {
       const arr = itemsByOrderId.get(item.orderId) ?? [];
@@ -232,7 +261,10 @@ export class CloseCheckUseCase {
           billLinesForStock.push({ productId: line.productId, productName: line.productName, quantity: line.quantity });
         }
       }
-      ordersSnapshot.push(buildClosedOrderSnapshot(order, lines, staffNameById, actorId, now));
+      const snapshotLines = lines.filter((l) => l.status !== 'paid');
+      if (snapshotLines.length > 0) {
+        ordersSnapshot.push(buildClosedOrderSnapshot(order, snapshotLines, staffNameById, actorId, now));
+      }
     }
 
     if (billLinesForStock.length === 0) {
@@ -312,27 +344,31 @@ export class CloseCheckUseCase {
       return true;
     }
 
-    const removedItems = new Set<OrderItemEntity>();
     for (const { item, quantity } of ctx.partialMutations) {
       if (quantity < item.quantity) {
         item.quantity -= quantity;
         await em.save(OrderItemEntity, item);
+        await em.save(OrderItemEntity, em.create(OrderItemEntity, {
+          orderId: item.orderId, productId: item.productId, productName: item.productName,
+          price: item.price, quantity, note: item.note ?? undefined, status: 'paid',
+          cancelReason: null, cancelledBy: null, cancelledAt: null,
+        }));
       } else {
-        removedItems.add(item);
-        await em.remove(OrderItemEntity, item);
+        item.status = 'paid';
+        await em.save(OrderItemEntity, item);
       }
     }
 
     const activeOrders = ctx.activeOrders ?? [];
     const itemsByOrderId = ctx.itemsByOrderId ?? new Map<string, OrderItemEntity[]>();
     const allOrderItems = ctx.allOrderItems ?? [];
-    const hasRemainingBillable = allOrderItems.some(
-      (i) => !removedItems.has(i) && OrderStatusPolicy.isItemOnActiveBill(i.status),
+    const hasRemainingBillable = allOrderItems.some((i) =>
+      OrderStatusPolicy.isItemOnActiveBill(i.status),
     );
 
     if (hasRemainingBillable) {
       for (const order of activeOrders) {
-        const remainingInOrder = (itemsByOrderId.get(order.id) ?? []).filter((i) => !removedItems.has(i));
+        const remainingInOrder = itemsByOrderId.get(order.id) ?? [];
         const hasBillableInOrder = remainingInOrder.some((i) =>
           OrderStatusPolicy.isItemOnActiveBill(i.status),
         );

@@ -260,6 +260,24 @@ export class RestaurantSettingsService {
       );
       geofenceChanged = true;
     }
+    if (r.terminalLocationRestrictionEnabled) {
+      const lat = r.locationLatitude != null ? Number(r.locationLatitude) : NaN;
+      const lng = r.locationLongitude != null ? Number(r.locationLongitude) : NaN;
+      if (
+        r.locationLatitude == null ||
+        r.locationLongitude == null ||
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lng) ||
+        lat < -90 ||
+        lat > 90 ||
+        lng < -180 ||
+        lng > 180
+      ) {
+        throw new BadRequestException(
+          'Konum kısıtlamasını etkinleştirmek için geçerli enlem ve boylam koordinatları girilmelidir.',
+        );
+      }
+    }
     await this.repo.save(r);
     if (geofenceChanged) {
       this.ordersGateway.emitStaffSessionUpdated(restaurantId);

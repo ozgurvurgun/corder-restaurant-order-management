@@ -8,6 +8,7 @@ import {
   Index,
 } from 'typeorm';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
+import { RestaurantStaffEntity } from './restaurant-staff.entity';
 
 export interface TableDiscountState {
   type: 'percent' | 'amount' | 'complimentary';
@@ -35,7 +36,8 @@ export interface TableSplitState {
 }
 
 @Entity('tables')
-@Index(['restaurantId'])
+@Index('IDX_tables_restaurant_section_name', ['restaurantId', 'section', 'name'])
+@Index('IDX_tables_restaurant_status', ['restaurantId', 'status'])
 export class TableEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -66,13 +68,17 @@ export class TableEntity {
   @Column({ name: 'session_staff_id', type: 'uuid', nullable: true })
   sessionStaffId: string | null;
 
+  @ManyToOne(() => RestaurantStaffEntity, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'session_staff_id' })
+  sessionStaff?: RestaurantStaffEntity | null;
+
   @Column({ name: 'session_staff_name', type: 'varchar', length: 120, nullable: true })
   sessionStaffName: string | null;
 
   @Column({ name: 'session_locked_at', type: 'timestamptz', nullable: true })
   sessionLockedAt: Date | null;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
   /** Deterministic signed QR token populated on read/write responses. */

@@ -14,6 +14,9 @@ import {
   RecipeStockPolicy,
 } from '../domain/services/recipe-stock.policy';
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export interface CreateStockMovementDto {
   materialId: string;
   materialName?: string;
@@ -144,7 +147,11 @@ export class StockMovementsService {
   ): Promise<StockMovementEntity[]> {
     if (!billLinesForStock.length) return [];
     const soldProductIds = [
-      ...new Set(billLinesForStock.map((l) => l.productId).filter(Boolean)),
+      ...new Set(
+        billLinesForStock
+          .map((l) => (typeof l.productId === 'string' ? l.productId.trim() : ''))
+          .filter((id) => UUID_RE.test(id)),
+      ),
     ];
     if (!soldProductIds.length) return [];
 
@@ -161,7 +168,7 @@ export class StockMovementsService {
     for (const product of validProducts) {
       if (!Array.isArray(product.ingredients)) continue;
       for (const ing of product.ingredients) {
-        if (typeof ing?.materialId === 'string' && ing.materialId.trim()) {
+        if (typeof ing?.materialId === 'string' && UUID_RE.test(ing.materialId.trim())) {
           candidateMaterialIds.add(ing.materialId.trim());
         }
       }
@@ -265,25 +272,90 @@ export class StockMovementsService {
   ): Promise<StockMovementEntity[]> {
     const { linesToDeduct, linesToReverse } =
       RecipeStockPolicy.computeLineDeltas(previousLines, nextLines);
-    const outMovements = linesToDeduct.length
-      ? await this.deductRecipeIngredients(
-          em,
-          restaurantId,
-          linesToDeduct,
-          actorName,
-          'Order edit',
-        )
-      : [];
-    const inMovements = linesToReverse.length
-      ? await this.reverseRecipeIngredients(
-          em,
-          restaurantId,
-          linesToReverse,
-          actorName,
-          'Order edit reversal',
-        )
-      : [];
-    return [...outMovements, ...inMovements];
+    const changedLines = [...linesToDeduct, ...linesToReverse];
+    if (!changedLines.length) return [];
+
+    const changedProductIds = [
+      ...new Set(
+        changedLines
+          .map((l) => (typeof l.productId === 'string' ? l.productId.trim() : ''))
+          .filter((id) => UUID_RE.test(id)),
+      ),
+    ];
+    if (!changedProductIds.length) return [];
+
+    const recipeProducts = await em.find(ProductEntity, {
+      where: { id: In(changedProductIds), category: { restaurantId } },
+      relations: ['category'],
+    });
+    const validProducts = recipeProducts.filter(
+      (p) => p.category?.restaurantId === restaurantId,
+    );
+    const validProductById = new Map(validProducts.map((p) => [p.id, p]));
+
+    const candidateMaterialIds = new Set<string>();
+    for (const product of validProducts) {
+      if (!Array.isArray(product.ingredients)) continue;
+      for (const ing of product.ingredients) {
+        if (typeof ing?.materialId === 'string' && UUID_RE.test(ing.materialId.trim())) {
+          candidateMaterialIds.add(ing.materialId.trim());
+        }
+      }
+    }
+    const sortedCandidateIds = [...candidateMaterialIds].sort();
+    if (!sortedCandidateIds.length) return [];
+
+    const materials = await em.find(StockMaterialEntity, {
+      where: { id: In(sortedCandidateIds), restaurantId },
+      order: { id: 'ASC' },
+      lock: { mode: 'pessimistic_write' },
+    });
+    const materialById = new Map(materials.map((m) => [m.id, m]));
+
+    const netDeltas = RecipeStockPolicy.aggregateNetDeltas(
+      previousLines,
+      nextLines,
+      validProductById,
+      materialById,
+    );
+    if (!netDeltas.length) return [];
+
+    const savedMovements: StockMovementEntity[] = [];
+    const safeActor = (actorName || '').trim() || 'System';
+
+    for (const net of netDeltas) {
+      const material = materialById.get(net.materialId);
+      if (!material || material.restaurantId !== restaurantId) continue;
+      const delta = net.direction === 'out' ? -net.quantity : net.quantity;
+      const { previousStock, newStock } = material.applyDelta(delta);
+      await em.save(StockMaterialEntity, material);
+
+      const matUnitCost = Number(material.costPerUnit ?? 0);
+      const unitCost =
+        matUnitCost > 0 ? Number(matUnitCost.toFixed(4)) : null;
+      const totalCost =
+        unitCost != null
+          ? Number((net.quantity * unitCost).toFixed(4))
+          : null;
+
+      const movement = em.create(StockMovementEntity, {
+        restaurantId,
+        materialId: material.id,
+        materialName: material.name,
+        type: net.direction,
+        quantity: net.quantity,
+        previousStock,
+        newStock,
+        unitCost,
+        totalCost,
+        supplierId: null,
+        reason: net.reason,
+        createdBy: safeActor,
+      });
+      savedMovements.push(await em.save(StockMovementEntity, movement));
+    }
+
+    return savedMovements;
   }
 
   async create(restaurantId: string, dto: CreateStockMovementDto) {

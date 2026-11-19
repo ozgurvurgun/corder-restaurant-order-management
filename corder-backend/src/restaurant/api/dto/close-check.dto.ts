@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsIn,
@@ -8,6 +9,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   Min,
   ValidateNested,
@@ -83,6 +85,7 @@ export class CloseCheckDto {
   @IsOptional()
   @IsArray()
   @ArrayMinSize(1)
+  @ArrayMaxSize(200)
   @ValidateNested({ each: true })
   @Type(() => CloseCheckWalkInItemDto)
   items?: CloseCheckWalkInItemDto[];
@@ -90,6 +93,7 @@ export class CloseCheckDto {
   @IsOptional()
   @IsArray()
   @ArrayMinSize(1)
+  @ArrayMaxSize(200)
   @ValidateNested({ each: true })
   @Type(() => CloseCheckOrderLineDto)
   lines?: CloseCheckOrderLineDto[];
@@ -104,6 +108,7 @@ export class CloseCheckDto {
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(50)
   @ValidateNested({ each: true })
   @Type(() => CloseCheckSplitDto)
   splitDetails?: CloseCheckSplitDto[];

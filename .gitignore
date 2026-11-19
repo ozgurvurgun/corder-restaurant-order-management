@@ -10,3 +10,5 @@ dist-test/
 .DS_Store
 uploads/
 .pnpm-store/
+audit/
+prompt*.txt

@@ -1,10 +1,6 @@
-import {
-  Injectable,
-  ConflictException,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { RestaurantEntity } from '../domain/restaurant.entity';
 import { RootAdminEntity } from '../domain/root-admin.entity';
@@ -20,10 +16,7 @@ import {
 } from '../domain/subscription-billing.policy';
 import { CreateRestaurantDto } from '../api/dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from '../api/dto/update-restaurant.dto';
-import {
-  formatCanonicalCorderEmail,
-  toCorderEmailTenantSlug,
-} from '../../common/text/corder-email.policy';
+import { formatCanonicalCorderEmail, toCorderEmailTenantSlug } from '../../common/text/corder-email.policy';
 import { OrdersGateway } from '../../restaurant/api/orders.gateway';
 import { buildPaymentSuspendedErrorMessage } from '../../restaurant/domain/services/billing-suspension.policy';
 
@@ -53,6 +46,8 @@ export class RestaurantService {
     @InjectRepository(PlatformBillingConfigEntity)
     private readonly billingConfigRepo: Repository<PlatformBillingConfigEntity>,
     private readonly ordersGateway: OrdersGateway,
+    @Optional()
+    private readonly dataSource?: DataSource,
   ) {}
 
   private async assertUniqueTerminalEmail(
@@ -81,71 +76,73 @@ export class RestaurantService {
     bossById: Map<string, RootAdminEntity>,
   ): AssignedBossDto[] {
     const assignedMap = new Map<string, AssignedBossDto>();
+    const addBoss = (b: RootAdminEntity, customTitle?: string | null) => {
+      if (assignedMap.has(b.id)) return;
+      const bossTier = b.bossTier || 'franchise_owner';
+      assignedMap.set(b.id, {
+        id: b.id,
+        name: b.name,
+        email: b.email,
+        bossTier,
+        title:
+          customTitle ||
+          (bossTier === 'brand_owner' ? 'Brand Owner (HQ)' : 'Franchise / Branch Owner'),
+      });
+    };
 
     for (const link of links) {
       if (link.restaurantId !== r.id) continue;
       const b = bossById.get(link.bossId);
-      if (b) {
-        assignedMap.set(b.id, {
-          id: b.id,
-          name: b.name,
-          email: b.email,
-          bossTier: b.bossTier || 'franchise_owner',
-          title:
-            link.title ||
-            (b.bossTier === 'brand_owner' ? 'Brand Owner (HQ)' : 'Franchise / Branch Owner'),
-        });
-      }
+      if (b) addBoss(b, link.title);
     }
-
-    if (r.rootAdminId && !assignedMap.has(r.rootAdminId)) {
+    if (r.rootAdminId) {
       const b = bossById.get(r.rootAdminId);
-      if (b) {
-        assignedMap.set(b.id, {
-          id: b.id,
-          name: b.name,
-          email: b.email,
-          bossTier: b.bossTier || 'franchise_owner',
-          title: b.bossTier === 'brand_owner' ? 'Brand Owner (HQ)' : 'Franchise / Branch Owner',
-        });
-      }
+      if (b) addBoss(b);
     }
-
     if (r.brandName) {
       const normalizedBrand = r.brandName.trim().toLowerCase();
       for (const b of allBosses) {
-        if (
-          b.bossTier === 'brand_owner' &&
-          b.brandName &&
-          b.brandName.trim().toLowerCase() === normalizedBrand &&
-          !assignedMap.has(b.id)
-        ) {
-          assignedMap.set(b.id, {
-            id: b.id,
-            name: b.name,
-            email: b.email,
-            bossTier: 'brand_owner',
-            title: 'Brand Owner (HQ)',
-          });
+        if (b.bossTier === 'brand_owner' && b.brandName?.trim().toLowerCase() === normalizedBrand) {
+          addBoss(b, 'Brand Owner (HQ)');
         }
       }
     }
-
     return Array.from(assignedMap.values());
   }
 
   async enrichRestaurantsWithBosses(restaurants: RestaurantEntity[]) {
     if (restaurants.length === 0) return [];
     const restIds = restaurants.map((r) => r.id);
-    const [links, allBosses, allPayments, collectionEndDay] = await Promise.all([
+    const [links, allPayments, collectionEndDay] = await Promise.all([
       this.bossRestaurantRepo.find({ where: { restaurantId: In(restIds) } }),
-      this.rootAdminRepo.find(),
       this.paymentRepo.find({
         where: { restaurantId: In(restIds) },
         order: { paidAt: 'DESC', createdAt: 'DESC' },
       }),
       this.getCollectionEndDay(),
     ]);
+
+    const candidateBossIds = Array.from(
+      new Set<string>([
+        ...links.map((l) => l.bossId),
+        ...restaurants.map((r) => r.rootAdminId).filter((id): id is string => Boolean(id)),
+      ]),
+    );
+    const hasAnyBrand = restaurants.some((r) => Boolean(r.brandName?.trim()));
+    let allBosses: RootAdminEntity[] = [];
+    if (hasAnyBrand && candidateBossIds.length > 0) {
+      allBosses = await this.rootAdminRepo.find({
+        where: [{ id: In(candidateBossIds) }, { bossTier: 'brand_owner' }],
+      });
+    } else if (hasAnyBrand) {
+      allBosses = await this.rootAdminRepo.find({
+        where: { bossTier: 'brand_owner' },
+      });
+    } else if (candidateBossIds.length > 0) {
+      allBosses = await this.rootAdminRepo.find({
+        where: { id: In(candidateBossIds) },
+      });
+    }
     const bossById = new Map(allBosses.map((b) => [b.id, b]));
     const paymentsByRestId = new Map<string, RestaurantSubscriptionPaymentEntity[]>();
     for (const p of allPayments) {
@@ -173,50 +170,54 @@ export class RestaurantService {
         ...r,
         monthlyFee: Number(r.monthlyFee || 0),
         royaltyRate: Number(r.royaltyRate || 0),
-        billingStartPeriod: summary.billingStartPeriod,
-        billingStatus: summary.billingStatus,
-        currentPeriod: summary.currentPeriod,
-        isCurrentPeriodPaid: summary.isCurrentPeriodPaid,
-        paidPeriods: summary.paidPeriods,
-        paidThroughPeriod: summary.paidThroughPeriod,
-        prepaidFuturePeriods: summary.prepaidFuturePeriods,
-        overduePeriods: summary.overduePeriods,
-        duePeriods: summary.duePeriods,
-        nextUnpaidPeriod: summary.nextUnpaidPeriod,
-        lastPaymentDate: summary.lastPaymentDate,
-        lastPaidPeriod: summary.lastPaidPeriod,
-        totalCollectedAmount: summary.totalCollectedAmount,
+        ...summary,
         paymentHistory: restPayments.map(toPaymentRecordDto),
         bosses: this.resolveAssignedBossesForRestaurant(r, links, allBosses, bossById),
       };
     });
   }
 
-  async syncPersistedBillingSummary(restaurantId: string): Promise<void> {
-    const [entity, payments, collectionEndDay] = await Promise.all([
-      this.findOne(restaurantId),
-      this.paymentRepo.find({
-        where: { restaurantId },
-        order: { paidAt: 'DESC', createdAt: 'DESC' },
-      }),
-      this.getCollectionEndDay(),
-    ]);
-
-    const summary = computeRestaurantBillingSummary({
-      status: entity.status,
-      monthlyFee: entity.monthlyFee,
-      billingStartPeriod: entity.billingStartPeriod,
-      createdAt: entity.createdAt,
-      isAccessSuspended: entity.isAccessSuspended,
-      payments,
-      collectionEndDay,
-    });
-
-    entity.billingStartPeriod = summary.billingStartPeriod;
-    entity.billingStatus = summary.billingStatus;
-    entity.lastPaymentDate = summary.lastPaymentDate;
-    entity.lastPaidPeriod = summary.lastPaidPeriod;
-    await this.repo.save(entity);
+  async syncPersistedBillingSummary(
+    restaurantId: string,
+    em?: EntityManager,
+  ): Promise<void> {
+    const run = async (manager: EntityManager) => {
+      const entity = await manager.findOne(RestaurantEntity, {
+        where: { id: restaurantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!entity) throw new NotFoundException('Restaurant not found');
+      const [payments, configs] = await Promise.all([
+        manager.find(RestaurantSubscriptionPaymentEntity, {
+          where: { restaurantId },
+          order: { paidAt: 'DESC', createdAt: 'DESC' },
+        }),
+        manager.find(PlatformBillingConfigEntity, { order: { updatedAt: 'DESC' }, take: 1 }),
+      ]);
+      const summary = computeRestaurantBillingSummary({
+        status: entity.status,
+        monthlyFee: entity.monthlyFee,
+        billingStartPeriod: entity.billingStartPeriod,
+        createdAt: entity.createdAt,
+        isAccessSuspended: entity.isAccessSuspended,
+        payments,
+        collectionEndDay: configs[0]?.collectionEndDay ?? 30,
+      });
+      entity.billingStartPeriod = summary.billingStartPeriod;
+      entity.billingStatus = summary.billingStatus;
+      entity.lastPaymentDate = summary.lastPaymentDate;
+      entity.lastPaidPeriod = summary.lastPaidPeriod;
+      await manager.save(RestaurantEntity, entity);
+    };
+    if (em) {
+      await run(em);
+      return;
+    }
+    if (this.dataSource) {
+      await this.dataSource.transaction(run);
+      return;
+    }
+    await this.repo.manager.transaction(run);
   }
 
   async findAll() {
@@ -246,21 +247,28 @@ export class RestaurantService {
       where: { bossTier: 'brand_owner' },
     });
     const normalized = restaurant.brandName.trim().toLowerCase();
-    for (const boss of brandOwners) {
-      if (boss.brandName && boss.brandName.trim().toLowerCase() === normalized) {
-        const existing = await this.bossRestaurantRepo.findOne({
-          where: { bossId: boss.id, restaurantId: restaurant.id },
-        });
-        if (!existing) {
-          await this.bossRestaurantRepo.save(
-            this.bossRestaurantRepo.create({
-              bossId: boss.id,
-              restaurantId: restaurant.id,
-              title: 'Brand Owner (HQ)',
-            }),
-          );
-        }
-      }
+    const matchingBosses = brandOwners.filter(
+      (b) => b.brandName && b.brandName.trim().toLowerCase() === normalized,
+    );
+    if (matchingBosses.length === 0) return;
+    const existing = await this.bossRestaurantRepo.find({
+      where: {
+        bossId: In(matchingBosses.map((b) => b.id)),
+        restaurantId: restaurant.id,
+      },
+    });
+    const existingBossIds = new Set(existing.map((e) => e.bossId));
+    const toCreate = matchingBosses
+      .filter((b) => !existingBossIds.has(b.id))
+      .map((b) =>
+        this.bossRestaurantRepo.create({
+          bossId: b.id,
+          restaurantId: restaurant.id,
+          title: 'Brand Owner (HQ)',
+        }),
+      );
+    if (toCreate.length > 0) {
+      await this.bossRestaurantRepo.save(toCreate);
     }
   }
 
@@ -312,31 +320,16 @@ export class RestaurantService {
     if (existing) throw new ConflictException('Slug already in use');
 
     const {
-      terminalEmail: rawTerminalEmail,
-      terminalPassword: rawTerminalPassword,
-      printAgentUsername: rawUsername,
-      printAgentPassword: rawPassword,
-      monthlyFee,
-      royaltyRate,
-      brandName,
-      branchType,
-      franchiseeCompanyName,
-      billingStartPeriod: rawStartPeriod,
-      recordInitialPayment,
-      initialPaidMonths,
-      initialPaymentMethod,
-      isAccessSuspended,
-      billingNotes,
-      email: rawEmail,
-      ...restDto
+      terminalEmail: rawTerminalEmail, terminalPassword: rawTerminalPassword,
+      printAgentUsername: rawUsername, printAgentPassword: rawPassword,
+      monthlyFee, royaltyRate, brandName, branchType, franchiseeCompanyName,
+      billingStartPeriod: rawStartPeriod, recordInitialPayment, initialPaidMonths,
+      initialPaymentMethod, isAccessSuspended, billingNotes, email: rawEmail, ...restDto
     } = dto;
 
     const creds = await this.resolveDeviceCredentials({
-      tenantSlug: slug,
-      terminalEmail: rawTerminalEmail,
-      terminalPassword: rawTerminalPassword,
-      printAgentUsername: rawUsername,
-      printAgentPassword: rawPassword,
+      tenantSlug: slug, terminalEmail: rawTerminalEmail, terminalPassword: rawTerminalPassword,
+      printAgentUsername: rawUsername, printAgentPassword: rawPassword,
     });
 
     const now = new Date();
@@ -373,16 +366,11 @@ export class RestaurantService {
       const coveredPeriods = buildConsecutivePeriods(billingStartPeriod, months);
       await this.paymentRepo.save(
         this.paymentRepo.create({
-          restaurantId: saved.id,
-          paidAt: now,
-          amount: String(Number((feeValue * months).toFixed(2))),
-          periods: coveredPeriods,
-          periodStart: coveredPeriods[0],
-          periodEnd: coveredPeriods[coveredPeriods.length - 1],
-          monthsCount: coveredPeriods.length,
+          restaurantId: saved.id, paidAt: now, amount: String(Number((feeValue * months).toFixed(2))),
+          periods: coveredPeriods, periodStart: coveredPeriods[0],
+          periodEnd: coveredPeriods[coveredPeriods.length - 1], monthsCount: coveredPeriods.length,
           paymentMethod: initialPaymentMethod ?? 'bank_transfer',
-          note: billingNotes?.trim() || 'Başlangıç abonelik tahsilatı',
-          recordedBy,
+          note: billingNotes?.trim() || 'Başlangıç abonelik tahsilatı', recordedBy,
         }),
       );
     }

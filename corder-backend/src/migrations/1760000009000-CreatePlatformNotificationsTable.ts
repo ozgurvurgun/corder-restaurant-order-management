@@ -6,6 +6,8 @@ export class CreatePlatformNotificationsTable1760000009000
   name = 'CreatePlatformNotificationsTable1760000009000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"');
+
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS "platform_notifications" (
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),

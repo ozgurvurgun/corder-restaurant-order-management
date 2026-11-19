@@ -32,7 +32,7 @@ export function mapOrder(o: OrderDto): PanelOrder {
     tableId: o.tableId,
     userId: o.userId ?? "",
     userName: o.userName?.trim() ? formatTitleCase(o.userName) : undefined,
-    items: o.items.map(mapOrderItem),
+    items: o.items.filter((i) => i.status !== "paid").map(mapOrderItem),
     status: (o.status as PanelOrder["status"]) || "active",
     createdAt: new Date(o.createdAt),
     updatedAt: new Date(o.updatedAt),

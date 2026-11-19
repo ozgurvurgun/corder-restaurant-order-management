@@ -239,6 +239,7 @@ export interface PanelStore {
     actual: number,
   ) => void
   completeInventoryCount: (countId: string) => void
+  cancelInventoryCount: (countId: string) => void
 
   // Cash register actions
   openShift: (openingBalance: number) => void | Promise<void>

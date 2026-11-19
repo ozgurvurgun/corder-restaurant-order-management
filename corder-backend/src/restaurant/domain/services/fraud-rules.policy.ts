@@ -36,6 +36,14 @@ export interface FraudAnomalyScanContext {
   audits: AuditLogEntity[];
 }
 
+/** Permanent UTC+3 offset for Europe/Istanbul (Turkey). */
+const ISTANBUL_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+export function toIstanbulDayKey(date: Date): string {
+  const shifted = new Date(date.getTime() + ISTANBUL_OFFSET_MS);
+  return shifted.toISOString().slice(0, 10);
+}
+
 export class FraudRulesPolicy {
   static evaluateAnomalies(ctx: FraudAnomalyScanContext): CreateFraudAlertInput[] {
     const {
@@ -53,9 +61,17 @@ export class FraudRulesPolicy {
     const orderById = new Map(orders.map((o) => [o.id, o]));
     const out: CreateFraudAlertInput[] = [];
 
-    const voidStatsByActor = new Map<
+    const voidStatsByActorDay = new Map<
       string,
-      { count: number; amountMinor: number; tables: Set<string>; itemNames: string[] }
+      {
+        actorName: string;
+        actorId: string | null;
+        dayKey: string;
+        count: number;
+        amountMinor: number;
+        tables: Set<string>;
+        itemNames: string[];
+      }
     >();
 
     for (const item of orderItems) {
@@ -70,6 +86,7 @@ export class FraudRulesPolicy {
       const actorName =
         item.cancelledBy?.trim() || ord.userDisplayName?.trim() || 'Personel';
       const cancelledAt = item.cancelledAt ?? ord.updatedAt ?? ord.createdAt;
+      const cancelDayKey = toIstanbulDayKey(cancelledAt);
 
       const priorReceipt = printJobs.find((pj) => {
         if (pj.createdAt < ord.createdAt || pj.createdAt > cancelledAt) {
@@ -139,7 +156,11 @@ export class FraudRulesPolicy {
         });
       }
 
-      const cur = voidStatsByActor.get(actorName) ?? {
+      const bucketKey = `${actorName.toLowerCase()}::${cancelDayKey}`;
+      const cur = voidStatsByActorDay.get(bucketKey) ?? {
+        actorName,
+        actorId: ord.userId ?? null,
+        dayKey: cancelDayKey,
         count: 0,
         amountMinor: 0,
         tables: new Set<string>(),
@@ -149,11 +170,10 @@ export class FraudRulesPolicy {
       cur.amountMinor += toMinorUnits(lineAmount);
       cur.tables.add(tableName);
       if (cur.itemNames.length < 5) cur.itemNames.push(item.productName);
-      voidStatsByActor.set(actorName, cur);
+      voidStatsByActorDay.set(bucketKey, cur);
     }
 
-    const dayKey = new Date().toISOString().slice(0, 10);
-    for (const [actorName, stat] of voidStatsByActor.entries()) {
+    for (const stat of voidStatsByActorDay.values()) {
       if (stat.count >= 3 || stat.amountMinor >= 75_000) {
         const impact = fromMinorUnits(stat.amountMinor);
         out.push({
@@ -161,13 +181,15 @@ export class FraudRulesPolicy {
           ruleCode: 'EXCESSIVE_VOID_PATTERN',
           severity: stat.amountMinor >= 150_000 ? 'critical' : 'high',
           riskScore: stat.amountMinor >= 150_000 ? 88 : 78,
-          title: `Yüksek Ürün İptal Yoğunluğu (${actorName})`,
-          description: `${actorName} tarafından toplam ${stat.count} adet ürün (${impact} TL) iptal edildi (${Array.from(stat.tables).slice(0, 4).join(', ')}).`,
-          actorName,
+          title: `Yüksek Ürün İptal Yoğunluğu (${stat.actorName})`,
+          description: `${stat.actorName} tarafından ${stat.dayKey} gününde toplam ${stat.count} adet ürün (${impact} TL) iptal edildi (${Array.from(stat.tables).slice(0, 4).join(', ')}).`,
+          actorName: stat.actorName,
+          actorId: stat.actorId,
           tableName: Array.from(stat.tables)[0] ?? null,
           amountImpact: impact,
-          sourceKey: `excessive-void:${actorName.toLowerCase()}:${dayKey}`,
+          sourceKey: `excessive-void:${stat.actorName.toLowerCase()}:${stat.dayKey}`,
           evidence: {
+            dayKey: stat.dayKey,
             cancelledCount: stat.count,
             totalAmount: impact,
             sampleItems: stat.itemNames,

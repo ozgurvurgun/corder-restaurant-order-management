@@ -4,8 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
-import { PurchaseOrderEntity } from '../domain/purchase-order.entity';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import {
+  PurchaseOrderEntity,
+  PurchaseOrderItem,
+} from '../domain/purchase-order.entity';
 import { StockMaterialEntity } from '../domain/stock-material.entity';
 import { SupplierEntity } from '../domain/supplier.entity';
 import { StockMovementsService } from './stock-movements.service';
@@ -46,13 +49,9 @@ export class PurchaseOrdersService {
   private async validateAndNormalizeItems(
     restaurantId: string,
     rawItems: PurchaseOrderItemInputDto[],
+    em?: EntityManager,
   ): Promise<{
-    items: {
-      materialId: string;
-      materialName: string;
-      quantity: number;
-      unitCost: number;
-    }[];
+    items: PurchaseOrderItem[];
     totalAmount: number;
   }> {
     if (!rawItems?.length) {
@@ -63,9 +62,13 @@ export class PurchaseOrdersService {
     const uniqueMaterialIds = [
       ...new Set(rawItems.map((i) => i.materialId)),
     ];
-    const materials = await this.materialRepo.find({
-      where: { id: In(uniqueMaterialIds), restaurantId },
-    });
+    const materials = em
+      ? await em.find(StockMaterialEntity, {
+          where: { id: In(uniqueMaterialIds), restaurantId },
+        })
+      : await this.materialRepo.find({
+          where: { id: In(uniqueMaterialIds), restaurantId },
+        });
     const materialById = new Map(materials.map((m) => [m.id, m]));
     if (materialById.size !== uniqueMaterialIds.length) {
       throw new BadRequestException(
@@ -156,40 +159,51 @@ export class PurchaseOrdersService {
     id: string,
     dto: UpdatePurchaseOrderDto,
   ) {
-    const po = await this.repo.findOne({ where: { id, restaurantId } });
-    if (!po) throw new NotFoundException('Purchase order not found.');
-    if (po.status === 'received') {
-      throw new BadRequestException(
-        'Received purchase order cannot be modified.',
-      );
-    }
-    if (po.status === 'cancelled' && dto.status !== 'cancelled') {
-      throw new BadRequestException(
-        'Cancelled purchase order cannot be reopened.',
-      );
-    }
-
-    if (dto.items !== undefined) {
-      if (po.status !== 'draft') {
+    return this.dataSource.transaction(async (em) => {
+      const po = await em.findOne(PurchaseOrderEntity, {
+        where: { id, restaurantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!po) throw new NotFoundException('Purchase order not found.');
+      if (po.status === 'received') {
         throw new BadRequestException(
-          'Items can only be edited while purchase order is in draft status.',
+          'Received purchase order cannot be modified.',
         );
       }
-      const { items, totalAmount } = await this.validateAndNormalizeItems(
-        restaurantId,
-        dto.items,
-      );
-      po.items = items;
-      po.totalAmount = totalAmount;
-    }
+      if (po.status === 'cancelled' && dto.status !== 'cancelled') {
+        throw new BadRequestException(
+          'Cancelled purchase order cannot be reopened.',
+        );
+      }
+      if (po.status === 'ordered' && dto.status === 'draft') {
+        throw new BadRequestException(
+          'Ordered purchase order cannot be reverted to draft status.',
+        );
+      }
 
-    if (dto.notes !== undefined) {
-      po.notes = dto.notes?.trim() || null;
-    }
-    if (dto.status !== undefined) {
-      po.status = dto.status;
-    }
-    return this.repo.save(po);
+      if (dto.items !== undefined) {
+        if (po.status !== 'draft') {
+          throw new BadRequestException(
+            'Items can only be edited while purchase order is in draft status.',
+          );
+        }
+        const { items, totalAmount } = await this.validateAndNormalizeItems(
+          restaurantId,
+          dto.items,
+          em,
+        );
+        po.items = items;
+        po.totalAmount = totalAmount;
+      }
+
+      if (dto.notes !== undefined) {
+        po.notes = dto.notes?.trim() || null;
+      }
+      if (dto.status !== undefined) {
+        po.status = dto.status;
+      }
+      return em.save(PurchaseOrderEntity, po);
+    });
   }
 
   async cancel(restaurantId: string, id: string) {
@@ -215,29 +229,53 @@ export class PurchaseOrdersService {
       }
       if (po.status === 'received') return po;
 
-      const overrideByMaterialId = new Map(
-        (receiveDto?.items ?? []).map((i) => [i.materialId, i]),
-      );
+      const poMaterialIds = new Set(po.items.map((item) => item.materialId));
+      const overrideByMaterialId = new Map<
+        string,
+        { materialId: string; quantity?: number; receivedQuantity?: number; unitCost?: number }
+      >();
 
-      const effectiveItems = po.items.map((item) => {
+      for (const override of receiveDto?.items ?? []) {
+        if (!poMaterialIds.has(override.materialId)) {
+          throw new BadRequestException(
+            `Material '${override.materialId}' does not exist on this purchase order.`,
+          );
+        }
+        if (overrideByMaterialId.has(override.materialId)) {
+          throw new BadRequestException(
+            `Duplicate materialId '${override.materialId}' in received items.`,
+          );
+        }
+        overrideByMaterialId.set(override.materialId, override);
+      }
+
+      const updatedPoItems: PurchaseOrderItem[] = po.items.map((item) => {
+        const orderedQty = Number(Number(item.quantity).toFixed(3));
         const override = overrideByMaterialId.get(item.materialId);
-        const qty =
-          override?.quantity != null
-            ? Number(Number(override.quantity).toFixed(3))
-            : Number(item.quantity);
+        const rawOverrideQty =
+          override?.receivedQuantity != null
+            ? override.receivedQuantity
+            : override?.quantity;
+        const receivedQty =
+          rawOverrideQty != null
+            ? Math.max(0, Number(Number(rawOverrideQty).toFixed(3)))
+            : orderedQty;
         const unitCost =
           override?.unitCost != null
-            ? Number(Number(override.unitCost).toFixed(4))
-            : Number(item.unitCost);
+            ? Math.max(0, Number(Number(override.unitCost).toFixed(4)))
+            : Math.max(0, Number(Number(item.unitCost).toFixed(4)));
         return {
           materialId: item.materialId,
           materialName: item.materialName,
-          quantity: Math.max(0, qty),
-          unitCost: Math.max(0, unitCost),
+          quantity: orderedQty,
+          receivedQuantity: receivedQty,
+          unitCost,
         };
       });
 
-      const itemsToReceive = effectiveItems.filter((i) => i.quantity > 0);
+      const itemsToReceive = updatedPoItems.filter(
+        (i) => (i.receivedQuantity ?? 0) > 0,
+      );
       if (!itemsToReceive.length) {
         throw new BadRequestException(
           'At least one item with positive quantity is required to receive a purchase order.',
@@ -259,7 +297,7 @@ export class PurchaseOrdersService {
         a.materialId.localeCompare(b.materialId),
       );
       for (const item of sortedItems) {
-        const qty = Number(item.quantity);
+        const qty = Number(item.receivedQuantity);
         const unitCost = Number(item.unitCost);
         await this.stockMovements.applyMovement(em, restaurantId, {
           materialId: item.materialId,
@@ -274,14 +312,12 @@ export class PurchaseOrdersService {
         });
       }
 
-      if (receiveDto?.items?.length) {
-        po.items = effectiveItems;
-        const newTotal = effectiveItems.reduce(
-          (sum, it) => sum + it.quantity * it.unitCost,
-          0,
-        );
-        po.totalAmount = Number(newTotal.toFixed(4));
-      }
+      po.items = updatedPoItems;
+      const newTotal = updatedPoItems.reduce(
+        (sum, it) => sum + Number(it.receivedQuantity ?? 0) * it.unitCost,
+        0,
+      );
+      po.totalAmount = Number(newTotal.toFixed(4));
       if (receiveDto?.notes !== undefined) {
         po.notes = receiveDto.notes?.trim() || po.notes;
       }

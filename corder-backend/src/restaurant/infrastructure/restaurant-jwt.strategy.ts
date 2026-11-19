@@ -40,7 +40,9 @@ export class RestaurantJwtStrategy extends PassportStrategy(Strategy, 'restauran
         reqPath.includes('/restaurant/auth/switch-branch') ||
         reqPath.includes('/restaurant/boss'),
       isBillingInspectionRoute:
-        req.method === 'GET' && reqPath.includes('/restaurant/settings/billing'),
+        req.method === 'GET' &&
+        (reqPath.includes('/restaurant/settings/billing') ||
+          reqPath.includes('/restaurant/auth/me')),
       isOpeningNewShift:
         req.method === 'POST' && /\/restaurant\/shifts(?:\?|$)/.test(reqPath),
     });

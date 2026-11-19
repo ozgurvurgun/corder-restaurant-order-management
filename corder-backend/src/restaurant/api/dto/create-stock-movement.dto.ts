@@ -1,4 +1,13 @@
-import { IsIn, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import {
+  IsIn,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export const STOCK_MOVEMENT_TYPES = [
   'in',
@@ -15,22 +24,27 @@ export class CreateStockMovementBodyDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(160)
   materialName?: string;
 
   @IsIn(STOCK_MOVEMENT_TYPES)
   type!: StockMovementType;
 
   @IsNumber()
+  @Min(0.0001)
+  @Max(99_999_999.999)
   quantity!: number;
 
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @Max(99_999_999.99)
   unitCost?: number;
 
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @Max(9_999_999_999.99)
   totalCost?: number;
 
   @IsOptional()
@@ -39,9 +53,11 @@ export class CreateStockMovementBodyDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(500)
   reason?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(160)
   createdBy?: string;
 }

@@ -123,16 +123,17 @@ export class CheckSettlementPolicy {
     discountDto: SettlementDiscountInput | null | undefined,
     actor?: SettlementActorPolicy,
   ): void {
-    if (discountMinorUnits <= 0 || !actor || actor.isBoss) {
+    const requestedAmountMinor =
+      discountDto?.type === 'amount'
+        ? Math.max(discountMinorUnits, toMinorUnits(discountDto.value))
+        : discountMinorUnits;
+    if (requestedAmountMinor <= 0 || !actor || actor.isBoss) {
       return;
     }
     const perms = actor.permissions ?? [];
     const limits = actor.limits ?? { maxDiscountPercent: 0, maxDiscountAmount: 0 };
 
-    if (
-      discountDto?.type === 'complimentary' ||
-      (rawTotalMinorUnits > 0 && discountMinorUnits >= rawTotalMinorUnits)
-    ) {
+    if (discountDto?.type === 'complimentary') {
       if (!perms.includes('discount.complimentary')) {
         throw new ForbiddenException(
           'You do not have permission to apply a 100% complimentary discount (discount.complimentary)',
@@ -155,7 +156,10 @@ export class CheckSettlementPolicy {
     const maxAllowedByPercent = Math.round(
       (rawTotalMinorUnits * limits.maxDiscountPercent) / 100,
     );
-    if (discountMinorUnits > maxAllowedByPercent) {
+    if (
+      (discountDto?.type === 'percent' && discountDto.value > limits.maxDiscountPercent) ||
+      requestedAmountMinor > maxAllowedByPercent
+    ) {
       throw new ForbiddenException(
         `Discount exceeds your maximum percentage discount limit of ${limits.maxDiscountPercent}%`,
       );
@@ -163,11 +167,19 @@ export class CheckSettlementPolicy {
 
     if (
       limits.maxDiscountAmount != null &&
-      discountMinorUnits > toMinorUnits(limits.maxDiscountAmount)
+      requestedAmountMinor > toMinorUnits(limits.maxDiscountAmount)
     ) {
       throw new ForbiddenException(
         `Discount exceeds your maximum amount discount limit of ${limits.maxDiscountAmount} TL`,
       );
+    }
+
+    if (rawTotalMinorUnits > 0 && requestedAmountMinor >= rawTotalMinorUnits) {
+      if (!perms.includes('discount.complimentary')) {
+        throw new ForbiddenException(
+          'You do not have permission to apply a 100% complimentary discount (discount.complimentary)',
+        );
+      }
     }
   }
 

@@ -12,10 +12,10 @@ import { BadRequestException } from '@nestjs/common';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 import { OpenAccountItemEntity } from './open-account-item.entity';
 import { OpenAccountPaymentEntity } from './open-account-payment.entity';
+import { numericColumnTransformer } from '../../common/database/numeric-column.transformer';
 import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
 
 @Entity('open_accounts')
-@Index(['restaurantId'])
 @Index(['restaurantId', 'status'])
 export class OpenAccountEntity {
   @PrimaryGeneratedColumn('uuid')
@@ -34,10 +34,23 @@ export class OpenAccountEntity {
   @Column({ name: 'customer_phone', type: 'varchar', length: 50, nullable: true })
   customerPhone: string | null;
 
-  @Column({ name: 'amount', type: 'numeric', precision: 12, scale: 2 })
+  @Column({
+    name: 'amount',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    transformer: numericColumnTransformer,
+  })
   amount: number;
 
-  @Column({ name: 'paid_amount', type: 'numeric', precision: 12, scale: 2, default: 0 })
+  @Column({
+    name: 'paid_amount',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericColumnTransformer,
+  })
   paidAmount: number;
 
   @Column({ name: 'status', type: 'varchar', length: 20, default: 'open' })

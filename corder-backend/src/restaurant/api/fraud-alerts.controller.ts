@@ -11,7 +11,10 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { FraudDetectionService } from '../application/fraud-detection.service';
-import { FraudAlertStatus } from '../domain/fraud-alert.entity';
+import {
+  BulkDeleteFraudAlertsDto,
+  UpdateFraudAlertStatusDto,
+} from './dto/fraud-alert.dto';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
 import {
   PanelRootGuard,
@@ -35,10 +38,12 @@ export class FraudAlertsController {
   list(
     @RestaurantId() restaurantId: string,
     @Query('status') status?: string,
+    @Query('severity') severity?: string,
   ) {
     return this.fraudService.listForRestaurant(restaurantId, {
       status,
-      runScan: true,
+      severity,
+      runScan: false,
     });
   }
 
@@ -63,20 +68,12 @@ export class FraudAlertsController {
   }
 
   @Patch(':id')
-  @RequirePermissions(
-    'security.manage_fraud_alerts',
-    'security.view_fraud_alerts',
-    'reports.view_audit_logs',
-  )
+  @RequirePermissions('security.manage_fraud_alerts')
   updateStatus(
     @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
     @RestaurantUser() user: { name?: string },
-    @Body()
-    body: {
-      status: FraudAlertStatus;
-      resolutionNote?: string;
-    },
+    @Body() body: UpdateFraudAlertStatusDto,
   ) {
     return this.fraudService.updateStatus(
       id,
@@ -87,11 +84,7 @@ export class FraudAlertsController {
   }
 
   @Delete(':id')
-  @RequirePermissions(
-    'security.manage_fraud_alerts',
-    'security.view_fraud_alerts',
-    'reports.view_audit_logs',
-  )
+  @RequirePermissions('security.manage_fraud_alerts')
   removeOne(
     @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
@@ -100,19 +93,10 @@ export class FraudAlertsController {
   }
 
   @Post('bulk-delete')
-  @RequirePermissions(
-    'security.manage_fraud_alerts',
-    'security.view_fraud_alerts',
-    'reports.view_audit_logs',
-  )
+  @RequirePermissions('security.manage_fraud_alerts')
   bulkDelete(
     @RestaurantId() restaurantId: string,
-    @Body()
-    body: {
-      ids?: string[];
-      deleteAll?: boolean;
-      onlyResolved?: boolean;
-    },
+    @Body() body: BulkDeleteFraudAlertsDto,
   ) {
     return this.fraudService.deleteAlerts(restaurantId, body || {});
   }

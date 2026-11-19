@@ -83,6 +83,54 @@ export function mapUnhandledErrorToHttp(exception: unknown): {
     };
   }
 
+  if (dbErr.code === '22001') {
+    return {
+      status: HttpStatus.BAD_REQUEST,
+      body: {
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: 'One or more text fields exceed the maximum allowed length',
+        error: 'Bad Request',
+      },
+      shouldLogStack: false,
+    };
+  }
+
+  if (dbErr.code === '22003') {
+    return {
+      status: HttpStatus.BAD_REQUEST,
+      body: {
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: 'One or more numeric values are out of the allowed range',
+        error: 'Bad Request',
+      },
+      shouldLogStack: false,
+    };
+  }
+
+  if (dbErr.code === '23514') {
+    return {
+      status: HttpStatus.BAD_REQUEST,
+      body: {
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: 'Value violates database constraint rules',
+        error: 'Bad Request',
+      },
+      shouldLogStack: false,
+    };
+  }
+
+  if (dbErr.code === '23502') {
+    return {
+      status: HttpStatus.BAD_REQUEST,
+      body: {
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: 'A required field is missing or null',
+        error: 'Bad Request',
+      },
+      shouldLogStack: false,
+    };
+  }
+
   return {
     status: HttpStatus.INTERNAL_SERVER_ERROR,
     body: {

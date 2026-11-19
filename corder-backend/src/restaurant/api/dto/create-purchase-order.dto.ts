@@ -56,9 +56,15 @@ export class ReceivePurchaseOrderItemDto {
   @IsUUID()
   materialId!: string;
 
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  quantity!: number;
+  quantity?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  receivedQuantity?: number;
 
   @IsOptional()
   @IsNumber()

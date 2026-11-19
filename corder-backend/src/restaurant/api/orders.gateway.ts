@@ -26,6 +26,14 @@ function getRestaurantRoom(restaurantId: string) {
   return `restaurant:${restaurantId}`;
 }
 
+function getPanelRoom(restaurantId: string) {
+  return `restaurant:${restaurantId}:panel`;
+}
+
+function getBossRoom(restaurantId: string) {
+  return `restaurant:${restaurantId}:boss`;
+}
+
 function getPrintAgentRoom(restaurantId: string) {
   return `restaurant:${restaurantId}:print-agent`;
 }
@@ -173,14 +181,35 @@ export class OrdersGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       client.data.restaurantId = verified.restaurantId;
       client.data.role = verified.role;
       client.data.authType = verified.authType;
-      client.join(getRestaurantRoom(verified.restaurantId));
+      if (verified.role === 'root') {
+        const branchIds = Array.from(
+          new Set([
+            verified.restaurantId,
+            ...(verified.ownedRestaurantIds ??
+              (verified.sub
+                ? await this.sessionValidator.getActiveBossRestaurantIds(
+                    verified.sub,
+                    verified.restaurantId,
+                  )
+                : [])),
+          ]),
+        );
+        for (const rId of branchIds) {
+          client.join(getRestaurantRoom(rId));
+          client.join(getBossRoom(rId));
+        }
+      } else {
+        client.join(getRestaurantRoom(verified.restaurantId));
+        if (verified.role === 'staff') {
+          client.join(getPanelRoom(verified.restaurantId));
+        }
+      }
       if (verified.role === 'print_agent') {
         client.join(getPrintAgentRoom(verified.restaurantId));
         await this.printersService.registerAgentSocket(
           verified.restaurantId,
           client.id,
         );
-        this.emitPrintersUpdated(verified.restaurantId);
       }
       if (verified.expMs !== null) {
         this.scheduleSocketExpiry(client, verified.expMs);
@@ -245,7 +274,9 @@ export class OrdersGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   }
 
   emitFraudAlert(restaurantId: string, payload: Record<string, unknown>) {
-    this.server.to(getRestaurantRoom(restaurantId)).emit('fraud:alert', payload);
+    if (!this.server) return;
+    this.server.to(getPanelRoom(restaurantId)).emit('fraud:alert', payload);
+    this.server.to(getBossRoom(restaurantId)).emit('fraud:alert', payload);
   }
 
   emitPrintJob(restaurantId: string, payload: PrintJobSocketPayload) {
@@ -275,10 +306,24 @@ export class OrdersGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     },
   ) {
     if (!this.server) return;
+    const targetApps =
+      Array.isArray(payload.targetApps) && payload.targetApps.length > 0
+        ? payload.targetApps
+        : ['merchant', 'boss'];
+    const includePanel =
+      targetApps.includes('merchant') || targetApps.includes('panel');
+    const includeBoss = targetApps.includes('boss');
     for (const restaurantId of restaurantIds) {
-      this.server
-        .to(getRestaurantRoom(restaurantId))
-        .emit('platform:notification', payload);
+      if (includePanel) {
+        this.server
+          .to(getPanelRoom(restaurantId))
+          .emit('platform:notification', payload);
+      }
+      if (includeBoss) {
+        this.server
+          .to(getBossRoom(restaurantId))
+          .emit('platform:notification', payload);
+      }
     }
   }
 

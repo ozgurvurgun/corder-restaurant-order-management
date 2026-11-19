@@ -57,27 +57,36 @@ export class FraudDetectionService {
       input.actorId && UUID_RE.test(input.actorId.trim())
         ? input.actorId.trim()
         : null;
-    const saved = await this.alertRepo.save(
-      this.alertRepo.create({
-        restaurantId: input.restaurantId,
-        ruleCode: input.ruleCode,
-        severity: input.severity,
-        riskScore: Math.min(100, Math.max(1, Math.round(input.riskScore))),
-        title: input.title.slice(0, 255),
-        description: input.description,
-        actorName: input.actorName?.trim().slice(0, 160) || null,
-        actorId: safeActorId,
-        tableName: input.tableName?.trim().slice(0, 120) || null,
-        amountImpact: fromMinorUnits(
-          Math.max(0, toMinorUnits(input.amountImpact || 0)),
-        ),
-        status: 'open',
-        evidence: {
-          ...(input.evidence ?? {}),
-          sourceKey,
-        },
-      }),
-    );
+    let saved: FraudAlertEntity;
+    try {
+      saved = await this.alertRepo.save(
+        this.alertRepo.create({
+          restaurantId: input.restaurantId,
+          ruleCode: input.ruleCode,
+          severity: input.severity,
+          riskScore: Math.min(100, Math.max(1, Math.round(input.riskScore))),
+          title: input.title.slice(0, 255),
+          description: input.description,
+          actorName: input.actorName?.trim().slice(0, 160) || null,
+          actorId: safeActorId,
+          tableName: input.tableName?.trim().slice(0, 120) || null,
+          amountImpact: fromMinorUnits(
+            Math.max(0, toMinorUnits(input.amountImpact || 0)),
+          ),
+          status: 'open',
+          evidence: {
+            ...(input.evidence ?? {}),
+            sourceKey,
+          },
+        }),
+      );
+    } catch (err: unknown) {
+      if ((err as { code?: string } | null)?.code === '23505') {
+        existingSourceKeys?.add(sourceKey);
+        return null;
+      }
+      throw err;
+    }
 
     existingSourceKeys?.add(sourceKey);
     this.ordersGateway.emitFraudAlert(
@@ -177,9 +186,9 @@ export class FraudDetectionService {
 
   async listForRestaurant(
     restaurantId: string,
-    opts?: { status?: string; runScan?: boolean },
+    opts?: { status?: string; severity?: string; runScan?: boolean },
   ) {
-    if (opts?.runScan !== false) {
+    if (opts?.runScan === true) {
       await this.analyzeRestaurantAnomalies(restaurantId);
     }
     const rawAlerts = await this.alertRepo.find({
@@ -188,10 +197,19 @@ export class FraudDetectionService {
       take: 300,
     });
     const allAlerts = rawAlerts.filter((a) => a.status !== 'deleted');
-    const filtered =
-      opts?.status && opts.status !== 'all'
-        ? allAlerts.filter((a) => a.status === opts.status)
-        : allAlerts;
+    const filtered = allAlerts.filter((a) => {
+      if (opts?.status && opts.status !== 'all' && a.status !== opts.status) {
+        return false;
+      }
+      if (
+        opts?.severity &&
+        opts.severity !== 'all' &&
+        a.severity !== opts.severity
+      ) {
+        return false;
+      }
+      return true;
+    });
 
     return {
       alerts: filtered.map((a) => this.serializeAlert(a)),
@@ -202,15 +220,18 @@ export class FraudDetectionService {
   async listForBranches(
     branchIds: string[],
     branchNameById: Map<string, string>,
+    opts?: { runScan?: boolean },
   ) {
     if (branchIds.length === 0) {
       return { alerts: [], summary: this.computeSummary([]) };
     }
-    await Promise.all(
-      branchIds.map((id) =>
-        this.analyzeRestaurantAnomalies(id).catch(() => 0),
-      ),
-    );
+    if (opts?.runScan === true) {
+      await Promise.all(
+        branchIds.map((id) =>
+          this.analyzeRestaurantAnomalies(id).catch(() => 0),
+        ),
+      );
+    }
     const rawAlerts = await this.alertRepo.find({
       where: { restaurantId: In(branchIds) },
       order: { createdAt: 'DESC' },

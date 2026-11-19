@@ -27,26 +27,57 @@ export class ActorNameSyncService {
 
     await this.dataSource.transaction(async (em) => {
       if (actorId) {
-        await em.query(
-          `UPDATE orders SET user_display_name = $1 WHERE user_id = $2::uuid AND user_display_name IS DISTINCT FROM $1`,
-          [newNorm, actorId],
-        );
-        await em.query(
-          `UPDATE tables SET session_staff_name = $1 WHERE session_staff_id = $2::uuid AND session_staff_name IS DISTINCT FROM $1`,
-          [newNorm, actorId],
-        );
-        await em.query(
-          `UPDATE ledger_entries SET received_by = $1 WHERE received_by_user_id = $2 AND received_by IS DISTINCT FROM $1`,
-          [newNorm, actorId],
-        );
-        await em.query(
-          `UPDATE restaurant_audit_logs SET user_name = $1 WHERE user_id = $2 AND user_name IS DISTINCT FROM $1`,
-          [newNorm, actorId],
-        );
-        await em.query(
-          `UPDATE fraud_alerts SET actor_name = $1 WHERE actor_id = $2::uuid AND actor_name IS DISTINCT FROM $1`,
-          [newNorm, actorId],
-        );
+        if (restIds.length > 0) {
+          await em.query(
+            `UPDATE orders SET user_display_name = $1 WHERE user_id = $2::uuid AND restaurant_id = ANY($3::uuid[]) AND user_display_name IS DISTINCT FROM $1`,
+            [newNorm, actorId, restIds],
+          );
+          await em.query(
+            `UPDATE tables SET session_staff_name = $1 WHERE session_staff_id = $2::uuid AND restaurant_id = ANY($3::uuid[]) AND session_staff_name IS DISTINCT FROM $1`,
+            [newNorm, actorId, restIds],
+          );
+          await em.query(
+            `UPDATE ledger_entries SET received_by = $1 WHERE received_by_user_id = $2 AND restaurant_id = ANY($3::uuid[]) AND received_by IS DISTINCT FROM $1`,
+            [newNorm, actorId, restIds],
+          );
+          await em.query(
+            `UPDATE open_account_payments oap SET received_by = $1 FROM open_accounts oa WHERE oap.open_account_id = oa.id AND oap.received_by_user_id = $2 AND oa.restaurant_id = ANY($3::uuid[]) AND oap.received_by IS DISTINCT FROM $1`,
+            [newNorm, actorId, restIds],
+          );
+          await em.query(
+            `UPDATE restaurant_audit_logs SET user_name = $1 WHERE user_id = $2 AND restaurant_id = ANY($3::uuid[]) AND user_name IS DISTINCT FROM $1`,
+            [newNorm, actorId, restIds],
+          );
+          await em.query(
+            `UPDATE fraud_alerts SET actor_name = $1 WHERE actor_id = $2::uuid AND restaurant_id = ANY($3::uuid[]) AND actor_name IS DISTINCT FROM $1`,
+            [newNorm, actorId, restIds],
+          );
+        } else {
+          await em.query(
+            `UPDATE orders SET user_display_name = $1 WHERE user_id = $2::uuid AND user_display_name IS DISTINCT FROM $1`,
+            [newNorm, actorId],
+          );
+          await em.query(
+            `UPDATE tables SET session_staff_name = $1 WHERE session_staff_id = $2::uuid AND session_staff_name IS DISTINCT FROM $1`,
+            [newNorm, actorId],
+          );
+          await em.query(
+            `UPDATE ledger_entries SET received_by = $1 WHERE received_by_user_id = $2 AND received_by IS DISTINCT FROM $1`,
+            [newNorm, actorId],
+          );
+          await em.query(
+            `UPDATE open_account_payments SET received_by = $1 WHERE received_by_user_id = $2 AND received_by IS DISTINCT FROM $1`,
+            [newNorm, actorId],
+          );
+          await em.query(
+            `UPDATE restaurant_audit_logs SET user_name = $1 WHERE user_id = $2 AND user_name IS DISTINCT FROM $1`,
+            [newNorm, actorId],
+          );
+          await em.query(
+            `UPDATE fraud_alerts SET actor_name = $1 WHERE actor_id = $2::uuid AND actor_name IS DISTINCT FROM $1`,
+            [newNorm, actorId],
+          );
+        }
       }
 
       if (!oldNorm || restIds.length === 0) {
@@ -114,7 +145,18 @@ export class ActorNameSyncService {
            FROM jsonb_array_elements(co.orders_snapshot) AS ord
          )
          WHERE co.restaurant_id = ANY($2::uuid[])
-           AND jsonb_typeof(co.orders_snapshot) = 'array'`,
+           AND jsonb_typeof(co.orders_snapshot) = 'array'
+           AND EXISTS (
+             SELECT 1
+             FROM jsonb_array_elements(co.orders_snapshot) AS ord
+             WHERE ($4 <> '' AND (ord->>'userId') = $4)
+                OR LOWER(BTRIM(ord->>'userName')) = $3
+                OR EXISTS (
+                  SELECT 1
+                  FROM jsonb_array_elements(COALESCE(ord->'items', '[]'::jsonb)) AS itm
+                  WHERE itm ? 'cancelledBy' AND LOWER(BTRIM(itm->>'cancelledBy')) = $3
+                )
+           )`,
         [newNorm, restIds, oldNorm, actorId],
       );
       await em.query(
@@ -138,6 +180,22 @@ export class ActorNameSyncService {
         [newNorm, restIds, oldNorm],
       );
       await em.query(
+        `UPDATE open_accounts SET created_by = $1 WHERE restaurant_id = ANY($2::uuid[]) AND LOWER(BTRIM(created_by)) = $3`,
+        [newNorm, restIds, oldNorm],
+      );
+      await em.query(
+        `UPDATE open_account_payments oap SET received_by = $1 FROM open_accounts oa WHERE oap.open_account_id = oa.id AND oa.restaurant_id = ANY($2::uuid[]) AND LOWER(BTRIM(oap.received_by)) = $3`,
+        [newNorm, restIds, oldNorm],
+      );
+      await em.query(
+        `UPDATE inventory_counts SET counted_by = $1 WHERE restaurant_id = ANY($2::uuid[]) AND LOWER(BTRIM(counted_by)) = $3`,
+        [newNorm, restIds, oldNorm],
+      );
+      await em.query(
+        `UPDATE purchase_orders SET created_by = $1 WHERE restaurant_id = ANY($2::uuid[]) AND LOWER(BTRIM(created_by)) = $3`,
+        [newNorm, restIds, oldNorm],
+      );
+      await em.query(
         `UPDATE restaurant_audit_logs SET user_name = $1 WHERE restaurant_id = ANY($2::uuid[]) AND LOWER(BTRIM(user_name)) = $3`,
         [newNorm, restIds, oldNorm],
       );
@@ -152,3 +210,4 @@ export class ActorNameSyncService {
     });
   }
 }
+

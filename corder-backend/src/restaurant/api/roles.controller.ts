@@ -8,16 +8,16 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { RolesService } from '../application/roles.service';
+import { RolePolicyActor, RolesService } from '../application/roles.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
 import {
-  BossOnly,
   PanelRootGuard,
   RequirePermissions,
 } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
+import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
 
 @Controller('restaurant/roles')
 @UseGuards(RestaurantJwtGuard, PanelRootGuard)
@@ -41,8 +41,9 @@ export class RolesController {
   create(
     @RestaurantId() restaurantId: string,
     @Body() dto: CreateRoleDto,
+    @RestaurantUser() actor?: RolePolicyActor,
   ) {
-    return this.rolesService.create(restaurantId, dto);
+    return this.rolesService.create(restaurantId, dto, actor);
   }
 
   @Put(':idOrKey')
@@ -51,8 +52,9 @@ export class RolesController {
     @RestaurantId() restaurantId: string,
     @Param('idOrKey') idOrKey: string,
     @Body() dto: UpdateRoleDto,
+    @RestaurantUser() actor?: RolePolicyActor,
   ) {
-    return this.rolesService.update(restaurantId, idOrKey, dto);
+    return this.rolesService.update(restaurantId, idOrKey, dto, actor);
   }
 
   @Post(':idOrKey/reset')
@@ -60,8 +62,9 @@ export class RolesController {
   reset(
     @RestaurantId() restaurantId: string,
     @Param('idOrKey') idOrKey: string,
+    @RestaurantUser() actor?: RolePolicyActor,
   ) {
-    return this.rolesService.resetToDefault(restaurantId, idOrKey);
+    return this.rolesService.resetToDefault(restaurantId, idOrKey, actor);
   }
 
   @Delete(':idOrKey')

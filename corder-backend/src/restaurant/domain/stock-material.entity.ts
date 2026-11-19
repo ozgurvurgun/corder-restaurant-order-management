@@ -9,9 +9,14 @@ import {
   Index,
 } from 'typeorm';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
+import { SupplierEntity } from './supplier.entity';
+import { numericColumnTransformer } from '../../common/database/numeric-column.transformer';
 
 @Entity('stock_materials')
 @Index(['restaurantId', 'name'])
+@Index('IDX_stock_materials_supplier_id', ['supplierId'], {
+  where: '"supplier_id" IS NOT NULL',
+})
 export class StockMaterialEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -29,30 +34,55 @@ export class StockMaterialEntity {
   @Column({ type: 'varchar', length: 16 })
   unit: string;
 
-  @Column({ name: 'current_stock', type: 'decimal', precision: 12, scale: 3, default: 0 })
+  @Column({
+    name: 'current_stock',
+    type: 'decimal',
+    precision: 12,
+    scale: 3,
+    default: 0,
+    transformer: numericColumnTransformer,
+  })
   currentStock: number;
 
-  @Column({ name: 'min_stock', type: 'decimal', precision: 12, scale: 3, default: 0 })
+  @Column({
+    name: 'min_stock',
+    type: 'decimal',
+    precision: 12,
+    scale: 3,
+    default: 0,
+    transformer: numericColumnTransformer,
+  })
   minStock: number;
 
-  @Column({ name: 'cost_per_unit', type: 'decimal', precision: 12, scale: 4, default: 0 })
+  @Column({
+    name: 'cost_per_unit',
+    type: 'decimal',
+    precision: 12,
+    scale: 4,
+    default: 0,
+    transformer: numericColumnTransformer,
+  })
   costPerUnit: number;
 
   @Column({ name: 'supplier_id', type: 'uuid', nullable: true })
   supplierId: string | null;
 
+  @ManyToOne(() => SupplierEntity, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'supplier_id' })
+  supplier?: SupplierEntity | null;
+
   @Column({ type: 'varchar', length: 128, default: 'Other' })
   category: string;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 
   applyDelta(delta: number): { previousStock: number; newStock: number } {
     const previousStock = Number(this.currentStock ?? 0);
-    const newStock = Number((previousStock + delta).toFixed(3));
+    const newStock = Math.max(0, Number((previousStock + delta).toFixed(4)));
     this.currentStock = newStock;
     return { previousStock, newStock };
   }

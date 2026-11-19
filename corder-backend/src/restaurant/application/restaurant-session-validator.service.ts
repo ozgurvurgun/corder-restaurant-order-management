@@ -14,6 +14,7 @@ import {
 } from '../domain/services/billing-suspension.policy';
 import { RestaurantAuthService } from './restaurant-auth.service';
 import { RolesService } from './roles.service';
+import { evaluateStaffShiftAccess } from '../domain/services/terminal-access.policy';
 
 export interface HttpSessionContext {
   requestedRestaurantId?: string;
@@ -23,7 +24,9 @@ export interface HttpSessionContext {
 }
 
 export interface VerifiedSocketPrincipal {
+  sub?: string;
   restaurantId: string;
+  ownedRestaurantIds?: string[];
   role: RestaurantTokenPayload['role'];
   authType: 'print-agent-jwt' | 'jwt';
   expMs: number | null;
@@ -47,8 +50,9 @@ export class RestaurantSessionValidatorService {
       RestaurantEntity,
       'id' | 'name' | 'status' | 'isAccessSuspended' | 'billingStatus'
     >,
+    allowSuspended = false,
   ): void {
-    if (isRestaurantPaymentSuspended(restaurant)) {
+    if (!allowSuspended && isRestaurantPaymentSuspended(restaurant)) {
       throw new UnauthorizedException(
         buildPaymentSuspendedErrorMessage(restaurant.name),
       );
@@ -91,7 +95,10 @@ export class RestaurantSessionValidatorService {
       throw new UnauthorizedException('Restaurant not found');
     }
 
-    this.assertBranchActiveAndUnsuspended(restaurant);
+    this.assertBranchActiveAndUnsuspended(
+      restaurant,
+      Boolean(ctx?.isBillingInspectionRoute),
+    );
 
     if (payload.role === 'staff') {
       return this.validateHttpStaffPrincipal(payload, restaurant);
@@ -108,7 +115,7 @@ export class RestaurantSessionValidatorService {
       throw new UnauthorizedException('Boss account is inactive or not found');
     }
     if (
-      payload.pwdFp &&
+      !payload.pwdFp ||
       payload.pwdFp !== computeSecretFingerprint(admin.passwordHash)
     ) {
       throw new UnauthorizedException('Boss password has been changed; please sign in again');
@@ -136,7 +143,8 @@ export class RestaurantSessionValidatorService {
     );
     if (
       !requestedId &&
-      ctx.isBossMultiBranchRoute &&
+      ctx?.isBossMultiBranchRoute &&
+      !ctx?.isBillingInspectionRoute &&
       (!targetRestaurant ||
         targetRestaurant.status !== 'active' ||
         isRestaurantPaymentSuspended(targetRestaurant)) &&
@@ -149,7 +157,10 @@ export class RestaurantSessionValidatorService {
       throw new UnauthorizedException('You do not have access to this branch');
     }
 
-    this.assertBranchActiveAndUnsuspended(targetRestaurant);
+    this.assertBranchActiveAndUnsuspended(
+      targetRestaurant,
+      Boolean(ctx?.isBillingInspectionRoute),
+    );
 
     const tier = admin.bossTier || 'franchise_owner';
     return {
@@ -181,7 +192,7 @@ export class RestaurantSessionValidatorService {
       throw new UnauthorizedException('Staff account is inactive or not found');
     }
     if (
-      payload.pwdFp &&
+      !payload.pwdFp ||
       payload.pwdFp !== computeSecretFingerprint(staff.passwordHash)
     ) {
       throw new UnauthorizedException('Staff password has been changed; please sign in again');
@@ -189,6 +200,12 @@ export class RestaurantSessionValidatorService {
     const resolved = await this.rolesService.resolveForStaff(staff);
     if (!resolved.canAccessPanel) {
       throw new UnauthorizedException('Merchant panel access has been revoked');
+    }
+    const shiftEval = evaluateStaffShiftAccess(staff);
+    if (!shiftEval.allowed) {
+      throw new UnauthorizedException(
+        shiftEval.reason || 'Mesai saatleriniz dışında yönetim paneline erişemezsiniz.',
+      );
     }
     return {
       id: staff.id,
@@ -222,7 +239,7 @@ export class RestaurantSessionValidatorService {
       throw new UnauthorizedException('Terminal credentials are inactive or have been changed');
     }
     if (
-      payload.pwdFp &&
+      !payload.pwdFp ||
       payload.pwdFp !== computeSecretFingerprint(restaurant.terminalPasswordHash)
     ) {
       throw new UnauthorizedException('Terminal password has been changed; please sign in again');
@@ -300,12 +317,35 @@ export class RestaurantSessionValidatorService {
     );
     if (!principalValid) return null;
 
+    const ownedRestaurantIds =
+      payload.role === 'root'
+        ? await this.getActiveBossRestaurantIds(payload.sub, targetRestId)
+        : undefined;
+
     return {
+      sub: payload.sub,
       restaurantId: targetRestId,
+      ...(ownedRestaurantIds ? { ownedRestaurantIds } : {}),
       role: payload.role,
       authType: payload.role === 'print_agent' ? 'print-agent-jwt' : 'jwt',
       expMs,
     };
+  }
+
+  async getActiveBossRestaurantIds(
+    bossId: string,
+    fallbackRestaurantId?: string,
+  ): Promise<string[]> {
+    const owned = await this.authService
+      .getBossOwnedRestaurants(bossId, fallbackRestaurantId)
+      .catch(() => []);
+    const activeIds = owned
+      .filter((r) => r.status === 'active' && !isRestaurantPaymentSuspended(r))
+      .map((r) => r.id);
+    if (fallbackRestaurantId && !activeIds.includes(fallbackRestaurantId)) {
+      activeIds.unshift(fallbackRestaurantId);
+    }
+    return Array.from(new Set(activeIds));
   }
 
   private async verifySocketRoleCredentials(
@@ -322,7 +362,7 @@ export class RestaurantSessionValidatorService {
         return false;
       }
       const expectedFp = computeSecretFingerprint(restaurant.printAgentPasswordHash);
-      return !payload.pwdFp || payload.pwdFp === expectedFp;
+      return Boolean(payload.pwdFp) && payload.pwdFp === expectedFp;
     }
 
     if (payload.role === 'terminal') {
@@ -335,7 +375,7 @@ export class RestaurantSessionValidatorService {
         return false;
       }
       const expectedFp = computeSecretFingerprint(restaurant.terminalPasswordHash);
-      return !payload.pwdFp || payload.pwdFp === expectedFp;
+      return Boolean(payload.pwdFp) && payload.pwdFp === expectedFp;
     }
 
     if (payload.role === 'staff') {
@@ -343,14 +383,27 @@ export class RestaurantSessionValidatorService {
         where: { id: payload.sub, restaurantId: targetRestId, isActive: true },
       });
       if (!staff || !staff.passwordHash) return false;
-      if (payload.pwdFp && payload.pwdFp !== computeSecretFingerprint(staff.passwordHash)) {
+      if (!payload.pwdFp || payload.pwdFp !== computeSecretFingerprint(staff.passwordHash)) {
         return false;
       }
+      const shiftEval = evaluateStaffShiftAccess(staff);
+      if (!shiftEval.allowed) return false;
       const resolved = await this.rolesService.resolveForStaff(staff);
       return resolved.canAccessPanel || resolved.canAccessTerminal;
     }
 
-    return true;
+    if (payload.role === 'root') {
+      const admin = await this.rootAdminRepo.findOne({
+        where: { id: payload.sub },
+      });
+      if (!admin || admin.isActive === false || !admin.passwordHash) {
+        return false;
+      }
+      const expectedFp = computeSecretFingerprint(admin.passwordHash);
+      return Boolean(payload.pwdFp) && payload.pwdFp === expectedFp;
+    }
+
+    return false;
   }
 }
 

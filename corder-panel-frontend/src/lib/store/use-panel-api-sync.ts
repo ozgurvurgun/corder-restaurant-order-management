@@ -126,20 +126,21 @@ function syncServerNotificationState(
       createdAt: string
     }>
   } | null,
+  restaurantId?: string | null,
 ): void {
   if (!state) return
   if (Array.isArray(state.dismissedIds) && state.dismissedIds.length > 0) {
-    const merged = getDismissedNotifIds()
+    const merged = getDismissedNotifIds(restaurantId)
     state.dismissedIds.forEach((id) => merged.add(id))
-    saveDismissedNotifIds(merged)
+    saveDismissedNotifIds(merged, restaurantId)
   }
   if (state.clearedAt) {
-    const localCleared = getNotifsClearedAt()
+    const localCleared = getNotifsClearedAt(restaurantId)
     if (
       !localCleared ||
       new Date(state.clearedAt).getTime() > new Date(localCleared).getTime()
     ) {
-      saveNotifsClearedAt(state.clearedAt)
+      saveNotifsClearedAt(state.clearedAt, restaurantId)
     }
   }
 }
@@ -165,10 +166,11 @@ function buildDerivedNotifications(
     sentAt: string
     createdAt: string
   }>,
+  restaurantId?: string | null,
 ): PanelNotification[] {
-  const readIds = getReadNotifIds()
-  const dismissedIds = getDismissedNotifIds()
-  const clearedAtIso = getNotifsClearedAt()
+  const readIds = getReadNotifIds(restaurantId)
+  const dismissedIds = getDismissedNotifIds(restaurantId)
+  const clearedAtIso = getNotifsClearedAt(restaurantId)
   const clearedAtMs = clearedAtIso ? new Date(clearedAtIso).getTime() : 0
 
   const isVisible = (id: string, createdAt: Date) => {
@@ -233,9 +235,10 @@ function buildDerivedNotifications(
 function mergeDerivedAndRealtimeNotifications(
   prev: PanelNotification[],
   derived: PanelNotification[],
+  restaurantId?: string | null,
 ): PanelNotification[] {
-  const dismissedIds = getDismissedNotifIds()
-  const clearedAtIso = getNotifsClearedAt()
+  const dismissedIds = getDismissedNotifIds(restaurantId)
+  const clearedAtIso = getNotifsClearedAt(restaurantId)
   const clearedAtMs = clearedAtIso ? new Date(clearedAtIso).getTime() : 0
   const map = new Map<string, PanelNotification>()
   for (const n of derived) {
@@ -320,8 +323,14 @@ export function usePanelApiSync(
             setClosedTables(closed)
             const hydratedCancelled = buildHydratedCancelledItems(nextOrders, mappedTables, closed)
             setCancelledItems?.(hydratedCancelled)
-            const derived = buildDerivedNotifications(materialsCacheRef.current, hydratedCancelled)
-            setNotifications?.((prev) => mergeDerivedAndRealtimeNotifications(prev, derived))
+            const derived = buildDerivedNotifications(
+              materialsCacheRef.current,
+              hydratedCancelled,
+              undefined,
+              undefined,
+              restaurantId,
+            )
+            setNotifications?.((prev) => mergeDerivedAndRealtimeNotifications(prev, derived, restaurantId))
           }
         }
 
@@ -380,7 +389,7 @@ export function usePanelApiSync(
           api.notifications.getState(token).catch(() => null),
         ])
         if (cancelled) return
-        syncServerNotificationState(notifStateRes)
+        syncServerNotificationState(notifStateRes, restaurantId)
         const orders = mapApiOrdersToPanel(ordersRes)
         const users = staffRes.map(mapApiStaffToPanelUser)
         usersCacheRef.current = users
@@ -416,8 +425,9 @@ export function usePanelApiSync(
           hydratedCancelled,
           notifStateRes?.waiterCalls,
           notifStateRes?.platformNotifications,
+          restaurantId,
         )
-        setNotifications?.((prev) => mergeDerivedAndRealtimeNotifications(prev, derived))
+        setNotifications?.((prev) => mergeDerivedAndRealtimeNotifications(prev, derived, restaurantId))
 
         if (setCashTransactions && currentShiftRes?.id) {
           const cashTxRes = await api.cashTransactions.list(token, currentShiftRes.id).catch(() => null)

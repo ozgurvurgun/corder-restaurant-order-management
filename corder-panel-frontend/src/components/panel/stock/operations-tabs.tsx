@@ -257,8 +257,9 @@ export function InventoryCountsTab(props: {
     actual: number,
   ) => void
   completeInventoryCount: (countId: string) => void
+  cancelInventoryCount?: (countId: string) => void
 }) {
-  const { inventoryCounts, canCountInventory = true, startInventoryCount, updateInventoryItem, completeInventoryCount } = props
+  const { inventoryCounts, canCountInventory = true, startInventoryCount, updateInventoryItem, completeInventoryCount, cancelInventoryCount } = props
   const [page, setPage] = useState(1)
   const pageSize = 5
   const paginatedCounts = useMemo(
@@ -291,9 +292,24 @@ export function InventoryCountsTab(props: {
                 {ic.status === "completed" ? "Tamamlandı" : "Devam Ediyor"}
               </span>
               {ic.status === "in-progress" && canCountInventory && (
-                <button onClick={() => completeInventoryCount(ic.id)} className="h-[26px] px-3 bg-[#34c759] text-white rounded-lg text-[11px] font-medium hover:bg-[#2db84e]">
-                  Tamamla
-                </button>
+                <>
+                  {cancelInventoryCount && (
+                    <button
+                      type="button"
+                      onClick={() => cancelInventoryCount(ic.id)}
+                      className="h-[26px] px-3 bg-red-50 text-red-600 border border-red-200 rounded-lg text-[11px] font-medium hover:bg-red-100"
+                    >
+                      İptal Et
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => completeInventoryCount(ic.id)}
+                    className="h-[26px] px-3 bg-[#34c759] text-white rounded-lg text-[11px] font-medium hover:bg-[#2db84e]"
+                  >
+                    Tamamla
+                  </button>
+                </>
               )}
             </div>
           </div>

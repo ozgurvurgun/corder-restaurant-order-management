@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import {
   fetchMenu,
   formatMenuPrice,
@@ -68,10 +68,17 @@ export function MenuContent({
   const [selectedProduct, setSelectedProduct] = useState<ProductDisplay | null>(null)
   const [showCampaigns, setShowCampaigns] = useState(false)
   const [activeCampaignIndex, setActiveCampaignIndex] = useState(0)
-  const [hasSeenCampaigns, setHasSeenCampaigns] = useState(false)
+  const hasSeenCampaignsRef = useRef(false)
+  const campaignTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [showContact, setShowContact] = useState(false)
   const [logoFailed, setLogoFailed] = useState(false)
   const [waiterOpenTrigger, setWaiterOpenTrigger] = useState(0)
+
+  useEffect(() => {
+    return () => {
+      if (campaignTimerRef.current) clearTimeout(campaignTimerRef.current)
+    }
+  }, [])
 
   const loadMenu = useCallback(
     async (forceRefresh = false) => {
@@ -93,10 +100,11 @@ export function MenuContent({
             prev && res.categories.some((c) => c.id === prev) ? prev : res.categories[0].id
           )
         }
-        if (validCampaigns.length > 0 && !hasSeenCampaigns) {
-          setTimeout(() => {
+        if (validCampaigns.length > 0 && !hasSeenCampaignsRef.current) {
+          hasSeenCampaignsRef.current = true
+          if (campaignTimerRef.current) clearTimeout(campaignTimerRef.current)
+          campaignTimerRef.current = setTimeout(() => {
             setShowCampaigns(true)
-            setHasSeenCampaigns(true)
           }, 400)
         }
       } catch (e) {
@@ -111,7 +119,7 @@ export function MenuContent({
         setLoading(false)
       }
     },
-    [slug, tableToken, hasSeenCampaigns]
+    [slug, tableToken]
   )
 
   useEffect(() => {

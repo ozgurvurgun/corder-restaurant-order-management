@@ -90,7 +90,7 @@ export interface PanelOrderItem {
   price: number
   quantity: number
   note?: string
-  status: "pending" | "sent" | "preparing" | "ready" | "served" | "cancelled" | "ledger"
+  status: "pending" | "sent" | "preparing" | "ready" | "served" | "cancelled" | "ledger" | "paid"
   cancelReason?: string
   cancelledBy?: string
   cancelledAt?: Date
@@ -110,11 +110,8 @@ export interface PanelOrder {
   mergedFrom?: string
 }
 
-export function itemCountsTowardBill(i: { status: string }): boolean {
-  return i.status !== "cancelled" && i.status !== "ledger"
-}
-
-import type { PanelSplitSharePayment } from "./panel-domain-types"
+import { itemCountsTowardBill, type PanelSplitSharePayment } from "./panel-domain-types"
+export { itemCountsTowardBill }
 
 export type PanelTableStatus = "empty" | "occupied" | "ordering" | "checkout"
 

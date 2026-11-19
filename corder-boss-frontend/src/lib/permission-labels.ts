@@ -308,11 +308,14 @@ export const AUDIT_CATEGORY_LABELS: Record<AuditCategory | "ALL", string> = {
   order: "Sipariş",
   table: "Masa",
   payment: "Ödeme",
-  cash: "Kasa",
+  "cash-register": "Kasa",
+  register: "Kasa",
+  shift: "Vardiya",
   stock: "Stok",
   product: "Ürün",
-  staff: "Personel",
-  system: "Sistem",
+  user: "Personel",
+  settings: "Sistem & Ayarlar",
+  auth: "Oturum & Yetki",
 }
 
 /**

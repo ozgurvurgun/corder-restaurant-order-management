@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { DataSource, EntityManager, In, Not } from 'typeorm';
 import { OrderEntity } from '../../domain/order.entity';
 import { OrderItemEntity } from '../../domain/order-item.entity';
@@ -10,6 +10,7 @@ import { OrdersGateway } from '../../api/orders.gateway';
 import { CashShiftService } from '../cash-shift.service';
 import { LedgerService } from '../ledger.service';
 import { StockMovementsService } from '../stock-movements.service';
+import { SESSION_LOCK_STALE_MS, TableService } from '../table.service';
 import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
 
 interface StagedLedgerItem {
@@ -26,13 +27,29 @@ export class OrderLedgerUseCase {
     private readonly cashShiftService: CashShiftService,
     private readonly ledgerService: LedgerService,
     private readonly stockMovementsService: StockMovementsService,
+    @Optional()
+    private readonly tableService?: TableService,
   ) {}
+
+  private assertStaffMayUseLockedTable(
+    table: TableEntity,
+    actorStaffId: string | null | undefined,
+  ): void {
+    if (actorStaffId === null) return;
+    if (this.tableService) {
+      this.tableService.assertStaffMayUseTable(table, actorStaffId);
+    } else if (table.isLockedByOther(actorStaffId, SESSION_LOCK_STALE_MS)) {
+      const holder = (table.sessionStaffName ?? 'Waiter').trim() || 'Waiter';
+      throw new ForbiddenException(`Table is currently being served by ${holder}`);
+    }
+  }
 
   async assignItemsToLedger(
     restaurantId: string,
     lines: { itemId: string; quantity?: number }[],
     ledgerCustomerId: string,
     staffName: string,
+    actorStaffId?: string | null,
   ): Promise<{ ok: true; amount: number }> {
     const seen = new Set<string>();
     for (const line of lines) {
@@ -46,6 +63,15 @@ export class OrderLedgerUseCase {
     let total = 0;
     let tableEmptied = false;
     await this.dataSource.transaction(async (em) => {
+      const { table, staged } = await this.lockTableAndLoadStagedLedgerItems(
+        em,
+        restaurantId,
+        lines,
+        actorStaffId,
+      );
+      const tableId = table.id;
+      const tableName = (table.name ?? '').trim() || null;
+
       const customer = await em.findOne(LedgerCustomerEntity, {
         where: { id: ledgerCustomerId, restaurantId },
         lock: { mode: 'pessimistic_write' },
@@ -53,24 +79,6 @@ export class OrderLedgerUseCase {
       if (!customer) {
         throw new NotFoundException('Ledger customer not found');
       }
-
-      const staged = await this.loadStagedLedgerItems(em, restaurantId, lines);
-      const tableIds = new Set(staged.map((s) => s.order.tableId));
-      if (tableIds.size !== 1) {
-        throw new BadRequestException('All selected items must belong to the same table');
-      }
-      const tableId = staged[0].order.tableId;
-      const table = await em.findOne(TableEntity, {
-        where: { id: tableId, restaurantId },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (!table) {
-        throw new NotFoundException('Table not found');
-      }
-      if (table.status === 'checkout') {
-        throw new BadRequestException('Cannot assign items to ledger while table is in checkout');
-      }
-      const tableName = (table.name ?? '').trim() || null;
 
       const snapshotLines: Array<Record<string, unknown>> = [];
       const stockLines: BilledOrderLineForStock[] = [];
@@ -187,11 +195,12 @@ export class OrderLedgerUseCase {
     return { ok: true, amount: total };
   }
 
-  private async loadStagedLedgerItems(
+  private async lockTableAndLoadStagedLedgerItems(
     em: EntityManager,
     restaurantId: string,
     lines: { itemId: string; quantity?: number }[],
-  ): Promise<StagedLedgerItem[]> {
+    actorStaffId?: string | null,
+  ): Promise<{ table: TableEntity; staged: StagedLedgerItem[] }> {
     const sortedItemIds = [...new Set(lines.map((l) => l.itemId))].sort();
     const itemProbes = await em.find(OrderItemEntity, {
       where: { id: In(sortedItemIds) },
@@ -202,6 +211,31 @@ export class OrderLedgerUseCase {
     }
 
     const sortedOrderIds = [...new Set(itemProbes.map((i) => i.orderId))].sort();
+    const orderProbes = await em.find(OrderEntity, {
+      where: { id: In(sortedOrderIds), restaurantId },
+      select: { id: true, tableId: true },
+    });
+    if (orderProbes.length !== sortedOrderIds.length) {
+      throw new BadRequestException('Invalid order item');
+    }
+    const tableIds = new Set(orderProbes.map((o) => o.tableId));
+    if (tableIds.size !== 1) {
+      throw new BadRequestException('All selected items must belong to the same table');
+    }
+    const tableId = orderProbes[0].tableId;
+
+    const table = await em.findOne(TableEntity, {
+      where: { id: tableId, restaurantId },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (!table) {
+      throw new NotFoundException('Table not found');
+    }
+    if (table.status === 'checkout') {
+      throw new BadRequestException('Cannot assign items to ledger while table is in checkout');
+    }
+    this.assertStaffMayUseLockedTable(table, actorStaffId);
+
     const lockedOrders = await em.find(OrderEntity, {
       where: { id: In(sortedOrderIds), restaurantId },
       order: { id: 'ASC' },
@@ -238,15 +272,19 @@ export class OrderLedgerUseCase {
       if (item.status === 'ledger') {
         throw new BadRequestException('Order item is already assigned to ledger');
       }
+      if (item.status === 'paid') {
+        throw new BadRequestException('Order item is already paid');
+      }
       staged.push({ line, item, order });
     }
-    return staged;
+    return { table, staged };
   }
 
   async revertLedgerOrderItem(
     restaurantId: string,
     itemId: string,
     actorName: string,
+    actorStaffId?: string | null,
   ): Promise<{ ok: true; amount: number }> {
     await this.cashShiftService.requireCurrent(restaurantId);
     let amountOut = 0;
@@ -260,8 +298,28 @@ export class OrderLedgerUseCase {
         throw new NotFoundException('Order item not found');
       }
 
-      const order = await em.findOne(OrderEntity, {
+      const orderProbe = await em.findOne(OrderEntity, {
         where: { id: itemProbe.orderId, restaurantId },
+        select: { id: true, tableId: true },
+      });
+      if (!orderProbe) {
+        throw new NotFoundException('Order not found');
+      }
+
+      const table = await em.findOne(TableEntity, {
+        where: { id: orderProbe.tableId, restaurantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!table) {
+        throw new NotFoundException('Table not found');
+      }
+      if (table.status === 'checkout') {
+        throw new BadRequestException('Cannot revert ledger item while table is in checkout');
+      }
+      this.assertStaffMayUseLockedTable(table, actorStaffId);
+
+      const order = await em.findOne(OrderEntity, {
+        where: { id: orderProbe.id, restaurantId },
         lock: { mode: 'pessimistic_write' },
       });
       if (!order) {
@@ -280,17 +338,6 @@ export class OrderLedgerUseCase {
       }
       if (item.status !== 'ledger') {
         throw new BadRequestException('Only ledger-assigned order items can be reverted');
-      }
-
-      const table = await em.findOne(TableEntity, {
-        where: { id: order.tableId, restaurantId },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (!table) {
-        throw new NotFoundException('Table not found');
-      }
-      if (table.status === 'checkout') {
-        throw new BadRequestException('Cannot revert ledger item while table is in checkout');
       }
 
       const debtEntry = await this.ledgerService.findStandaloneDebtEntryForOrderItem(
@@ -342,7 +389,11 @@ export class OrderLedgerUseCase {
       );
 
       await this.mergeOrRestoreRevertedItem(em, item);
-      if (table.status === 'empty') {
+      if (
+        table.status === 'empty' ||
+        table.status === 'reserved' ||
+        table.status === 'ordering'
+      ) {
         table.status = 'occupied';
         await em.save(TableEntity, table);
       }
@@ -363,7 +414,7 @@ export class OrderLedgerUseCase {
       where: {
         orderId: item.orderId,
         productId: item.productId,
-        status: Not(In(['cancelled', 'ledger'])),
+        status: Not(In(['cancelled', 'ledger', 'paid'])),
       },
       order: { id: 'ASC' },
       lock: { mode: 'pessimistic_write' },

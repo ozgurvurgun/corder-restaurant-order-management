@@ -77,7 +77,7 @@ export class PrintAgentGuard implements CanActivate {
       throw new UnauthorizedException('Print Agent account is inactive or changed');
     }
     const expectedFp = computeSecretFingerprint(restaurant.printAgentPasswordHash);
-    if (payload.pwdFp && payload.pwdFp !== expectedFp) {
+    if (!payload.pwdFp || payload.pwdFp !== expectedFp) {
       throw new UnauthorizedException('Print Agent password has been changed');
     }
     request.printAgentRestaurantId = restaurant.id;

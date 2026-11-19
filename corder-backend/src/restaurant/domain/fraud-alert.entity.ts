@@ -8,6 +8,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
+import { numericColumnTransformer } from '../../common/database/numeric-column.transformer';
 
 export type FraudRuleCode =
   | 'POST_PRINT_VOID_OR_DISCOUNT'
@@ -16,8 +17,7 @@ export type FraudRuleCode =
   | 'TRANSFER_THEN_VOID'
   | 'CASH_DRAWER_DISCREPANCY'
   | 'UNUSUAL_CASH_OUT'
-  | 'BOUNDARY_DISCOUNT_ABUSE'
-  | 'OFF_HOURS_SENSITIVE_ACTION';
+  | 'BOUNDARY_DISCOUNT_ABUSE';
 
 export type FraudAlertSeverity = 'low' | 'medium' | 'high' | 'critical';
 
@@ -29,7 +29,6 @@ export type FraudAlertStatus =
   | 'deleted';
 
 @Entity('fraud_alerts')
-@Index(['restaurantId'])
 @Index(['restaurantId', 'status'])
 @Index(['restaurantId', 'createdAt'])
 export class FraudAlertEntity {
@@ -73,6 +72,7 @@ export class FraudAlertEntity {
     precision: 12,
     scale: 2,
     default: 0,
+    transformer: numericColumnTransformer,
   })
   amountImpact!: number;
 

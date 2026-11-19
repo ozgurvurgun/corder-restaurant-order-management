@@ -24,6 +24,7 @@ import {
   getToken,
   getRestaurant,
   getStaffSession,
+  setStaffSession,
   type RawTableDto,
   type OrderDto,
 } from "./api"
@@ -43,7 +44,10 @@ import {
   mapSessionToTerminalUser,
   useTerminalSessionActions,
 } from "./use-terminal-session-actions"
-import type { ActiveWaiterCall } from "./terminal-notifications"
+import {
+  normalizeWaiterCallPayload,
+  type ActiveWaiterCall,
+} from "./terminal-notifications"
 
 interface TerminalContextType {
   currentUser: TerminalUser | null
@@ -152,6 +156,21 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     setWaiterCalls((prev) => prev.filter((c) => c.id !== id))
   }, [])
 
+  const syncNotifications = useCallback(async () => {
+    const token = getToken()
+    const staffSession = getStaffSession()
+    if (!token || !staffSession?.staffToken) return
+    try {
+      const state = await api.notifications.getState(token)
+      const calls = (state.waiterCalls ?? [])
+        .map((c) => normalizeWaiterCallPayload(c))
+        .filter((c): c is ActiveWaiterCall => c !== null)
+      setWaiterCalls(calls.slice(0, 20))
+    } catch {
+      /* ignore background notification sync errors */
+    }
+  }, [])
+
   const lockedTableIdRef = useRef<string | null>(null)
   const pendingUnlockTableIdRef = useRef<string | null>(null)
   const currentUserRef = useRef<TerminalUser | null>(currentUser)
@@ -229,9 +248,40 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       ])
       setRawTables(tablesRes)
       setRawOrders(ordersRes)
+      const existingSession = getStaffSession()
       if (staffUsersRes) {
-        setUsers(staffUsersRes.map((u) => ({ ...u, name: formatTitleCase(u.name) })))
+        const normalizedUsers = staffUsersRes.map((u) => ({
+          ...u,
+          name: formatTitleCase(u.name),
+        }))
+        setUsers(normalizedUsers)
         setUsersLoaded(true)
+        if (existingSession) {
+          const matchingMember = normalizedUsers.find(
+            (u) => u.id === existingSession.staffId
+          )
+          if (matchingMember) {
+            const updatedSession = setStaffSession({
+              ...existingSession,
+              name: matchingMember.name,
+              role: matchingMember.role,
+              roleLabel: matchingMember.roleLabel ?? existingSession.roleLabel,
+              permissions: Array.isArray(matchingMember.permissions)
+                ? matchingMember.permissions
+                : existingSession.permissions,
+              limits: matchingMember.limits ?? existingSession.limits,
+              effectiveEndTime:
+                matchingMember.effectiveEndTime ?? existingSession.effectiveEndTime,
+            })
+            setCurrentUser(mapSessionToTerminalUser(updatedSession))
+          } else {
+            setCurrentUser(mapSessionToTerminalUser(existingSession))
+          }
+        } else {
+          setCurrentUser(null)
+        }
+      } else {
+        setCurrentUser(mapSessionToTerminalUser(existingSession))
       }
       if (menuRes) {
         const mapped = mapMenuTreeToCategoriesAndProducts(menuRes.categories)
@@ -241,7 +291,6 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
           (prev) => prev ?? mapped.categories.find((c) => !c.parentId)?.id ?? null
         )
       }
-      setCurrentUser(mapSessionToTerminalUser(getStaffSession()))
     } catch (err) {
       setError(translateApiError(err, "Veri yüklenemedi"))
     } finally {
@@ -297,6 +346,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     pullTables,
     logout: sessionActions.logout,
     onWaiterCalled: handleWaiterCalled,
+    onNotificationsUpdated: syncNotifications,
   })
 
   const orderActions = useTerminalOrderActions({

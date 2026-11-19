@@ -289,12 +289,8 @@ export function useSystemActions(params: {
     saveNotifsClearedAt(nowIso)
     setNotifications((prev) => {
       const dismissed = getDismissedNotifIds()
-      const ids = prev.map((n) => n.id)
-      ids.forEach((id) => dismissed.add(id))
+      prev.forEach((n) => dismissed.add(n.id))
       saveDismissedNotifIds(dismissed)
-      if (token && ids.length > 0) {
-        void api.notifications.dismiss(token, ids).catch(() => {})
-      }
       return []
     })
     if (token) {
@@ -304,9 +300,13 @@ export function useSystemActions(params: {
 
   const switchBranch = useCallback(
     (id: string) => {
-      setBranches((prev) => prev.map((b) => ({ ...b, isCurrent: b.id === id })))
-      if (switchBusiness) void switchBusiness(id)
-      logActivity({ action: "branch_switched", category: "settings", details: `Şube değiştirildi: ${id}`, metadata: { branchId: id } })
+      if (!switchBusiness) return
+      void switchBusiness(id)
+        .then(() => {
+          setBranches((prev) => prev.map((b) => ({ ...b, isCurrent: b.id === id })))
+          logActivity({ action: "branch_switched", category: "settings", details: `Şube değiştirildi: ${id}`, metadata: { branchId: id } })
+        })
+        .catch(() => {})
     },
     [setBranches, switchBusiness, logActivity],
   )
@@ -430,14 +430,12 @@ export function useSystemActions(params: {
           total: 0,
         })
         .then(() => {
-          setPrinters((prev) => prev.map((p) => (p.id === id ? { ...p, status: "online" } : p)))
-          void api.technical.updatePrinter(token, id, { status: "online" }).catch(() => {})
           logActivity({ action: "printer_tested", category: "settings", details: `Yazıcı test edildi: ${pr.name}`, metadata: { printerId: id } })
           showPanelToast(`${pr.name} test baskısı kuyruğa gönderildi`, "success")
         })
         .catch((err) => showPanelToast(err instanceof Error ? err.message : "Test baskısı gönderilemedi", "error"))
     },
-    [printers, token, currentUser?.name, setPrinters, logActivity],
+    [printers, token, currentUser?.name, logActivity],
   )
 
   const addPrinterDepartment = useCallback(

@@ -152,13 +152,37 @@ export function clearStaffSession() {
   localStorage.removeItem(STAFF_SESSION_KEY)
 }
 
+export function getLocationHeaders(): Record<string, string> {
+  const coords = getCachedTerminalCoords()
+  if (!coords) return {}
+  const headers: Record<string, string> = {}
+  if (coords.latitude != null && Number.isFinite(Number(coords.latitude))) {
+    headers["X-Terminal-Lat"] = String(coords.latitude)
+  }
+  if (coords.longitude != null && Number.isFinite(Number(coords.longitude))) {
+    headers["X-Terminal-Lng"] = String(coords.longitude)
+  }
+  return headers
+}
+
+export function isLocationGeofenceError(status: number, message: unknown): boolean {
+  if (status !== 401 || typeof message !== "string") return false
+  const lower = message.toLowerCase()
+  return (
+    lower.includes("konum") ||
+    lower.includes("gps") ||
+    lower.includes("mesafeniz") ||
+    lower.includes("uzakta olduğunuz")
+  )
+}
+
 export function isStaffAuthError(status: number, message: unknown): boolean {
   if (status !== 401 || typeof message !== "string") return false
+  if (isLocationGeofenceError(status, message)) return false
   const lower = message.toLowerCase()
   return (
     lower.includes("personel") ||
     lower.includes("mesai") ||
-    lower.includes("konum") ||
     lower.includes("staff") ||
     lower.includes("pin") ||
     lower.includes("actor session") ||
@@ -187,11 +211,7 @@ async function request<T>(
       if (staffSession?.staffToken) {
         headers["X-Staff-Token"] = staffSession.staffToken
       }
-      const coords = getCachedTerminalCoords()
-      if (coords) {
-        headers["X-Terminal-Lat"] = String(coords.latitude)
-        headers["X-Terminal-Lng"] = String(coords.longitude)
-      }
+      Object.assign(headers, getLocationHeaders())
     }
   }
   const res = await fetch(url, { ...init, headers })
@@ -205,7 +225,9 @@ async function request<T>(
       // Use raw response text when body is not JSON
     }
     if (res.status === 401 && token && !skipAuthExpired) {
-      if (isStaffAuthError(res.status, message)) {
+      if (isLocationGeofenceError(res.status, message)) {
+        // Location/geofence warning: do not expire staff PIN session
+      } else if (isStaffAuthError(res.status, message)) {
         if (typeof message === "string" && message.trim()) {
           try {
             sessionStorage.setItem("terminal_staff_kick_notice", message.trim())
@@ -256,6 +278,7 @@ export const api = {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
           "X-Staff-Token": staffSession.staffToken,
+          ...getLocationHeaders(),
         },
         body: JSON.stringify(force ? { force: true } : {}),
       })
@@ -288,7 +311,9 @@ export const api = {
           // Keep raw text when response is not JSON
         }
         if (res.status === 401) {
-          if (isStaffAuthError(res.status, message)) {
+          if (isLocationGeofenceError(res.status, message)) {
+            // Do not invoke staffExpiredHandler on location/geofence errors
+          } else if (isStaffAuthError(res.status, message)) {
             staffExpiredHandler?.()
           } else {
             notifyAuthExpired(typeof message === "string" ? message : null)
@@ -316,6 +341,7 @@ export const api = {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
             "X-Staff-Token": staffSession.staffToken,
+            ...getLocationHeaders(),
           },
           body: JSON.stringify({}),
         }).catch(() => undefined)
@@ -337,52 +363,30 @@ export const api = {
     },
     create: (
       token: string,
-      body: {
-        tableId: string
-        items: { productId: string; quantity: number; note?: string }[]
-      }
+      body: { tableId: string; items: { productId: string; quantity: number; note?: string }[] }
     ) =>
       request<OrderDto>("/restaurant/orders", { method: "POST", token, body: JSON.stringify(body) }),
     move: (token: string, fromTableId: string, toTableId: string) =>
       request<{ moved: number }>("/restaurant/orders/move", {
-        method: "PATCH",
-        token,
-        body: JSON.stringify({ fromTableId, toTableId }),
+        method: "PATCH", token, body: JSON.stringify({ fromTableId, toTableId }),
       }),
     moveItems: (
       token: string,
-      body: {
-        fromTableId: string
-        toTableId: string
-        items: Array<{ itemId: string; quantity?: number }>
-      }
+      body: { fromTableId: string; toTableId: string; items: Array<{ itemId: string; quantity?: number }> }
     ) =>
       request<OrderDto>("/restaurant/orders/move-items", {
-        method: "POST",
-        token,
-        body: JSON.stringify(body),
+        method: "POST", token, body: JSON.stringify(body),
       }),
     cancelItem: (
-      token: string,
-      _orderId: string,
-      itemId: string,
-      reason = "Terminal iptali",
-      quantity?: number
+      token: string, _orderId: string, itemId: string, reason = "Terminal iptali", quantity?: number
     ) =>
       request<{ ok: true }>("/restaurant/orders/cancel-item", {
-        method: "POST",
-        token,
-        body: JSON.stringify({
-          itemId,
-          reason,
-          ...(quantity != null ? { quantity } : {}),
-        }),
+        method: "POST", token,
+        body: JSON.stringify({ itemId, reason, ...(quantity != null ? { quantity } : {}) }),
       }),
     closeCheck: (token: string, body: CloseCheckBody) =>
       request<{ ok: boolean }>("/restaurant/orders/close-check", {
-        method: "POST",
-        token,
-        body: JSON.stringify(body),
+        method: "POST", token, body: JSON.stringify(body),
       }),
     printReceipt: (
       token: string,
@@ -390,28 +394,36 @@ export const api = {
         | { tableId: string; orderId?: string }
         | { orderId: string }
         | {
-            tableName: string
-            waiterName?: string
-            items: { productName: string; quantity: number; price: number; note?: string }[]
-            total: number
+            tableName: string; waiterName?: string
+            items: { productName: string; quantity: number; price: number; note?: string }[]; total: number
           }
     ) =>
       request<{ ok: true; jobId: string }>("/restaurant/orders/print-receipt", {
-        method: "POST",
-        token,
-        body: JSON.stringify({ ...body, receiptMode: "split" as const }),
+        method: "POST", token, body: JSON.stringify({ ...body, receiptMode: "split" as const }),
       }),
   },
   menu: {
-    terminal: (token: string) =>
-      request<MenuBusinessDto>("/restaurant/menu", { token }),
+    terminal: (token: string) => request<MenuBusinessDto>("/restaurant/menu", { token }),
+  },
+  notifications: {
+    getState: (token: string) =>
+      request<{
+        clearedAt: string | null
+        dismissedIds: string[]
+        waiterCalls?: Array<{
+          id: string
+          tableId: string
+          tableName: string
+          sectionName?: string
+          requestType?: string
+          note?: string | null
+          createdAt: string
+        }>
+      }>("/restaurant/notifications", { token, skipAuthExpired: true }),
   },
   staff: {
     listTerminalUsers: (token: string) =>
-      request<TerminalStaffMember[]>("/restaurant/staff/terminal-users", {
-        token,
-        skipStaffToken: true,
-      }),
+      request<TerminalStaffMember[]>("/restaurant/staff/terminal-users", { token, skipStaffToken: true }),
     verifyPin: (
       token: string,
       pin: string,
@@ -419,23 +431,11 @@ export const api = {
       coords?: { latitude?: number | null; longitude?: number | null }
     ) =>
       request<{
-        staffId: string
-        name: string
-        role: string
-        roleLabel?: string
-        permissions?: string[]
-        limits?: {
-          maxDiscountPercent: number
-          maxDiscountAmount: number | null
-        }
-        staffToken: string
-        shiftAccessUntil?: string | null
-        effectiveEndTime?: string | null
+        staffId: string; name: string; role: string; roleLabel?: string
+        permissions?: string[]; limits?: { maxDiscountPercent: number; maxDiscountAmount: number | null }
+        staffToken: string; shiftAccessUntil?: string | null; effectiveEndTime?: string | null
       }>("/restaurant/staff/verify-pin", {
-        method: "POST",
-        token,
-        skipAuthExpired: true,
-        skipStaffToken: true,
+        method: "POST", token, skipAuthExpired: true, skipStaffToken: true,
         body: JSON.stringify({
           pin,
           ...(staffId ? { staffId } : {}),

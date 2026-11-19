@@ -10,9 +10,14 @@ import { TableEntity } from '../domain/table.entity';
 import { OrderEntity } from '../domain/order.entity';
 import { RestaurantStaffEntity } from '../domain/restaurant-staff.entity';
 import { OrderStatusPolicy } from '../domain/services/order-status.policy';
+import {
+  CheckSettlementPolicy,
+  SettlementActorPolicy,
+} from '../domain/services/check-settlement.policy';
 import { TableQrTokenPolicy } from '../domain/services/table-qr-token.policy';
 import { BulkCreateTablesDto, CreateTableDto } from '../api/dto/create-table.dto';
 import { UpdateTableDto } from '../api/dto/update-table.dto';
+import { computeDiscountMinorUnits, toMinorUnits } from '../../common/money/minor-units';
 
 /** Grace period (ms) to automatically take over a stale lock after disconnect. */
 export const SESSION_LOCK_STALE_MS = 120_000;
@@ -32,6 +37,26 @@ export class TableService {
     }
     table.qrToken = TableQrTokenPolicy.generateToken(table.restaurantId, table.id);
     return table;
+  }
+
+  async getBillableSubtotalMinorUnits(
+    restaurantId: string,
+    tableId: string,
+    em: Repository<TableEntity>['manager'] = this.repo.manager,
+  ): Promise<number> {
+    const activeOrders = await em.find(OrderEntity, {
+      where: { restaurantId, tableId, status: 'active' },
+      relations: ['items'],
+    });
+    let sumMinor = 0;
+    for (const order of activeOrders) {
+      for (const item of order.items ?? []) {
+        if (OrderStatusPolicy.isItemOnActiveBill(item.status)) {
+          sumMinor += Math.max(0, toMinorUnits(item.price)) * Math.max(0, item.quantity);
+        }
+      }
+    }
+    return sumMinor;
   }
 
   private async tableHasBillableItems(
@@ -63,21 +88,51 @@ export class TableService {
         billableTableIds.add(ord.tableId);
       }
     }
-    const staleTablesToHeal: TableEntity[] = [];
+    const staleTableIdsToHeal: string[] = [];
     for (const table of tables) {
+      const hasActiveSessionLock = table.hasActiveLock(SESSION_LOCK_STALE_MS, now);
       if (
-        (table.status === 'checkout' ||
-          table.status === 'occupied' ||
-          table.status === 'ordering') &&
+        (table.status === 'checkout' || table.status === 'occupied') &&
+        !hasActiveSessionLock &&
         !billableTableIds.has(table.id)
       ) {
         table.markEmpty();
-        staleTablesToHeal.push(table);
+        staleTableIdsToHeal.push(table.id);
       }
       this.sanitizeStaleLock(table, now);
     }
-    if (staleTablesToHeal.length > 0) {
-      await this.repo.save(staleTablesToHeal).catch(() => undefined);
+    if (
+      staleTableIdsToHeal.length > 0 &&
+      typeof this.repo.manager?.query === 'function'
+    ) {
+      const staleThresholdIso = new Date(
+        now.getTime() - SESSION_LOCK_STALE_MS,
+      ).toISOString();
+      await this.repo.manager
+        .query(
+          `UPDATE tables t
+           SET status = 'empty',
+               discount = NULL,
+               split_info = NULL,
+               session_staff_id = NULL,
+               session_staff_name = NULL,
+               session_locked_at = NULL
+           WHERE t.restaurant_id = $1::uuid
+             AND t.id = ANY($2::uuid[])
+             AND t.status IN ('occupied', 'checkout')
+             AND (t.session_staff_id IS NULL OR t.session_locked_at IS NULL OR t.session_locked_at < $3::timestamptz)
+             AND NOT EXISTS (
+               SELECT 1
+               FROM orders o
+               JOIN order_items oi ON oi.order_id = o.id
+               WHERE o.restaurant_id = t.restaurant_id
+                 AND o.table_id = t.id
+                 AND o.status = 'active'
+                 AND oi.status NOT IN ('cancelled', 'ledger', 'paid')
+             )`,
+          [restaurantId, staleTableIdsToHeal, staleThresholdIso],
+        )
+        .catch(() => undefined);
     }
     return tables.sort((a, b) => {
       const sectionCmp = a.section.localeCompare(b.section, undefined, {
@@ -154,6 +209,7 @@ export class TableService {
     id: string,
     restaurantId: string,
     dto: UpdateTableDto,
+    actor?: SettlementActorPolicy,
   ): Promise<TableEntity> {
     return this.repo.manager.transaction(async (em) => {
       const entity = await em.findOne(TableEntity, {
@@ -170,7 +226,23 @@ export class TableService {
       if (dto.section !== undefined) {
         entity.section = dto.section.trim() || 'default';
       }
-      if (dto.discount !== undefined) entity.discount = dto.discount;
+      if (dto.discount !== undefined) {
+        if (dto.discount !== null && actor && !actor.isBoss) {
+          const rawSubtotalMinor = await this.getBillableSubtotalMinorUnits(
+            restaurantId,
+            entity.id,
+            em,
+          );
+          const discountMinor = computeDiscountMinorUnits(rawSubtotalMinor, dto.discount);
+          CheckSettlementPolicy.assertDiscountAllowedForActor(
+            rawSubtotalMinor,
+            discountMinor,
+            dto.discount,
+            actor,
+          );
+        }
+        entity.discount = dto.discount;
+      }
       if (dto.splitInfo !== undefined) entity.splitInfo = dto.splitInfo;
       if (dto.status !== undefined) {
         const hasBillableItems = await this.tableHasBillableItems(
@@ -185,7 +257,11 @@ export class TableService {
             );
           }
           entity.markEmpty();
-        } else if (!hasBillableItems && dto.status !== 'reserved') {
+        } else if (
+          !hasBillableItems &&
+          dto.status !== 'reserved' &&
+          dto.status !== 'ordering'
+        ) {
           entity.markEmpty();
         } else {
           entity.status = dto.status;
@@ -209,10 +285,13 @@ export class TableService {
         where: { restaurantId, tableId: entity.id, status: 'active' },
         relations: ['items'],
       });
-      const hasBillableItems = activeOrders.some((o) =>
-        (o.items ?? []).some((i) => OrderStatusPolicy.isItemOnActiveBill(i.status)),
+      const hasActiveOrder = activeOrders.some(
+        (o) =>
+          !Array.isArray(o.items) ||
+          o.items.length === 0 ||
+          o.items.some((i) => i.status !== 'cancelled'),
       );
-      if (hasBillableItems) {
+      if (hasActiveOrder) {
         throw new BadRequestException(
           'Cannot delete a table that has active open orders',
         );

@@ -69,7 +69,7 @@ export function mapMenuTreeToCategoriesAndProducts(
 }
 
 export function isItemOnActiveBill(status: string): boolean {
-  return status !== "cancelled" && status !== "ledger"
+  return status !== "cancelled" && status !== "ledger" && status !== "paid"
 }
 
 export function calculateOrderItemsMinorTotal(items: TerminalOrderItem[]): number {
@@ -108,7 +108,9 @@ export function mapOrderDtoToTerminalOrder(
   const tableName = matchedTable?.name ?? dto.tableId
   const tableNumber = extractTableNumber(tableName, 0)
 
-  const items: TerminalOrderItem[] = dto.items.map((item) => {
+  const items: TerminalOrderItem[] = dto.items
+    .filter((item) => item.status !== "paid")
+    .map((item) => {
     const cleanPrice = fromMinorUnits(toMinorUnits(item.price))
     const formattedItemName = formatTitleCase(item.productName)
     const product: TerminalProduct = productsById?.get(item.productId) ?? {

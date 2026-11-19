@@ -86,11 +86,13 @@ export function evaluateStaffShiftAccess(
   const rawEndMins = parseHhMm(staff.shiftEndTime);
   if (startMins === null || rawEndMins === null) {
     return {
-      allowed: true,
+      allowed: false,
       effectiveStartTime: null,
       effectiveEndTime: null,
-      remainingSeconds: null,
+      remainingSeconds: 0,
       shiftAccessUntilIso: null,
+      reason:
+        'Mesai saat kısıtlaması etkin ancak başlangıç veya bitiş saati geçersiz/eksik. Lütfen yöneticinizle iletişime geçin.',
     };
   }
 
@@ -187,6 +189,14 @@ export function evaluateRestaurantGeofenceAccess(
   clientCoords?: { latitude?: number | null; longitude?: number | null } | null,
 ): GeofenceAccessEvaluation {
   if (!restaurant.terminalLocationRestrictionEnabled) {
+    return { allowed: true };
+  }
+  if (
+    restaurant.locationLatitude == null ||
+    restaurant.locationLongitude == null ||
+    String(restaurant.locationLatitude).trim() === '' ||
+    String(restaurant.locationLongitude).trim() === ''
+  ) {
     return { allowed: true };
   }
   const restLat = Number(restaurant.locationLatitude);

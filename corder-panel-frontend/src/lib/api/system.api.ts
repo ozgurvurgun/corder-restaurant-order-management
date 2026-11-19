@@ -411,10 +411,12 @@ export const securityApi = {
   },
   scanFraudAlerts: (token: string) =>
     request<{
+      ok?: boolean
+      newAlertsCount?: number
       scanned?: number
       created?: number
       alerts?: FraudAlertDto[]
-      ok?: boolean
+      summary?: Record<string, unknown>
     }>("/restaurant/security/fraud-alerts/scan", { method: "POST", token }),
   updateFraudAlertStatus: (
     token: string,

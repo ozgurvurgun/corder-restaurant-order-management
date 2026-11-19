@@ -9,12 +9,10 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import {
-  CreatePlatformNotificationInput,
-  PlatformNotificationsService,
-} from '../application/platform-notifications.service';
+import { PlatformNotificationsService } from '../application/platform-notifications.service';
 import { PlatformAdminEntity } from '../domain/platform-admin.entity';
 import { PlatformJwtGuard } from '../infrastructure/platform-jwt.guard';
+import { CreatePlatformNotificationDto } from './dto/create-platform-notification.dto';
 
 @Controller('platform/notifications')
 @UseGuards(PlatformJwtGuard)
@@ -30,7 +28,7 @@ export class PlatformNotificationsController {
 
   @Post()
   create(
-    @Body() dto: CreatePlatformNotificationInput,
+    @Body() dto: CreatePlatformNotificationDto,
     @Req() req: { user?: PlatformAdminEntity },
   ) {
     return this.notificationsService.create(

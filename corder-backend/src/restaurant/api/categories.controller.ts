@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Optional,
   Param,
   ParseUUIDPipe,
   Post,
@@ -13,6 +14,7 @@ import { CategoryService } from '../application/category.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { ReorderCategoriesDto } from './dto/reorder-categories.dto';
+import { OrdersGateway } from './orders.gateway';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
 import {
   PanelRootGuard,
@@ -23,7 +25,10 @@ import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 @Controller('restaurant/categories')
 @UseGuards(RestaurantJwtGuard, PanelRootGuard)
 export class CategoriesController {
-  constructor(private readonly service: CategoryService) {}
+  constructor(
+    private readonly service: CategoryService,
+    @Optional() private readonly ordersGateway?: OrdersGateway,
+  ) {}
 
   @Get()
   @RequirePermissions('catalog.view', 'order.view', 'order.create')
@@ -42,27 +47,33 @@ export class CategoriesController {
 
   @Post()
   @RequirePermissions('catalog.manage_categories')
-  create(@RestaurantId() restaurantId: string, @Body() dto: CreateCategoryDto) {
-    return this.service.create(restaurantId, dto);
+  async create(@RestaurantId() restaurantId: string, @Body() dto: CreateCategoryDto) {
+    const res = await this.service.create(restaurantId, dto);
+    this.ordersGateway?.emitPrintersUpdated(restaurantId);
+    return res;
   }
 
   @Put(':id')
   @RequirePermissions('catalog.manage_categories')
-  update(
+  async update(
     @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
     @Body() dto: UpdateCategoryDto,
   ) {
-    return this.service.update(id, restaurantId, dto);
+    const res = await this.service.update(id, restaurantId, dto);
+    this.ordersGateway?.emitPrintersUpdated(restaurantId);
+    return res;
   }
 
   @Delete(':id')
   @RequirePermissions('catalog.manage_categories')
-  remove(
+  async remove(
     @Param('id', ParseUUIDPipe) id: string,
     @RestaurantId() restaurantId: string,
   ) {
-    return this.service.remove(id, restaurantId);
+    const res = await this.service.remove(id, restaurantId);
+    this.ordersGateway?.emitPrintersUpdated(restaurantId);
+    return res;
   }
 
   @Post('reorder')

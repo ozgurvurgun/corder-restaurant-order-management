@@ -1,5 +1,8 @@
+import { BadRequestException } from '@nestjs/common';
 import { ProductEntity } from '../product.entity';
 import { StockMaterialEntity } from '../stock-material.entity';
+
+export type RecipeUnitFamily = 'mass' | 'volume' | 'count';
 
 export interface BilledOrderLineForStock {
   productId: string;
@@ -9,6 +12,13 @@ export interface BilledOrderLineForStock {
 
 export interface MaterialDeductionAggregation {
   materialId: string;
+  quantity: number;
+  reason: string;
+}
+
+export interface MaterialNetDeltaAggregation {
+  materialId: string;
+  direction: 'out' | 'in';
   quantity: number;
   reason: string;
 }
@@ -23,19 +33,76 @@ function normalizeUnit(unit?: string | null): string {
   if (raw === 'ml' || raw === 'mililitre') return 'ml';
   if (raw === 'cl' || raw === 'santilitre') return 'cl';
   if (raw === 'l' || raw === 'lt' || raw === 'litre') return 'l';
+  if (raw === 'adet' || raw === 'pcs' || raw === 'piece') return 'adet';
+  if (raw === 'porsiyon' || raw === 'portion') return 'porsiyon';
+  if (raw === 'paket' || raw === 'pack') return 'paket';
+  if (raw === 'koli' || raw === 'box') return 'koli';
   return raw;
 }
 
+function resolveUnitFamily(normalizedUnit: string): RecipeUnitFamily | null {
+  if (normalizedUnit === 'g' || normalizedUnit === 'kg') return 'mass';
+  if (
+    normalizedUnit === 'ml' ||
+    normalizedUnit === 'cl' ||
+    normalizedUnit === 'l'
+  ) {
+    return 'volume';
+  }
+  if (
+    normalizedUnit === 'adet' ||
+    normalizedUnit === 'porsiyon' ||
+    normalizedUnit === 'paket' ||
+    normalizedUnit === 'koli'
+  ) {
+    return 'count';
+  }
+  return null;
+}
+
 export class RecipeStockPolicy {
+  static getUnitFamily(unit?: string | null): RecipeUnitFamily | null {
+    const normalized = normalizeUnit(unit);
+    if (!normalized) return null;
+    return resolveUnitFamily(normalized);
+  }
+
+  static areUnitsCompatible(
+    fromUnit?: string | null,
+    toUnit?: string | null,
+  ): boolean {
+    const uFrom = normalizeUnit(fromUnit);
+    const uTo = normalizeUnit(toUnit);
+    if (!uFrom || !uTo || uFrom === uTo) return true;
+    const familyFrom = resolveUnitFamily(uFrom);
+    const familyTo = resolveUnitFamily(uTo);
+    return Boolean(familyFrom && familyTo && familyFrom === familyTo);
+  }
+
+  static assertUnitsCompatible(
+    fromUnit?: string | null,
+    toUnit?: string | null,
+    materialName?: string,
+  ): void {
+    if (!this.areUnitsCompatible(fromUnit, toUnit)) {
+      const label = materialName ? ` for material '${materialName}'` : '';
+      throw new BadRequestException(
+        `Recipe ingredient unit '${fromUnit}' is incompatible with stock material unit '${toUnit}'${label}.`,
+      );
+    }
+  }
+
   /**
    * Converts an ingredient quantity from `fromUnit` into the stock material's base `toUnit`
-   * when both belong to the same mass (g/kg) or volume (ml/cl/l) family.
+   * when both belong to the same mass (`kg`/`g`/`gr`), volume (`l`/`lt`/`ml`/`cl`), or count
+   * (`adet`/`porsiyon`/`paket`) unit family, throwing `BadRequestException` on mismatch.
    */
   static convertQuantity(
     quantity: number,
     fromUnit?: string | null,
     toUnit?: string | null,
   ): number {
+    this.assertUnitsCompatible(fromUnit, toUnit);
     if (!Number.isFinite(quantity) || quantity <= 0) return 0;
     const uFrom = normalizeUnit(fromUnit);
     const uTo = normalizeUnit(toUnit);
@@ -104,7 +171,7 @@ export class RecipeStockPolicy {
     const out: MaterialDeductionAggregation[] = [];
     for (const materialId of sortedMaterialIds) {
       const entry = byMaterial.get(materialId)!;
-      const deductQty = Number(entry.quantity.toFixed(3));
+      const deductQty = Number(entry.quantity.toFixed(4));
       if (deductQty <= 0) continue;
       const uniqLabels = [...new Set(entry.labels)];
       const reason =
@@ -116,6 +183,77 @@ export class RecipeStockPolicy {
         quantity: deductQty,
         reason,
       });
+    }
+    return out;
+  }
+
+  /**
+   * Computes net per-material deductions and reversals in a single UUID-sorted pass
+   * across `previousLines` and `nextLines`.
+   */
+  static aggregateNetDeltas(
+    previousLines: BilledOrderLineForStock[],
+    nextLines: BilledOrderLineForStock[],
+    productById: Map<string, ProductEntity>,
+    materialById?: Map<string, Pick<StockMaterialEntity, 'unit'>>,
+  ): MaterialNetDeltaAggregation[] {
+    const { linesToDeduct, linesToReverse } = this.computeLineDeltas(
+      previousLines,
+      nextLines,
+    );
+    const deductions = this.aggregateDeductions(
+      linesToDeduct,
+      productById,
+      materialById,
+      'Order edit',
+    );
+    const reversals = this.aggregateDeductions(
+      linesToReverse,
+      productById,
+      materialById,
+      'Order edit reversal',
+    );
+
+    const byMaterial = new Map<
+      string,
+      { outQty: number; inQty: number; outReason?: string; inReason?: string }
+    >();
+
+    for (const d of deductions) {
+      const cur = byMaterial.get(d.materialId) ?? { outQty: 0, inQty: 0 };
+      cur.outQty += d.quantity;
+      cur.outReason = d.reason;
+      byMaterial.set(d.materialId, cur);
+    }
+
+    for (const r of reversals) {
+      const cur = byMaterial.get(r.materialId) ?? { outQty: 0, inQty: 0 };
+      cur.inQty += r.quantity;
+      cur.inReason = r.reason;
+      byMaterial.set(r.materialId, cur);
+    }
+
+    const sortedMaterialIds = [...byMaterial.keys()].sort();
+    const out: MaterialNetDeltaAggregation[] = [];
+    for (const materialId of sortedMaterialIds) {
+      const entry = byMaterial.get(materialId)!;
+      const netDeduct = Number((entry.outQty - entry.inQty).toFixed(4));
+      if (netDeduct === 0) continue;
+      if (netDeduct > 0) {
+        out.push({
+          materialId,
+          direction: 'out',
+          quantity: netDeduct,
+          reason: entry.outReason ?? 'Order edit',
+        });
+      } else {
+        out.push({
+          materialId,
+          direction: 'in',
+          quantity: Math.abs(netDeduct),
+          reason: entry.inReason ?? 'Order edit reversal',
+        });
+      }
     }
     return out;
   }

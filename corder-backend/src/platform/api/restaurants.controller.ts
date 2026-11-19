@@ -12,13 +12,11 @@ import {
 } from '@nestjs/common';
 import { RestaurantService } from '../application/restaurant.service';
 import { PlatformBillingService } from '../application/platform-billing.service';
-import {
-  PlatformSupportService,
-  SupportActionInput,
-} from '../application/platform-support.service';
+import { PlatformSupportService } from '../application/platform-support.service';
 import { PlatformAdminEntity } from '../domain/platform-admin.entity';
 import { CreateRestaurantDto } from './dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto';
+import { ExecuteSupportActionDto } from './dto/execute-support-action.dto';
 import {
   RecordRestaurantPaymentDto,
   SuspendRestaurantBillingDto,
@@ -156,7 +154,7 @@ export class RestaurantsController {
   @Post(':id/support-action')
   executeSupportAction(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: SupportActionInput,
+    @Body() body: ExecuteSupportActionDto,
     @Req() req: { user?: Partial<PlatformAdminEntity> },
   ) {
     return this.supportService.executeSupportAction(

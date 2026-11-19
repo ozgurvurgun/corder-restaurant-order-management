@@ -38,6 +38,13 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill,
   const completedRef = useRef(false)
   const submittingRef = useRef(false)
   const table = tables.find((t) => t.id === tableId)
+  const preCheckoutStatusRef = useRef(
+    table?.status && table.status !== "checkout" ? table.status : "occupied",
+  )
+  const latestTableStatusRef = useRef(table?.status)
+  useEffect(() => {
+    if (table?.status) latestTableStatusRef.current = table.status
+  }, [table?.status])
   const isPersonShare = splitTarget?.mode === "person-share"
   const isItemsSplit = splitTarget?.mode === "items"
   const baseTotal = splitTarget ? splitTarget.amount : total
@@ -140,9 +147,10 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill,
   }
   useEffect(() => {
     if (!token) return
+    latestTableStatusRef.current = "checkout"
     void api.tables.update(token, tableId, { status: "checkout" }).catch(() => {}); return () => {
-      if (!completedRef.current) {
-        void api.tables.update(token, tableId, { status: "occupied" }).catch(() => {})
+      if (!completedRef.current && latestTableStatusRef.current === "checkout") {
+        void api.tables.update(token, tableId, { status: preCheckoutStatusRef.current }).catch(() => {})
       }
     }
   }, [token, tableId])
@@ -158,7 +166,7 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill,
           splitTarget.amount,
           method === "ledger" ? { ledgerCustomerId: effectiveLedgerCustomerId } : undefined,
         ); if (!res.ok) return
-        completedRef.current = true; if (!res.fullyClosed && token) void api.tables.update(token, tableId, { status: "occupied" }).catch(() => {}); showToast(
+        completedRef.current = true; if (!res.fullyClosed && token) void api.tables.update(token, tableId, { status: preCheckoutStatusRef.current }).catch(() => {}); showToast(
           res.fullyClosed
             ? `${table?.name || "Masa"} tüm kişi payları ödendi ve masa kapatıldı`
             : `${table?.name || "Masa"} - ${splitTarget.shareIndex + 1}. kişi payı (${formatCurrency(splitTarget.amount)} TL) ödendi`,
@@ -217,7 +225,7 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill,
         ...(splitTarget?.mode === "items" ? { lines: splitTarget.lines } : {}),
       }); if (!res.ok || !res.completedOrder) return
       completedRef.current = true; if (res.tableFullyClosed === false && token) {
-        void api.tables.update(token, tableId, { status: "occupied" }).catch(() => {})
+        void api.tables.update(token, tableId, { status: preCheckoutStatusRef.current }).catch(() => {})
       }
       showToast(
         res.tableFullyClosed === false

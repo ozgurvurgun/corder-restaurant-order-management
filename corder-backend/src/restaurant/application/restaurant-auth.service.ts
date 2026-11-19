@@ -13,7 +13,6 @@ import { RootAdminEntity } from '../../platform/domain/root-admin.entity';
 import { BossRestaurantEntity } from '../../platform/domain/boss-restaurant.entity';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 import { PlatformBillingConfigEntity } from '../../platform/domain/platform-billing-config.entity';
-import { CashShiftEntity } from '../domain/cash-shift.entity';
 import { RestaurantStaffEntity } from '../domain/restaurant-staff.entity';
 import {
   AuthenticatedRestaurantUserDto,
@@ -31,6 +30,7 @@ import {
   toBranchSummaryDto,
 } from '../domain/services/billing-suspension.policy';
 import { RolesService } from './roles.service';
+import { evaluateStaffShiftAccess } from '../domain/services/terminal-access.policy';
 import { DEFAULT_JWT_EXPIRES_IN, requireConfigSecret } from '../../common/security/env.validation';
 
 export {
@@ -66,12 +66,6 @@ export class RestaurantAuthService {
   async loadBillingConfig(): Promise<PlatformBillingConfigEntity | null> {
     const list = await this.billingConfigRepo.find({ order: { updatedAt: 'DESC' }, take: 1 });
     return list[0] ?? null;
-  }
-
-  async hasOpenCashShift(restaurantId: string): Promise<boolean> {
-    return this.restaurantRepo.manager.exists(CashShiftEntity, {
-      where: { restaurantId, status: 'open' },
-    });
   }
 
   async getBossOwnedRestaurants(
@@ -192,7 +186,7 @@ export class RestaurantAuthService {
       throw new UnauthorizedException('Print Agent account is no longer active');
     }
     const expectedFp = this.computePasswordFingerprint(restaurant.printAgentPasswordHash);
-    if (payload.pwdFp && payload.pwdFp !== expectedFp) {
+    if (!payload.pwdFp || payload.pwdFp !== expectedFp) {
       throw new UnauthorizedException('Print Agent password has been changed');
     }
     return this.issuePrintAgentTokens(restaurant);
@@ -358,6 +352,12 @@ export class RestaurantAuthService {
       if (!resolved.canAccessPanel) {
         throw new UnauthorizedException('This account does not have Merchant Panel access permission');
       }
+      const shiftEval = evaluateStaffShiftAccess(staff);
+      if (!shiftEval.allowed) {
+        throw new UnauthorizedException(
+          shiftEval.reason || 'Mesai saatleriniz dışında yönetim paneline erişemezsiniz.',
+        );
+      }
       const summary = toBranchSummaryDto(staff.restaurant);
       return {
         accessToken: this.signToken({
@@ -430,13 +430,12 @@ export class RestaurantAuthService {
     const owned = await this.getBossOwnedRestaurants(admin.id, admin.restaurantId, admin);
     const activeBranches = owned.filter((r) => r.status === 'active' && !isRestaurantPaymentSuspended(r));
     const current =
-      activeBranches.find((r) => r.id === restaurantId) ??
+      owned.find((r) => r.id === restaurantId && r.status === 'active') ??
       activeBranches[0] ??
       owned.find((r) => r.id === restaurantId) ??
       owned[0];
-    if (!current) throw new NotFoundException('Active restaurant branch not found');
-    if (isRestaurantPaymentSuspended(current)) {
-      throw new UnauthorizedException(buildPaymentSuspendedErrorMessage(current.name));
+    if (!current || current.status !== 'active') {
+      throw new NotFoundException('Active restaurant branch not found');
     }
     return {
       restaurant: toBranchSummaryDto(current),
@@ -451,8 +450,8 @@ export class RestaurantAuthService {
       relations: ['restaurant'],
     });
     if (!staff || !staff.restaurant) throw new UnauthorizedException('Staff user not found');
-    if (isRestaurantPaymentSuspended(staff.restaurant)) {
-      throw new UnauthorizedException(buildPaymentSuspendedErrorMessage(staff.restaurant.name));
+    if (staff.restaurant.status !== 'active') {
+      throw new UnauthorizedException('Branch account is not active');
     }
     const resolved = await this.rolesService.resolveForStaff(staff);
     const summary = toBranchSummaryDto(staff.restaurant);
@@ -462,8 +461,8 @@ export class RestaurantAuthService {
   private async getTerminalSessionProfile(restaurantId: string) {
     const rest = await this.restaurantRepo.findOne({ where: { id: restaurantId } });
     if (!rest) throw new NotFoundException('Restaurant not found');
-    if (isRestaurantPaymentSuspended(rest)) {
-      throw new UnauthorizedException(buildPaymentSuspendedErrorMessage(rest.name));
+    if (rest.status !== 'active') {
+      throw new UnauthorizedException('Restaurant account is not active');
     }
     const summary = toBranchSummaryDto(rest);
     return { restaurant: summary, restaurants: [summary], user: buildTerminalUserDto(rest) };

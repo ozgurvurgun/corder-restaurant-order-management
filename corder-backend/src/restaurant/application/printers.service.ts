@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { PrinterConfigEntity } from '../domain/printer-config.entity';
 import { CreatePrinterDto } from '../api/dto/create-printer.dto';
 import { UpdatePrinterDto } from '../api/dto/update-printer.dto';
+import { OrdersGateway } from '../api/orders.gateway';
 
 export { CreatePrinterDto, UpdatePrinterDto };
 
@@ -17,6 +18,11 @@ export class PrintersService {
   constructor(
     @InjectRepository(PrinterConfigEntity)
     private readonly repo: Repository<PrinterConfigEntity>,
+    @Optional()
+    @Inject(forwardRef(() => OrdersGateway))
+    private readonly ordersGateway?: OrdersGateway,
+    @Optional()
+    private readonly dataSource?: DataSource,
   ) {}
 
   isAgentOnline(restaurantId: string): boolean {
@@ -186,13 +192,18 @@ export class PrintersService {
     const uuidRe =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-    return this.repo.manager.transaction(async (em) => {
+    const runTransaction =
+      this.dataSource && typeof this.dataSource.transaction === 'function'
+        ? this.dataSource.transaction.bind(this.dataSource)
+        : this.repo.manager.transaction.bind(this.repo.manager);
+    const { savedList, changed } = await runTransaction(async (em) => {
       const existing = await em.find(PrinterConfigEntity, {
         where: { restaurantId },
         order: { createdAt: 'ASC' },
       });
       const claimedIds = new Set<string>();
-      const savedList: PrinterConfigEntity[] = [];
+      const savedRows: PrinterConfigEntity[] = [];
+      let rowsChanged = false;
 
       for (const p of incoming) {
         const name = String(p.name || p.systemPrinterName || p.host || 'Yazıcı')
@@ -203,6 +214,7 @@ export class PrintersService {
           Boolean(p.id && receiptId && p.id === receiptId) ||
           p.role === 'receipt' ||
           /kasa|adisyon|fiş|fis|receipt/i.test(name);
+        const nextType = isReceipt ? 'receipt' : 'kitchen';
         const isNetwork = p.mode === 'network';
         const connection = isNetwork ? 'network' : 'usb';
         const ipAddress = isNetwork
@@ -229,24 +241,40 @@ export class PrintersService {
 
         if (match) {
           claimedIds.add(match.id);
-          Object.assign(match, {
-            name,
-            type: isReceipt ? 'receipt' : 'kitchen',
-            connection,
-            ipAddress,
-            port,
-            department,
-            paperWidth,
-            autoCut,
-            status: 'online',
-            updatedAt: new Date(),
-          });
-          savedList.push(await em.save(PrinterConfigEntity, match));
+          const hasDiff =
+            match.name !== name ||
+            match.type !== nextType ||
+            match.connection !== connection ||
+            (match.ipAddress ?? null) !== (ipAddress ?? null) ||
+            (match.port ?? null) !== (port ?? null) ||
+            (match.department ?? null) !== (department ?? null) ||
+            match.paperWidth !== paperWidth ||
+            match.autoCut !== autoCut ||
+            match.status !== 'online';
+          if (hasDiff) {
+            rowsChanged = true;
+            Object.assign(match, {
+              name,
+              type: nextType,
+              connection,
+              ipAddress,
+              port,
+              department,
+              paperWidth,
+              autoCut,
+              status: 'online',
+              updatedAt: new Date(),
+            });
+            savedRows.push(await em.save(PrinterConfigEntity, match));
+          } else {
+            savedRows.push(match);
+          }
         } else {
+          rowsChanged = true;
           const created = em.create(PrinterConfigEntity, {
             restaurantId,
             name,
-            type: isReceipt ? 'receipt' : 'kitchen',
+            type: nextType,
             connection,
             ipAddress,
             port,
@@ -257,17 +285,30 @@ export class PrintersService {
           });
           const saved = await em.save(PrinterConfigEntity, created);
           claimedIds.add(saved.id);
-          savedList.push(saved);
+          savedRows.push(saved);
         }
       }
 
       for (const oldRow of existing) {
         if (!claimedIds.has(oldRow.id)) {
+          rowsChanged = true;
           await em.remove(PrinterConfigEntity, oldRow);
         }
       }
 
-      return savedList;
+      return { savedList: savedRows, changed: rowsChanged };
     });
+
+    if (changed) {
+      this.ordersGateway?.emitPrintersUpdated(restaurantId);
+    }
+    return savedList;
+  }
+
+  async syncFromAgent(
+    restaurantId: string,
+    body: Parameters<PrintersService['syncFromPrintAgent']>[1],
+  ): Promise<PrinterConfigEntity[]> {
+    return this.syncFromPrintAgent(restaurantId, body);
   }
 }

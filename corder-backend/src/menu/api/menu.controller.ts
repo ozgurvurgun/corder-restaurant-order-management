@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Header, Param, Post, Query } from '@nestjs/common';
 import { MenuQueryService } from '../application/menu-query.service';
+import { CallWaiterDto } from './dto/call-waiter.dto';
 
 @Controller('menu')
 export class MenuController {
@@ -36,12 +37,7 @@ export class MenuController {
   @Post('business/:slug/call-waiter')
   callWaiterByBusinessSlug(
     @Param('slug') slug: string,
-    @Body()
-    body: {
-      tableToken: string;
-      requestType?: 'waiter' | 'bill';
-      note?: string;
-    },
+    @Body() body: CallWaiterDto,
   ) {
     return this.menuQuery.callWaiter(slug, body);
   }
@@ -49,12 +45,7 @@ export class MenuController {
   @Post(':slug/call-waiter')
   callWaiter(
     @Param('slug') slug: string,
-    @Body()
-    body: {
-      tableToken: string;
-      requestType?: 'waiter' | 'bill';
-      note?: string;
-    },
+    @Body() body: CallWaiterDto,
   ) {
     return this.menuQuery.callWaiter(slug, body);
   }

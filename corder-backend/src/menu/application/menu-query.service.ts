@@ -118,6 +118,13 @@ export class MenuQueryService {
     return restaurant;
   }
 
+  isCampaignCurrentlyValid(
+    validUntil: Date | string | null | undefined,
+    now: Date = new Date(),
+  ): boolean {
+    return isCampaignValidNow(validUntil, now);
+  }
+
   async getBusinessBySlug(
     slug: string | null,
     tableToken?: string,
@@ -250,7 +257,7 @@ export class MenuQueryService {
     const categories = buildMenuCategoryTree(allCats, visibleIds, roots, products);
     const now = new Date();
     const activeCampaigns = rawCampaigns.filter((c) =>
-      isCampaignValidNow(c.validUntil, now),
+      this.isCampaignCurrentlyValid(c.validUntil, now),
     );
 
     return {

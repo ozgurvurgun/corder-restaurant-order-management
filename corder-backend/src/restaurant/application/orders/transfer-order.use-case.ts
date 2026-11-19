@@ -66,12 +66,38 @@ export class TransferOrderUseCase {
     isMergeIntoOccupied: boolean,
   ): boolean {
     let changed = false;
-    if (fromTable.discount && !toTable.discount) {
+    if (!isMergeIntoOccupied && fromTable.discount && !toTable.discount) {
       toTable.discount = fromTable.discount;
       changed = true;
     }
     if (isMergeIntoOccupied) {
-      if (toTable.splitInfo && !toTable.splitInfo.paidShares?.length) {
+      const fromPaidShares = fromTable.splitInfo?.paidShares ?? [];
+      const toPaidShares = toTable.splitInfo?.paidShares ?? [];
+      if (fromPaidShares.length > 0 || toPaidShares.length > 0) {
+        const mergedShares = [...toPaidShares];
+        let nextShareIndex =
+          mergedShares.reduce((max, s) => Math.max(max, s.shareIndex), -1) + 1;
+        for (const share of fromPaidShares) {
+          const shareIndex = mergedShares.some((s) => s.shareIndex === share.shareIndex)
+            ? nextShareIndex++
+            : share.shareIndex;
+          nextShareIndex = Math.max(nextShareIndex, shareIndex + 1);
+          mergedShares.push({ ...share, shareIndex });
+        }
+        const fromPersonCount = fromTable.splitInfo?.personCount ?? fromPaidShares.length;
+        const toPersonCount = toTable.splitInfo?.personCount ?? toPaidShares.length;
+        const personCount = Math.max(
+          mergedShares.length + 1,
+          (toTable.splitInfo ? toPersonCount : 0) + (fromTable.splitInfo ? fromPersonCount : 0),
+        );
+        toTable.splitInfo = {
+          ...(toTable.splitInfo ?? fromTable.splitInfo ?? { type: 'person' }),
+          type: 'person',
+          personCount,
+          paidShares: mergedShares,
+        };
+        changed = true;
+      } else if (toTable.splitInfo) {
         toTable.splitInfo = null;
         changed = true;
       }
@@ -79,11 +105,38 @@ export class TransferOrderUseCase {
       toTable.splitInfo = fromTable.splitInfo;
       changed = true;
     }
-    if (toTable.status === 'empty') {
+    if (
+      toTable.status === 'empty' ||
+      toTable.status === 'reserved' ||
+      toTable.status === 'ordering'
+    ) {
       toTable.status = 'occupied';
       changed = true;
     }
     return changed;
+  }
+
+  private async targetTableHasBillableItems(
+    em: EntityManager,
+    restaurantId: string,
+    toTableId: string,
+  ): Promise<boolean> {
+    if (typeof em.find === 'function') {
+      const orders = await em.find(OrderEntity, {
+        where: { restaurantId, tableId: toTableId, status: 'active' },
+        relations: ['items'],
+      });
+      if (orders.length === 0) return false;
+      const anyWithItemsRelation = orders.some((o) => Array.isArray(o.items));
+      if (!anyWithItemsRelation) return true;
+      return orders.some((o) =>
+        (o.items ?? []).some((i) => OrderStatusPolicy.isItemOnActiveBill(i.status)),
+      );
+    }
+    const count = await em.count(OrderEntity, {
+      where: { restaurantId, tableId: toTableId, status: 'active' },
+    });
+    return count > 0;
   }
 
   async moveTable(
@@ -117,9 +170,11 @@ export class TransferOrderUseCase {
         return 0;
       }
 
-      const existingTargetOrders = await em.count(OrderEntity, {
-        where: { restaurantId, tableId: toTableId, status: 'active' },
-      });
+      const targetHadBillableItems = await this.targetTableHasBillableItems(
+        em,
+        restaurantId,
+        toTableId,
+      );
 
       await em.update(
         OrderEntity,
@@ -127,7 +182,7 @@ export class TransferOrderUseCase {
         { tableId: toTableId, updatedAt: new Date() },
       );
 
-      if (this.applyTargetTableStateOnFullMove(fromTable, toTable, existingTargetOrders > 0)) {
+      if (this.applyTargetTableStateOnFullMove(fromTable, toTable, targetHadBillableItems)) {
         await em.save(TableEntity, toTable);
       }
 
@@ -206,11 +261,15 @@ export class TransferOrderUseCase {
       await em.save(TableEntity, fromTable);
     }
 
-    if (
+    const shouldTransitionToOccupied =
       toTable.status === 'empty' ||
+      toTable.status === 'reserved' ||
+      toTable.status === 'ordering';
+    if (
+      shouldTransitionToOccupied ||
       (toTable.splitInfo && !toTable.splitInfo.paidShares?.length)
     ) {
-      if (toTable.status === 'empty') toTable.status = 'occupied';
+      if (shouldTransitionToOccupied) toTable.status = 'occupied';
       if (toTable.splitInfo && !toTable.splitInfo.paidShares?.length) {
         toTable.splitInfo = null;
       }

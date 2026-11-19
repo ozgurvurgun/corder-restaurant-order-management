@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsIn,
   IsInt,
@@ -69,12 +70,14 @@ export class TableSplitInfoDto {
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(200)
   @ValidateNested({ each: true })
   @Type(() => TableSplitSharePaymentDto)
   paidShares?: TableSplitSharePaymentDto[];
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(200)
   @IsString({ each: true })
   itemIds?: string[];
 
@@ -92,14 +95,16 @@ export class UpdateTableDto {
   @IsOptional()
   @IsString()
   @MinLength(1)
+  @MaxLength(120)
   name?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(120)
   section?: string;
 
   @IsOptional()
-  @IsIn(['empty', 'occupied', 'ordering', 'checkout'])
+  @IsIn(['empty', 'occupied', 'ordering', 'checkout', 'reserved'])
   status?: string;
 
   @IsOptional()

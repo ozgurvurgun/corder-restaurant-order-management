@@ -236,7 +236,7 @@ function startAgent({ config: initialConfig, store, printer, onContextInvalidate
     socket.on("order.print_job", enqueueOrderPrintJobsFromPayload)
     socket.on("printers:updated", () => {
       if (typeof onContextInvalidated === "function") {
-        void Promise.resolve(onContextInvalidated()).catch(() => {})
+        void Promise.resolve(onContextInvalidated("ws-printers-updated")).catch(() => {})
       }
     })
     socket.on("auth:expired", () => {

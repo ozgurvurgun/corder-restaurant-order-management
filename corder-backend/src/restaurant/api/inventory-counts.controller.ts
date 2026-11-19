@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -60,5 +61,14 @@ export class InventoryCountsController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.inventoryCounts.complete(restaurantId, id, user.name);
+  }
+
+  @Delete(':id')
+  @RequirePermissions('inventory.count_adjust')
+  cancel(
+    @RestaurantId() restaurantId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.inventoryCounts.cancel(restaurantId, id);
   }
 }

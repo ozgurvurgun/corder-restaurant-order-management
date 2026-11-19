@@ -3,8 +3,11 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  ManyToOne,
+  JoinColumn,
   Index,
 } from 'typeorm';
+import { RootAdminEntity } from './root-admin.entity';
 import {
   RestaurantBillingStatus,
   RestaurantPaymentRecord,
@@ -27,7 +30,10 @@ export const RESTAURANT_MENU_TEMPLATES: readonly RestaurantMenuTemplate[] = [
 export type { RestaurantBillingStatus, RestaurantPaymentRecord };
 
 @Entity('restaurants')
-@Index(['terminalEmail'])
+@Index('UQ_restaurants_terminal_email', ['terminalEmail'], {
+  unique: true,
+  where: '"terminal_email" IS NOT NULL',
+})
 @Index(['printAgentUsername'], { unique: true })
 @Index(['brandName'])
 @Index(['billingStatus'])
@@ -171,6 +177,10 @@ export class RestaurantEntity {
   @Column({ name: 'root_admin_id', type: 'uuid', nullable: true })
   rootAdminId: string | null;
 
+  @ManyToOne(() => RootAdminEntity, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'root_admin_id' })
+  rootAdmin?: RootAdminEntity | null;
+
   /** Terminal login (independent of root admin; one per restaurant). */
   @Column({ name: 'terminal_email', type: 'varchar', nullable: true })
   terminalEmail: string | null;
@@ -185,6 +195,6 @@ export class RestaurantEntity {
   @Column({ name: 'print_agent_password_hash', type: 'varchar', nullable: true })
   printAgentPasswordHash: string | null;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }

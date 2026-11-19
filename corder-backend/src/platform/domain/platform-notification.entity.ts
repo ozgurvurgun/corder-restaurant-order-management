@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  Index,
 } from 'typeorm';
 
 export type PlatformNotificationLevel = 'info' | 'warning' | 'urgent' | 'success';
@@ -10,6 +11,8 @@ export type PlatformNotificationTargetApp = 'merchant' | 'boss';
 export type PlatformNotificationStatus = 'scheduled' | 'sent' | 'cancelled';
 
 @Entity('platform_notifications')
+@Index('IDX_platform_notifications_status_scheduled', ['status', 'scheduledAt'])
+@Index('IDX_platform_notifications_sent_at', ['sentAt'])
 export class PlatformNotificationEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;

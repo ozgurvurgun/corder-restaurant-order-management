@@ -15,6 +15,7 @@ export function useTerminalApiSync(params: {
   refreshLiveState: () => Promise<void>
   pullTables: () => Promise<void>
   onWaiterCalled?: (call: ActiveWaiterCall) => void
+  onNotificationsUpdated?: () => Promise<void> | void
 }) {
   const {
     isLoggedIn,
@@ -23,14 +24,20 @@ export function useTerminalApiSync(params: {
     refreshLiveState,
     pullTables,
     onWaiterCalled,
+    onNotificationsUpdated,
   } = params
 
   const socketRef = useRef<Socket | null>(null)
   const onWaiterCalledRef = useRef(onWaiterCalled)
+  const onNotificationsUpdatedRef = useRef(onNotificationsUpdated)
 
   useEffect(() => {
     onWaiterCalledRef.current = onWaiterCalled
   }, [onWaiterCalled])
+
+  useEffect(() => {
+    onNotificationsUpdatedRef.current = onNotificationsUpdated
+  }, [onNotificationsUpdated])
 
   useEffect(() => {
     if (!isLoggedIn) return
@@ -59,6 +66,13 @@ export function useTerminalApiSync(params: {
     socket.on("orders:updated", syncLive)
     socket.on("tables:presence", () => void pullTables())
     socket.on("staff:session-updated", () => void refreshData())
+    socket.on("notifications:updated", () => {
+      if (onNotificationsUpdatedRef.current) {
+        void onNotificationsUpdatedRef.current()
+      } else {
+        void refreshLiveState()
+      }
+    })
 
     socket.on("waiter:called", (payload: unknown) => {
       const call = normalizeWaiterCallPayload(payload)

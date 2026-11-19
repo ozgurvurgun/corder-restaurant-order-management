@@ -53,13 +53,16 @@ const STATUS_LABELS: Record<FraudAlertDto["status"], { label: string; badge: str
   false_positive: { label: "Yanlış Alarm", badge: "bg-slate-100 text-slate-600" },
 }
 
-let cachedFraudAlerts: FraudAlertDto[] = []
+const cachedFraudAlertsByRestaurant = new Map<string, FraudAlertDto[]>()
 
 export function SecurityFraudTab(props: { canManageAlerts: boolean }) {
   const { canManageAlerts } = props
-  const { token } = usePanelAuth()
+  const { token, currentBusiness } = usePanelAuth()
+  const cacheKey = currentBusiness?.id || "default"
 
-  const [alerts, setAlerts] = useState<FraudAlertDto[]>(() => cachedFraudAlerts)
+  const [alerts, setAlerts] = useState<FraudAlertDto[]>(
+    () => cachedFraudAlertsByRestaurant.get(cacheKey) ?? [],
+  )
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [scanning, setScanning] = useState(false)
@@ -76,7 +79,7 @@ export function SecurityFraudTab(props: { canManageAlerts: boolean }) {
     try {
       const res = await api.security.listFraudAlerts(token)
       const list = Array.isArray(res) ? res : (res?.alerts ?? [])
-      cachedFraudAlerts = list
+      cachedFraudAlertsByRestaurant.set(cacheKey, list)
       setAlerts(list)
       setSelectedIds((prev) => prev.filter((id) => list.some((a) => a.id === id)))
     } catch {
@@ -84,7 +87,7 @@ export function SecurityFraudTab(props: { canManageAlerts: boolean }) {
     } finally {
       setLoading(false)
     }
-  }, [token])
+  }, [token, cacheKey])
 
   useEffect(() => {
     void loadAlerts()
@@ -99,9 +102,8 @@ export function SecurityFraudTab(props: { canManageAlerts: boolean }) {
     setScanning(true)
     try {
       const res = await api.security.scanFraudAlerts(token)
-      if (Array.isArray(res?.alerts)) setAlerts(res.alerts)
-      else await loadAlerts()
-      const createdCount = res?.created ?? 0
+      await loadAlerts()
+      const createdCount = res?.newAlertsCount ?? res?.created ?? 0
       showPanelToast(
         createdCount > 0
           ? `Suistimal taraması tamamlandı: ${createdCount} yeni uyarı tespit edildi`

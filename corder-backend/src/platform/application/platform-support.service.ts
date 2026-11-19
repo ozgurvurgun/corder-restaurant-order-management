@@ -1,19 +1,13 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DataSource, In, IsNull } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { RestaurantEntity } from '../domain/restaurant.entity';
 import { TableEntity } from '../../restaurant/domain/table.entity';
 import { OrderEntity } from '../../restaurant/domain/order.entity';
-import { OrderItemEntity } from '../../restaurant/domain/order-item.entity';
 import { CompletedOrderEntity } from '../../restaurant/domain/completed-order.entity';
 import { CashShiftEntity } from '../../restaurant/domain/cash-shift.entity';
 import { CategoryEntity } from '../../restaurant/domain/category.entity';
 import { ProductEntity } from '../../restaurant/domain/product.entity';
-import { PrinterConfigEntity } from '../../restaurant/domain/printer-config.entity';
 import { PrintJobEntity } from '../../restaurant/domain/print-job.entity';
 import { RestaurantStaffEntity } from '../../restaurant/domain/restaurant-staff.entity';
 import { FraudAlertEntity } from '../../restaurant/domain/fraud-alert.entity';
@@ -61,17 +55,76 @@ export class PlatformSupportService {
       throw new NotFoundException('Restaurant not found');
     }
 
-    await this.fraudService
-      .analyzeRestaurantAnomalies(restaurantId)
-      .catch(() => 0);
-
     const { startOfToday } = computeIstanbulDateBoundaries(new Date());
+    const loadRevenueAgg = async (): Promise<{
+      totalMinor: number;
+      todayMinor: number;
+    }> => {
+      if (typeof em.createQueryBuilder === 'function') {
+        const row = await em
+          .createQueryBuilder(CompletedOrderEntity, 'co')
+          .select('COALESCE(SUM(co.net_amount), 0)', 'totalRevenue')
+          .addSelect(
+            'COALESCE(SUM(CASE WHEN co.closed_at >= :startOfToday THEN co.net_amount ELSE 0 END), 0)',
+            'todayRevenue',
+          )
+          .where('co.restaurant_id = :restaurantId', {
+            restaurantId,
+            startOfToday,
+          })
+          .getRawOne<{
+            totalRevenue: string | number | null;
+            todayRevenue: string | number | null;
+          }>();
+        return {
+          totalMinor: toMinorUnits(Number(row?.totalRevenue ?? 0)),
+          todayMinor: toMinorUnits(Number(row?.todayRevenue ?? 0)),
+        };
+      }
+      const rows = await em.find(CompletedOrderEntity, {
+        where: { restaurantId },
+        select: ['id', 'netAmount', 'closedAt'],
+      });
+      let totalMinor = 0;
+      let todayMinor = 0;
+      for (const co of rows) {
+        const m = toMinorUnits(co.netAmount || 0);
+        totalMinor += m;
+        if (co.closedAt >= startOfToday) todayMinor += m;
+      }
+      return { totalMinor, todayMinor };
+    };
+
+    const loadLedgerReceivableMinor = async (): Promise<number> => {
+      if (typeof em.createQueryBuilder === 'function') {
+        const row = await em
+          .createQueryBuilder(LedgerEntryEntity, 'le')
+          .select(
+            `COALESCE(SUM(CASE WHEN le.entry_type = 'debt' THEN le.amount::numeric ELSE -le.amount::numeric END), 0)`,
+            'netReceivable',
+          )
+          .where('le.restaurant_id = :restaurantId', { restaurantId })
+          .getRawOne<{ netReceivable: string | number | null }>();
+        return toMinorUnits(Number(row?.netReceivable ?? 0));
+      }
+      const rows = await em.find(LedgerEntryEntity, {
+        where: { restaurantId },
+        select: ['entryType', 'amount'],
+      });
+      let minor = 0;
+      for (const entry of rows) {
+        const m = toMinorUnits(entry.amount || 0);
+        minor += entry.entryType === 'debt' ? m : -m;
+      }
+      return minor;
+    };
+
     const [
       tables,
       activeOrdersCount,
       pendingKitchenCount,
       pendingJobsCount,
-      completedOrders,
+      revenueAgg,
       openShift,
       recentShifts,
       categories,
@@ -79,59 +132,32 @@ export class PlatformSupportService {
       staffMembers,
       fraudAlerts,
       ledgerCustomerCount,
-      ledgerEntries,
+      ledgerReceivableMinor,
       unackWaiterCallsCount,
     ] = await Promise.all([
-      em.find(TableEntity, {
-        where: { restaurantId },
-        order: { section: 'ASC', name: 'ASC' },
-      }),
+      em.find(TableEntity, { where: { restaurantId }, order: { section: 'ASC', name: 'ASC' } }),
       em.count(OrderEntity, { where: { restaurantId, status: 'active' } }),
       em.count(OrderEntity, {
-        where: {
-          restaurantId,
-          status: 'active',
-          kitchenTicketPrintedAt: IsNull(),
-        },
+        where: { restaurantId, status: 'active', kitchenTicketPrintedAt: IsNull() },
       }),
-      em.count(PrintJobEntity, {
-        where: { restaurantId, printedAt: IsNull() },
-      }),
-      em.find(CompletedOrderEntity, {
-        where: { restaurantId },
-        select: ['id', 'netAmount', 'closedAt'],
-      }),
+      em.count(PrintJobEntity, { where: { restaurantId, printedAt: IsNull() } }),
+      loadRevenueAgg(),
       em.findOne(CashShiftEntity, {
         where: { restaurantId, status: 'open' },
         order: { openedAt: 'DESC' },
       }),
-      em.find(CashShiftEntity, {
-        where: { restaurantId },
-        order: { openedAt: 'DESC' },
-        take: 10,
-      }),
-      em.find(CategoryEntity, {
-        where: { restaurantId },
-        select: ['id'],
-      }),
+      em.find(CashShiftEntity, { where: { restaurantId }, order: { openedAt: 'DESC' }, take: 10 }),
+      em.find(CategoryEntity, { where: { restaurantId }, select: ['id'] }),
       this.printersService.list(restaurantId),
-      em.find(RestaurantStaffEntity, {
-        where: { restaurantId },
-        order: { createdAt: 'ASC' },
-      }),
+      em.find(RestaurantStaffEntity, { where: { restaurantId }, order: { createdAt: 'ASC' } }),
       em.find(FraudAlertEntity, {
         where: { restaurantId },
         order: { createdAt: 'DESC' },
         take: 50,
       }),
       em.count(LedgerCustomerEntity, { where: { restaurantId } }),
-      em.find(LedgerEntryEntity, {
-        where: { restaurantId },
-        select: ['entryType', 'amount'],
-      }),
-      em.count(WaiterCallEntity, {
-        where: { restaurantId, acknowledged: false },
-      }),
+      loadLedgerReceivableMinor(),
+      em.count(WaiterCallEntity, { where: { restaurantId, acknowledged: false } }),
     ]);
 
     const categoryIds = categories.map((c) => c.id);
@@ -157,21 +183,8 @@ export class PlatformSupportService {
       }
     }
 
-    let todayRevenueMinor = 0;
-    let totalRevenueMinor = 0;
-    for (const co of completedOrders) {
-      const m = toMinorUnits(co.netAmount || 0);
-      totalRevenueMinor += m;
-      if (co.closedAt >= startOfToday) {
-        todayRevenueMinor += m;
-      }
-    }
-
-    let ledgerReceivableMinor = 0;
-    for (const entry of ledgerEntries) {
-      const m = toMinorUnits(entry.amount || 0);
-      ledgerReceivableMinor += entry.entryType === 'debt' ? m : -m;
-    }
+    const todayRevenueMinor = revenueAgg.todayMinor;
+    const totalRevenueMinor = revenueAgg.totalMinor;
 
     const openFraudAlertsCount = fraudAlerts.filter(
       (a) => a.status === 'open' || a.status === 'investigating',
@@ -195,36 +208,18 @@ export class PlatformSupportService {
       };
     };
 
-    const tablesSummary = {
-      total: tables.length,
-      occupied,
-      empty,
-      reserved,
-      checkout,
-      lockedSessionsCount,
-    };
+    const tablesSummary = { total: tables.length, occupied, empty, reserved, checkout, lockedSessionsCount };
     const serializedStaff = staffMembers.map((s) => ({
-      id: s.id,
-      name: s.name,
-      email: s.email,
-      role: s.role,
-      phone: s.phone,
-      isActive: s.isActive,
-      canAccessPanel: s.canAccessPanel,
-      canAccessTerminal: s.canAccessTerminal,
+      id: s.id, name: s.name, email: s.email, role: s.role, phone: s.phone,
+      isActive: s.isActive, canAccessPanel: s.canAccessPanel, canAccessTerminal: s.canAccessTerminal,
       createdAt: s.createdAt.toISOString(),
     }));
 
     return {
       restaurant: {
-        id: restaurant.id,
-        name: restaurant.name,
-        slug: restaurant.slug,
-        status: restaurant.status,
-        brandName: restaurant.brandName ?? null,
-        branchType: restaurant.branchType || 'independent',
-        isAccessSuspended: Boolean(restaurant.isAccessSuspended),
-        logoUrl: restaurant.logoUrl ?? null,
+        id: restaurant.id, name: restaurant.name, slug: restaurant.slug, status: restaurant.status,
+        brandName: restaurant.brandName ?? null, branchType: restaurant.branchType || 'independent',
+        isAccessSuspended: Boolean(restaurant.isAccessSuspended), logoUrl: restaurant.logoUrl ?? null,
       },
       tablesSummary,
       activeOrdersCount,
@@ -235,23 +230,15 @@ export class PlatformSupportService {
       categoriesCount: categories.length,
       productsCount,
       printers: printers.map((p) => ({
-        id: p.id,
-        name: p.name,
-        type: p.type,
-        connection: p.connection,
-        ipAddress: p.ipAddress,
-        port: p.port,
-        department: p.department,
-        status: p.status,
-        paperWidth: p.paperWidth,
+        id: p.id, name: p.name, type: p.type, connection: p.connection,
+        ipAddress: p.ipAddress, port: p.port, department: p.department,
+        status: p.status, paperWidth: p.paperWidth,
       })),
       pendingPrintJobsCount: pendingJobsCount + pendingKitchenCount,
       unacknowledgedWaiterCallsCount: unackWaiterCallsCount,
       staffMembers: serializedStaff,
       openFraudAlertsCount,
-      recentFraudAlerts: fraudAlerts
-        .slice(0, 10)
-        .map((a) => this.fraudService.serializeAlert(a)),
+      recentFraudAlerts: fraudAlerts.slice(0, 10).map((a) => this.fraudService.serializeAlert(a)),
       ledgerSummary: {
         customerCount: ledgerCustomerCount,
         totalReceivable: fromMinorUnits(Math.max(0, ledgerReceivableMinor)),
@@ -302,75 +289,95 @@ export class PlatformSupportService {
       }
 
       case 'force_close_shift': {
-        const openShift = await em.findOne(CashShiftEntity, {
-          where: { restaurantId, status: 'open' },
-          order: { openedAt: 'DESC' },
-        });
-        if (!openShift) {
+        const runForceClose = async (txEm: typeof em) => {
+          const openShift = await txEm.findOne(CashShiftEntity, {
+            where: { restaurantId, status: 'open' },
+            order: { openedAt: 'DESC' },
+            lock: { mode: 'pessimistic_write' },
+          });
+          if (!openShift) return null;
+          const expectedMinor =
+            toMinorUnits(openShift.openingBalance || 0) +
+            toMinorUnits(openShift.cashIn || 0) -
+            toMinorUnits(openShift.cashOut || 0);
+          openShift.closeShift(
+            actorName,
+            Math.max(0, expectedMinor),
+            'Platform destek konsolu üzerinden kapatıldı',
+          );
+          await txEm.save(CashShiftEntity, openShift);
+          return openShift.openedBy;
+        };
+        const openedBy =
+          typeof this.dataSource.transaction === 'function'
+            ? await this.dataSource.transaction(runForceClose)
+            : await runForceClose(em);
+        if (!openedBy) {
           return {
             ok: true,
             action: dto.action,
             message: 'Bu şubede açık vardiya bulunmuyor.',
           };
         }
-        const expectedMinor =
-          toMinorUnits(openShift.openingBalance || 0) +
-          toMinorUnits(openShift.cashIn || 0) -
-          toMinorUnits(openShift.cashOut || 0);
-        openShift.closeShift(
-          actorName,
-          Math.max(0, expectedMinor),
-          'Platform destek konsolu üzerinden kapatıldı',
-        );
-        await em.save(CashShiftEntity, openShift);
         this.ordersGateway.emitOrdersUpdated(restaurantId);
         return {
           ok: true,
           action: dto.action,
-          message: `Açık kasa vardiyası (${openShift.openedBy}) güvenli şekilde kapatıldı.`,
+          message: `Açık kasa vardiyası (${openedBy}) güvenli şekilde kapatıldı.`,
         };
       }
 
       case 'release_stuck_tables': {
-        const [tables, activeOrders] = await Promise.all([
-          em.find(TableEntity, { where: { restaurantId } }),
-          em.find(OrderEntity, {
+        const runReleaseTables = async (txEm: typeof em) => {
+          const tables = await txEm.find(TableEntity, {
+            where: { restaurantId },
+            order: { id: 'ASC' },
+            lock: { mode: 'pessimistic_write' },
+          });
+          const activeOrders = await txEm.find(OrderEntity, {
             where: { restaurantId, status: 'active' },
             relations: ['items'],
-          }),
-        ]);
-        const billableTableIds = new Set<string>();
-        for (const ord of activeOrders) {
-          const hasBillable = (ord.items ?? []).some((i) =>
-            OrderStatusPolicy.isItemOnActiveBill(i.status),
-          );
-          if (hasBillable) billableTableIds.add(ord.tableId);
-        }
+          });
+          const billableTableIds = new Set<string>();
+          for (const ord of activeOrders) {
+            const hasBillable = (ord.items ?? []).some((i) =>
+              OrderStatusPolicy.isItemOnActiveBill(i.status),
+            );
+            if (hasBillable) billableTableIds.add(ord.tableId);
+          }
 
-        let releasedCount = 0;
-        for (const table of tables) {
-          let changed = false;
-          if (table.sessionStaffId || table.sessionLockedAt) {
-            table.releaseSession();
-            changed = true;
+          const changedTables: TableEntity[] = [];
+          for (const table of tables) {
+            let changed = false;
+            if (table.sessionStaffId || table.sessionLockedAt) {
+              table.releaseSession();
+              changed = true;
+            }
+            if (table.status === 'checkout') {
+              table.status = billableTableIds.has(table.id)
+                ? 'occupied'
+                : 'empty';
+              changed = true;
+            } else if (
+              table.status === 'occupied' &&
+              !billableTableIds.has(table.id)
+            ) {
+              table.markEmpty();
+              changed = true;
+            }
+            if (changed) {
+              changedTables.push(table);
+            }
           }
-          if (table.status === 'checkout') {
-            table.status = billableTableIds.has(table.id)
-              ? 'occupied'
-              : 'empty';
-            changed = true;
-          } else if (
-            table.status === 'occupied' &&
-            !billableTableIds.has(table.id)
-          ) {
-            table.markEmpty();
-            changed = true;
+          if (changedTables.length > 0) {
+            await txEm.save(TableEntity, changedTables);
           }
-          if (changed) {
-            await em.save(TableEntity, table);
-            releasedCount += 1;
-          }
-        }
+          return changedTables.length;
+        };
+        const releasedCount =
+          typeof this.dataSource.transaction === 'function'
+            ? await this.dataSource.transaction(runReleaseTables)
+            : await runReleaseTables(em);
         await this.ordersGateway
           .emitTableSessionPresence(restaurantId)
           .catch(() => undefined);
@@ -411,13 +418,19 @@ export class PlatformSupportService {
         if (!staff) {
           throw new NotFoundException('Staff member not found');
         }
-        const nextSecret = (dto.newPassword ?? '').trim() || '123456';
+        const nextSecret = (dto.newPassword ?? '').trim();
+        if (nextSecret.length < 4) {
+          throw new BadRequestException(
+            'newPassword is required and must be at least 4 characters',
+          );
+        }
         const hashed = await bcrypt.hash(nextSecret, 10);
         staff.passwordHash = hashed;
         if (/^\d{4,8}$/.test(nextSecret)) {
           staff.pinHash = hashed;
         }
         await em.save(RestaurantStaffEntity, staff);
+        this.ordersGateway.emitStaffSessionUpdated(restaurantId, staff.id);
         return {
           ok: true,
           action: dto.action,
@@ -437,6 +450,7 @@ export class PlatformSupportService {
         }
         staff.isActive = !staff.isActive;
         await em.save(RestaurantStaffEntity, staff);
+        this.ordersGateway.emitStaffSessionUpdated(restaurantId, staff.id);
         return {
           ok: true,
           action: dto.action,

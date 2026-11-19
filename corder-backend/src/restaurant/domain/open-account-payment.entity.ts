@@ -8,6 +8,7 @@ import {
   Index,
 } from 'typeorm';
 import { OpenAccountEntity } from './open-account.entity';
+import { numericColumnTransformer } from '../../common/database/numeric-column.transformer';
 
 @Entity('open_account_payments')
 @Index(['openAccountId'])
@@ -22,7 +23,12 @@ export class OpenAccountPaymentEntity {
   @JoinColumn({ name: 'open_account_id' })
   openAccount: OpenAccountEntity;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    transformer: numericColumnTransformer,
+  })
   amount: number;
 
   @Column({ name: 'received_by', type: 'varchar', length: 255 })

@@ -117,7 +117,11 @@ export class CreateOrderUseCase {
         });
       });
       await txItemRepo.save(items);
-      if (lockedTable.status === 'empty') {
+      if (
+        lockedTable.status === 'empty' ||
+        lockedTable.status === 'reserved' ||
+        lockedTable.status === 'ordering'
+      ) {
         lockedTable.status = 'occupied';
         await em.save(TableEntity, lockedTable);
       }

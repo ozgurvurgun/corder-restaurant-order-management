@@ -8,6 +8,7 @@ import {
   Index,
 } from 'typeorm';
 import { OpenAccountEntity } from './open-account.entity';
+import { numericColumnTransformer } from '../../common/database/numeric-column.transformer';
 
 @Entity('open_account_items')
 @Index(['openAccountId'])
@@ -31,7 +32,12 @@ export class OpenAccountItemEntity {
   @Column({ type: 'int', default: 1 })
   quantity: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    transformer: numericColumnTransformer,
+  })
   price: number;
 
   @Column({ type: 'text', nullable: true })

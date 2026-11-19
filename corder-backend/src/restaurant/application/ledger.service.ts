@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { LedgerCustomerEntity } from '../domain/ledger-customer.entity';
 import { LedgerEntryEntity } from '../domain/ledger-entry.entity';
 import { CashShiftEntity } from '../domain/cash-shift.entity';
@@ -167,6 +167,33 @@ export class LedgerService {
     }));
   }
 
+  private async getCustomerBalanceMinorUnits(
+    em: EntityManager,
+    restaurantId: string,
+    customerId: string,
+  ): Promise<number> {
+    if (typeof em.createQueryBuilder === 'function') {
+      const raw = await em
+        .createQueryBuilder(LedgerEntryEntity, 'e')
+        .select(`SUM(CASE WHEN e.entry_type = 'debt' THEN e.amount::numeric ELSE 0 END)`, 'debtSum')
+        .addSelect(`SUM(CASE WHEN e.entry_type = 'payment' THEN e.amount::numeric ELSE 0 END)`, 'paySum')
+        .addSelect(`SUM(CASE WHEN e.entry_type = 'credit' THEN e.amount::numeric ELSE 0 END)`, 'creditSum')
+        .where('e.restaurant_id = :restaurantId', { restaurantId })
+        .andWhere('e.customer_id = :customerId', { customerId })
+        .getRawOne<{ debtSum: string | null; paySum: string | null; creditSum: string | null }>();
+      return (
+        toMinorUnits(Number(raw?.debtSum || 0)) -
+        toMinorUnits(Number(raw?.paySum || 0)) -
+        toMinorUnits(Number(raw?.creditSum || 0))
+      );
+    }
+    const rows = await em.find(LedgerEntryEntity, { where: { restaurantId, customerId } });
+    return rows.reduce((acc, row) => {
+      const amt = toMinorUnits(Number(row.amount || 0));
+      return row.entryType === 'debt' ? acc + amt : acc - amt;
+    }, 0);
+  }
+
   async recordPayment(
     restaurantId: string,
     customerId: string,
@@ -195,6 +222,17 @@ export class LedgerService {
       }
 
       const customer = await this.assertCustomer(restaurantId, customerId, em, true);
+      const currentBalanceMinorUnits = await this.getCustomerBalanceMinorUnits(
+        em,
+        restaurantId,
+        customer.id,
+      );
+      if (currentBalanceMinorUnits <= 0) {
+        throw new BadRequestException('Customer has no outstanding debt balance');
+      }
+      if (payMinorUnits > currentBalanceMinorUnits) {
+        throw new BadRequestException('Payment amount cannot exceed customer debt balance');
+      }
       const row = em.create(LedgerEntryEntity, {
         restaurantId,
         customerId: customer.id,
@@ -243,28 +281,14 @@ export class LedgerService {
   }
 
   async addPayment(
-    restaurantId: string,
-    customerId: string,
-    amount: number,
-    receivedBy: string,
-    receivedByUserId?: string | null,
-    paymentMethod = 'cash',
+    restaurantId: string, customerId: string, amount: number,
+    receivedBy: string, receivedByUserId?: string | null, paymentMethod = 'cash',
   ) {
-    return this.recordPayment(
-      restaurantId,
-      customerId,
-      amount,
-      receivedBy,
-      receivedByUserId,
-      paymentMethod,
-    );
+    return this.recordPayment(restaurantId, customerId, amount, receivedBy, receivedByUserId, paymentMethod);
   }
 
   async assertCustomer(
-    restaurantId: string,
-    customerId: string,
-    em?: EntityManager,
-    lock = false,
+    restaurantId: string, customerId: string, em?: EntityManager, lock = false,
   ): Promise<LedgerCustomerEntity> {
     const customer = em
       ? await em.findOne(LedgerCustomerEntity, {
@@ -279,104 +303,59 @@ export class LedgerService {
   async recordDebtInTransaction(
     em: EntityManager,
     params: {
-      restaurantId: string;
-      customerId: string;
-      amount: number;
-      description: string;
-      tableId?: string | null;
-      tableName?: string | null;
-      completedOrderId: string;
-      snapshot: unknown;
-      recordedBy?: string | null;
+      restaurantId: string; customerId: string; amount: number; description: string;
+      tableId?: string | null; tableName?: string | null; completedOrderId: string;
+      snapshot: unknown; recordedBy?: string | null;
     },
   ): Promise<void> {
     const minorUnits = toMinorUnits(params.amount);
-    if (minorUnits < 0) {
-      throw new BadRequestException('Invalid debt amount');
-    }
+    if (minorUnits < 0) throw new BadRequestException('Invalid debt amount');
     await this.assertCustomer(params.restaurantId, params.customerId, em, true);
-    const row = em.create(LedgerEntryEntity, {
-      restaurantId: params.restaurantId,
-      customerId: params.customerId,
-      entryType: 'debt',
-      amount: fromMinorUnits(minorUnits),
-      description: params.description,
-      tableId: params.tableId?.trim() || null,
-      tableName: params.tableName?.trim() || null,
-      completedOrderId: params.completedOrderId,
-      snapshot: params.snapshot ?? null,
-      receivedBy: (params.recordedBy ?? '').trim() || null,
-      receivedByUserId: null,
-    });
-    await em.save(LedgerEntryEntity, row);
+    await em.save(LedgerEntryEntity, em.create(LedgerEntryEntity, {
+      restaurantId: params.restaurantId, customerId: params.customerId, entryType: 'debt',
+      amount: fromMinorUnits(minorUnits), description: params.description,
+      tableId: params.tableId?.trim() || null, tableName: params.tableName?.trim() || null,
+      completedOrderId: params.completedOrderId, snapshot: params.snapshot ?? null,
+      receivedBy: (params.recordedBy ?? '').trim() || null, receivedByUserId: null,
+    }));
   }
 
   async recordStandaloneDebt(
     em: EntityManager,
     params: {
-      restaurantId: string;
-      customerId: string;
-      amount: number;
-      description: string;
-      tableId?: string | null;
-      tableName?: string | null;
-      snapshot: unknown;
-      recordedBy?: string | null;
+      restaurantId: string; customerId: string; amount: number; description: string;
+      tableId?: string | null; tableName?: string | null; snapshot: unknown; recordedBy?: string | null;
     },
   ): Promise<void> {
     const minorUnits = toMinorUnits(params.amount);
-    if (minorUnits <= 0) {
-      throw new BadRequestException('Invalid debt amount');
-    }
+    if (minorUnits <= 0) throw new BadRequestException('Invalid debt amount');
     await this.assertCustomer(params.restaurantId, params.customerId, em, true);
-    const row = em.create(LedgerEntryEntity, {
-      restaurantId: params.restaurantId,
-      customerId: params.customerId,
-      entryType: 'debt',
-      amount: fromMinorUnits(minorUnits),
-      description: params.description.trim() || 'Ledger item assignment',
-      tableId: params.tableId?.trim() || null,
-      tableName: params.tableName?.trim() || null,
-      completedOrderId: null,
-      snapshot: params.snapshot ?? null,
-      receivedBy: (params.recordedBy ?? '').trim() || null,
-      receivedByUserId: null,
-    });
-    await em.save(LedgerEntryEntity, row);
+    await em.save(LedgerEntryEntity, em.create(LedgerEntryEntity, {
+      restaurantId: params.restaurantId, customerId: params.customerId, entryType: 'debt',
+      amount: fromMinorUnits(minorUnits), description: params.description.trim() || 'Ledger item assignment',
+      tableId: params.tableId?.trim() || null, tableName: params.tableName?.trim() || null,
+      completedOrderId: null, snapshot: params.snapshot ?? null,
+      receivedBy: (params.recordedBy ?? '').trim() || null, receivedByUserId: null,
+    }));
   }
 
   async recordStandaloneCredit(
     em: EntityManager,
     params: {
-      restaurantId: string;
-      customerId: string;
-      amount: number;
-      description: string;
-      tableId?: string | null;
-      tableName?: string | null;
-      snapshot?: unknown;
-      recordedBy?: string | null;
+      restaurantId: string; customerId: string; amount: number; description: string;
+      tableId?: string | null; tableName?: string | null; snapshot?: unknown; recordedBy?: string | null;
     },
   ): Promise<void> {
     const minorUnits = toMinorUnits(params.amount);
-    if (minorUnits <= 0) {
-      throw new BadRequestException('Invalid credit amount');
-    }
+    if (minorUnits <= 0) throw new BadRequestException('Invalid credit amount');
     await this.assertCustomer(params.restaurantId, params.customerId, em, true);
-    const row = em.create(LedgerEntryEntity, {
-      restaurantId: params.restaurantId,
-      customerId: params.customerId,
-      entryType: 'credit',
-      amount: fromMinorUnits(minorUnits),
-      description: (params.description ?? '').trim() || 'Revert ledger item',
-      tableId: params.tableId?.trim() || null,
-      tableName: params.tableName?.trim() || null,
-      completedOrderId: null,
-      snapshot: params.snapshot ?? null,
-      receivedBy: (params.recordedBy ?? '').trim() || null,
-      receivedByUserId: null,
-    });
-    await em.save(LedgerEntryEntity, row);
+    await em.save(LedgerEntryEntity, em.create(LedgerEntryEntity, {
+      restaurantId: params.restaurantId, customerId: params.customerId, entryType: 'credit',
+      amount: fromMinorUnits(minorUnits), description: (params.description ?? '').trim() || 'Revert ledger item',
+      tableId: params.tableId?.trim() || null, tableName: params.tableName?.trim() || null,
+      completedOrderId: null, snapshot: params.snapshot ?? null,
+      receivedBy: (params.recordedBy ?? '').trim() || null, receivedByUserId: null,
+    }));
   }
 
   async reconcileCompletedOrderDebtInTransaction(
@@ -450,24 +429,35 @@ export class LedgerService {
     restaurantId: string,
     orderItemId: string,
   ): Promise<LedgerEntryEntity | null> {
-    const rows = await em.find(LedgerEntryEntity, {
-      where: {
-        restaurantId,
-        completedOrderId: IsNull(),
-        entryType: 'debt',
-      },
-      order: { createdAt: 'DESC' },
-      take: 300,
-    });
-    for (const entry of rows) {
-      const snap = entry.snapshot as {
-        items?: Array<{ orderItemId?: string; id?: string }>;
-      } | null;
-      const items = snap?.items ?? [];
-      if (items.some((it) => (it.orderItemId ?? it.id) === orderItemId)) {
-        return entry;
-      }
-    }
-    return null;
+    return em
+      .createQueryBuilder(LedgerEntryEntity, 'e')
+      .where('e.restaurant_id = :restaurantId', { restaurantId })
+      .andWhere('e.completed_order_id IS NULL')
+      .andWhere("e.entry_type = 'debt'")
+      .andWhere(
+        `(
+          e.snapshot->>'sourceOrderItemId' = :orderItemId
+          OR (jsonb_typeof(e.snapshot->'items') = 'array' AND (
+            e.snapshot->'items' @> :byOrderItemId::jsonb
+            OR e.snapshot->'items' @> :byId::jsonb
+          ))
+        )`,
+        {
+          orderItemId,
+          byOrderItemId: JSON.stringify([{ orderItemId }]),
+          byId: JSON.stringify([{ id: orderItemId }]),
+        },
+      )
+      .andWhere(
+        `NOT EXISTS (
+          SELECT 1
+          FROM ledger_entries cr
+          WHERE cr.restaurant_id = e.restaurant_id
+            AND cr.entry_type = 'credit'
+            AND cr.snapshot->>'originalDebtEntryId' = e.id::text
+        )`,
+      )
+      .orderBy('e.created_at', 'DESC')
+      .getOne();
   }
 }

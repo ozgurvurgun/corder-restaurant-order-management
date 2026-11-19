@@ -15,6 +15,7 @@ import {
   RequirePermissions,
 } from '../infrastructure/panel-root.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
+import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
 import { StockMaterialsService } from '../application/stock-materials.service';
 import { CreateStockMaterialDto } from './dto/create-stock-material.dto';
 import { UpdateStockMaterialDto } from './dto/update-stock-material.dto';
@@ -49,8 +50,9 @@ export class StockMaterialsController {
     @RestaurantId() restaurantId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: UpdateStockMaterialDto,
+    @RestaurantUser() user?: { name?: string },
   ) {
-    return this.materials.update(restaurantId, id, body);
+    return this.materials.update(restaurantId, id, body, user?.name);
   }
 
   @Delete(':id')

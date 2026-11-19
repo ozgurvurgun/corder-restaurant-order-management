@@ -252,68 +252,6 @@ export class BossOverviewPolicy {
     return acc;
   }
 
-  static buildHourlySales(completedMonth: CompletedOrderEntity[], startOfToday: Date) {
-    const hourlyMap = new Map<number, { hour: string; revenueMinor: number; orders: number }>();
-    for (let h = 8; h <= 23; h++) {
-      hourlyMap.set(h, { hour: `${String(h).padStart(2, '0')}:00`, revenueMinor: 0, orders: 0 });
-    }
-    for (const c of completedMonth) {
-      if (c.closedAt < startOfToday) continue;
-      const h = getIstanbulHour(new Date(c.closedAt));
-      const bucket = hourlyMap.get(h) ?? { hour: `${String(h).padStart(2, '0')}:00`, revenueMinor: 0, orders: 0 };
-      bucket.revenueMinor += toMinorUnits(c.netAmount || 0);
-      bucket.orders += 1;
-      hourlyMap.set(h, bucket);
-    }
-    return Array.from(hourlyMap.entries())
-      .sort(([hA], [hB]) => hA - hB)
-      .map(([, b]) => ({ hour: b.hour, revenue: fromMinorUnits(b.revenueMinor), orders: b.orders }));
-  }
-
-  static buildTopProductsAndStaffPerformance(completedMonth: CompletedOrderEntity[]) {
-    const productStats = new Map<string, { name: string; quantity: number; revenueMinor: number }>();
-    const staffStats = new Map<string, { name: string; ordersCount: number; revenueMinor: number; discountMinor: number }>();
-
-    for (const c of completedMonth) {
-      const waiterName = (c.waiter || c.closedBy || 'Staff').trim();
-      const st = staffStats.get(waiterName) ?? { name: waiterName, ordersCount: 0, revenueMinor: 0, discountMinor: 0 };
-      st.ordersCount += 1;
-      st.revenueMinor += toMinorUnits(c.netAmount || 0);
-      st.discountMinor += toMinorUnits(c.discountAmount || 0);
-      staffStats.set(waiterName, st);
-
-      for (const so of Array.isArray(c.ordersSnapshot) ? c.ordersSnapshot : []) {
-        const sItems = (so as { items?: Array<{ productName?: string; price?: number; quantity?: number; status?: string }> }).items ?? [];
-        for (const item of sItems) {
-          if (item.status === 'cancelled' || item.status === 'ledger') continue;
-          const pName = (item.productName || 'Product').trim();
-          const qty = Math.max(0, Math.floor(Number(item.quantity || 1)));
-          if (qty <= 0) continue;
-          const cur = productStats.get(pName) ?? { name: pName, quantity: 0, revenueMinor: 0 };
-          cur.quantity += qty;
-          cur.revenueMinor += toMinorUnits(item.price || 0) * qty;
-          productStats.set(pName, cur);
-        }
-      }
-    }
-
-    return {
-      topProducts: Array.from(productStats.values())
-        .sort((a, b) => b.revenueMinor - a.revenueMinor)
-        .slice(0, 10)
-        .map((p) => ({ name: p.name, quantity: p.quantity, revenue: fromMinorUnits(p.revenueMinor) })),
-      staffPerformance: Array.from(staffStats.values())
-        .sort((a, b) => b.revenueMinor - a.revenueMinor)
-        .slice(0, 12)
-        .map((s) => ({
-          name: s.name,
-          ordersCount: s.ordersCount,
-          revenue: fromMinorUnits(s.revenueMinor),
-          discountGiven: fromMinorUnits(s.discountMinor),
-        })),
-    };
-  }
-
   static buildCriticalMaterials(materials: StockMaterialEntity[], branchNameById: Map<string, string>) {
     return materials
       .filter((m) => Number(m.currentStock) <= Number(m.minStock))

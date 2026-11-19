@@ -6,13 +6,20 @@ import {
   type PanelOrder,
   type PanelTable,
 } from "../panel-types"
-import { notifyAuthExpired, getBase, type OrderDto } from "../api"
-import { computeDiscountMinorUnits, fromMinorUnits, toMinorUnits } from "../format"
+import { api, notifyAuthExpired, getBase, setSessionUser, type OrderDto } from "../api"
+import { computeDiscountMinorUnits, formatTitleCase, fromMinorUnits, toMinorUnits } from "../format"
 import { mapOrder } from "../mappers/orders-tables.mapper"
 import {
   getNotificationPrefs,
   showBrowserNotification,
 } from "../notification-sound"
+import {
+  getDismissedNotifIds,
+  getNotifsClearedAt,
+  getReadNotifIds,
+  saveDismissedNotifIds,
+  saveNotifsClearedAt,
+} from "./panel-local-storage"
 import { showPanelToast } from "@/components/panel/panel-toast"
 
 export function usePanelSocket(params: {
@@ -234,6 +241,91 @@ export function usePanelSocket(params: {
       showBrowserNotification(title, message, notifId)
     }
 
+    const handleStaffSessionUpdated = () => {
+      if (!token) return
+      void api.restaurant
+        .me(token)
+        .then((meRes) => {
+          if (meRes.user.role !== "root" && meRes.user.role !== "staff") {
+            notifyAuthExpired("Yönetim paneli erişim yetkiniz kaldırıldı.")
+            return
+          }
+          const normalizedUser = {
+            ...meRes.user,
+            name: formatTitleCase(meRes.user.name),
+          }
+          setSessionUser(normalizedUser)
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(
+              new CustomEvent("corder:staff-session-updated", {
+                detail: normalizedUser,
+              }),
+            )
+          }
+        })
+        .catch(() => {})
+      void refreshPosRef.current?.()
+    }
+
+    const handleNotificationsUpdated = () => {
+      if (!token) return
+      void api.notifications
+        .getState(token)
+        .then((state) => {
+          if (!state) return
+          if (Array.isArray(state.dismissedIds) && state.dismissedIds.length > 0) {
+            const merged = getDismissedNotifIds(restaurantId)
+            state.dismissedIds.forEach((id) => merged.add(id))
+            saveDismissedNotifIds(merged, restaurantId)
+          }
+          if (state.clearedAt) {
+            const localCleared = getNotifsClearedAt(restaurantId)
+            if (
+              !localCleared ||
+              new Date(state.clearedAt).getTime() > new Date(localCleared).getTime()
+            ) {
+              saveNotifsClearedAt(state.clearedAt, restaurantId)
+            }
+          }
+          const readIds = getReadNotifIds(restaurantId)
+          const dismissedIds = getDismissedNotifIds(restaurantId)
+          const clearedIso = getNotifsClearedAt(restaurantId)
+          const clearedMs = clearedIso ? new Date(clearedIso).getTime() : 0
+          const activeWaiterIds = new Set((state.waiterCalls ?? []).map((wc) => wc.id))
+          const waiterNotifs: PanelNotification[] = (state.waiterCalls ?? []).map((wc) => {
+            const isBill = wc.requestType === "bill"
+            const section = wc.sectionName || "Salon"
+            return {
+              id: wc.id,
+              type: "waiter-call" as const,
+              title: `🔔 ${wc.tableName} (${section}) - ${isBill ? "Hesap İstiyor!" : "Garson Çağırıyor!"}`,
+              message: wc.note
+                ? `Not: ${wc.note}`
+                : `${wc.tableName} masasından ${isBill ? "hesap talebi" : "garson çağrısı"} geldi.`,
+              read: readIds.has(wc.id),
+              createdAt: new Date(wc.createdAt),
+            }
+          })
+          setNotifications?.((prev) => {
+            const kept = prev.filter((n) => {
+              if (dismissedIds.has(n.id)) return false
+              const ts = new Date(n.createdAt).getTime()
+              if (clearedMs > 0 && Number.isFinite(ts) && ts <= clearedMs) return false
+              if (n.type === "waiter-call" && !activeWaiterIds.has(n.id)) return false
+              return true
+            })
+            const existingIds = new Set(kept.map((n) => n.id))
+            const added = waiterNotifs.filter(
+              (wn) => !existingIds.has(wn.id) && !dismissedIds.has(wn.id),
+            )
+            return [...added, ...kept].sort(
+              (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+            )
+          })
+        })
+        .catch(() => {})
+    }
+
     socket.on("connect", handleConnect)
     socket.io.on("reconnect", handleReconnect)
     socket.on("auth:expired", handleAuthExpired)
@@ -245,6 +337,8 @@ export function usePanelSocket(params: {
     socket.on("waiter:called", handleWaiterCalled)
     socket.on("fraud:alert", handleFraudAlert)
     socket.on("platform:notification", handlePlatformNotification)
+    socket.on("staff:session-updated", handleStaffSessionUpdated)
+    socket.on("notifications:updated", handleNotificationsUpdated)
 
     return () => {
       socket.off("connect", handleConnect)
@@ -258,6 +352,8 @@ export function usePanelSocket(params: {
       socket.off("waiter:called", handleWaiterCalled)
       socket.off("fraud:alert", handleFraudAlert)
       socket.off("platform:notification", handlePlatformNotification)
+      socket.off("staff:session-updated", handleStaffSessionUpdated)
+      socket.off("notifications:updated", handleNotificationsUpdated)
       socket.disconnect()
       socketRef.current = null
     }

@@ -366,10 +366,30 @@ export function useInventoryActions(params: {
     [token, setInventoryCounts, refreshMaterialsAndMovements],
   )
 
+  const cancelInventoryCount = useCallback(
+    (countId: string) => {
+      if (!token) return
+      api.stock.inventoryCounts
+        .cancel(token, countId)
+        .then(() => {
+          setInventoryCounts((prev) => prev.filter((c) => c.id !== countId))
+          logActivity({
+            action: "inventory_count_cancelled",
+            category: "stock",
+            details: `Stok sayımı iptal edildi: ${countId}`,
+            metadata: { countId },
+          })
+          showPanelToast("Stok sayımı iptal edildi", "info")
+        })
+        .catch((err) => showPanelToast(err instanceof Error ? err.message : "Stok sayımı iptal edilemedi", "error"))
+    },
+    [token, setInventoryCounts, logActivity],
+  )
+
   return {
     addMaterial, updateMaterial, deleteMaterial, addStockMovement,
     setProductIngredients, addSupplier, updateSupplier, deleteSupplier,
     addPurchaseOrder, updatePurchaseOrder, receivePurchaseOrder,
-    startInventoryCount, updateInventoryItem, completeInventoryCount,
+    startInventoryCount, updateInventoryItem, completeInventoryCount, cancelInventoryCount,
   }
 }
