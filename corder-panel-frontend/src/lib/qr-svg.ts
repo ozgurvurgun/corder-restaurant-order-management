@@ -225,7 +225,13 @@ export function encodeQrMatrix(text: string): boolean[][] {
   return modules
 }
 
-export function generateQrSvg(text: string, pixelSize = 160, margin = 2): string {
+export function generateQrSvg(
+  text: string,
+  pixelSize = 160,
+  margin = 3,
+  darkColor = "#000000",
+  lightColor = "#ffffff",
+): string {
   const matrix = encodeQrMatrix(text)
   const n = matrix.length
   const viewSize = n + margin * 2
@@ -233,9 +239,15 @@ export function generateQrSvg(text: string, pixelSize = 160, margin = 2): string
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) if (matrix[r][c]) path += `M${c + margin} ${r + margin}h1v1h-1z`
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewSize} ${viewSize}" width="${pixelSize}" height="${pixelSize}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#ffffff"/><path d="${path}" fill="#1d1d1f"/></svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewSize} ${viewSize}" width="${pixelSize}" height="${pixelSize}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="${lightColor}"/><path d="${path}" fill="${darkColor}"/></svg>`
 }
 
-export function generateQrDataUri(text: string, pixelSize = 160, margin = 2): string {
-  return `data:image/svg+xml;utf8,${encodeURIComponent(generateQrSvg(text, pixelSize, margin))}`
+export function generateQrDataUri(
+  text: string,
+  pixelSize = 160,
+  margin = 3,
+  darkColor = "#000000",
+  lightColor = "#ffffff",
+): string {
+  return `data:image/svg+xml;utf8,${encodeURIComponent(generateQrSvg(text, pixelSize, margin, darkColor, lightColor))}`
 }

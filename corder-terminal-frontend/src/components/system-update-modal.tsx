@@ -55,7 +55,11 @@ async function purgeBrowserCachesAndReload(updateId: string): Promise<void> {
   }
 
   try {
+    const savedCarts = sessionStorage.getItem("terminal_carts_v1")
+    const savedLock = sessionStorage.getItem("terminal_locked_table_id")
     sessionStorage.clear()
+    if (savedCarts) sessionStorage.setItem("terminal_carts_v1", savedCarts)
+    if (savedLock) sessionStorage.setItem("terminal_locked_table_id", savedLock)
   } catch {
     // ignore sessionStorage errors
   }

@@ -1,18 +1,13 @@
 import { useState, useMemo } from "react"
 import {
   Bell,
-  Copy,
-  ExternalLink,
   Layers,
   Loader2,
-  Printer,
-  QrCode,
   ToggleLeft,
   ToggleRight,
   X,
 } from "lucide-react"
 import type { PanelSection, PanelTable } from "@/lib/panel-types"
-import { escapeHtml, generateQrDataUri } from "@/lib/qr-svg"
 import { showPanelToast } from "../panel-toast"
 import {
   getBrowserNotificationPermission,
@@ -22,6 +17,8 @@ import {
   showBrowserNotification,
   type NotificationPrefs,
 } from "@/lib/notification-sound"
+
+export { TableQrCodesModal } from "./table-qr-codes-modal"
 
 export function BulkCreateTablesModal(props: {
   sections: PanelSection[]
@@ -149,142 +146,6 @@ export function BulkCreateTablesModal(props: {
           >
             {busy ? <><Loader2 className="w-4 h-4 animate-spin" /> Oluşturuluyor…</> : `${parsedCount} Masayı Oluştur`}
           </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-export function TableQrCodesModal(props: {
-  restaurantName: string
-  restaurantSlug: string
-  tables: PanelTable[]
-  onClose: () => void
-}) {
-  const { restaurantName, restaurantSlug, tables, onClose } = props
-  const slug = restaurantSlug || "restoran"
-  const generalMenuUrl = `https://menu.corders.uk/?restaurant=${encodeURIComponent(slug)}`
-  const buildTableUrl = (t: PanelTable): string | null => {
-    const token = t.qrToken?.trim()
-    if (!token) return null
-    return `https://menu.corders.uk/?restaurant=${encodeURIComponent(slug)}&t=${encodeURIComponent(token)}`
-  }
-
-  const copyUrl = (url: string, label: string) => {
-    void navigator.clipboard?.writeText(url)
-    showPanelToast(`${label} bağlantısı kopyalandı`, "success")
-  }
-
-  const handlePrintAllQrCodes = () => {
-    const printable = tables
-      .map((t) => ({ table: t, url: buildTableUrl(t) }))
-      .filter((item): item is { table: PanelTable; url: string } => Boolean(item.url))
-    if (printable.length === 0) {
-      showPanelToast("Yazdırılacak imzalı QR kodlu masa bulunamadı", "error")
-      return
-    }
-    const win = window.open("", "_blank")
-    if (!win) return
-    const safeBrand = escapeHtml(restaurantName || "Restoran")
-    const cardsHtml = printable
-      .map(({ table: t, url }) => {
-        const qrImg = generateQrDataUri(url, 220, 2)
-        const safeSection = escapeHtml(t.section)
-        const safeName = escapeHtml(t.name)
-        return `<div class="card"><div class="brand">${safeBrand}</div><div class="section">${safeSection}</div><div class="table">${safeName}</div><img src="${qrImg}" alt="${safeName}" width="160" height="160" /><div class="hint">Menüyü görmek ve garson çağırmak için okutun</div></div>`
-      })
-      .join("")
-    win.document.write(`<!DOCTYPE html><html lang="tr"><head><meta charset="utf-8"/><title>Masa QR Kodları - ${safeBrand}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:20px;color:#1d1d1f}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.card{border:1.5px solid #d1d1d6;border-radius:16px;padding:16px;text-align:center;page-break-inside:avoid}.brand{font-size:12px;font-weight:600;color:#86868b}.section{font-size:11px;color:#e63462;font-weight:600;margin-top:2px}.table{font-size:20px;font-weight:800;margin:4px 0 10px}.hint{font-size:10px;color:#636366;margin-top:8px}</style></head><body><div class="grid">${cardsHtml}</div><script>window.onload=()=>setTimeout(()=>window.print(),200);</script></body></html>`)
-    win.document.close()
-  }
-
-  return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 backdrop-blur-sm p-3">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[680px] max-h-[86vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-[#f0f0f0]">
-          <div className="flex items-center gap-2 min-w-0">
-            <QrCode className="w-4 h-4 text-[#e63462] flex-shrink-0" />
-            <h3 className="text-[15px] font-semibold text-[#1d1d1f] truncate">
-              Masaya Özel İmzalı QR Kodlar (Garson Çağrılı)
-            </h3>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-              type="button"
-              onClick={handlePrintAllQrCodes}
-              className="h-[32px] px-3.5 rounded-lg bg-[#1d1d1f] text-white text-[12px] font-medium hover:bg-[#3a3a3c] inline-flex items-center gap-1.5 whitespace-nowrap flex-shrink-0"
-            >
-              <Printer className="w-3.5 h-3.5 flex-shrink-0" />
-              <span>Masa QR Kodlarını Yazdır</span>
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-7 h-7 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed] flex-shrink-0"
-            >
-              <X className="w-3.5 h-3.5 text-[#86868b]" />
-            </button>
-          </div>
-        </div>
-
-        <div className="p-5 overflow-y-auto space-y-4">
-          <div className="rounded-xl bg-[#f5f5f7] border border-[#d1d1d6]/60 p-3.5 flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <span className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
-                Genel QR Menü (Masasız - Garson Çağrısı Gizli)
-              </span>
-              <p className="text-[12px] font-mono text-[#1d1d1f] truncate mt-0.5">{generalMenuUrl}</p>
-            </div>
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <button type="button" onClick={() => copyUrl(generalMenuUrl, "Genel QR Menü")} className="h-[28px] px-2.5 rounded-lg bg-white border border-[#d1d1d6]/60 text-[11px] font-medium text-[#1d1d1f] hover:bg-[#e8e8ed] flex items-center gap-1">
-                <Copy className="w-3 h-3" /> Kopyala
-              </button>
-              <a href={generalMenuUrl} target="_blank" rel="noreferrer" className="h-[28px] px-2.5 rounded-lg bg-white border border-[#d1d1d6]/60 text-[11px] font-medium text-[#1d1d1f] hover:bg-[#e8e8ed] flex items-center gap-1">
-                <ExternalLink className="w-3 h-3" /> Aç
-              </a>
-            </div>
-          </div>
-
-          <div className="border border-[#d1d1d6]/60 rounded-xl overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-[#f9f9f9] border-b border-[#f0f0f0]">
-                  <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase">Masa</th>
-                  <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase">Bölüm</th>
-                  <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase">İmzalı QR Bağlantısı</th>
-                  <th className="text-right px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase">İşlem</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tables.map((t, idx) => {
-                  const url = buildTableUrl(t)
-                  return (
-                    <tr key={t.id} className={`border-b border-[#f0f0f0] ${idx % 2 === 1 ? "bg-[#fafafa]" : ""}`}>
-                      <td className="px-4 py-2 text-[13px] font-semibold text-[#1d1d1f]">{t.name}</td>
-                      <td className="px-4 py-2 text-[12px] text-[#86868b]">{t.section}</td>
-                      <td className="px-4 py-2 text-[11px] font-mono text-[#636366] max-w-[280px] truncate">
-                        {url ?? "İmzalı QR anahtarı bekleniyor"}
-                      </td>
-                      <td className="px-4 py-2 text-right">
-                        {url ? (
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button type="button" onClick={() => copyUrl(url, t.name)} className="h-[26px] px-2.5 rounded bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[11px] font-medium text-[#1d1d1f] flex items-center gap-1">
-                              <Copy className="w-3 h-3" /> Kopyala
-                            </button>
-                            <a href={url} target="_blank" rel="noreferrer" className="h-[26px] px-2 rounded bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[11px] font-medium text-[#1d1d1f] flex items-center">
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          </div>
-                        ) : (
-                          <span className="text-[11px] text-[#86868b]">-</span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
         </div>
       </div>
     </div>

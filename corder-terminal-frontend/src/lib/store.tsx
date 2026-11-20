@@ -162,6 +162,11 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     if (!token || !staffSession?.staffToken) return
     try {
       const state = await api.notifications.getState(token)
+      if (state.latestSystemUpdate?.id && typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("corder:system-update", { detail: state.latestSystemUpdate })
+        )
+      }
       const calls = (state.waiterCalls ?? [])
         .map((c) => normalizeWaiterCallPayload(c))
         .filter((c): c is ActiveWaiterCall => c !== null)

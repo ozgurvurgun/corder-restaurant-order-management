@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react"
 import { io, type Socket } from "socket.io-client"
-import { getBase, getToken, notifyAuthExpired } from "./api"
+import { api, getBase, getToken, notifyAuthExpired } from "./api"
 import {
   getTerminalNotificationPrefs,
   normalizeWaiterCallPayload,
@@ -71,6 +71,21 @@ export function useTerminalApiSync(params: {
       window.dispatchEvent(new CustomEvent("corder:system-update", { detail: payload }))
     }
 
+    const checkLatestSystemUpdate = async () => {
+      const currentToken = getToken()
+      if (!currentToken) return
+      try {
+        const res = await api.notifications.getSystemUpdate(currentToken)
+        if (res?.latestSystemUpdate?.id) {
+          handleSystemUpdate(res.latestSystemUpdate)
+        }
+      } catch {
+        // ignore background system update check errors
+      }
+    }
+
+    void checkLatestSystemUpdate()
+
     socket.on("auth:expired", handleAuthExpired)
     socket.on("platform:system_update", handleSystemUpdate)
     socket.on("platform:notification", (payload?: { id?: string; level?: string; title?: string; message?: string; sentAt?: string }) => {
@@ -84,6 +99,7 @@ export function useTerminalApiSync(params: {
     socket.on("tables:presence", () => void pullTables())
     socket.on("staff:session-updated", () => void refreshData())
     socket.on("notifications:updated", () => {
+      void checkLatestSystemUpdate()
       if (onNotificationsUpdatedRef.current) {
         void onNotificationsUpdatedRef.current()
       } else {
@@ -113,10 +129,22 @@ export function useTerminalApiSync(params: {
     socket.on("connect", () => {
       setIsOffline(false)
       void refreshLiveState()
+      void checkLatestSystemUpdate()
     })
-    socket.io.on("reconnect", () => void refreshData())
+    socket.io.on("reconnect", () => {
+      void refreshData()
+      void checkLatestSystemUpdate()
+    })
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void checkLatestSystemUpdate()
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange)
 
     return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange)
       socketRef.current?.disconnect()
       socketRef.current = null
     }

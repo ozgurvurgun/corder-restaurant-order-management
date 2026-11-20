@@ -106,6 +106,70 @@ export class NotificationsController {
     });
   }
 
+  private async findLatestSystemUpdate(
+    restaurantId: string,
+    platformSince: Date,
+    dismissedSet: Set<string>,
+  ) {
+    const rows = await this.queryPlatformNotifications(
+      restaurantId,
+      'root',
+      platformSince,
+    );
+    const match = rows.find((pn) => {
+      if (pn.level !== 'system_update') return false;
+      if (
+        dismissedSet.has(pn.id) ||
+        dismissedSet.has(`platform:${pn.id}`) ||
+        dismissedSet.has(`platform-notif-${pn.id}`)
+      ) {
+        return false;
+      }
+      const targets = Array.isArray(pn.targetRestaurantIds)
+        ? pn.targetRestaurantIds
+        : [];
+      return targets.length === 0 || targets.includes(restaurantId);
+    });
+    if (!match) return null;
+    return {
+      id: match.id,
+      title: match.title,
+      message: match.message,
+      level: 'system_update',
+      targetApps: Array.isArray(match.targetApps)
+        ? match.targetApps
+        : ['merchant', 'boss', 'terminal'],
+      sentAt: (match.sentAt ?? match.createdAt).toISOString(),
+      createdAt: match.createdAt.toISOString(),
+    };
+  }
+
+  @Get('system-update')
+  async getSystemUpdate(
+    @RestaurantId() restaurantId: string,
+    @RestaurantUser() user?: { role?: string },
+  ) {
+    if (!user || user.role === 'print_agent') {
+      throw new ForbiddenException('Unauthorized notification access');
+    }
+    const restaurant = await this.restaurantRepo.findOne({
+      where: { id: restaurantId },
+    });
+    if (!restaurant) {
+      throw new NotFoundException('Restaurant not found');
+    }
+    const platformSince =
+      restaurant.notificationsClearedAt ??
+      new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const dismissedSet = new Set(restaurant.dismissedNotificationIds ?? []);
+    const latestSystemUpdate = await this.findLatestSystemUpdate(
+      restaurantId,
+      platformSince,
+      dismissedSet,
+    );
+    return { latestSystemUpdate };
+  }
+
   @Get()
   async getState(
     @RestaurantId() restaurantId: string,
@@ -128,7 +192,7 @@ export class NotificationsController {
       restaurant.notificationsClearedAt ??
       new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-    const [calls, sentPlatformNotifs] = await Promise.all([
+    const [calls, sentPlatformNotifs, terminalSystemUpdate] = await Promise.all([
       this.waiterCallRepo.find({
         where: {
           restaurantId,
@@ -139,6 +203,9 @@ export class NotificationsController {
         take: 50,
       }),
       this.queryPlatformNotifications(restaurantId, user?.role, platformSince),
+      user?.role === 'terminal'
+        ? this.findLatestSystemUpdate(restaurantId, platformSince, dismissedSet)
+        : Promise.resolve(null),
     ]);
 
     const waiterCalls = calls
@@ -187,7 +254,9 @@ export class NotificationsController {
       }));
 
     const latestSystemUpdate =
-      platformNotifications.find((pn) => pn.level === 'system_update') ?? null;
+      platformNotifications.find((pn) => pn.level === 'system_update') ??
+      terminalSystemUpdate ??
+      null;
 
     return {
       clearedAt: restaurant.notificationsClearedAt

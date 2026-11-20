@@ -419,7 +419,26 @@ export const api = {
           note?: string | null
           createdAt: string
         }>
+        latestSystemUpdate?: {
+          id: string
+          title?: string
+          message?: string
+          sentAt?: string
+        } | null
       }>("/restaurant/notifications", { token, skipAuthExpired: true }),
+    getSystemUpdate: (token: string) =>
+      request<{
+        latestSystemUpdate?: {
+          id: string
+          title?: string
+          message?: string
+          sentAt?: string
+        } | null
+      }>("/restaurant/notifications/system-update", {
+        token,
+        skipAuthExpired: true,
+        skipStaffToken: true,
+      }),
   },
   staff: {
     listTerminalUsers: (token: string) =>
