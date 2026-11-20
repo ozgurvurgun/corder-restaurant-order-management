@@ -45,3 +45,4 @@ export class WebPushSubscriptionEntity {
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt!: Date;
 }
+

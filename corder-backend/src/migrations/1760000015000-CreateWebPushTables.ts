@@ -82,3 +82,4 @@ export class CreateWebPushTables1760000015000 implements MigrationInterface {
     await queryRunner.query(`DROP TABLE IF EXISTS "web_push_vapid_keys"`);
   }
 }
+

@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { CompletedOrderEntity } from '../domain/completed-order.entity';
@@ -9,9 +9,13 @@ import {
   CheckSettlementPolicy,
   SettlementActorPolicy,
 } from '../domain/services/check-settlement.policy';
-import { OrderStatusPolicy } from '../domain/services/order-status.policy';
-import { buildCompletedOrderEditLogEntry } from '../domain/services/completed-order-edit-log.policy';
-import { BilledOrderLineForStock } from '../domain/services/recipe-stock.policy';
+import {
+  assertCompletedOrderEditPermissions,
+  buildCompletedOrderEditLogEntry,
+  extractStockLinesFromCompletedOrdersSnapshot,
+  preserveCompletedOrderSnapshotNumbers,
+  sumActiveCompletedOrderLinesMinorUnits,
+} from '../domain/services/completed-order-edit-log.policy';
 import { CloseCheckSplitDto } from '../api/dto/close-check.dto';
 import { UpdateCompletedOrderDto } from '../api/dto/update-completed-order.dto';
 import { OrdersGateway } from '../api/orders.gateway';
@@ -76,46 +80,45 @@ export class CompletedOrdersService {
     return qb.getMany();
   }
 
-  private sumActiveOrderLinesMinorUnits(
-    orders: { items: { status: string; price: number; quantity: number }[] }[],
-  ): number {
-    let sumMinorUnits = 0;
-    for (const order of orders) {
-      for (const item of order.items || []) {
-        if (!OrderStatusPolicy.isItemOnActiveBill(item.status)) continue;
-        const qty = Math.max(0, Math.floor(Number(item.quantity) || 0));
-        const unitMinor = toMinorUnits(item.price);
-        if (unitMinor < 0) {
-          throw new BadRequestException('Invalid item price in completed order');
-        }
-        sumMinorUnits += unitMinor * qty;
-      }
-    }
-    return sumMinorUnits;
-  }
+  private applyEditedOrderFields(
+    row: CompletedOrderEntity,
+    dto: UpdateCompletedOrderDto,
+    settlement: ReturnType<typeof CheckSettlementPolicy.computeSettlement>,
+    ledgerCustomer: { id: string; name: string } | null,
+    editEntry: ReturnType<typeof buildCompletedOrderEditLogEntry>,
+  ): { totalAmount: number; discountAmount: number; netAmount: number } {
+    const totalAmount = fromMinorUnits(settlement.rawTotalMinorUnits);
+    const discountAmount = fromMinorUnits(settlement.discountMinorUnits);
+    const netAmount = fromMinorUnits(settlement.netMinorUnits);
 
-  private extractStockLinesFromOrders(
-    ordersSnapshot: unknown,
-  ): BilledOrderLineForStock[] {
-    if (!Array.isArray(ordersSnapshot)) return [];
-    const out: BilledOrderLineForStock[] = [];
-    for (const ord of ordersSnapshot) {
-      const items = (ord as { items?: Array<{ productId?: string; productName?: string; quantity?: number; status?: string }> })?.items ?? [];
-      for (const item of items) {
-        if (!item?.productId || !OrderStatusPolicy.isItemOnActiveBill(String(item.status ?? 'served'))) {
-          continue;
-        }
-        const qty = Math.max(0, Math.floor(Number(item.quantity) || 0));
-        if (qty > 0) {
-          out.push({
-            productId: String(item.productId),
-            productName: String(item.productName ?? 'Product'),
-            quantity: qty,
-          });
-        }
-      }
+    row.ordersSnapshot = dto.orders as unknown[];
+    row.paymentSnapshot = {
+      ...dto.payment,
+      amount: netAmount,
+      tip: fromMinorUnits(settlement.tipMinorUnits),
+      ...(settlement.normalizedSplits ? { splitDetails: settlement.normalizedSplits } : {}),
+      ...(settlement.discountSnapshot ? { discount: settlement.discountSnapshot } : {}),
+      ...(ledgerCustomer
+        ? {
+            ledgerCustomerId: ledgerCustomer.id,
+            ledgerCustomerName: ledgerCustomer.name,
+          }
+        : {}),
+    } as unknown;
+    row.totalAmount = totalAmount;
+    row.discountAmount = discountAmount;
+    row.netAmount = netAmount;
+    row.paymentMethod = dto.payment.method;
+    row.paymentTip = fromMinorUnits(settlement.tipMinorUnits);
+    row.paymentSplit = settlement.normalizedSplits ?? null;
+    row.paymentDiscount = settlement.discountSnapshot ?? null;
+    if (editEntry.changes.length > 0) {
+      row.editHistory = [
+        ...(Array.isArray(row.editHistory) ? row.editHistory : []),
+        editEntry,
+      ];
     }
-    return out;
+    return { totalAmount, discountAmount, netAmount };
   }
 
   async updateFromPanel(
@@ -151,19 +154,8 @@ export class CompletedOrdersService {
       const prevNetMinor = toMinorUnits(row.netAmount);
       const prevDiscountMinor = toMinorUnits(row.discountAmount);
       const prevOrdersSnapshot = row.ordersSnapshot;
-      const prevOrderNumberById = new Map<string, string>();
-      if (Array.isArray(prevOrdersSnapshot)) {
-        for (const snap of prevOrdersSnapshot as Array<{ id?: unknown; orderNumber?: unknown }>) {
-          if (typeof snap?.id === 'string' && typeof snap?.orderNumber === 'string' && snap.orderNumber.trim()) {
-            prevOrderNumberById.set(snap.id, snap.orderNumber.trim());
-          }
-        }
-      }
-      for (const ord of dto.orders) {
-        if (!ord.orderNumber && prevOrderNumberById.has(ord.id)) {
-          ord.orderNumber = prevOrderNumberById.get(ord.id);
-        }
-      }
+      preserveCompletedOrderSnapshotNumbers(prevOrdersSnapshot, dto.orders);
+
       const prevSplits = Array.isArray(row.paymentSplit)
         ? (row.paymentSplit as Array<{ method: string; amount: number }>)
         : null;
@@ -177,10 +169,10 @@ export class CompletedOrdersService {
         ledgerCustomerName?: string;
         discount?: { appliedBy?: string };
       };
-      const prevStockLines = this.extractStockLinesFromOrders(row.ordersSnapshot);
-      const nextStockLines = this.extractStockLinesFromOrders(dto.orders);
+      const prevStockLines = extractStockLinesFromCompletedOrdersSnapshot(row.ordersSnapshot);
+      const nextStockLines = extractStockLinesFromCompletedOrdersSnapshot(dto.orders);
 
-      const rawTotalMinor = this.sumActiveOrderLinesMinorUnits(dto.orders);
+      const rawTotalMinor = sumActiveCompletedOrderLinesMinorUnits(dto.orders);
       const effectiveLedgerCustomerId =
         dto.payment.ledgerCustomerId ?? prevPaymentSnap.ledgerCustomerId ?? null;
 
@@ -194,37 +186,16 @@ export class CompletedOrdersService {
       });
 
       const safeActorName = normalizeStorageText(actorName || '') || 'sistem';
-      const discountChanged =
-        settlement.discountMinorUnits > prevDiscountMinor ||
-        JSON.stringify(dto.payment.discount ?? null) !== JSON.stringify(row.paymentDiscount ?? null);
-      if (discountChanged && settlement.discountMinorUnits > 0) {
-        CheckSettlementPolicy.assertDiscountAllowedForActor(
-          settlement.rawTotalMinorUnits,
-          settlement.discountMinorUnits,
-          dto.payment.discount ?? null,
-          actor,
-        );
-      }
-      if (settlement.discountSnapshot) {
-        settlement.discountSnapshot.appliedBy = discountChanged
-          ? safeActorName
-          : normalizeStorageText(
-              dto.payment.discount?.appliedBy ||
-                (prevPaymentSnap.discount as { appliedBy?: string } | undefined)?.appliedBy ||
-                safeActorName,
-            );
-      }
-
-      if (
-        settlement.ledgerMinorUnits > prevBreakdown.ledgerMinorUnits &&
-        actor &&
-        !actor.isBoss &&
-        !(actor.permissions ?? []).includes('ledger.assign_order')
-      ) {
-        throw new ForbiddenException(
-          'You do not have permission to assign checks to a customer ledger (ledger.assign_order)',
-        );
-      }
+      assertCompletedOrderEditPermissions({
+        settlement,
+        prevDiscountMinor,
+        prevLedgerMinor: prevBreakdown.ledgerMinorUnits,
+        prevPaymentDiscount: row.paymentDiscount,
+        prevDiscountAppliedBy: prevPaymentSnap.discount?.appliedBy,
+        requestedDiscount: dto.payment.discount ?? null,
+        safeActorName,
+        actor,
+      });
 
       const ledgerCustomer = await this.ledgerService.reconcileCompletedOrderDebtInTransaction(
         em,
@@ -248,21 +219,17 @@ export class CompletedOrdersService {
         safeActorName,
       );
 
-      const totalAmount = fromMinorUnits(settlement.rawTotalMinorUnits);
-      const discountAmount = fromMinorUnits(settlement.discountMinorUnits);
-      const netAmount = fromMinorUnits(settlement.netMinorUnits);
-
       const editEntry = buildCompletedOrderEditLogEntry({
         editedBy: safeActorName,
         editedByUserId: actor?.id?.trim() || null,
         previousOrdersSnapshot: prevOrdersSnapshot,
         nextOrdersSnapshot: dto.orders,
         previousTotalAmount: prevTotalAmount,
-        nextTotalAmount: totalAmount,
+        nextTotalAmount: fromMinorUnits(settlement.rawTotalMinorUnits),
         previousDiscountAmount: prevDiscountAmount,
-        nextDiscountAmount: discountAmount,
+        nextDiscountAmount: fromMinorUnits(settlement.discountMinorUnits),
         previousNetAmount: prevNetAmount,
-        nextNetAmount: netAmount,
+        nextNetAmount: fromMinorUnits(settlement.netMinorUnits),
         previousMethod: prevMethod,
         nextMethod: dto.payment.method,
         previousSplit: prevSplits,
@@ -272,34 +239,13 @@ export class CompletedOrdersService {
           ledgerCustomer?.name ?? dto.payment.ledgerCustomerName ?? null,
       });
 
-      row.ordersSnapshot = dto.orders as unknown[];
-      row.paymentSnapshot = {
-        ...dto.payment,
-        amount: netAmount,
-        tip: fromMinorUnits(settlement.tipMinorUnits),
-        ...(settlement.normalizedSplits ? { splitDetails: settlement.normalizedSplits } : {}),
-        ...(settlement.discountSnapshot ? { discount: settlement.discountSnapshot } : {}),
-        ...(ledgerCustomer
-          ? {
-              ledgerCustomerId: ledgerCustomer.id,
-              ledgerCustomerName: ledgerCustomer.name,
-            }
-          : {}),
-      } as unknown;
-      row.totalAmount = totalAmount;
-      row.discountAmount = discountAmount;
-      row.netAmount = netAmount;
-      row.paymentMethod = dto.payment.method;
-      row.paymentTip = fromMinorUnits(settlement.tipMinorUnits);
-      row.paymentSplit = settlement.normalizedSplits ?? null;
-      row.paymentDiscount = settlement.discountSnapshot ?? null;
-      if (editEntry.changes.length > 0) {
-        row.editHistory = [
-          ...(Array.isArray(row.editHistory) ? row.editHistory : []),
-          editEntry,
-        ];
-      }
-
+      const { netAmount } = this.applyEditedOrderFields(
+        row,
+        dto,
+        settlement,
+        ledgerCustomer,
+        editEntry,
+      );
       const savedRow = await em.save(CompletedOrderEntity, row);
 
       await this.reconcileActiveShiftIfNeeded(

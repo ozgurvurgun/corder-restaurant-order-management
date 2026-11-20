@@ -120,29 +120,12 @@ export class CashShiftService {
     return current;
   }
 
-  async printShiftReport(id: string, restaurantId: string) {
-    const em = this.dataSource.manager;
-    const [shift, restaurant] = await Promise.all([
-      this.repo.findOne({ where: { id, restaurantId } }),
-      em.findOne(RestaurantEntity, { where: { id: restaurantId } }),
-    ]);
-    if (!shift) {
-      throw new NotFoundException('Cash shift not found.');
-    }
-
-    const windowStart = shift.openedAt;
-    const windowEnd = shift.closedAt ?? new Date();
-    const [completedOrders, cashTxs] = await Promise.all([
-      em.find(CompletedOrderEntity, {
-        where: { restaurantId, closedAt: Between(windowStart, windowEnd) },
-        order: { closedAt: 'ASC' },
-      }),
-      em.find(CashTransactionEntity, {
-        where: { restaurantId, shiftId: shift.id },
-        order: { createdAt: 'ASC' },
-      }),
-    ]);
-
+  private buildShiftReportSummary(
+    shift: CashShiftEntity,
+    restaurantName: string,
+    completedOrders: CompletedOrderEntity[],
+    cashTxs: CashTransactionEntity[],
+  ) {
     let ordersNetMinor = 0;
     let ordersCashMinor = 0;
     let ordersCardMinor = 0;
@@ -174,13 +157,10 @@ export class CashShiftService {
     let txCashOutMinor = 0;
     for (const tx of cashTxs) {
       const amtMinor = toMinorUnits(tx.amount || 0);
-      const normalizedRef = (tx.reference ?? '').trim().toLowerCase();
-      const isCardExpense = tx.type === 'expense' && normalizedRef === 'credit-card';
-      if (tx.type === 'cash-in' || tx.type === 'sale') {
-        txCashInMinor += amtMinor;
-      } else if (!isCardExpense) {
-        txCashOutMinor += amtMinor;
-      }
+      const isCardExpense =
+        tx.type === 'expense' && (tx.reference ?? '').trim().toLowerCase() === 'credit-card';
+      if (tx.type === 'cash-in' || tx.type === 'sale') txCashInMinor += amtMinor;
+      else if (!isCardExpense) txCashOutMinor += amtMinor;
     }
 
     const totalCashMinor = Math.max(toMinorUnits(shift.totalCash || 0), ordersCashMinor);
@@ -216,57 +196,71 @@ export class CashShiftService {
     const cashDifferenceMinor =
       closingBalanceMinor != null ? closingBalanceMinor - expectedCashMinor : 0;
 
-    const totalRevenue = fromMinorUnits(totalRevenueMinor);
-    const totalCash = fromMinorUnits(totalCashMinor);
-    const totalCard = fromMinorUnits(totalCardMinor);
-    const totalMealCard = fromMinorUnits(totalMealCardMinor);
-    const totalMultinet = fromMinorUnits(totalMultinetMinor);
-    const totalLedger = fromMinorUnits(totalLedgerMinor);
-    const discountTotal = fromMinorUnits(ordersDiscountMinor);
-    const openingBalance = fromMinorUnits(openingBalanceMinor);
-    const cashIn = fromMinorUnits(cashInMinor);
-    const cashOut = fromMinorUnits(cashOutMinor);
-    const expectedCash = fromMinorUnits(expectedCashMinor);
-    const closingBalance =
-      closingBalanceMinor != null ? fromMinorUnits(closingBalanceMinor) : null;
-    const cashDifference = fromMinorUnits(cashDifferenceMinor);
-    const closedTablesCount =
-      completedOrders.length || Number(shift.transactionCount || 0);
-    const reportType = shift.status === 'open' ? 'X' : 'Z';
-    const restaurantName = restaurant?.name || 'Corder Restoran';
-
-    const shiftReport = {
-      reportType,
+    return {
+      reportType: shift.status === 'open' ? 'X' : 'Z',
       restaurantName,
       shiftId: shift.id,
       openedBy: shift.openedBy,
       closedBy: shift.closedBy ?? null,
       openedAt: shift.openedAt.toISOString(),
       closedAt: shift.closedAt ? shift.closedAt.toISOString() : null,
-      openingBalance,
-      cashIn,
-      cashOut,
-      expectedCash,
-      closingBalance,
-      cashDifference,
-      totalRevenue,
-      totalCash,
-      totalCard,
-      totalMealCard,
-      totalMultinet,
-      totalLedger,
-      closedTablesCount,
-      discountTotal,
+      openingBalance: fromMinorUnits(openingBalanceMinor),
+      cashIn: fromMinorUnits(cashInMinor),
+      cashOut: fromMinorUnits(cashOutMinor),
+      expectedCash: fromMinorUnits(expectedCashMinor),
+      closingBalance:
+        closingBalanceMinor != null ? fromMinorUnits(closingBalanceMinor) : null,
+      cashDifference: fromMinorUnits(cashDifferenceMinor),
+      totalRevenue: fromMinorUnits(totalRevenueMinor),
+      totalCash: fromMinorUnits(totalCashMinor),
+      totalCard: fromMinorUnits(totalCardMinor),
+      totalMealCard: fromMinorUnits(totalMealCardMinor),
+      totalMultinet: fromMinorUnits(totalMultinetMinor),
+      totalLedger: fromMinorUnits(totalLedgerMinor),
+      closedTablesCount:
+        completedOrders.length || Number(shift.transactionCount || 0),
+      discountTotal: fromMinorUnits(ordersDiscountMinor),
+      mealAndMultinetCombined: fromMinorUnits(totalMealCardMinor + totalMultinetMinor),
     };
+  }
+
+  async printShiftReport(id: string, restaurantId: string) {
+    const em = this.dataSource.manager;
+    const [shift, restaurant] = await Promise.all([
+      this.repo.findOne({ where: { id, restaurantId } }),
+      em.findOne(RestaurantEntity, { where: { id: restaurantId } }),
+    ]);
+    if (!shift) {
+      throw new NotFoundException('Cash shift not found.');
+    }
+
+    const windowStart = shift.openedAt;
+    const windowEnd = shift.closedAt ?? new Date();
+    const [completedOrders, cashTxs] = await Promise.all([
+      em.find(CompletedOrderEntity, {
+        where: { restaurantId, closedAt: Between(windowStart, windowEnd) },
+        order: { closedAt: 'ASC' },
+      }),
+      em.find(CashTransactionEntity, {
+        where: { restaurantId, shiftId: shift.id },
+        order: { createdAt: 'ASC' },
+      }),
+    ]);
+
+    const { mealAndMultinetCombined, ...shiftReport } = this.buildShiftReportSummary(
+      shift,
+      restaurant?.name || 'Corder Restoran',
+      completedOrders,
+      cashTxs,
+    );
 
     const jobId = randomUUID();
-    const createdAt = new Date().toISOString();
     const payload: PrintJobSocketPayload = {
       type: 'order.print_job',
       jobId,
       restaurantId,
       printType: 'receipt',
-      createdAt,
+      createdAt: new Date().toISOString(),
       receiptMode: 'consolidated',
       includeLineNotes: false,
       isReprint: false,
@@ -274,25 +268,27 @@ export class CashShiftService {
       shiftReport,
       order: {
         tableName:
-          reportType === 'X' ? 'X RAPORU (ANLIK)' : 'Z RAPORU (KAPANIŞ)',
+          shiftReport.reportType === 'X'
+            ? 'X RAPORU (ANLIK)'
+            : 'Z RAPORU (KAPANIŞ)',
         waiterName: shift.closedBy || shift.openedBy || '-',
-        subtotal: totalRevenue,
-        total: totalRevenue,
+        subtotal: shiftReport.totalRevenue,
+        total: shiftReport.totalRevenue,
         items: [
           {
-            productName: `Kapanan Masa (${closedTablesCount} Adet)`,
+            productName: `Kapanan Masa (${shiftReport.closedTablesCount} Adet)`,
             quantity: 1,
-            price: totalRevenue,
+            price: shiftReport.totalRevenue,
           },
-          { productName: 'Nakit Tahsilat', quantity: 1, price: totalCash },
-          { productName: 'Kredi Kartı Tahsilat', quantity: 1, price: totalCard },
+          { productName: 'Nakit Tahsilat', quantity: 1, price: shiftReport.totalCash },
+          { productName: 'Kredi Kartı Tahsilat', quantity: 1, price: shiftReport.totalCard },
           {
             productName: 'Yemek Kartı / Multinet',
             quantity: 1,
-            price: fromMinorUnits(totalMealCardMinor + totalMultinetMinor),
+            price: mealAndMultinetCombined,
           },
-          { productName: 'Cari / Açık Hesap', quantity: 1, price: totalLedger },
-          { productName: 'Beklenen Kasa Nakit', quantity: 1, price: expectedCash },
+          { productName: 'Cari / Açık Hesap', quantity: 1, price: shiftReport.totalLedger },
+          { productName: 'Beklenen Kasa Nakit', quantity: 1, price: shiftReport.expectedCash },
         ],
       },
     };

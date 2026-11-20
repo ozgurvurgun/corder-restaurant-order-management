@@ -1,18 +1,19 @@
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode,
 } from "react"
-import { io, type Socket } from "socket.io-client"
+import { type Socket } from "socket.io-client"
 import {
-  BOSS_UNAUTHORIZED_EVENT, bossApi, clearBossSession, getApiBase, getBossToken,
-  getStoredActiveBranchId, getStoredBossUser, getStoredBranches, notifyUnauthorized, setBossSession,
+  BOSS_UNAUTHORIZED_EVENT, bossApi, clearBossSession, getBossToken,
+  getStoredActiveBranchId, getStoredBossUser, getStoredBranches, setBossSession,
   setStoredActiveBranchId, setStoredBranches, type StoredBossUser,
 } from "./api"
 import { formatTitleCase, normalizeBossBranch } from "./format"
 import {
   getBossDismissedNotifIds, getBossReadNotifIds, getFraudPushSoundEnabled,
   markBossNotifReadLocal, markBossNotifsDismissedLocal, requestBrowserNotificationPermission,
-  setFraudPushSoundEnabled, syncBossWebPushSubscription, triggerFraudPushNotification, triggerPlatformPushNotification,
+  setFraudPushSoundEnabled, triggerFraudPushNotification,
 } from "./fraud-notifier"
+import { useBossSocket } from "./use-boss-socket"
 import type {
   BossOverviewResponse, BossPlatformNotificationDto, BranchSummary, CatalogCategoryDto, CatalogProductDto,
   FraudAlertDto, FraudAlertStatus, LiveOrderDto, LiveTableDto,
@@ -376,80 +377,20 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     void refreshAll()
   }, [user?.id, selectedBranchId, refreshAll])
 
-  useEffect(() => {
-    const token = getBossToken()
-    if (!token || !user?.id) return
-    const socket = io(getApiBase() || undefined, {
-      path: "/ws",
-      auth: {
-        token,
-        ...(effectiveBranchIdRef.current ? { restaurantId: effectiveBranchIdRef.current } : {}),
-      },
-      transports: ["websocket", "polling"],
-    })
-    socketRef.current = socket
-    const scheduleLiveRefresh = () => {
-      if (liveRefreshTimerRef.current !== null) window.clearTimeout(liveRefreshTimerRef.current)
-      liveRefreshTimerRef.current = window.setTimeout(() => {
-        liveRefreshTimerRef.current = null
-        if (effectiveBranchIdRef.current) {
-          void refreshLiveOperations(effectiveBranchIdRef.current, selectedBranchIdRef.current)
-        }
-      }, 250)
-    }
-    const onTablesPresence = (presenceMap?: Record<string, { staffId: string; staffName: string }>) => {
-      if (!presenceMap || typeof presenceMap !== "object") return
-      setTables((prev) =>
-        prev.map((t) => ({
-          ...t,
-          sessionStaffId: presenceMap[t.id]?.staffId ?? null,
-          sessionStaffName: presenceMap[t.id]?.staffName ? formatTitleCase(presenceMap[t.id]!.staffName) : null,
-        }))
-      )
-    }
-    const onAuthExpired = (payload?: { reason?: string }) => {
-      notifyUnauthorized(payload?.reason)
-    }
-    const onSystemUpdate = (payload?: { id?: string; title?: string; message?: string; sentAt?: string }) => {
-      if (!payload?.id || typeof window === "undefined") return
-      window.dispatchEvent(new CustomEvent("corder:system-update", { detail: payload }))
-    }
-    const onPlatformNotification = (payload?: BossPlatformNotificationDto) => {
-      if (!payload || !payload.id) return
-      if ((payload as { level?: string }).level === "system_update") {
-        onSystemUpdate(payload)
-      }
-      if (Array.isArray(payload.targetApps) && !payload.targetApps.includes("boss")) return
-      setPlatformNotifications((prev) =>
-        prev.some((n) => n.id === payload.id) ? prev : [{ ...payload, read: false }, ...prev]
-      )
-      showToast(`📢 ${payload.title}: ${payload.message}`, payload.level === "urgent" ? "error" : "success")
-      if (pushSoundEnabledRef.current) void triggerPlatformPushNotification(payload)
-    }
-    const onNotificationsUpdated = () => {
-      if (effectiveBranchIdRef.current) {
-        void fetchPlatformNotifsSilently(effectiveBranchIdRef.current)
-      }
-    }
-    socket.on("connect", () => { void syncBossWebPushSubscription(token) })
-    socket.on("auth:expired", onAuthExpired)
-    socket.on("platform:notification", onPlatformNotification)
-    socket.on("platform:system_update", onSystemUpdate)
-    socket.on("notifications:updated", onNotificationsUpdated)
-    socket.on("order:created", scheduleLiveRefresh)
-    socket.on("orders:moved", scheduleLiveRefresh)
-    socket.on("orders:updated", scheduleLiveRefresh)
-    socket.on("fraud:alert", scheduleLiveRefresh)
-    socket.on("tables:presence", onTablesPresence)
-    return () => {
-      if (liveRefreshTimerRef.current !== null) {
-        window.clearTimeout(liveRefreshTimerRef.current)
-        liveRefreshTimerRef.current = null
-      }
-      socket.disconnect()
-      if (socketRef.current === socket) socketRef.current = null
-    }
-  }, [tokenVersion, user?.id, refreshLiveOperations, fetchPlatformNotifsSilently, showToast])
+  useBossSocket({
+    tokenVersion,
+    userId: user?.id,
+    socketRef,
+    liveRefreshTimerRef,
+    effectiveBranchIdRef,
+    selectedBranchIdRef,
+    pushSoundEnabledRef,
+    setTables,
+    setPlatformNotifications,
+    refreshLiveOperations,
+    fetchPlatformNotifsSilently,
+    showToast,
+  })
 
   const login = useCallback(async (email: string, password: string) => {
     try {

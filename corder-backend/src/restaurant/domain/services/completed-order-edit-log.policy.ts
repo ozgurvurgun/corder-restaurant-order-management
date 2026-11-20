@@ -1,5 +1,149 @@
 import { randomUUID } from 'crypto';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
+import { normalizeStorageText } from '../../../common/text/text-normalizer';
+import {
+  CheckSettlementPolicy,
+  type CheckSettlementResult,
+  type SettlementActorPolicy,
+} from './check-settlement.policy';
+import { OrderStatusPolicy } from './order-status.policy';
+import type { BilledOrderLineForStock } from './recipe-stock.policy';
+
+export function sumActiveCompletedOrderLinesMinorUnits(
+  orders: { items: { status: string; price: number; quantity: number }[] }[],
+): number {
+  let sumMinorUnits = 0;
+  for (const order of orders) {
+    for (const item of order.items || []) {
+      if (!OrderStatusPolicy.isItemOnActiveBill(item.status)) continue;
+      const qty = Math.max(0, Math.floor(Number(item.quantity) || 0));
+      const unitMinor = toMinorUnits(item.price);
+      if (unitMinor < 0) {
+        throw new BadRequestException('Invalid item price in completed order');
+      }
+      sumMinorUnits += unitMinor * qty;
+    }
+  }
+  return sumMinorUnits;
+}
+
+export function extractStockLinesFromCompletedOrdersSnapshot(
+  ordersSnapshot: unknown,
+): BilledOrderLineForStock[] {
+  if (!Array.isArray(ordersSnapshot)) return [];
+  const out: BilledOrderLineForStock[] = [];
+  for (const ord of ordersSnapshot) {
+    const items =
+      (
+        ord as {
+          items?: Array<{
+            productId?: string;
+            productName?: string;
+            quantity?: number;
+            status?: string;
+          }>;
+        }
+      )?.items ?? [];
+    for (const item of items) {
+      if (
+        !item?.productId ||
+        !OrderStatusPolicy.isItemOnActiveBill(String(item.status ?? 'served'))
+      ) {
+        continue;
+      }
+      const qty = Math.max(0, Math.floor(Number(item.quantity) || 0));
+      if (qty > 0) {
+        out.push({
+          productId: String(item.productId),
+          productName: String(item.productName ?? 'Product'),
+          quantity: qty,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+export function preserveCompletedOrderSnapshotNumbers(
+  prevOrdersSnapshot: unknown,
+  nextOrders: Array<{ id: string; orderNumber?: string | null }>,
+): void {
+  const prevOrderNumberById = new Map<string, string>();
+  if (Array.isArray(prevOrdersSnapshot)) {
+    for (const snap of prevOrdersSnapshot as Array<{ id?: unknown; orderNumber?: unknown }>) {
+      if (
+        typeof snap?.id === 'string' &&
+        typeof snap?.orderNumber === 'string' &&
+        snap.orderNumber.trim()
+      ) {
+        prevOrderNumberById.set(snap.id, snap.orderNumber.trim());
+      }
+    }
+  }
+  for (const ord of nextOrders) {
+    if (!ord.orderNumber && prevOrderNumberById.has(ord.id)) {
+      ord.orderNumber = prevOrderNumberById.get(ord.id);
+    }
+  }
+}
+
+export function assertCompletedOrderEditPermissions(params: {
+  settlement: CheckSettlementResult;
+  prevDiscountMinor: number;
+  prevLedgerMinor: number;
+  prevPaymentDiscount: unknown;
+  prevDiscountAppliedBy?: string;
+  requestedDiscount: {
+    type: 'percent' | 'amount' | 'complimentary';
+    value: number;
+    amount?: number;
+    reason?: string;
+    appliedBy?: string;
+  } | null;
+  safeActorName: string;
+  actor?: { id?: string } & SettlementActorPolicy;
+}): void {
+  const {
+    settlement,
+    prevDiscountMinor,
+    prevLedgerMinor,
+    prevPaymentDiscount,
+    prevDiscountAppliedBy,
+    requestedDiscount,
+    safeActorName,
+    actor,
+  } = params;
+  const discountChanged =
+    settlement.discountMinorUnits > prevDiscountMinor ||
+    JSON.stringify(requestedDiscount ?? null) !==
+      JSON.stringify(prevPaymentDiscount ?? null);
+  if (discountChanged && settlement.discountMinorUnits > 0) {
+    CheckSettlementPolicy.assertDiscountAllowedForActor(
+      settlement.rawTotalMinorUnits,
+      settlement.discountMinorUnits,
+      requestedDiscount ?? null,
+      actor,
+    );
+  }
+  if (settlement.discountSnapshot) {
+    settlement.discountSnapshot.appliedBy = discountChanged
+      ? safeActorName
+      : normalizeStorageText(
+          requestedDiscount?.appliedBy || prevDiscountAppliedBy || safeActorName,
+        );
+  }
+  if (
+    settlement.ledgerMinorUnits > prevLedgerMinor &&
+    actor &&
+    !actor.isBoss &&
+    !(actor.permissions ?? []).includes('ledger.assign_order')
+  ) {
+    throw new ForbiddenException(
+      'You do not have permission to assign checks to a customer ledger (ledger.assign_order)',
+    );
+  }
+}
 
 export type CompletedOrderEditChangeType =
   | 'item_cancelled'

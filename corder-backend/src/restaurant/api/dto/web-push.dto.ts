@@ -64,3 +64,4 @@ export class UnsubscribeWebPushDto {
   @MaxLength(2048)
   endpoint!: string;
 }
+
