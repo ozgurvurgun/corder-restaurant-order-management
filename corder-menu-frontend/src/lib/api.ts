@@ -115,9 +115,40 @@ export class MenuFetchError extends Error {
   }
 }
 
-const CACHE_PREFIX = "corder_menu_cache_v5:"
+const CACHE_PREFIX = "corder_menu_cache_v6:"
 const CACHE_TTL_MS = 60_000
 const memoryCache = new Map<string, { timestamp: number; data: MenuResponse }>()
+const inflightRequests = new Map<string, Promise<MenuResponse>>()
+
+export function resolveSlugFromLocation(searchParams?: URLSearchParams): string {
+  const params =
+    searchParams ??
+    (typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null)
+  const fromRestaurant = params?.get("restaurant")?.trim()
+  if (fromRestaurant) return fromRestaurant
+  const fromSlug = params?.get("slug")?.trim()
+  if (fromSlug) return fromSlug
+
+  if (typeof window !== "undefined") {
+    const segments = window.location.pathname
+      .split("/")
+      .map((s) => decodeURIComponent(s.trim()))
+      .filter((s) => Boolean(s) && s !== "index.html")
+    if (
+      segments.length >= 2 &&
+      (segments[0] === "menu" ||
+        segments[0] === "m" ||
+        segments[0] === "r" ||
+        segments[0] === "business")
+    ) {
+      return segments[1]
+    }
+    if (segments.length === 1 && segments[0] !== "menu") {
+      return segments[0]
+    }
+  }
+  return ""
+}
 
 function buildCacheKey(slug: string, tableToken?: string): string {
   const cleanToken = tableToken?.trim() || ""
@@ -305,60 +336,79 @@ export async function fetchMenu(
     return cached.data
   }
 
+  if (!options?.forceRefresh) {
+    const existingInflight = inflightRequests.get(cacheKey)
+    if (existingInflight) return existingInflight
+  }
+
   const base = getBase().replace(/\/$/, "")
   const q = encodeURIComponent(cleanSlug)
   const tQuery = cleanToken ? `&t=${encodeURIComponent(cleanToken)}` : ""
   const url = `${base}/menu?restaurant=${q}${tQuery}`
 
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 12_000)
+  const requestPromise = (async () => {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 12_000)
 
-  try {
-    const res = await fetch(url, { signal: controller.signal })
-    if (!res.ok) {
-      const text = await res.text()
-      let message = text
-      try {
-        const j = JSON.parse(text) as { message?: string | string[] }
-        message = Array.isArray(j.message) ? j.message.join(", ") : (j.message ?? text)
-      } catch {
-        // Ignore non-JSON body
+    try {
+      const res = await fetch(url, { signal: controller.signal })
+      if (!res.ok) {
+        const text = await res.text()
+        let message = text
+        try {
+          const j = JSON.parse(text) as { message?: string | string[] }
+          message = Array.isArray(j.message) ? j.message.join(", ") : (j.message ?? text)
+        } catch {
+          // Ignore non-JSON body
+        }
+        const lower = (message || "").toLowerCase()
+        if (
+          res.status === 403 ||
+          res.status === 423 ||
+          lower.includes("suspended") ||
+          lower.includes("ödeme") ||
+          lower.includes("askıya") ||
+          lower.includes("durduruldu")
+        ) {
+          throw new MenuFetchError(
+            "Bu işletmenin dijital menü hizmeti geçici olarak kullanım dışıdır.",
+            "suspended"
+          )
+        }
+        if (res.status === 404 || lower.includes("not found")) {
+          throw new MenuFetchError(
+            "Bu işletmeye ait aktif bir dijital menü bulunamadı.",
+            "not_found"
+          )
+        }
+        throw new MenuFetchError("Menü yüklenirken bir sorun oluştu.", "network")
       }
-      const lower = (message || "").toLowerCase()
-      if (
-        res.status === 403 ||
-        res.status === 423 ||
-        lower.includes("suspended") ||
-        lower.includes("ödeme") ||
-        lower.includes("askıya") ||
-        lower.includes("durduruldu")
-      ) {
-        throw new MenuFetchError(
-          "Bu işletmenin dijital menü hizmeti geçici olarak kullanım dışıdır.",
-          "suspended"
-        )
-      }
-      if (res.status === 404 || lower.includes("not found")) {
-        throw new MenuFetchError(
-          "Bu işletmeye ait aktif bir dijital menü bulunamadı.",
-          "not_found"
-        )
-      }
-      throw new MenuFetchError("Menü yüklenirken bir sorun oluştu.", "network")
+      const rawData = (await res.json()) as MenuResponse
+      const data = normalizeMenuResponse(rawData, cleanToken)
+      writeCachedMenu(cacheKey, data)
+      return data
+    } catch (err) {
+      if (err instanceof MenuFetchError) throw err
+      if (cached) return cached.data
+      throw new MenuFetchError(
+        "Menü yüklenemedi. Lütfen internet bağlantınızı kontrol edip tekrar deneyin.",
+        "network"
+      )
+    } finally {
+      clearTimeout(timeoutId)
+      inflightRequests.delete(cacheKey)
     }
-    const rawData = (await res.json()) as MenuResponse
-    const data = normalizeMenuResponse(rawData, cleanToken)
-    writeCachedMenu(cacheKey, data)
-    return data
-  } catch (err) {
-    if (err instanceof MenuFetchError) throw err
-    if (cached) return cached.data
-    throw new MenuFetchError(
-      "Menü yüklenemedi. Lütfen internet bağlantınızı kontrol edip tekrar deneyin.",
-      "network"
-    )
-  } finally {
-    clearTimeout(timeoutId)
+  })()
+
+  inflightRequests.set(cacheKey, requestPromise)
+  return requestPromise
+}
+
+if (typeof window !== "undefined") {
+  const initialSlug = resolveSlugFromLocation()
+  if (initialSlug) {
+    const initialToken = new URLSearchParams(window.location.search).get("t")?.trim() || ""
+    void fetchMenu(initialSlug, { tableToken: initialToken }).catch(() => undefined)
   }
 }
 

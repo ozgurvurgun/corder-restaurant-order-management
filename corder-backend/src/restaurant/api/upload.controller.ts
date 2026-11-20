@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
-import { randomUUID } from 'crypto';
+import { createHash } from 'crypto';
 import { mkdir, writeFile } from 'fs/promises';
 import { dirname, resolve, sep } from 'path';
 import type { Request } from 'express';
@@ -105,7 +105,11 @@ export class UploadController {
     );
 
     const tenant = tenantPrefix(req.user);
-    const key = `${tenant}/menu/${randomUUID()}${optimized.ext}`;
+    const contentHash = createHash('sha256')
+      .update(optimized.buffer)
+      .digest('hex')
+      .slice(0, 24);
+    const key = `${tenant}/menu/${contentHash}${optimized.ext}`;
 
     if (this.r2.isConfigured()) {
       try {

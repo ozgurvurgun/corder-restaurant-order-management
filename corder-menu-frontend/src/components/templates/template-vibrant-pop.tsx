@@ -16,15 +16,17 @@ import {
 
 function VibrantBentoProductCard(props: {
   product: MenuProduct
+  index?: number
   onSelect: (display: ProductDisplay) => void
 }) {
-  const { product, onSelect } = props
+  const { product, index = 0, onSelect } = props
   const [imgFailed, setImgFailed] = useState(false)
   const resolvedImage = resolveImageUrl(product.imageUrl)
   const display: ProductDisplay = {
     ...product,
     image: imgFailed ? undefined : resolvedImage,
   }
+  const isEager = index < 6
 
   return (
     <button
@@ -44,7 +46,8 @@ function VibrantBentoProductCard(props: {
             <img
               src={resolvedImage}
               alt={product.name}
-              loading="lazy"
+              loading={isEager ? "eager" : "lazy"}
+              fetchPriority={index < 4 ? "high" : "auto"}
               decoding="async"
               onError={() => setImgFailed(true)}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
@@ -105,10 +108,11 @@ function VibrantSubcategoryBlock(props: {
       </div>
       {cat.products.length > 0 && (
         <div className="space-y-3 mb-4">
-          {cat.products.map((product) => (
+          {cat.products.map((product, idx) => (
             <VibrantBentoProductCard
               key={product.id}
               product={product}
+              index={idx}
               onSelect={onSelectProduct}
             />
           ))}
@@ -275,10 +279,11 @@ export function VibrantPopMenuTemplate(props: MenuTemplateProps) {
             </div>
             {activeRoot.products.length > 0 && (
               <div className="space-y-3 mb-6">
-                {activeRoot.products.map((product) => (
+                {activeRoot.products.map((product, idx) => (
                   <VibrantBentoProductCard
                     key={product.id}
                     product={product}
+                    index={idx}
                     onSelect={onSelectProduct}
                   />
                 ))}

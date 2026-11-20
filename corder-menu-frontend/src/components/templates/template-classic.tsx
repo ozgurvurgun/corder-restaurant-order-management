@@ -15,15 +15,17 @@ import {
 
 function ClassicProductItem(props: {
   product: MenuProduct
+  index?: number
   onSelect: (display: ProductDisplay) => void
 }) {
-  const { product, onSelect } = props
+  const { product, index = 0, onSelect } = props
   const [imgFailed, setImgFailed] = useState(false)
   const resolvedImage = resolveImageUrl(product.imageUrl)
   const display: ProductDisplay = {
     ...product,
     image: imgFailed ? undefined : resolvedImage,
   }
+  const isEager = index < 6
 
   return (
     <button
@@ -65,7 +67,8 @@ function ClassicProductItem(props: {
             <img
               src={resolvedImage}
               alt={product.name}
-              loading="lazy"
+              loading={isEager ? "eager" : "lazy"}
+              fetchPriority={index < 4 ? "high" : "auto"}
               decoding="async"
               onError={() => setImgFailed(true)}
               className="w-full h-full object-cover"
@@ -88,8 +91,8 @@ function ClassicSubcategoryBlock(props: {
       <h3 className="text-base font-semibold text-stone-800 mb-3 tracking-tight">{cat.name}</h3>
       {cat.products.length > 0 && (
         <div className="space-y-3 mb-4">
-          {cat.products.map((product) => (
-            <ClassicProductItem key={product.id} product={product} onSelect={onSelectProduct} />
+          {cat.products.map((product, idx) => (
+            <ClassicProductItem key={product.id} product={product} index={idx} onSelect={onSelectProduct} />
           ))}
         </div>
       )}
@@ -227,10 +230,11 @@ export function ClassicMenuTemplate(props: MenuTemplateProps) {
             </h2>
             {activeRoot.products.length > 0 && (
               <div className="space-y-3 mb-6">
-                {activeRoot.products.map((product) => (
+                {activeRoot.products.map((product, idx) => (
                   <ClassicProductItem
                     key={product.id}
                     product={product}
+                    index={idx}
                     onSelect={onSelectProduct}
                   />
                 ))}
