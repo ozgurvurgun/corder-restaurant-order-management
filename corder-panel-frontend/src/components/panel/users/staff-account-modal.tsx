@@ -235,7 +235,7 @@ export function StaffAccountModal({
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="block text-[11px] font-semibold text-[#86868b] mb-1">Ad Soyad *</label>
           <input
@@ -293,7 +293,7 @@ export function StaffAccountModal({
           />
         </div>
 
-        <div className="col-span-2 flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-[#f0f0f0]">
+        <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-[#f0f0f0]">
           <div className="flex flex-wrap items-center gap-5">
             <label className="flex items-center gap-2 text-[12px] font-semibold text-[#1d1d1f] cursor-pointer">
               <input
@@ -433,7 +433,7 @@ export function StaffAccountModal({
               return (
                 <div key={catKey} className="rounded-xl border border-[#e5e5ea] bg-[#fafafa] p-3">
                   <p className="text-[12px] font-bold text-[#1d1d1f] mb-2">{catMeta.title}</p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {catPerms.map((perm) => {
                       const roleHas = currentFormRoleDef?.permissions.includes(perm.key) ?? false
                       const isGranted = formGrantedPerms.includes(perm.key)

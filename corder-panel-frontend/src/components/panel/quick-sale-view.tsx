@@ -79,7 +79,7 @@ function QuickSaleSubtree(props: {
         <h4 className="text-[12px] font-semibold text-[#86868b] mb-2 px-1"> {node?.name ?? ""} </h4>
       )}
       {nodeProducts.length > 0 && (
-        <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 mb-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 mb-2">
           {nodeProducts.map((product) => (
             <ProductCard key={product.id} product={product} showImage={showImage} disabled={disabled} onAdd={onAddProduct} />
           ))}
@@ -121,6 +121,7 @@ export default function QuickSaleView() {
   const showImages = settings.showProductImages !== false
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
+  const [mobilePane, setMobilePane] = useState<"products" | "cart">("products")
   const [cartItems, setCartItems] = useState<
     { productId: string; name: string; price: number; quantity: number; image?: string }[]
   >([])
@@ -263,9 +264,30 @@ export default function QuickSaleView() {
     })
   }
   return (
-    <div className="h-full flex bg-[#f5f5f7]">
-      <div className="flex-1 flex flex-col p-4 overflow-hidden">
-        <div className="relative mb-4">
+    <div className="h-full flex flex-col lg:flex-row bg-[#f5f5f7] overflow-hidden">
+      <div className="lg:hidden flex-shrink-0 bg-white border-b border-[#d1d1d6]/60 px-3.5 py-2 flex gap-2">
+        <button
+          type="button"
+          onClick={() => setMobilePane("products")}
+          className={`flex-1 h-9 rounded-xl text-[12px] font-semibold transition-colors ${
+            mobilePane === "products" ? "bg-[#1d1d1f] text-white" : "bg-[#f5f5f7] text-[#636366]"
+          }`}
+        >
+          Ürünler ({filteredProducts.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobilePane("cart")}
+          className={`flex-1 h-9 rounded-xl text-[12px] font-semibold transition-colors flex items-center justify-center gap-1.5 ${
+            mobilePane === "cart" ? "bg-[#e63462] text-white" : "bg-[#e63462]/10 text-[#e63462]"
+          }`}
+        >
+          <ShoppingBag className="w-3.5 h-3.5" />
+          Sepet ({cartItemCount}) • ₺{formatCurrency(cartTotal)}
+        </button>
+      </div>
+      <div className={`${mobilePane === "cart" ? "hidden lg:flex" : "flex"} flex-1 flex-col p-3.5 sm:p-4 overflow-hidden min-w-0`}>
+        <div className="relative mb-3 sm:mb-4">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#86868b]" />
           <input
             type="text"
@@ -274,13 +296,13 @@ export default function QuickSaleView() {
             onChange={(e) => {
               setSearchQuery(e.target.value); if (e.target.value) setSelectedCategoryId(null)
             }}
-            className="w-full h-[48px] pl-12 pr-4 text-[14px] bg-white rounded-2xl border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 shadow-sm"
+            className="w-full h-[44px] sm:h-[48px] pl-12 pr-4 text-[14px] bg-white rounded-2xl border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 shadow-sm"
           />
           {searchQuery && (
             <button onClick={() => setSearchQuery("")} className="absolute right-4 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-[#86868b]/20 flex items-center justify-center"><X className="w-3.5 h-3.5 text-[#86868b]" /></button>
           )}
         </div>
-        <div className="flex gap-2 mb-4 overflow-x-auto pb-2 flex-shrink-0">
+        <div className="flex gap-2 mb-3 sm:mb-4 overflow-x-auto pb-2 flex-shrink-0">
           <button onClick={() => { setSelectedCategoryId(null); setSearchQuery("") }} className={`px-4 py-2 rounded-xl text-[13px] font-medium whitespace-nowrap transition-colors ${ !selectedCategoryId && !searchQuery ? "bg-[#e63462] text-white" : "bg-white text-[#1d1d1f] hover:bg-[#e8e8ed] border border-[#d1d1d6]/60" }`}> Tümü </button>
           {quickSaleRootCategories.map((cat) => (
             <button key={cat.id} type="button" onClick={() => { setSelectedCategoryId(cat.id); setSearchQuery("") }} className={`px-4 py-2 rounded-xl text-[13px] font-medium whitespace-nowrap transition-colors ${ selectedCategoryId === cat.id ? "bg-[#e63462] text-white" : "bg-white text-[#1d1d1f] hover:bg-[#e8e8ed] border border-[#d1d1d6]/60" }`}> {cat.name} </button>
@@ -293,7 +315,7 @@ export default function QuickSaleView() {
               <p className="text-[14px]">Ürün bulunamadı</p>
             </div>
           ) : searchQuery.trim() || !selectedCategoryId ? (
-            <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
               {filteredProducts.map((product) => (
                 <ProductCard key={product.id} product={product} showImage={showImages} disabled={isSubmitting || !canQuickSale} onAdd={addToCart} />
               ))}
@@ -303,7 +325,7 @@ export default function QuickSaleView() {
           )}
         </div>
       </div>
-      <div className="w-[380px] bg-white border-l border-[#d1d1d6]/60 flex flex-col">
+      <div className={`${mobilePane === "products" ? "hidden lg:flex" : "flex"} flex-1 lg:flex-initial w-full lg:w-[380px] bg-white lg:border-l border-[#d1d1d6]/60 flex-col overflow-hidden`}>
         <div className="px-5 py-4 border-b border-[#f0f0f0] flex items-center justify-between">
           <div>
             <h2 className="text-[16px] font-semibold text-[#1d1d1f]">Hızlı Satış</h2>

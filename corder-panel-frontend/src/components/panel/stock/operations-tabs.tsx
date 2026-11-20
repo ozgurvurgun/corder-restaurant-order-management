@@ -57,8 +57,8 @@ export function MovementsTab(props: {
           onSubmit={handleAddMovement}
         />
       )}
-      <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
-        <table className="w-full">
+      <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-x-auto">
+        <table className="w-full min-w-[560px]">
           <thead>
             <tr className="bg-[#f9f9f9] border-b border-[#f0f0f0]">
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Tarih</th>
@@ -176,8 +176,8 @@ export function SuppliersTab(props: {
           onSubmit={handleAddSupplier}
         />
       )}
-      <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
-        <table className="w-full">
+      <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-x-auto">
+        <table className="w-full min-w-[560px]">
           <thead>
             <tr className="bg-[#f9f9f9] border-b border-[#f0f0f0]">
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Firma</th>
@@ -313,7 +313,8 @@ export function InventoryCountsTab(props: {
               )}
             </div>
           </div>
-          <table className="w-full">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[440px]">
             <thead>
               <tr className="border-b border-[#f0f0f0]">
                 <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase">Malzeme</th>
@@ -360,6 +361,7 @@ export function InventoryCountsTab(props: {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       ))}
       <PaginationBar
@@ -395,9 +397,9 @@ export function CostAnalysisTab(props: {
         <span className="font-medium text-[#1d1d1f]">Ürün Eşleştir</span>{" "}
         reçetesi ile malzeme birim maliyetlerinin toplamı.
       </p>
-      <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
+      <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-x-auto">
         <h3 className="text-[13px] font-semibold text-[#1d1d1f] px-4 pt-4 pb-2">Ürün Maliyet Analizi</h3>
-        <table className="w-full">
+        <table className="w-full min-w-[560px]">
           <thead>
             <tr className="bg-[#f9f9f9] border-b border-[#f0f0f0]">
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Ürün</th>

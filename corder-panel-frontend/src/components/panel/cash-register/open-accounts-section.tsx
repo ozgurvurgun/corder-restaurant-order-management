@@ -110,7 +110,7 @@ export function ShiftOverviewSection(props: {
   return (
     <>
       {canViewCashTotals && (
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {[
             {
               label: "Toplam Ciro",
@@ -174,7 +174,7 @@ export function ShiftOverviewSection(props: {
         <h3 className="text-[13px] font-semibold text-[#1d1d1f] mb-3">
           Vardiya Bilgisi
         </h3>
-        <div className="grid grid-cols-3 gap-4 text-[12px]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 text-[12px]">
           <div>
             <span className="text-[#86868b]">Açan: </span>
             <span className="text-[#1d1d1f] font-medium">
@@ -223,7 +223,7 @@ export function ShiftOverviewSection(props: {
       </div>
 
       {(canTxIn || canTxOut) && (
-        <div className="flex gap-3">
+        <div className="flex flex-wrap sm:flex-nowrap gap-2 sm:gap-3">
           {canTxOut && (
             <button
               onClick={() => onOpenAddTransaction("expense")}
@@ -360,7 +360,8 @@ export function CashTransactionsSection(props: {
           </button>
         )}
       </div>
-      <table className="w-full">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[520px]">
         <thead>
           <tr className="bg-[#f9f9f9] border-b border-[#f0f0f0]">
             <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
@@ -423,6 +424,7 @@ export function CashTransactionsSection(props: {
           ))}
         </tbody>
       </table>
+      </div>
       <div className="px-4 pb-3">
         <PaginationBar
           currentPage={page}

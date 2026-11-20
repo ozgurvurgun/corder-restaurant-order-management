@@ -115,6 +115,7 @@ function renderScreen(
 
 export function AuthenticatedShell() {
   const [activeView, setActiveView] = useState<PanelViewId>("dashboard")
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { token, currentBusiness, isBoss, hasPermission } = usePanelAuth()
 
   useEffect(() => {
@@ -127,6 +128,11 @@ export function AuthenticatedShell() {
     }
   }, [activeView, isBoss, hasPermission])
 
+  const handleNavigate = (view: PanelViewId) => {
+    setActiveView(view)
+    setMobileMenuOpen(false)
+  }
+
   return (
     <PanelProvider>
       <I18nProvider>
@@ -135,12 +141,17 @@ export function AuthenticatedShell() {
             <div className="h-dvh w-full overflow-hidden flex bg-[#f5f5f7] dark:bg-[#000000]">
               <PanelSidebar
                 activeScreen={activeView}
-                onNavigate={setActiveView}
+                onNavigate={handleNavigate}
+                mobileOpen={mobileMenuOpen}
+                onCloseMobile={() => setMobileMenuOpen(false)}
               />
-              <div className="flex-1 flex flex-col overflow-hidden">
-                <HeaderBar activeView={activeView} />
-                <main className="flex-1 overflow-hidden">
-                  {renderScreen(activeView, setActiveView)}
+              <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+                <HeaderBar
+                  activeView={activeView}
+                  onOpenMobileMenu={() => setMobileMenuOpen(true)}
+                />
+                <main className="flex-1 overflow-hidden min-w-0">
+                  {renderScreen(activeView, handleNavigate)}
                 </main>
               </div>
               <SystemUpdateModal />

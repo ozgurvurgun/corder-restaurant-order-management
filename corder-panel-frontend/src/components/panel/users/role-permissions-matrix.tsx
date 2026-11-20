@@ -334,7 +334,7 @@ export function RolePermissionsMatrix({
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {catPerms.map((perm) => {
                     const enabled = draftRolePerms.includes(perm.key)
                     const label = getPermissionLabel(perm.key, perm)

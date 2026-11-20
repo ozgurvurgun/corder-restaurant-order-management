@@ -174,9 +174,9 @@ export default function DashboardView(_props: DashboardViewProps) {
 
   return (
     <div className="h-full overflow-auto">
-      <div className="p-6 w-full">
+      <div className="p-3.5 sm:p-6 w-full">
         <div
-          className={`grid gap-4 mb-6 ${stats.length === 4 ? "grid-cols-4" : "grid-cols-3"}`}
+          className={`grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6 ${stats.length === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}
         >
           {stats.map((stat) => {
             const Icon = stat.icon
@@ -219,8 +219,8 @@ export default function DashboardView(_props: DashboardViewProps) {
         </div>
 
         {canViewFinancial && (
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="col-span-2 bg-[var(--panel-card)] rounded-2xl p-5 border border-[var(--panel-border)]">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+            <div className="lg:col-span-2 bg-[var(--panel-card)] rounded-2xl p-4 sm:p-5 border border-[var(--panel-border)]">
               <h3 className="text-[14px] font-semibold text-[var(--panel-text)] mb-4">
                 {t("hourlyRevenue")}
               </h3>
@@ -309,7 +309,7 @@ export default function DashboardView(_props: DashboardViewProps) {
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="bg-[var(--panel-card)] rounded-2xl p-5 border border-[var(--panel-border)]">
             <h3 className="text-[14px] font-semibold text-[var(--panel-text)] mb-3">
               {t("topProducts")}

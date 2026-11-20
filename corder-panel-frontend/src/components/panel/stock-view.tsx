@@ -238,7 +238,7 @@ export default function StockView() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-shrink-0 bg-white/50 border-b border-[#d1d1d6]/40 px-5 py-2.5 flex items-center justify-between gap-3 overflow-x-auto">
+      <div className="flex-shrink-0 bg-white/50 border-b border-[#d1d1d6]/40 px-3.5 sm:px-5 py-2.5 flex items-center justify-between gap-3 overflow-x-auto">
         <div className="flex gap-1.5">
           {TABS.map((tab) => (
             <button
@@ -262,7 +262,7 @@ export default function StockView() {
         )}
       </div>
 
-      <div className="flex-1 overflow-auto p-5">
+      <div className="flex-1 overflow-auto p-3.5 sm:p-5">
         <div className="w-full flex flex-col gap-4">
           {activeTab === "materials" && (
             <MaterialsTab

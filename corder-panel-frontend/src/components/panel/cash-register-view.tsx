@@ -317,7 +317,7 @@ export default function CashRegisterView() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-shrink-0 border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl px-5 py-2.5 flex items-center justify-between gap-3 flex-wrap">
+      <div className="flex-shrink-0 border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl px-3.5 sm:px-5 py-2.5 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap">
           <Filter className="w-3.5 h-3.5 text-[#86868b]" />
           <CustomSelect
@@ -384,19 +384,19 @@ export default function CashRegisterView() {
         </div>
       </div>
 
-      <div className="flex-shrink-0 bg-white/50 border-b border-[#d1d1d6]/40 px-5 py-2.5 flex gap-1.5">
+      <div className="flex-shrink-0 bg-white/50 border-b border-[#d1d1d6]/40 px-3.5 sm:px-5 py-2.5 flex gap-1.5 overflow-x-auto">
         {cashRegisterTabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-3.5 py-[5px] rounded-lg text-[12px] font-medium transition-colors ${activeTab === tab.id ? "bg-[#e63462] text-white" : "text-[#86868b] hover:bg-black/[0.04]"}`}
+            className={`px-3.5 py-[5px] rounded-lg text-[12px] font-medium transition-colors whitespace-nowrap flex-shrink-0 ${activeTab === tab.id ? "bg-[#e63462] text-white" : "text-[#86868b] hover:bg-black/[0.04]"}`}
           >
             {tab.label}
           </button>
         ))}
       </div>
 
-      <div className="flex-1 overflow-auto p-5">
+      <div className="flex-1 overflow-auto p-3.5 sm:p-5">
         <div className="w-full flex flex-col gap-5">
           {activeTab === "overview" && (
             <ShiftOverviewSection

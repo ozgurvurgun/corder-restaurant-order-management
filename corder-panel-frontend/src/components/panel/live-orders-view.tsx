@@ -134,7 +134,7 @@ export default function CompletedOrdersView() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-shrink-0 border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl px-5 py-3 flex items-center justify-between gap-3 flex-wrap">
+      <div className="flex-shrink-0 border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl px-3.5 sm:px-5 py-3 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5 text-[11px] text-[#86868b]">
             <Filter className="w-3 h-3" />
@@ -222,7 +222,7 @@ export default function CompletedOrdersView() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-5">
+      <div className="flex-1 overflow-auto p-3.5 sm:p-5">
         <CompletedOrdersList
           paginatedTables={paginatedTables}
           expandedId={expandedId}

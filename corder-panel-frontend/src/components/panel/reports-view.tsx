@@ -314,7 +314,7 @@ export default function ReportsView() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-shrink-0 border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl px-5 py-2.5 flex items-center justify-between gap-3 flex-wrap">
+      <div className="flex-shrink-0 border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl px-3.5 sm:px-5 py-2.5 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap">
           <Filter className="w-3.5 h-3.5 text-[#86868b]" />
           <CustomSelect
@@ -348,8 +348,8 @@ export default function ReportsView() {
               : ""}
           </span>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-[12px] text-[#86868b]">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          <div className="hidden sm:flex items-center gap-2 text-[12px] text-[#86868b]">
             <Clock className="w-3.5 h-3.5" />
             {new Date().toLocaleDateString("tr-TR", {
               timeZone: ISTANBUL_TZ,
@@ -358,7 +358,7 @@ export default function ReportsView() {
               year: "numeric",
             })}
           </div>
-          <div className="h-4 w-px bg-[#d1d1d6]/60" />
+          <div className="hidden sm:block h-4 w-px bg-[#d1d1d6]/60" />
           <button onClick={handleExportCsv} className="h-[28px] px-2.5 flex items-center gap-1.5 text-[11px] font-medium text-[#86868b] hover:bg-black/[0.04] rounded-md transition-colors">
             <Download className="w-3 h-3" /> CSV (Excel)
           </button>
@@ -368,7 +368,7 @@ export default function ReportsView() {
         </div>
       </div>
 
-      <div className="flex-shrink-0 bg-white/50 border-b border-[#d1d1d6]/40 px-5 py-2.5 flex gap-1.5 overflow-x-auto">
+      <div className="flex-shrink-0 bg-white/50 border-b border-[#d1d1d6]/40 px-3.5 sm:px-5 py-2.5 flex gap-1.5 overflow-x-auto">
         {availableTabs.map((tab) => (
           <button
             key={tab.id}
@@ -380,11 +380,11 @@ export default function ReportsView() {
         ))}
       </div>
 
-      <div className="flex-1 overflow-auto p-5">
+      <div className="flex-1 overflow-auto p-3.5 sm:p-5">
         <div className="w-full flex flex-col gap-5">
           {activeTab === "daily" && (
             <>
-              <div className={`grid gap-3 ${summaryCards.length === 5 ? "grid-cols-5" : "grid-cols-3"}`}>
+              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 ${summaryCards.length === 5 ? "lg:grid-cols-5" : "lg:grid-cols-3"}`}>
                 {summaryCards.map((card) => {
                   const Icon = card.icon
                   return (
@@ -406,7 +406,7 @@ export default function ReportsView() {
               </div>
 
               {canViewFinancial && (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4">
                     <h3 className="text-[13px] font-semibold text-[#1d1d1f] mb-3">Saatlik Ciro</h3>
                     <ResponsiveContainer width="100%" height={220}>

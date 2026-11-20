@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react"
-import { Bell, Globe, ChefHat, AlertTriangle, Package, CreditCard } from "lucide-react"
+import { Bell, Globe, ChefHat, AlertTriangle, Package, CreditCard, Menu } from "lucide-react"
 import { usePanelStore } from "@/lib/panel-store"
 import { usePanelI18n } from "@/lib/panel-i18n"
 import { ISTANBUL_TZ } from "@/lib/format"
@@ -7,9 +7,10 @@ import type { PanelViewId } from "@/lib/panel-types"
 
 interface HeaderBarProps {
   activeView?: PanelViewId
+  onOpenMobileMenu?: () => void
 }
 
-export function HeaderBar({ activeView = "dashboard" }: HeaderBarProps) {
+export function HeaderBar({ activeView = "dashboard", onOpenMobileMenu }: HeaderBarProps) {
   const { notifications, markNotificationRead, clearAllNotifications, currentShift } = usePanelStore()
   const { locale, setLocale, t } = usePanelI18n()
   const [showNotifications, setShowNotifications] = useState(false)
@@ -107,10 +108,20 @@ export function HeaderBar({ activeView = "dashboard" }: HeaderBarProps) {
   }
 
   return (
-    <div className="h-[52px] flex items-center justify-between gap-4 px-6 border-b border-[#e5e5ea] bg-white/80 backdrop-blur-xl flex-shrink-0 relative z-[100]">
+    <div className="h-[52px] flex items-center justify-between gap-2 sm:gap-4 px-3.5 sm:px-6 border-b border-[#e5e5ea] bg-white/80 backdrop-blur-xl flex-shrink-0 relative z-[100]">
       {/* Left: Page Title & Context */}
-      <div className="flex items-center gap-3 min-w-0">
-        <h1 className="text-[16px] font-semibold text-[#1d1d1f] truncate">
+      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+        {onOpenMobileMenu && (
+          <button
+            type="button"
+            onClick={onOpenMobileMenu}
+            className="lg:hidden -ml-1 p-2 rounded-lg text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors flex-shrink-0"
+            aria-label="Menüyü aç"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        )}
+        <h1 className="text-[15px] sm:text-[16px] font-semibold text-[#1d1d1f] truncate">
           {getViewTitle(activeView)}
         </h1>
         {activeView === "dashboard" && mounted && (
@@ -157,7 +168,7 @@ export function HeaderBar({ activeView = "dashboard" }: HeaderBarProps) {
             )}
           </button>
           {showNotifications && (
-            <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-xl shadow-2xl border border-[#e5e5ea] overflow-hidden z-[9999]">
+            <div className="absolute right-0 top-full mt-2 w-[min(24rem,calc(100vw-1.5rem))] bg-white rounded-xl shadow-2xl border border-[#e5e5ea] overflow-hidden z-[9999]">
               <div className="flex items-center justify-between px-4 py-3 border-b border-[#e5e5ea]">
                 <h3 className="text-[15px] font-semibold text-[#1d1d1f]">
                   {t("notifications")}

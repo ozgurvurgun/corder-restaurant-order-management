@@ -72,19 +72,19 @@ export function MaterialsTab(props: {
 
   return (
     <>
-      <div className="flex items-center justify-between">
-        <div className="relative">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="relative flex-1 sm:flex-initial">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#86868b]" />
           <input
             type="text"
             placeholder="Malzeme ara..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-[30px] w-[220px] pl-8 pr-3 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 focus:ring-1 focus:ring-[#e63462]/20"
+            className="h-[30px] w-full sm:w-[220px] pl-8 pr-3 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 focus:ring-1 focus:ring-[#e63462]/20"
           />
         </div>
         {canManageMaterials && (
-          <button onClick={() => setShowAddMaterial(true)} className="h-[30px] px-3 flex items-center gap-1.5 bg-[#e63462] text-white rounded-lg text-[12px] font-medium hover:bg-[#d42d56]">
+          <button onClick={() => setShowAddMaterial(true)} className="h-[30px] px-3 flex items-center gap-1.5 bg-[#e63462] text-white rounded-lg text-[12px] font-medium hover:bg-[#d42d56] whitespace-nowrap">
             <Plus className="w-3.5 h-3.5" /> Malzeme Ekle
           </button>
         )}
@@ -112,8 +112,8 @@ export function MaterialsTab(props: {
         />
       )}
 
-      <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
-        <table className="w-full">
+      <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-x-auto">
+        <table className="w-full min-w-[640px]">
           <thead>
             <tr className="bg-[#f9f9f9] border-b border-[#f0f0f0]">
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Malzeme</th>
@@ -316,8 +316,8 @@ export function ProductLinkTab(props: {
         })}
       </div>
 
-      <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
-        <table className="w-full">
+      <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-x-auto">
+        <table className="w-full min-w-[640px]">
           <thead>
             <tr className="bg-[#f9f9f9] border-b border-[#f0f0f0]">
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Ürün</th>

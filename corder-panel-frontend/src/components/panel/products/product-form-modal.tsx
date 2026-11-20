@@ -195,7 +195,7 @@ export function AddProductInlineForm(props: {
           <X className="w-3 h-3 text-[#86868b]" />
         </button>
       </div>
-      <div className="flex gap-3">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
         <input
           type="text"
           value={productName}
@@ -210,7 +210,7 @@ export function AddProductInlineForm(props: {
           value={productPrice}
           onChange={(e) => setProductPrice(e.target.value)}
           placeholder="Fiyat"
-          className="w-[120px] h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
+          className="w-full sm:w-[120px] h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
         />
       </div>
       <input

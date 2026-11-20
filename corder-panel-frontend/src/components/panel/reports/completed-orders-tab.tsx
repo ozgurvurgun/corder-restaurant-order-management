@@ -78,7 +78,8 @@ export function HistoryTab(props: {
           )}
         </button>
         {showClosedDetail && (
-          <table className="w-full">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px]">
             <thead>
               <tr className="border-t border-b border-[#f0f0f0] bg-[#f9f9f9]">
                 <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
@@ -159,6 +160,7 @@ export function HistoryTab(props: {
               ))}
             </tbody>
           </table>
+          </div>
         )}
         {showClosedDetail && (
           <div className="px-4 pb-3">
@@ -188,7 +190,8 @@ export function HistoryTab(props: {
           )}
         </button>
         {showCancelledDetail && (
-          <table className="w-full">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[540px]">
             <thead>
               <tr className="border-t border-b border-[#f0f0f0] bg-[#f9f9f9]">
                 <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
@@ -240,6 +243,7 @@ export function HistoryTab(props: {
               ))}
             </tbody>
           </table>
+          </div>
         )}
         {showCancelledDetail && (
           <div className="px-4 pb-3">

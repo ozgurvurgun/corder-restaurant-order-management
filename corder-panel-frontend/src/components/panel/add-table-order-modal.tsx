@@ -90,7 +90,7 @@ function ProductSubtree(props: {
         </h4>
       )}
       {nodeProducts.length > 0 && (
-        <div className="grid grid-cols-3 md:grid-cols-4 gap-2.5 mb-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 mb-2">
           {nodeProducts.map((product) => (
             <ProductCard key={product.id} product={product} showImage={showImage} disabled={disabled} onAddProduct={onAddProduct} />
           ))}
@@ -262,8 +262,8 @@ export default function AddTableOrderModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-5xl h-[min(90vh,820px)] bg-[#f5f5f7] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-[160] flex items-center justify-center bg-black/40 p-2 sm:p-4">
+      <div className="w-full max-w-5xl h-[min(94dvh,820px)] bg-[#f5f5f7] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         <div className="flex-shrink-0 h-[52px] px-4 bg-white border-b border-[#d1d1d6]/60 flex items-center justify-between">
           <div>
             <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Sipariş Gir</h3>
@@ -278,8 +278,8 @@ export default function AddTableOrderModal({
           <div className="px-4 py-2.5 bg-[#fff4e5] text-[12px] text-[#b54708] border-b border-[#f5d0a9]">Sipariş gönderebilmek için önce kasayı açmanız gerekir.</div>
         )}
 
-        <div className="flex-1 min-h-0 flex">
-          <div className="flex-1 flex flex-col p-4 min-w-0">
+        <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden">
+          <div className="flex-1 flex flex-col p-3 sm:p-4 min-w-0 min-h-0">
             <div className="relative mb-3">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#86868b]" />
               <input
@@ -335,7 +335,7 @@ export default function AddTableOrderModal({
                   <p className="text-[13px]">Ürün bulunamadı</p>
                 </div>
               ) : searchQuery.trim() || !selectedCategoryId ? (
-                <div className="grid grid-cols-3 md:grid-cols-4 gap-2.5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
                   {filteredProducts.map((product) => (
                     <ProductCard key={product.id} product={product} showImage={showImages} disabled={isSubmitting} onAddProduct={addToCart} />
                   ))}
@@ -346,7 +346,7 @@ export default function AddTableOrderModal({
             </div>
           </div>
 
-          <div className="w-[300px] flex-shrink-0 bg-white border-l border-[#d1d1d6]/60 flex flex-col">
+          <div className="w-full max-h-[42%] md:max-h-none md:w-[300px] flex-shrink-0 bg-white border-t md:border-t-0 md:border-l border-[#d1d1d6]/60 flex flex-col">
             <div className="px-4 py-3 border-b border-[#d1d1d6]/40">
               <p className="text-[13px] font-semibold text-[#1d1d1f]">
                 Sepet ({cartCount})

@@ -130,7 +130,7 @@ export default function BillingView() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-shrink-0 border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl flex items-center justify-end px-5 py-2.5">
+      <div className="flex-shrink-0 border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl flex items-center justify-end px-3.5 sm:px-5 py-2.5">
         <div className="flex items-center gap-2 text-[12px] text-[#86868b]">
           <CalendarClock className="w-3.5 h-3.5 text-[#e63462]" />
           <span>
@@ -142,7 +142,7 @@ export default function BillingView() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-5">
+      <div className="flex-1 overflow-auto p-3.5 sm:p-5">
         <div className="w-full flex flex-col gap-4">
           {/* Unpaid / Collection Window Warning Banner (only shown when actually unpaid!) */}
           {showUnpaidWarning && (

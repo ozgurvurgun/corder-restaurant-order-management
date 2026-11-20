@@ -181,7 +181,7 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
   }
   return (
     <>
-      <div className="w-[400px] h-full border-l border-[#d1d1d6]/60 bg-white flex flex-col flex-shrink-0">
+      <div className="fixed inset-0 z-[150] w-full lg:static lg:z-auto lg:w-[400px] h-full border-l border-[#d1d1d6]/60 bg-white flex flex-col flex-shrink-0">
         <div className="flex-shrink-0 h-[52px] border-b border-[#d1d1d6]/60 flex items-center justify-between px-4">
           <div className="flex items-center gap-2 min-w-0">
             <h3 className="text-[15px] font-semibold text-[#1d1d1f] truncate"> {table.name} </h3>

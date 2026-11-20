@@ -109,8 +109,8 @@ export function CompletedOrdersList(props: {
         const activeItems = allItems.filter((i) => itemCountsTowardBill(i))
         const cancelledItems = allItems.filter((i) => i.status === "cancelled"); return (
           <div key={closedTable.id} className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden hover:shadow-sm transition-shadow">
-            <div className="flex items-center justify-between px-4 py-3 bg-[#f5f5f7]/50 border-b border-[#f0f0f0] cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : closedTable.id) }>
-              <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center justify-between gap-2 px-3.5 sm:px-4 py-3 bg-[#f5f5f7]/50 border-b border-[#f0f0f0] cursor-pointer flex-wrap" onClick={() => setExpandedId(isExpanded ? null : closedTable.id) }>
+              <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
                 <div className="flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-[#e63462]" />
                   <span className="font-semibold text-[14px] text-[#1d1d1f]"> {closedTable.tableName} </span>
@@ -137,8 +137,8 @@ export function CompletedOrdersList(props: {
               </div>
             </div>
 
-            <div className="px-4 py-2.5 bg-[#fafafa] border-b border-[#f0f0f0] flex items-center justify-between text-[11px]">
-              <div className="flex items-center gap-6">
+            <div className="px-3.5 sm:px-4 py-2.5 bg-[#fafafa] border-b border-[#f0f0f0] flex flex-wrap items-center justify-between gap-2.5 text-[11px]">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-6">
                 <div className="flex items-center gap-1.5 text-green-600">
                   <DoorOpen className="w-3.5 h-3.5" />
                   <span className="font-medium"> {locale === "tr" ? "Açılış" : "Opened"}: </span>
@@ -161,7 +161,7 @@ export function CompletedOrdersList(props: {
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {closedTable.editHistory && closedTable.editHistory.length > 0 && onViewEditHistory && (
                   <button
                     type="button"
@@ -260,8 +260,8 @@ export function CompletedOrdersList(props: {
                         <span> {locale === "tr" ? "Garson:" : "Waiter:"}{" "} <span className="font-medium text-[#1d1d1f]"> {orderWaiterLabel(order, users, locale)} </span>
                         </span>
                       </div>
-                      <div className="bg-[#f9f9f9] rounded-lg border border-[#e8e8ed] overflow-hidden">
-                        <table className="w-full text-[12px]">
+                      <div className="bg-[#f9f9f9] rounded-lg border border-[#e8e8ed] overflow-x-auto">
+                        <table className="w-full min-w-[360px] text-[12px]">
                           <thead>
                             <tr className="bg-[#f0f0f0] text-[#636366]">
                               <th className="text-left px-3 py-2 font-medium"> {locale === "tr" ? "Ürün" : "Product"} </th>
@@ -392,8 +392,8 @@ export function CompletedOrdersList(props: {
             )}
 
             {!isExpanded && (
-              <div className="px-4 py-2.5 flex items-center justify-between text-[11px] text-[#86868b]">
-                <div className="flex items-center gap-4">
+              <div className="px-3.5 sm:px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#86868b]">
+                <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                   <span className="flex items-center gap-1"><CreditCard className="w-3 h-3" />{" "} {formatPaymentDisplay(closedTable.payment)} </span>
                   <span className="flex items-center gap-1"><Receipt className="w-3 h-3" />{" "} {closedTable.orders.reduce( (s, o) => s + o.items.filter((i) => itemCountsTowardBill(i)).length, 0, )}{" "} {locale === "tr" ? "ürün" : "items"} </span>
                   {closedTable.discountAmount > 0 && (

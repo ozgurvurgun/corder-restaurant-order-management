@@ -98,13 +98,13 @@ export function TableQrCodesModal(props: {
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/45 backdrop-blur-sm p-3">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[960px] max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-[#f0f0f0]">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 px-4 sm:px-6 py-3.5 border-b border-[#f0f0f0]">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-xl bg-[#e63462]/10 text-[#e63462] flex items-center justify-center flex-shrink-0">
               <QrCode className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <h3 className="text-[15px] font-semibold text-[#1d1d1f] truncate">
+              <h3 className="text-[14px] sm:text-[15px] font-semibold text-[#1d1d1f] truncate">
                 Masa QR Tasarım &amp; Profesyonel Baskı Stüdyosu
               </h3>
               <p className="text-[11px] text-[#86868b] truncate">
@@ -112,7 +112,7 @@ export function TableQrCodesModal(props: {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
             <button
               type="button"
               onClick={handleDownloadBulkZip}
@@ -405,8 +405,8 @@ export function TableQrCodesModal(props: {
             </div>
           </div>
 
-          <div className="border border-[#d1d1d6]/60 rounded-xl overflow-hidden">
-            <table className="w-full">
+          <div className="border border-[#d1d1d6]/60 rounded-xl overflow-x-auto">
+            <table className="w-full min-w-[600px]">
               <thead>
                 <tr className="bg-[#f9f9f9] border-b border-[#f0f0f0]">
                   <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase">Masa No</th>

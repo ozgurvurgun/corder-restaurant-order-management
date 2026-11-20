@@ -177,7 +177,7 @@ export default function TechnicalView() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-shrink-0 bg-white/50 border-b border-[#d1d1d6]/40 px-5 py-2.5 flex gap-1.5 overflow-x-auto">
+      <div className="flex-shrink-0 bg-white/50 border-b border-[#d1d1d6]/40 px-3.5 sm:px-5 py-2.5 flex gap-1.5 overflow-x-auto">
         {TABS.map((tab) => (
           <button
             key={tab.id}
@@ -191,11 +191,11 @@ export default function TechnicalView() {
         ))}
       </div>
 
-      <div className="flex-1 overflow-auto p-5">
+      <div className="flex-1 overflow-auto p-3.5 sm:p-5">
         <div className="w-full flex flex-col gap-4">
           {activeTab === "notifications" && (
             <>
-              <div className="flex justify-between items-center">
+              <div className="flex flex-wrap justify-between items-center gap-2">
                 <p className="text-[12px] text-[#86868b]">
                   {notifications.length} bildirim ({unreadCount} okunmamış)
                 </p>
@@ -315,8 +315,8 @@ export default function TechnicalView() {
                 </button>
               </div>
 
-              <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
-                <table className="w-full">
+              <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-x-auto">
+                <table className="w-full min-w-[640px]">
                   <thead>
                     <tr className="bg-[#f9f9f9] border-b border-[#f0f0f0]">
                       <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase">Yazıcı Adı</th>
@@ -434,8 +434,8 @@ export default function TechnicalView() {
                 )}
               </div>
 
-              <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
-                <table className="w-full">
+              <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-x-auto">
+                <table className="w-full min-w-[640px]">
                   <thead>
                     <tr className="bg-[#f9f9f9] border-b border-[#f0f0f0]">
                       <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Tarih</th>

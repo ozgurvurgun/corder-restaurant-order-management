@@ -58,7 +58,7 @@ export function StaffShiftRestrictionFields({
   }
 
   return (
-    <div className="col-span-2 rounded-xl border border-[#e5e5ea] bg-[#f9f9fb] p-3.5 space-y-3">
+    <div className="sm:col-span-2 rounded-xl border border-[#e5e5ea] bg-[#f9f9fb] p-3.5 space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#e63462]/10 text-[#e63462]">

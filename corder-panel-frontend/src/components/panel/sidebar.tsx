@@ -15,6 +15,7 @@ import {
   Building2,
   ShieldCheck,
   CreditCard,
+  X,
 } from "lucide-react"
 import { usePanelStore } from "@/lib/panel-store"
 import { usePanelI18n } from "@/lib/panel-i18n"
@@ -27,11 +28,15 @@ export type PanelScreen = PanelViewId
 interface SidebarProps {
   activeScreen: PanelViewId
   onNavigate: (screen: PanelViewId) => void
+  mobileOpen?: boolean
+  onCloseMobile?: () => void
 }
 
 export default function PanelSidebar({
   activeScreen,
   onNavigate,
+  mobileOpen = false,
+  onCloseMobile,
 }: SidebarProps) {
   const { currentUser, settings, notifications } = usePanelStore()
   const { locale, t } = usePanelI18n()
@@ -172,24 +177,45 @@ export default function PanelSidebar({
   ]
 
   return (
-    <aside className="w-[240px] h-full flex flex-col border-r border-[#d1d1d6]/60 dark:border-[#38383a] bg-[#f5f5f7]/80 dark:bg-[#1c1c1e]/80 backdrop-blur-2xl flex-shrink-0 select-none">
-      {/* App header */}
-      <div className="px-5 pt-5 pb-3 flex flex-col gap-2.5">
-        <div className="flex items-center gap-2.5">
-          <img
-            src="/corder-logo.png"
-            alt="Corder"
-            className="w-8 h-8 rounded-lg object-cover shadow-sm flex-shrink-0"
-          />
-          <div className="min-w-0 flex-1">
-            <h1 className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white leading-tight truncate">
-              {currentBusiness?.name || settings.name || "Corder"}
-            </h1>
-            <p className="text-[11px] text-[#86868b] leading-tight">
-              {locale === "tr" ? "Merchant Paneli" : "Merchant Panel"}
-            </p>
+    <>
+      {mobileOpen && (
+        <div
+          onClick={onCloseMobile}
+          className="fixed inset-0 z-[190] bg-black/40 backdrop-blur-[2px] lg:hidden"
+        />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-[200] w-[260px] h-full flex flex-col border-r border-[#d1d1d6]/60 dark:border-[#38383a] bg-[#f5f5f7]/95 dark:bg-[#1c1c1e]/95 lg:bg-[#f5f5f7]/80 lg:dark:bg-[#1c1c1e]/80 backdrop-blur-2xl flex-shrink-0 select-none transition-transform duration-200 lg:static lg:z-auto lg:w-[240px] lg:translate-x-0 ${
+          mobileOpen ? "translate-x-0 shadow-2xl lg:shadow-none" : "-translate-x-full"
+        }`}
+      >
+        {/* App header */}
+        <div className="px-5 pt-5 pb-3 flex flex-col gap-2.5">
+          <div className="flex items-center gap-2.5">
+            <img
+              src="/corder-logo.png"
+              alt="Corder"
+              className="w-8 h-8 rounded-lg object-cover shadow-sm flex-shrink-0"
+            />
+            <div className="min-w-0 flex-1">
+              <h1 className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white leading-tight truncate">
+                {currentBusiness?.name || settings.name || "Corder"}
+              </h1>
+              <p className="text-[11px] text-[#86868b] leading-tight">
+                {locale === "tr" ? "Merchant Paneli" : "Merchant Panel"}
+              </p>
+            </div>
+            {onCloseMobile && (
+              <button
+                type="button"
+                onClick={onCloseMobile}
+                className="lg:hidden w-7 h-7 rounded-lg bg-black/[0.05] flex items-center justify-center text-[#86868b] hover:text-[#1d1d1f]"
+                aria-label="Menüyü kapat"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
-        </div>
 
         {/* Multi-Branch Switcher for Boss */}
         {businesses.length > 1 && (
@@ -289,6 +315,7 @@ export default function PanelSidebar({
           </button>
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   )
 }

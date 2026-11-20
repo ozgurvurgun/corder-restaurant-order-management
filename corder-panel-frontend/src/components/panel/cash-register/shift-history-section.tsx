@@ -104,12 +104,12 @@ export function ZReportSection(props: {
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-        <div className="flex items-center gap-2">
-          <span className="text-[12px] font-medium text-[#86868b]">Vardiya:</span>
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="text-[12px] font-medium text-[#86868b] flex-shrink-0">Vardiya:</span>
           <CustomSelect
             value={selectedShift.id}
             onChange={(e) => onSelectShift(e.target.value)}
-            className="h-[34px] px-3 text-[12px] bg-white rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
+            className="h-[34px] px-3 text-[12px] bg-white rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 max-w-full"
           >
             {allShifts.map((s) => (
               <option key={s.id} value={s.id}>
@@ -136,7 +136,7 @@ export function ZReportSection(props: {
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-6">
+      <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4 sm:p-6">
         <div className="text-center mb-6">
           <h3 className="text-[18px] font-bold text-[#1d1d1f]">{settings.name}</h3>
           {settings.address && <p className="text-[11px] text-[#86868b] mt-1">{settings.address}</p>}

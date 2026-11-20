@@ -247,15 +247,15 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill,
       ? `Seçili Ürünleri Öde (${splitTarget.lines.length} Kalem)`
       : "Hesap Kes"
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-[480px] max-h-[90vh] overflow-auto animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#f0f0f0]">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 backdrop-blur-sm p-3">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[480px] max-h-[92dvh] overflow-auto animate-in fade-in zoom-in-95 duration-200">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-[#f0f0f0]">
           <h3 className="text-[16px] font-semibold text-[#1d1d1f]">{headerTitle}</h3>
           <button type="button" disabled={isSubmitting} onClick={onClose} className="w-7 h-7 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed] disabled:opacity-50">
             <X className="w-3.5 h-3.5 text-[#86868b]" />
           </button>
         </div>
-        <div className="px-6 py-5 flex flex-col gap-5">
+        <div className="px-4 sm:px-6 py-4 sm:py-5 flex flex-col gap-4 sm:gap-5">
           <div className="text-center bg-[#f5f5f7] rounded-xl p-4">
             <p className="text-[11px] uppercase tracking-wider text-[#86868b] font-semibold">
               {isPersonShare ? "Kişi Payı Tutarı" : isItemsSplit ? "Seçilen Ürünler Tutarı" : "Toplam Tutar"}

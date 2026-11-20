@@ -104,13 +104,13 @@ export default function SettingsView() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-shrink-0 bg-white border-b border-[#d1d1d6]/40 px-5 py-3">
-        <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex-shrink-0 bg-white border-b border-[#d1d1d6]/40 px-3.5 sm:px-5 py-3">
+        <div className="flex items-center gap-2 overflow-x-auto pb-0.5 sm:flex-wrap">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`h-[36px] px-4 rounded-full text-[13px] font-medium transition-colors flex items-center gap-2 ${
+              className={`h-[36px] px-4 rounded-full text-[13px] font-medium transition-colors flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
                 activeTab === tab.id ? "bg-[#e63462] text-white" : "text-[#86868b] hover:bg-[#f5f5f7]"
               }`}
             >
@@ -121,7 +121,7 @@ export default function SettingsView() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-5">
+      <div className="flex-1 overflow-auto p-3.5 sm:p-5">
         <div className="w-full flex flex-col gap-6">
           {activeTab === "general" && canManageSettings && (
             <>
@@ -146,7 +146,7 @@ export default function SettingsView() {
                     Yüklenmezse QR menüde restoran adının baş harfi gösterilir.
                   </p>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-[11px] text-[#86868b] font-medium mb-1 block">İşletme Adı</label>
                     <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
@@ -155,7 +155,7 @@ export default function SettingsView() {
                     <label className="text-[11px] text-[#86868b] font-medium mb-1 block">Telefon (Menü &amp; Fiş)</label>
                     <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Örn: 0232 000 00 00" className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
                   </div>
-                  <div className="col-span-2">
+                  <div className="sm:col-span-2">
                     <label className="text-[11px] text-[#86868b] font-medium mb-1 block">Açık Adres / Konum (Menü &amp; Fiş)</label>
                     <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Müşterilerin QR menüde ve adisyon fişinde göreceği adres" className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
                   </div>
@@ -272,7 +272,7 @@ export default function SettingsView() {
                               <div key={t.id} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f5f5f7] rounded-lg group">
                                 <span className={`text-[12px] font-medium ${isOccupied ? "text-[#e63462]" : "text-[#1d1d1f]"}`}>{t.name}</span>
                                 {!isOccupied && (
-                                  <button onClick={() => deleteTable(t.id)} className="opacity-0 group-hover:opacity-100 w-4 h-4 rounded flex items-center justify-center hover:bg-red-100 transition-all">
+                                  <button onClick={() => deleteTable(t.id)} className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 w-4 h-4 rounded flex items-center justify-center hover:bg-red-100 transition-all">
                                     <X className="w-2.5 h-2.5 text-red-400" />
                                   </button>
                                 )}
@@ -387,7 +387,7 @@ export default function SettingsView() {
                     <QrCode className="w-3.5 h-3.5" /> Masaya Özel QR Kodları &amp; Yazdır
                   </button>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-[11px] text-[#86868b] font-medium mb-1 flex items-center gap-1">Telefon (Menüde Gösterilir)</label>
                     <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Örn: 0232 000 00 00" className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />

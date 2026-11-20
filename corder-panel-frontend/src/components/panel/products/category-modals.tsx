@@ -201,8 +201,8 @@ export function CategorySettingsModal(props: {
   }, [setEditingCatSettings])
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-[360px]">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm p-3">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[360px]">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#e8e8ed]">
           <h3 className="text-[15px] font-semibold text-[#1d1d1f]">
             Kategori Ayarları

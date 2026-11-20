@@ -232,8 +232,8 @@ export function PeriodComparisonTab(props: {
         </ResponsiveContainer>
       </div>
 
-      <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
-        <table className="w-full">
+      <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-x-auto">
+        <table className="w-full min-w-[540px]">
           <thead>
             <tr className="bg-[#f9f9f9] border-b border-[#f0f0f0]">
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Dönem</th>
@@ -311,7 +311,7 @@ export function ProductTrendsTab(props: { productTrends: ProductTrend[] }) {
       <PaginationBar currentPage={page} totalItems={productTrends.length} pageSize={pageSize} onPageChange={setPage} itemLabel="ürün" />
 
       {selectedTrend && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4">
             <h3 className="text-[13px] font-semibold text-[#1d1d1f] mb-3">
               {selectedTrend.productName} - Satış Adedi
@@ -436,9 +436,9 @@ export function WaitersTab(props: { dailyReport: DailyReport }) {
 
   return (
     <>
-      <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
+      <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-x-auto">
         <h3 className="text-[13px] font-semibold text-[#1d1d1f] px-4 pt-4 pb-2">Garson Performansı</h3>
-        <table className="w-full">
+        <table className="w-full min-w-[520px]">
           <thead>
             <tr className="border-b border-[#f0f0f0] bg-[#f9f9f9]">
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Garson</th>

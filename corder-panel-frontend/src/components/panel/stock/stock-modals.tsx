@@ -55,7 +55,7 @@ export function AddMaterialForm(props: {
           <X className="w-3 h-3 text-[#86868b]" />
         </button>
       </div>
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <input
           type="text"
           value={matName}
@@ -114,7 +114,7 @@ export function AddMaterialForm(props: {
           <CustomSelect
             value={matSupplier}
             onChange={(e) => setMatSupplier(e.target.value)}
-            className="col-span-2 h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60"
+            className="sm:col-span-2 h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60"
           >
             <option value="">Tedarikçi seçin (opsiyonel)</option>
             {suppliers
@@ -192,7 +192,7 @@ export function AddMovementForm(props: {
           <X className="w-3 h-3 text-[#86868b]" />
         </button>
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <CustomSelect
           value={mvMatId}
           onChange={(e) => setMvMatId(e.target.value)}
@@ -231,7 +231,7 @@ export function AddMovementForm(props: {
           className="h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
         />
       </div>
-      <div className="grid grid-cols-2 gap-3 mt-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
         <input
           type="number"
           min={0}
@@ -294,7 +294,7 @@ export function AddSupplierForm(props: {
 
   return (
     <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4">
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <input
           type="text"
           value={supName}

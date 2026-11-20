@@ -13,10 +13,10 @@ export default function TablesView() {
   const cardSize = settings.tableCardSize || "normal"
   const gridClass =
     cardSize === "compact"
-      ? "grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
+      ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
       : cardSize === "large"
-        ? "grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
-        : "grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+        ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+        : "grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
   const cardPadding = cardSize === "compact" ? "p-3" : cardSize === "large" ? "p-5" : "p-4"
 
   const allSections = ["Tumu", ...sections.map((s) => s.name)]
@@ -37,8 +37,8 @@ export default function TablesView() {
       {/* Left: Table Grid */}
       <div className="flex-1 flex flex-col h-full min-w-0">
         {/* Toolbar */}
-        <div className="flex-shrink-0 bg-white/50 border-b border-[#d1d1d6]/40 px-5 py-2.5 flex items-center justify-between gap-3">
-          <div className="flex gap-1.5 overflow-x-auto">
+        <div className="flex-shrink-0 bg-white/50 border-b border-[#d1d1d6]/40 px-3.5 sm:px-5 py-2.5 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
+          <div className="flex gap-1.5 overflow-x-auto max-w-full">
             {allSections.map((s) => (
               <button
                 key={s}
@@ -53,18 +53,18 @@ export default function TablesView() {
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-3 flex-shrink-0">
-            <div className="relative">
+          <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto flex-shrink-0">
+            <div className="relative flex-1 sm:flex-initial">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#86868b]" />
               <input
                 type="text"
                 placeholder="Masa ara..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-[30px] w-[180px] pl-8 pr-3 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 focus:ring-1 focus:ring-[#e63462]/20"
+                className="h-[30px] w-full sm:w-[180px] pl-8 pr-3 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 focus:ring-1 focus:ring-[#e63462]/20"
               />
             </div>
-            <div className="flex items-center gap-1.5 text-[11px] text-[#86868b]">
+            <div className="flex items-center gap-1.5 text-[11px] text-[#86868b] flex-shrink-0">
               <span className="inline-block w-2 h-2 rounded-full bg-[#e63462]" />
               Dolu: {occupiedCount}
               <span className="inline-block w-2 h-2 rounded-full bg-[#d1d1d6] ml-2" />
@@ -74,7 +74,7 @@ export default function TablesView() {
         </div>
 
         {/* Grid */}
-        <div className="flex-1 overflow-auto p-5">
+        <div className="flex-1 overflow-auto p-3.5 sm:p-5">
           <div className={`grid ${gridClass} gap-3`}>
             {filteredTables.map((table) => {
               const isOccupied = table.status !== "empty"

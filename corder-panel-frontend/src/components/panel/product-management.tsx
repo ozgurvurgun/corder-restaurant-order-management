@@ -158,9 +158,9 @@ export default function ProductManagement() {
   }
 
   return (
-    <div className="h-full flex">
-      <div className="w-[220px] h-full border-r border-[#d1d1d6]/60 bg-white flex flex-col flex-shrink-0">
-        <div className="h-[52px] border-b border-[#d1d1d6]/60 flex items-center justify-between px-4">
+    <div className="h-full flex flex-col md:flex-row overflow-hidden">
+      <div className="w-full md:w-[220px] max-h-[190px] md:max-h-none md:h-full border-b md:border-b-0 md:border-r border-[#d1d1d6]/60 bg-white flex flex-col flex-shrink-0">
+        <div className="h-[44px] md:h-[52px] border-b border-[#d1d1d6]/60 flex items-center justify-between px-4 flex-shrink-0">
           <h3 className="text-[13px] font-semibold text-[#1d1d1f]">Kategoriler</h3>
           {canManageCategories && (
             <button type="button" onClick={() => { setShowAddCategory(true); setCatName(""); setNewCategoryParentId("") }} className="w-6 h-6 rounded-md bg-[#e63462]/10 flex items-center justify-center hover:bg-[#e63462]/20 transition-colors">
@@ -247,7 +247,7 @@ export default function ProductManagement() {
                       )}
                     </span>
                   </button>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0">
                     <span className="text-[10px] text-[#86868b]"> {products.filter((p) => p.categoryId === cat.id).length} </span>
                     {canManageCategories && (
                       <>
@@ -281,10 +281,10 @@ export default function ProductManagement() {
         )}
       </div>
 
-      <div className="flex-1 flex flex-col h-full min-w-0">
-        <div className="flex-shrink-0 h-[52px] border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl flex items-center justify-between px-5">
+      <div className="flex-1 flex flex-col h-full min-w-0 min-h-0">
+        <div className="flex-shrink-0 min-h-[52px] py-2 border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl flex flex-wrap items-center justify-between gap-2 px-3.5 sm:px-5">
           <h2 className="text-[15px] font-semibold text-[#1d1d1f]">Ürünler</h2>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#86868b]" />
               <input
@@ -292,7 +292,7 @@ export default function ProductManagement() {
                 placeholder="Ürün ara..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-[30px] w-[180px] pl-8 pr-3 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 focus:ring-1 focus:ring-[#e63462]/20"
+                className="h-[30px] w-[140px] sm:w-[180px] pl-8 pr-3 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 focus:ring-1 focus:ring-[#e63462]/20"
               />
             </div>
             {canManageProducts && (
@@ -300,7 +300,7 @@ export default function ProductManagement() {
                 onClick={() => {
                   setShowAddProduct(true); setProductName(""); setProductPrice(""); setProductDesc(""); setProductCalories(""); setProductAllergens([]); setProductImage("")
                 }}
-                className="h-[30px] px-3 flex items-center gap-1.5 bg-[#e63462] text-white rounded-lg text-[12px] font-medium hover:bg-[#d42d56] transition-colors"
+                className="h-[30px] px-3 flex items-center gap-1.5 bg-[#e63462] text-white rounded-lg text-[12px] font-medium hover:bg-[#d42d56] transition-colors whitespace-nowrap"
               >
                 <Plus className="w-3.5 h-3.5" /> Ürün Ekle
               </button>
@@ -308,7 +308,7 @@ export default function ProductManagement() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto p-5">
+        <div className="flex-1 overflow-auto p-3.5 sm:p-5">
           {showAddProduct && canManageProducts && (
             <AddProductInlineForm
               productName={productName}
@@ -329,8 +329,8 @@ export default function ProductManagement() {
             />
           )}
 
-          <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
-            <table className="w-full">
+          <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-x-auto">
+            <table className="w-full min-w-[460px]">
               <thead>
                 <tr className="border-b border-[#f0f0f0] bg-[#f9f9f9]">
                   <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Ürün</th>

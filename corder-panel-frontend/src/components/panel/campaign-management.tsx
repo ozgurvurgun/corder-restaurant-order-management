@@ -137,9 +137,9 @@ export default function CampaignManagement() {
 
   return (
     <div className="h-full flex flex-col bg-[#f5f5f7]">
-      <header className="flex-shrink-0 px-6 py-3 border-b border-[#d1d1d6]/60 bg-white/80 backdrop-blur-xl">
-        <div className="flex items-center justify-between">
-          <p className="text-[13px] text-[#86868b]">
+      <header className="flex-shrink-0 px-3.5 sm:px-6 py-3 border-b border-[#d1d1d6]/60 bg-white/80 backdrop-blur-xl">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <p className="text-[12px] sm:text-[13px] text-[#86868b]">
             {locale === "tr"
               ? "Menü açılışında gösterilecek kampanyalar"
               : "Campaigns shown on menu open"}
@@ -150,7 +150,7 @@ export default function CampaignManagement() {
                 resetForm()
                 setShowForm(true)
               }}
-              className="flex items-center gap-2 h-9 px-4 bg-[#e63462] hover:bg-[#d42d58] text-white rounded-lg text-[13px] font-semibold transition-colors"
+              className="flex items-center gap-2 h-9 px-4 bg-[#e63462] hover:bg-[#d42d58] text-white rounded-lg text-[13px] font-semibold transition-colors whitespace-nowrap"
             >
               <Plus className="w-4 h-4" />
               {locale === "tr" ? "Kampanya Ekle" : "Add Campaign"}
@@ -159,7 +159,7 @@ export default function CampaignManagement() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-6">
+      <main className="flex-1 overflow-y-auto p-3.5 sm:p-6">
         {sortedCampaigns.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="w-16 h-16 rounded-full bg-[#e63462]/10 flex items-center justify-center mb-4">
@@ -362,7 +362,7 @@ export default function CampaignManagement() {
                 }
               />
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[12px] font-medium text-[#86868b] mb-1.5">
                     {locale === "tr" ? "Normal Fiyat" : "Original Price"}
