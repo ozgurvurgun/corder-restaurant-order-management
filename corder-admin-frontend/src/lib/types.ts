@@ -233,8 +233,13 @@ export interface RestaurantDiagnosticsDto {
   }
 }
 
-export type PlatformNotificationLevel = "info" | "warning" | "urgent" | "success"
-export type PlatformNotificationTargetApp = "merchant" | "boss"
+export type PlatformNotificationLevel =
+  | "info"
+  | "warning"
+  | "urgent"
+  | "success"
+  | "system_update"
+export type PlatformNotificationTargetApp = "merchant" | "boss" | "terminal"
 export type PlatformNotificationStatus = "scheduled" | "sent" | "cancelled"
 
 export interface PlatformNotificationDto {

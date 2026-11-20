@@ -195,6 +195,16 @@ export function usePanelSocket(params: {
       showBrowserNotification(title, message, notifId)
     }
 
+    const handleSystemUpdate = (payload: {
+      id?: string
+      title?: string
+      message?: string
+      sentAt?: string
+    }) => {
+      if (!payload?.id || typeof window === "undefined") return
+      window.dispatchEvent(new CustomEvent("corder:system-update", { detail: payload }))
+    }
+
     const handlePlatformNotification = (payload: {
       id?: string
       title?: string
@@ -204,6 +214,9 @@ export function usePanelSocket(params: {
       sentAt?: string
       createdAt?: string
     }) => {
+      if (payload.level === "system_update") {
+        handleSystemUpdate(payload)
+      }
       if (
         Array.isArray(payload.targetApps) &&
         !payload.targetApps.includes("merchant")
@@ -287,6 +300,19 @@ export function usePanelSocket(params: {
               saveNotifsClearedAt(state.clearedAt, restaurantId)
             }
           }
+          const latestUpdate = (
+            state as {
+              latestSystemUpdate?: {
+                id?: string
+                title?: string
+                message?: string
+                sentAt?: string
+              } | null
+            }
+          ).latestSystemUpdate
+          if (latestUpdate?.id) {
+            handleSystemUpdate(latestUpdate)
+          }
           const readIds = getReadNotifIds(restaurantId)
           const dismissedIds = getDismissedNotifIds(restaurantId)
           const clearedIso = getNotifsClearedAt(restaurantId)
@@ -306,6 +332,19 @@ export function usePanelSocket(params: {
               createdAt: new Date(wc.createdAt),
             }
           })
+          const platformNotifs: PanelNotification[] = (state.platformNotifications ?? [])
+            .filter((pn) => !Array.isArray(pn.targetApps) || pn.targetApps.includes("merchant"))
+            .map((pn) => {
+              const notifId = `platform:${pn.id}`
+              return {
+                id: notifId,
+                type: "system" as const,
+                title: `📢 ${pn.title}`,
+                message: pn.message,
+                read: readIds.has(notifId) || readIds.has(pn.id),
+                createdAt: new Date(pn.sentAt || pn.createdAt),
+              }
+            })
           setNotifications?.((prev) => {
             const kept = prev.filter((n) => {
               if (dismissedIds.has(n.id)) return false
@@ -315,7 +354,7 @@ export function usePanelSocket(params: {
               return true
             })
             const existingIds = new Set(kept.map((n) => n.id))
-            const added = waiterNotifs.filter(
+            const added = [...platformNotifs, ...waiterNotifs].filter(
               (wn) => !existingIds.has(wn.id) && !dismissedIds.has(wn.id),
             )
             return [...added, ...kept].sort(
@@ -337,6 +376,7 @@ export function usePanelSocket(params: {
     socket.on("waiter:called", handleWaiterCalled)
     socket.on("fraud:alert", handleFraudAlert)
     socket.on("platform:notification", handlePlatformNotification)
+    socket.on("platform:system_update", handleSystemUpdate)
     socket.on("staff:session-updated", handleStaffSessionUpdated)
     socket.on("notifications:updated", handleNotificationsUpdated)
 
@@ -352,6 +392,7 @@ export function usePanelSocket(params: {
       socket.off("waiter:called", handleWaiterCalled)
       socket.off("fraud:alert", handleFraudAlert)
       socket.off("platform:notification", handlePlatformNotification)
+      socket.off("platform:system_update", handleSystemUpdate)
       socket.off("staff:session-updated", handleStaffSessionUpdated)
       socket.off("notifications:updated", handleNotificationsUpdated)
       socket.disconnect()

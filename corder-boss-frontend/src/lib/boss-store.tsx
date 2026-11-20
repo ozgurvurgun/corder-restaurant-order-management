@@ -194,6 +194,11 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     if (!branchId || !getBossToken()) return
     try {
       const state = await bossApi.notifications.getState(branchId)
+      const latestUpdate = (state as { latestSystemUpdate?: { id?: string } | null })
+        .latestSystemUpdate
+      if (latestUpdate?.id && typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("corder:system-update", { detail: latestUpdate }))
+      }
       const readSet = getBossReadNotifIds()
       const dismissedSet = getBossDismissedNotifIds()
       const items = (state.platformNotifications ?? [])
@@ -398,8 +403,15 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     const onAuthExpired = (payload?: { reason?: string }) => {
       notifyUnauthorized(payload?.reason)
     }
+    const onSystemUpdate = (payload?: { id?: string; title?: string; message?: string; sentAt?: string }) => {
+      if (!payload?.id || typeof window === "undefined") return
+      window.dispatchEvent(new CustomEvent("corder:system-update", { detail: payload }))
+    }
     const onPlatformNotification = (payload?: BossPlatformNotificationDto) => {
       if (!payload || !payload.id) return
+      if ((payload as { level?: string }).level === "system_update") {
+        onSystemUpdate(payload)
+      }
       if (Array.isArray(payload.targetApps) && !payload.targetApps.includes("boss")) return
       setPlatformNotifications((prev) =>
         prev.some((n) => n.id === payload.id) ? prev : [{ ...payload, read: false }, ...prev]
@@ -414,6 +426,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     }
     socket.on("auth:expired", onAuthExpired)
     socket.on("platform:notification", onPlatformNotification)
+    socket.on("platform:system_update", onSystemUpdate)
     socket.on("notifications:updated", onNotificationsUpdated)
     socket.on("order:created", scheduleLiveRefresh)
     socket.on("orders:moved", scheduleLiveRefresh)

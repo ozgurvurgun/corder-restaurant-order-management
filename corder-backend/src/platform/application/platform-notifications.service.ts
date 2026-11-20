@@ -30,10 +30,12 @@ const VALID_LEVELS: Set<PlatformNotificationLevel> = new Set([
   'warning',
   'urgent',
   'success',
+  'system_update',
 ]);
 const VALID_APPS: Set<PlatformNotificationTargetApp> = new Set([
   'merchant',
   'boss',
+  'terminal',
 ]);
 
 @Injectable()
@@ -123,7 +125,7 @@ export class PlatformNotificationsService
     if (restaurantIds.length === 0) return;
 
     const sentIso = (notif.sentAt ?? notif.createdAt ?? new Date()).toISOString();
-    this.ordersGateway.emitPlatformNotification(restaurantIds, {
+    const payload = {
       id: notif.id,
       title: notif.title,
       message: notif.message,
@@ -136,7 +138,16 @@ export class PlatformNotificationsService
         : [],
       sentAt: sentIso,
       createdAt: (notif.createdAt ?? new Date()).toISOString(),
-    });
+    };
+    this.ordersGateway.emitPlatformNotification(restaurantIds, payload);
+    if (notif.level === 'system_update') {
+      this.ordersGateway.emitSystemUpdateBroadcast(restaurantIds, {
+        id: notif.id,
+        title: notif.title,
+        message: notif.message,
+        sentAt: sentIso,
+      });
+    }
   }
 
   private formatNotification(
@@ -290,6 +301,33 @@ export class PlatformNotificationsService
     }
 
     return this.formatSingleNotification(saved);
+  }
+
+  async broadcastSystemUpdate(
+    dto: {
+      title?: string;
+      message?: string;
+      targetRestaurantIds?: string[];
+    },
+    createdBy = 'Platform Admin',
+  ) {
+    const title =
+      (dto.title ?? '').trim() || 'Yeni Sistem Güncellemesi Yayınlandı';
+    const message =
+      (dto.message ?? '').trim() ||
+      'Sistemimizde yeni özellikler ve performans iyileştirmeleri devreye alındı. Güncel sürümü yüklemek ve tarayıcı önbelleğini temizlemek için aşağıdaki butona tıklayın.';
+
+    return this.create(
+      {
+        title,
+        message,
+        level: 'system_update',
+        targetApps: ['merchant', 'boss', 'terminal'],
+        targetRestaurantIds: dto.targetRestaurantIds ?? [],
+        scheduledAt: null,
+      },
+      createdBy,
+    );
   }
 
   async sendNow(id: string) {

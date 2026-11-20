@@ -11,6 +11,7 @@ import { OperationsCatalogTab } from "@/components/operations-catalog-tab"
 import { SecurityFraudTab } from "@/components/security-fraud-tab"
 import { CustomSelect } from "@/components/ui/custom-inputs"
 import { ConfirmDialogProvider } from "@/components/ui/confirm-dialog"
+import { SystemUpdateModal } from "@/components/system-update-modal"
 import {
   AlertTriangle,
   Home,
@@ -294,6 +295,7 @@ export default function App() {
     <ConfirmDialogProvider>
       <BossStoreProvider>
         <BossShell />
+        <SystemUpdateModal />
       </BossStoreProvider>
     </ConfirmDialogProvider>
   )

@@ -186,6 +186,9 @@ export class NotificationsController {
         createdAt: pn.createdAt.toISOString(),
       }));
 
+    const latestSystemUpdate =
+      platformNotifications.find((pn) => pn.level === 'system_update') ?? null;
+
     return {
       clearedAt: restaurant.notificationsClearedAt
         ? restaurant.notificationsClearedAt.toISOString()
@@ -195,6 +198,7 @@ export class NotificationsController {
         : [],
       waiterCalls,
       platformNotifications,
+      latestSystemUpdate,
     };
   }
 

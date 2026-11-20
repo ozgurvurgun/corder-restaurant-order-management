@@ -13,6 +13,7 @@ import { MoveTableScreen } from "@/components/move-table-screen"
 import { OpenOrdersScreen } from "@/components/open-orders-screen"
 import { MoveOrderItemScreen } from "@/components/move-order-item-screen"
 import { WaiterCallAlertBanner } from "@/components/notification-settings-modal"
+import { SystemUpdateModal } from "@/components/system-update-modal"
 
 export default function App() {
   const {
@@ -152,6 +153,7 @@ export default function App() {
       <div className="mx-auto max-w-md min-h-dvh relative flex flex-col">
         {offlineBanner}
         <LoginScreen onLogin={handleLogin} />
+        <SystemUpdateModal />
       </div>
     )
   }
@@ -161,6 +163,7 @@ export default function App() {
       <div className="mx-auto max-w-md min-h-dvh relative flex flex-col">
         {offlineBanner}
         <UserSelectScreen onSelect={handleUserSelect} />
+        <SystemUpdateModal />
       </div>
     )
   }
@@ -274,6 +277,7 @@ export default function App() {
         onConfirm={exitTableToFloor}
         onCancel={() => setLeaveCartConfirm(false)}
       />
+      <SystemUpdateModal />
     </div>
   )
 }

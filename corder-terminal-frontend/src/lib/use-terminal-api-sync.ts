@@ -60,7 +60,24 @@ export function useTerminalApiSync(params: {
     const handleAuthExpired = (payload?: { reason?: string }) =>
       notifyAuthExpired(payload?.reason)
 
+    const handleSystemUpdate = (payload?: {
+      id?: string
+      title?: string
+      message?: string
+      level?: string
+      sentAt?: string
+    }) => {
+      if (!payload?.id || typeof window === "undefined") return
+      window.dispatchEvent(new CustomEvent("corder:system-update", { detail: payload }))
+    }
+
     socket.on("auth:expired", handleAuthExpired)
+    socket.on("platform:system_update", handleSystemUpdate)
+    socket.on("platform:notification", (payload?: { id?: string; level?: string; title?: string; message?: string; sentAt?: string }) => {
+      if (payload?.level === "system_update") {
+        handleSystemUpdate(payload)
+      }
+    })
     socket.on("order:created", syncLive)
     socket.on("orders:moved", syncLive)
     socket.on("orders:updated", syncLive)

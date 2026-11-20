@@ -20,6 +20,7 @@ import CashRegisterView from "@/components/panel/cash-register-view"
 import StockView from "@/components/panel/stock-view"
 import TechnicalView from "@/components/panel/technical-view"
 import CampaignManagement from "@/components/panel/campaign-management"
+import { SystemUpdateModal } from "@/components/panel/SystemUpdateModal"
 
 function isViewPermitted(
   view: PanelViewId,
@@ -142,6 +143,7 @@ export function AuthenticatedShell() {
                   {renderScreen(activeView, setActiveView)}
                 </main>
               </div>
+              <SystemUpdateModal />
             </div>
           </PanelFontSizeProvider>
         </PanelToastProvider>

@@ -21,11 +21,13 @@ export const PLATFORM_NOTIFICATION_LEVELS: readonly PlatformNotificationLevel[] 
   'warning',
   'urgent',
   'success',
+  'system_update',
 ];
 
 export const PLATFORM_NOTIFICATION_TARGET_APPS: readonly PlatformNotificationTargetApp[] = [
   'merchant',
   'boss',
+  'terminal',
 ];
 
 export class CreatePlatformNotificationDto implements CreatePlatformNotificationInput {
@@ -45,7 +47,7 @@ export class CreatePlatformNotificationDto implements CreatePlatformNotification
 
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(2)
+  @ArrayMaxSize(3)
   @IsIn(PLATFORM_NOTIFICATION_TARGET_APPS, { each: true })
   targetApps?: PlatformNotificationTargetApp[];
 
@@ -59,4 +61,22 @@ export class CreatePlatformNotificationDto implements CreatePlatformNotification
   @ValidateIf((_, v) => v !== null && v !== '')
   @IsISO8601()
   scheduledAt?: string | null;
+}
+
+export class BroadcastSystemUpdateDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  message?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(500)
+  @IsUUID(undefined, { each: true })
+  targetRestaurantIds?: string[];
 }

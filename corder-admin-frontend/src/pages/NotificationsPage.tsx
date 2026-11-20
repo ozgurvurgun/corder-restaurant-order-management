@@ -12,16 +12,8 @@ import {
   LEVEL_OPTIONS,
   NotificationHistoryPanel,
 } from "@/components/notifications/NotificationHistoryPanel"
-import {
-  Bell,
-  Check,
-  Clock,
-  Crown,
-  Megaphone,
-  Search,
-  Send,
-  Store,
-} from "lucide-react"
+import { SystemUpdateBroadcastCard } from "@/components/notifications/SystemUpdateBroadcastCard"
+import { Bell, Check, Clock, Crown, Megaphone, Search, Send, Store } from "lucide-react"
 
 function toLocalDatetimeInputValue(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0")
@@ -233,6 +225,14 @@ export function NotificationsPage() {
           {notice.text}
         </div>
       )}
+
+      <SystemUpdateBroadcastCard
+        venueScope={venueScope}
+        selectedRestIds={selectedRestIds}
+        totalRestaurantsCount={restaurants.length}
+        onBroadcastSuccess={() => void loadNotifications()}
+        onNotice={showNotice}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <form

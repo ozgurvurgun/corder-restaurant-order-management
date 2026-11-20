@@ -464,6 +464,19 @@ export const platform = {
         body: JSON.stringify(body),
       })
     },
+    async broadcastUpdate(body?: {
+      title?: string
+      message?: string
+      targetRestaurantIds?: string[]
+    }) {
+      return platformFetch<PlatformNotificationDto>(
+        "/platform/notifications/broadcast-update",
+        {
+          method: "POST",
+          body: JSON.stringify(body ?? {}),
+        }
+      )
+    },
     async sendNow(id: string) {
       return platformFetch<PlatformNotificationDto>(
         `/platform/notifications/${encodeURIComponent(id)}/send-now`,

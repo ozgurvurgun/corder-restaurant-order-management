@@ -319,11 +319,28 @@ export class OrdersGateway implements OnGatewayInit, OnGatewayConnection, OnGate
           .to(getPanelRoom(restaurantId))
           .emit('platform:notification', payload);
       }
-      if (includeBoss) {
+      if (includeBoss || includePanel) {
         this.server
           .to(getBossRoom(restaurantId))
           .emit('platform:notification', payload);
       }
+    }
+  }
+
+  emitSystemUpdateBroadcast(
+    restaurantIds: string[],
+    payload: {
+      id: string;
+      title: string;
+      message: string;
+      sentAt: string;
+    },
+  ) {
+    if (!this.server) return;
+    for (const restaurantId of restaurantIds) {
+      this.server
+        .to(getRestaurantRoom(restaurantId))
+        .emit('platform:system_update', payload);
     }
   }
 

@@ -143,6 +143,11 @@ function syncServerNotificationState(
       saveNotifsClearedAt(state.clearedAt, restaurantId)
     }
   }
+  const latestUpdate = (state as { latestSystemUpdate?: { id?: string } | null })
+    .latestSystemUpdate
+  if (latestUpdate?.id && typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("corder:system-update", { detail: latestUpdate }))
+  }
 }
 
 function buildDerivedNotifications(

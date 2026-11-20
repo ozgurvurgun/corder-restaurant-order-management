@@ -23,6 +23,12 @@ export const LEVEL_OPTIONS: Array<{
   { value: "urgent", label: "Acil Bildirim", badgeClass: "bg-red-50 text-red-700 border-red-200" },
 ]
 
+const SYSTEM_UPDATE_LEVEL_META = {
+  value: "system_update" as const,
+  label: "Sistem Güncelleme & Cache",
+  badgeClass: "bg-purple-50 text-purple-700 border-purple-200",
+}
+
 export function formatDateTimeTr(iso: string | null): string {
   if (!iso) return "-"
   const d = new Date(iso)
@@ -113,7 +119,9 @@ export function NotificationHistoryPanel({
           notifications.map((n) => {
             const isScheduled = n.status === "scheduled"
             const levelMeta =
-              LEVEL_OPTIONS.find((l) => l.value === n.level) ?? LEVEL_OPTIONS[0]
+              n.level === "system_update"
+                ? SYSTEM_UPDATE_LEVEL_META
+                : (LEVEL_OPTIONS.find((l) => l.value === n.level) ?? LEVEL_OPTIONS[0])
             return (
               <div
                 key={n.id}
