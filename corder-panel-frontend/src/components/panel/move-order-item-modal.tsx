@@ -153,23 +153,26 @@ export default function MoveOrderItemModal({
           {emptyTables.length > 0 && (
             <div className="space-y-2">
               <p className="text-[12px] font-medium text-[#86868b] uppercase tracking-wide">Boş Masalar</p>
-              <div className="grid grid-cols-3 gap-2">
-                {emptyTables.map((table) => (
-                  <button
-                    key={table.id}
-                    type="button"
-                    disabled={moving}
-                    onClick={() => setSelectedTable(table.id)}
-                    className={`p-3 rounded-xl text-center ${
-                      selectedTable === table.id
-                        ? "bg-[#e63462] text-white ring-2 ring-[#e63462] ring-offset-2"
-                        : "bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed]"
-                    }`}
-                  >
-                    <p className="text-[14px] font-semibold">{table.name}</p>
-                    <p className="text-[11px] opacity-70">{table.section}</p>
-                  </button>
-                ))}
+              <div className="grid grid-cols-3 gap-2.5 p-1 -m-1">
+                {emptyTables.map((table) => {
+                  const isSelected = selectedTable === table.id
+                  return (
+                    <button
+                      key={table.id}
+                      type="button"
+                      disabled={moving}
+                      onClick={() => setSelectedTable(table.id)}
+                      className={`p-3 rounded-xl text-center transition-all ${
+                        isSelected
+                          ? "bg-[#e63462] text-white ring-2 ring-[#e63462] ring-offset-2"
+                          : "bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed]"
+                      }`}
+                    >
+                      <p className="text-[14px] font-semibold">{table.name}</p>
+                      <p className={`text-[11px] ${isSelected ? "text-white/85" : "opacity-70"}`}>{table.section}</p>
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -177,26 +180,31 @@ export default function MoveOrderItemModal({
           {occupiedTables.length > 0 && (
             <div className="space-y-2">
               <p className="text-[12px] font-medium text-[#86868b] uppercase tracking-wide">Dolu Masalar</p>
-              <div className="grid grid-cols-3 gap-2">
-                {occupiedTables.map((table) => (
-                  <button
-                    key={table.id}
-                    type="button"
-                    disabled={moving}
-                    onClick={() => setSelectedTable(table.id)}
-                    className={`p-3 rounded-xl text-center ${
-                      selectedTable === table.id
-                        ? "bg-[#e63462] text-white ring-2 ring-[#e63462] ring-offset-2"
-                        : "bg-orange-50 text-[#1d1d1f] border border-orange-200 hover:bg-orange-100"
-                    }`}
-                  >
-                    <p className="text-[14px] font-semibold">{table.name}</p>
-                    <div className="flex items-center justify-center gap-1 mt-0.5">
-                      <Merge className="w-3 h-3 text-orange-500" />
-                      <p className="text-[11px] text-orange-600 font-medium">{"₺"}{formatCurrency(table.totalAmount)}</p>
-                    </div>
-                  </button>
-                ))}
+              <div className="grid grid-cols-3 gap-2.5 p-1 -m-1">
+                {occupiedTables.map((table) => {
+                  const isSelected = selectedTable === table.id
+                  return (
+                    <button
+                      key={table.id}
+                      type="button"
+                      disabled={moving}
+                      onClick={() => setSelectedTable(table.id)}
+                      className={`p-3 rounded-xl text-center transition-all border ${
+                        isSelected
+                          ? "bg-[#e63462] text-white border-[#e63462] ring-2 ring-[#e63462] ring-offset-2"
+                          : "bg-orange-50 text-[#1d1d1f] border-orange-200 hover:bg-orange-100"
+                      }`}
+                    >
+                      <p className="text-[14px] font-semibold">{table.name}</p>
+                      <div className="flex items-center justify-center gap-1 mt-0.5">
+                        <Merge className={`w-3 h-3 ${isSelected ? "text-white/90" : "text-orange-500"}`} />
+                        <p className={`text-[11px] font-semibold ${isSelected ? "text-white" : "text-orange-600"}`}>
+                          {"₺"}{formatCurrency(table.totalAmount)}
+                        </p>
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )}
