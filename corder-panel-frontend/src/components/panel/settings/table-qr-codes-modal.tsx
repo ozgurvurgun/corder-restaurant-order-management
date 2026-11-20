@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import {
   Check, Copy, Download, ExternalLink, Printer, QrCode, Scissors, Sparkles, X,
 } from "lucide-react"
+import { CustomSelect } from "@/components/ui/custom-inputs"
 import type { PanelTable } from "@/lib/panel-types"
 import { generateQrDataUri } from "@/lib/qr-svg"
 import {
@@ -216,15 +217,12 @@ export function TableQrCodesModal(props: {
                   <label className="text-[11px] font-semibold text-[#1d1d1f] uppercase tracking-wide block mb-1">
                     3. Baskı Yöntemi / Materyal
                   </label>
-                  <select
+                  <CustomSelect
                     value={prefs.printMedium}
-                    onChange={(e) => updatePrefs({ printMedium: e.target.value as QrPrintMediumId })}
-                    className="w-full h-[36px] px-2.5 text-[12px] font-medium bg-white rounded-xl border border-[#d1d1d6] text-[#1d1d1f] focus:outline-none focus:border-[#e63462]"
-                  >
-                    {QR_PRINT_MEDIUMS.map((m) => (
-                      <option key={m.id} value={m.id}>{m.label}</option>
-                    ))}
-                  </select>
+                    onValueChange={(val) => updatePrefs({ printMedium: val as QrPrintMediumId })}
+                    options={QR_PRINT_MEDIUMS.map((m) => ({ value: m.id, label: m.label }))}
+                    className="w-full h-[36px] px-3 text-[12px] font-medium bg-white rounded-xl border border-[#d1d1d6] text-[#1d1d1f]"
+                  />
                   <p className="text-[10px] text-[#86868b] mt-1">
                     {QR_PRINT_MEDIUMS.find((m) => m.id === prefs.printMedium)?.description}
                   </p>
@@ -234,27 +232,31 @@ export function TableQrCodesModal(props: {
                   <label className="text-[11px] font-semibold text-[#1d1d1f] uppercase tracking-wide block mb-1">
                     4. Fiziksel Baskı Ölçüsü (mm)
                   </label>
-                  <select
+                  <CustomSelect
                     value={prefs.cardSize}
-                    onChange={(e) => updatePrefs({ cardSize: e.target.value as QrCardSizeId })}
-                    className="w-full h-[36px] px-2.5 text-[12px] font-medium bg-white rounded-xl border border-[#d1d1d6] text-[#1d1d1f] focus:outline-none focus:border-[#e63462]"
+                    onValueChange={(val) => updatePrefs({ cardSize: val as QrCardSizeId })}
+                    options={QR_CARD_SIZES.map((s) => ({ value: s.id, label: s.label }))}
+                    className="w-full h-[36px] px-3 text-[12px] font-medium bg-white rounded-xl border border-[#d1d1d6] text-[#1d1d1f]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => updatePrefs({ showCropMarks: !prefs.showCropMarks })}
+                    className="inline-flex items-center gap-2 mt-2 cursor-pointer select-none group"
                   >
-                    {QR_CARD_SIZES.map((s) => (
-                      <option key={s.id} value={s.id}>{s.label}</option>
-                    ))}
-                  </select>
-                  <label className="inline-flex items-center gap-1.5 mt-1.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={prefs.showCropMarks}
-                      onChange={(e) => updatePrefs({ showCropMarks: e.target.checked })}
-                      className="rounded border-[#d1d1d6] text-[#e63462] focus:ring-[#e63462]"
-                    />
+                    <span
+                      className={`w-4 h-4 rounded-md border flex items-center justify-center transition-colors ${
+                        prefs.showCropMarks
+                          ? "bg-[#e63462] border-[#e63462] text-white"
+                          : "bg-white border-[#d1d1d6] group-hover:border-[#86868b]"
+                      }`}
+                    >
+                      {prefs.showCropMarks && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                    </span>
                     <Scissors className="w-3 h-3 text-[#636366]" />
                     <span className="text-[11px] text-[#48484a] font-medium">
                       Kesim kılavuz çizgilerini (kros) göster
                     </span>
-                  </label>
+                  </button>
                 </div>
               </div>
             </div>

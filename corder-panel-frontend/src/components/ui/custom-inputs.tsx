@@ -191,7 +191,7 @@ export function CustomSelect({
           <div
             ref={menuRef}
             style={{ top: coords.top, left: coords.left, width: coords.width }}
-            className="fixed z-[9999] max-h-60 overflow-y-auto rounded-xl border border-[#e5e5ea] bg-white p-1.5 shadow-2xl"
+            className="fixed z-[10050] max-h-60 overflow-y-auto rounded-xl border border-[#e5e5ea] bg-white p-1.5 shadow-2xl"
           >
             {parsedOptions.map((opt) => {
               const isSelected = opt.value === (selectedItem?.value ?? strVal)
@@ -382,7 +382,7 @@ export function CustomDatePicker({
           <div
             ref={popRef}
             style={{ top: coords.top, left: coords.left, width: 268 }}
-            className="fixed z-[9999] rounded-2xl border border-[#e5e5ea] bg-white p-3.5 shadow-2xl select-none"
+            className="fixed z-[10050] rounded-2xl border border-[#e5e5ea] bg-white p-3.5 shadow-2xl select-none"
           >
             <div className="mb-2.5 flex items-center justify-between">
               <button

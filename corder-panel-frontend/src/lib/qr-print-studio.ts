@@ -364,3 +364,4 @@ export function buildPrintableQrDocumentHtml(params: {
 </body>
 </html>`
 }
+
