@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { platform } from "@/lib/api"
 import { useConfirm } from "@/components/ui/confirm-dialog"
-import { RefreshCw, Sparkles, Zap } from "lucide-react"
+import { RefreshCw, Zap } from "lucide-react"
 
 interface SystemUpdateBroadcastCardProps {
   venueScope: "all" | "selected"
@@ -72,7 +72,7 @@ export function SystemUpdateBroadcastCard({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#e63462] text-white shadow-sm">
-            <Sparkles className="h-5 w-5" />
+            <RefreshCw className="h-5 w-5" />
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">

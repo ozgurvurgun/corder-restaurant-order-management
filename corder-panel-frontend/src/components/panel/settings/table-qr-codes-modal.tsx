@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import {
-  Check, Copy, Download, ExternalLink, FolderArchive, Printer, QrCode, Scissors, Sparkles, X,
+  Check, Copy, Download, ExternalLink, FolderArchive, Printer, QrCode, Scissors, X,
 } from "lucide-react"
 import { CustomSelect } from "@/components/ui/custom-inputs"
 import type { PanelTable } from "@/lib/panel-types"
@@ -326,8 +326,8 @@ export function TableQrCodesModal(props: {
 
             <div className="lg:col-span-5 flex flex-col items-center justify-between bg-white rounded-2xl border border-[#d1d1d6]/70 p-4">
               <div className="w-full flex items-center justify-between mb-2">
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#e63462]">
-                  <Sparkles className="w-3.5 h-3.5" /> Canlı Baskı Önizlemesi (1:1 SVG)
+                <span className="inline-flex items-center text-[11px] font-semibold text-[#e63462]">
+                  Canlı Baskı Önizlemesi (1:1 SVG)
                 </span>
                 <span className="text-[10px] font-mono text-[#86868b]">
                   {isLaser ? "100% Saf Vektör (#000)" : "300+ DPI Vektörel SVG"}

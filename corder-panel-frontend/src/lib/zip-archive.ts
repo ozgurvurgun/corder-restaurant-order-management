@@ -133,3 +133,4 @@ export function downloadZipArchive(filename: string, entries: ZipTextEntry[]): v
   document.body.removeChild(a)
   setTimeout(() => URL.revokeObjectURL(url), 2000)
 }
+

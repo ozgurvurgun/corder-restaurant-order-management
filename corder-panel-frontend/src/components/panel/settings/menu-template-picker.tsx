@@ -1,4 +1,4 @@
-import { Check, ExternalLink, Palette, Sparkles } from "lucide-react"
+import { Check, ExternalLink, Palette } from "lucide-react"
 import type { MenuTemplateId } from "@/lib/panel-types"
 
 export interface MenuTemplateOption {
@@ -197,8 +197,8 @@ export function MenuTemplatePickerCard(props: {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-[14px] font-semibold text-[#1d1d1f]">QR Menü Tasarım Şablonu (5 Profesyonel Konsept)</h3>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#e63462]/10 text-[#e63462] text-[10px] font-semibold">
-                <Sparkles className="w-2.5 h-2.5" /> Aktif: {activeOption.title}
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-[#e63462]/10 text-[#e63462] text-[10px] font-semibold">
+                Aktif: {activeOption.title}
               </span>
             </div>
             <p className="text-[11px] text-[#86868b] mt-0.5">

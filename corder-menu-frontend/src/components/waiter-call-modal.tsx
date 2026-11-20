@@ -117,15 +117,8 @@ export function WaiterCallWidget(props: {
     theme === "dark"
       ? "bg-gradient-to-br from-amber-400 via-amber-500 to-yellow-600 text-stone-950 shadow-amber-500/30 border border-amber-300/40 hover:shadow-amber-500/50 hover:scale-105 active:scale-95"
       : theme === "editorial"
-        ? "bg-[#1C1917] text-[#F6F1E7] shadow-stone-900/35 border border-[#D6CEBF]/35 hover:bg-stone-800 hover:scale-105 active:scale-95"
-        : "bg-stone-900 text-white shadow-stone-900/35 hover:bg-stone-800 hover:scale-105 active:scale-95"
-
-  const pulseDotClass =
-    theme === "dark"
-      ? "bg-stone-950 ring-2 ring-amber-300"
-      : theme === "editorial"
-        ? "bg-amber-400 ring-2 ring-[#1C1917]"
-        : "bg-rose-500 ring-2 ring-stone-900"
+        ? "bg-[#8C2D19] text-[#F6F1E7] shadow-[#8C2D19]/35 hover:bg-[#732312] hover:scale-105 active:scale-95"
+        : "bg-gradient-to-br from-rose-500 to-orange-500 text-white shadow-rose-500/40 hover:shadow-rose-500/60 hover:scale-105 active:scale-95"
 
   const isDarkModal = theme === "dark"
 
@@ -155,12 +148,9 @@ export function WaiterCallWidget(props: {
         ) : (
           <div className="flex flex-col items-center justify-center leading-none">
             <WaiterIcon className="w-5 h-5 flex-shrink-0" />
-            <span className="mt-0.5 text-[8.5px] font-extrabold tracking-tight">
+            <span className="mt-0.5 text-[9px] font-bold tracking-tight">
               Garson
             </span>
-            <span
-              className={`absolute top-2.5 right-2.5 w-2 h-2 rounded-full animate-pulse ${pulseDotClass}`}
-            />
           </div>
         )}
       </button>

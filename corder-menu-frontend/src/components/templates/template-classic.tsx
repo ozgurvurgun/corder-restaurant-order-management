@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Clock, MapPin, Search, Sparkles } from "lucide-react"
+import { Clock, MapPin, Search } from "lucide-react"
 import {
   applyCfImageFallback,
   formatMenuPrice,
@@ -160,9 +160,8 @@ export function ClassicMenuTemplate(props: MenuTemplateProps) {
                 type="button"
                 onClick={() => onOpenCampaigns(0)}
                 aria-label="Kampanyaları Gör"
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-50 text-rose-600 border border-rose-200/60 text-xs font-semibold hover:bg-rose-100/80 transition-colors flex-shrink-0"
+                className="flex items-center px-3.5 py-2 rounded-xl bg-rose-50 text-rose-600 border border-rose-200/60 text-xs font-semibold hover:bg-rose-100/80 transition-colors flex-shrink-0"
               >
-                <Sparkles className="w-3.5 h-3.5" />
                 <span>Kampanyalar ({activeCampaigns.length})</span>
               </button>
             )}

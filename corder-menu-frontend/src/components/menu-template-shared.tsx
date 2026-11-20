@@ -1,5 +1,4 @@
 import { useState } from "react"
-import { Sparkles } from "lucide-react"
 import {
   applyCfImageFallback,
   formatMenuPrice,
@@ -237,8 +236,7 @@ export function ActiveCampaignsShowcaseStrip(props: {
   return (
     <section aria-label="Öne Çıkan Kampanyalar" className="pt-2 pb-4">
       <div className="px-5 mb-2.5 flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <Sparkles className={`w-4 h-4 ${isDark ? "text-amber-400" : "text-rose-500"}`} />
+        <div className="flex items-center">
           <h2
             className={`text-xs font-bold uppercase tracking-wider ${
               isDark ? "text-amber-300/90" : "text-stone-600"
@@ -289,9 +287,7 @@ export function ActiveCampaignsShowcaseStrip(props: {
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                   ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-rose-500/20 to-orange-500/20 flex items-center justify-center">
-                      <Sparkles className="w-6 h-6 text-rose-500/60" />
-                    </div>
+                    <div className="w-full h-full bg-gradient-to-br from-rose-500/20 to-orange-500/20 flex items-center justify-center" />
                   )}
                   {camp.discountPercent != null && camp.discountPercent > 0 && (
                     <span className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-rose-600 to-orange-500 text-white text-[11px] font-bold shadow-sm">

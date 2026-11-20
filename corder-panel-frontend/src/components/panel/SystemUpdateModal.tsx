@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { RefreshCw, ShieldCheck, Sparkles } from "lucide-react"
+import { RefreshCw, ShieldCheck } from "lucide-react"
 
 interface SystemUpdatePayload {
   id: string
@@ -116,7 +116,7 @@ export function SystemUpdateModal() {
       <div className="w-full max-w-md rounded-2xl border border-[#e5e5ea] bg-white p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-200">
         <div className="flex items-start gap-3.5">
           <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-[#e63462] text-white shadow-md">
-            <Sparkles className="h-6 w-6" />
+            <RefreshCw className="h-6 w-6" />
           </div>
           <div className="min-w-0 flex-1">
             <span className="inline-flex items-center rounded-full bg-[#e63462]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#e63462]">

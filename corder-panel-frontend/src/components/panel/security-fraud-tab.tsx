@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
 import {
   AlertOctagon, AlertTriangle, CheckCircle2, Eye, Loader2,
-  RefreshCw, ShieldAlert, ShieldCheck, Sparkles, Trash2, User, XCircle,
+  RefreshCw, ShieldAlert, ShieldCheck, Trash2, User, XCircle,
 } from "lucide-react"
 import { api, type FraudAlertDto } from "@/lib/api"
 import { usePanelAuth } from "@/lib/panel-auth"
@@ -306,7 +306,7 @@ export function SecurityFraudTab(props: { canManageAlerts: boolean }) {
             onClick={() => void handleScan()}
             className="h-[30px] px-3.5 flex items-center gap-1.5 rounded-lg bg-[#e63462] text-white text-[12px] font-medium hover:bg-[#d42d56] disabled:opacity-50"
           >
-            {scanning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            {scanning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldAlert className="w-3.5 h-3.5" />}
             Şimdi Denetle &amp; Tara
           </button>
         </div>

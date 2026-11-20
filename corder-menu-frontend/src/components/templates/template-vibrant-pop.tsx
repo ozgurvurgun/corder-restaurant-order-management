@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { ArrowUpRight, Clock, MapPin, Search, Sparkles, UtensilsCrossed } from "lucide-react"
+import { ArrowUpRight, Clock, MapPin, Search, UtensilsCrossed } from "lucide-react"
 import {
   applyCfImageFallback,
   formatMenuPrice,
@@ -154,9 +154,8 @@ export function VibrantPopMenuTemplate(props: MenuTemplateProps) {
                 type="button"
                 onClick={() => onOpenCampaigns(0)}
                 aria-label="Kampanyaları Gör"
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white text-rose-600 text-xs font-extrabold shadow-md hover:bg-rose-50 transition-colors"
+                className="inline-flex items-center px-3.5 py-1.5 rounded-full bg-white text-rose-600 text-xs font-extrabold shadow-md hover:bg-rose-50 transition-colors"
               >
-                <Sparkles className="w-3.5 h-3.5" />
                 <span>Kampanyalar ({activeCampaigns.length})</span>
               </button>
             </div>
