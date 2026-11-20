@@ -344,7 +344,6 @@ function createUiServer({ store, agent }) {
           "defaultKitchenPrinterId",
           "receiptPrinterId",
           "printFooterLine",
-          "printTicketStamp",
         ]) {
           if (body[k] !== undefined) patch[k] = String(body[k] || "").trim()
         }

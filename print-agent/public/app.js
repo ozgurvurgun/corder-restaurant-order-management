@@ -325,7 +325,6 @@ function bindRoutingAndQueueEvents() {
         method: "POST",
         body: JSON.stringify({
           printFooterLine: formatTitleCase($("inputFooterLine").value.trim()),
-          printTicketStamp: "",
           printUsbDrainMs: Number($("inputUsbDrainMs").value) || 0,
           autoStartOnBoot: $("inputAutoStartOnBoot").checked,
         }),

@@ -10,7 +10,6 @@ const {
   toMinorUnits,
   money,
   formatTicketDate,
-  orderNumberFromId,
   clampWidth,
   kvLine,
   kvWrappedLines,
@@ -77,12 +76,6 @@ function resolveDepartmentTicketHeading(printerName, suffix) {
   return `${prefix} ${suffix}`
 }
 
-function resolveTicketOrderNumber(payload) {
-  const explicit = String(payload?.orderNumber || "").trim()
-  if (explicit) return explicit
-  return orderNumberFromId(payload?.orderId || payload?.jobId, payload?.createdAt)
-}
-
 function buildKitchenTicket(payload, options = {}) {
   const width = clampWidth(options.charsPerLine)
   const footerLine = formatTitleCase(options.footerLine)
@@ -94,7 +87,7 @@ function buildKitchenTicket(payload, options = {}) {
 
   appendTicketBanner(chunks, push, width, payload.isReprint, "", heading)
   push(kvLine("Tarih/Saat", formatTicketDate(payload.createdAt), width))
-  push(kvLine("Sipariş No", resolveTicketOrderNumber(payload), width))
+  push(kvLine("Sipariş No", String(payload.orderNumber || "-").trim(), width))
   chunks.push(BOLD_ON)
   push(kvLine("Masa", formatTitleCase(payload.tableName) || "-", width))
   chunks.push(BOLD_OFF)
@@ -122,7 +115,7 @@ function buildShiftReportTicket(payload, options = {}) {
   appendTicketBanner(chunks, push, width, payload.isReprint, stamp, heading)
   push(hrLine("-", width))
   push(kvLine("Rapor Tarihi", formatTicketDate(payload.createdAt), width))
-  push(kvLine("Vardiya No", orderNumberFromId(r.shiftId || payload.jobId, r.openedAt || payload.createdAt), width))
+  push(kvLine("Vardiya Açan", formatTitleCase(r.openedBy) || "-", width))
   push(kvLine("Vardiya Açan", formatTitleCase(r.openedBy) || "-", width))
   if (r.closedBy) {
     push(kvLine("Vardiya Kapatan", formatTitleCase(r.closedBy), width))
@@ -193,7 +186,7 @@ function buildReceipt(payload, options = {}) {
 
   appendTicketBanner(chunks, push, width, payload.isReprint, "", "ADİSYON / HESAP FİŞİ")
   push(kvLine("Tarih/Saat", formatTicketDate(payload.createdAt), width))
-  push(kvLine("Sipariş No", resolveTicketOrderNumber(payload), width))
+  push(kvLine("Sipariş No", String(payload.orderNumber || "-").trim(), width))
   push(kvLine("Masa", formatTitleCase(payload.tableName) || "-", width))
   push(kvLine("Garson", formatTitleCase(payload.waiterName) || "-", width))
   if (payload.paymentMethod) {
@@ -279,7 +272,7 @@ function buildKitchenCancelTicket(payload, options = {}) {
 
   appendTicketBanner(chunks, push, width, false, "", heading)
   push(kvLine("Tarih/Saat", formatTicketDate(payload.createdAt), width))
-  push(kvLine("Sipariş No", resolveTicketOrderNumber(payload), width))
+  push(kvLine("Sipariş No", String(payload.orderNumber || "-").trim(), width))
   chunks.push(BOLD_ON)
   push(kvLine("Masa", formatTitleCase(payload.tableName) || "-", width))
   chunks.push(BOLD_OFF)

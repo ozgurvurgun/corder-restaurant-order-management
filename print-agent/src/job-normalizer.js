@@ -48,12 +48,7 @@ function normalizePrintJob(payload, restaurantId) {
   return {
     jobId: String(payload.jobId),
     orderId: payload.order.orderId ? String(payload.order.orderId) : undefined,
-    orderNumber:
-      typeof payload.order.orderNumber === "string" && payload.order.orderNumber.trim()
-        ? payload.order.orderNumber.trim()
-        : typeof payload.orderNumber === "string" && payload.orderNumber.trim()
-          ? payload.orderNumber.trim()
-          : undefined,
+    orderNumber: payload.order.orderNumber ? String(payload.order.orderNumber).trim() : undefined,
     restaurantId: payload.restaurantId,
     printType: payload.printType,
     receiptMode: payload.receiptMode === "consolidated" ? "consolidated" : "split",
@@ -157,7 +152,6 @@ async function printJob(job, printer, agentConfig) {
     footerLine: agentConfig.printFooterLine,
     charsPerLine,
     feedLinesBeforeCut,
-    ticketStamp: agentConfig.printTicketStamp,
     includeLineNotes: job.includeLineNotes !== false,
     autoCut: tp ? tp.autoCut !== false : true,
     openCashDrawer: Boolean(job.openCashDrawer),

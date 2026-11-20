@@ -129,40 +129,6 @@ function formatTicketDate(input) {
   return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
-function orderNumberFromId(id, createdAt) {
-  const s = String(id || "").trim()
-  if (/^\d{6}-\d{3,}/.test(s)) return s
-  const d = createdAt ? new Date(createdAt) : new Date()
-  const validDate = Number.isNaN(d.getTime()) ? new Date() : d
-  let prefix = ""
-  try {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Europe/Istanbul",
-      year: "2-digit",
-      month: "2-digit",
-      day: "2-digit",
-    }).formatToParts(validDate)
-    const map = {}
-    for (const p of parts) map[p.type] = p.value
-    if (map.year && map.month && map.day) prefix = `${map.year}${map.month}${map.day}`
-  } catch {
-    // Fallback below
-  }
-  if (!prefix) {
-    const yy = String(validDate.getFullYear()).slice(-2)
-    const mm = String(validDate.getMonth() + 1).padStart(2, "0")
-    const dd = String(validDate.getDate()).padStart(2, "0")
-    prefix = `${yy}${mm}${dd}`
-  }
-  let h = 2166136261
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  const code = String(((h >>> 0) % 900) + 100)
-  return `${prefix}-${code}`
-}
-
 function clampWidth(n) {
   const w = Number(n)
   return Number.isFinite(w) ? Math.min(64, Math.max(24, Math.floor(w))) : 42
@@ -329,7 +295,6 @@ module.exports = {
   toMinorUnits,
   money,
   formatTicketDate,
-  orderNumberFromId,
   clampWidth,
   kvLine,
   kvWrappedLines,
