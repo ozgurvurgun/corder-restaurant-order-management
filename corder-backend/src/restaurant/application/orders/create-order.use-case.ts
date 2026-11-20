@@ -53,18 +53,26 @@ export async function allocateNextOrderNumber(
   );
   const rows = (await queryFn.call(
     em,
-    `SELECT COALESCE(
-       MAX(
-         CASE
-           WHEN SUBSTRING("order_number" FROM '^' || $2 || '-([0-9]+)$') IS NOT NULL
-           THEN CAST(SUBSTRING("order_number" FROM '^' || $2 || '-([0-9]+)$') AS INTEGER)
-           ELSE 0
-         END
-       ),
-       0
-     ) + 1 AS next_seq
-     FROM "orders"
-     WHERE "restaurant_id" = $1 AND "order_number" LIKE ($2 || '-%')`,
+    `SELECT COALESCE(MAX(seq), 0) + 1 AS next_seq
+     FROM (
+       SELECT CASE
+         WHEN SUBSTRING("order_number" FROM '^' || $2 || '-([0-9]+)$') IS NOT NULL
+         THEN CAST(SUBSTRING("order_number" FROM '^' || $2 || '-([0-9]+)$') AS INTEGER)
+         ELSE 0
+       END AS seq
+       FROM "orders"
+       WHERE "restaurant_id" = $1 AND "order_number" LIKE ($2 || '-%')
+       UNION ALL
+       SELECT CASE
+         WHEN SUBSTRING((elem->>'orderNumber') FROM '^' || $2 || '-([0-9]+)$') IS NOT NULL
+         THEN CAST(SUBSTRING((elem->>'orderNumber') FROM '^' || $2 || '-([0-9]+)$') AS INTEGER)
+         ELSE 0
+       END AS seq
+       FROM "completed_orders" co, jsonb_array_elements(co."orders_snapshot") elem
+       WHERE co."restaurant_id" = $1
+         AND jsonb_typeof(co."orders_snapshot") = 'array'
+         AND (elem->>'orderNumber') LIKE ($2 || '-%')
+     ) combined`,
     [restaurantId, datePrefix],
   )) as Array<{ next_seq?: number | string }>;
   const nextSeq = Math.max(1, Number(rows?.[0]?.next_seq) || 1);

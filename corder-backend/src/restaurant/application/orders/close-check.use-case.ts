@@ -22,14 +22,8 @@ import { StockMovementsService } from '../stock-movements.service';
 import { SESSION_LOCK_STALE_MS, TableService } from '../table.service';
 import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
 import { normalizeStorageText } from '../../../common/text/text-normalizer';
-import {
-  buildClosedOrderSnapshot,
-  buildCompletedPaymentSnapshot,
-  serializeCashShift,
-  serializeCashTransaction,
-  serializeCompletedOrder,
-  serializeStockMovement,
-} from './order.mapper';
+import { allocateNextOrderNumber } from './create-order.use-case';
+import { buildClosedOrderSnapshot, buildCompletedPaymentSnapshot, serializeCashShift, serializeCashTransaction, serializeCompletedOrder, serializeStockMovement } from './order.mapper';
 
 interface PartialItemMutation {
   item: OrderItemEntity;
@@ -418,9 +412,7 @@ export class CloseCheckUseCase {
     for (const reqItem of walkInItems) {
       const product = productById.get(reqItem.productId);
       if (!product) throw new BadRequestException('Product not found or does not belong to this restaurant');
-      if (product.inStock === false) {
-        throw new BadRequestException(`Product "${product.name}" is out of stock`);
-      }
+      if (product.inStock === false) throw new BadRequestException(`Product "${product.name}" is out of stock`);
       const unitMinor = toMinorUnits(product.price);
       if (unitMinor < 0) throw new BadRequestException('Invalid product price');
       rawTotalMinorUnits += unitMinor * reqItem.quantity;
@@ -433,12 +425,13 @@ export class CloseCheckUseCase {
     }
 
     const quickOrderId = randomUUID();
+    const orderNumber = await allocateNextOrderNumber(em, restaurantId, now);
     return {
       table: null, tableName: 'walk-in sale', section: 'register', waiterName: actorName, openedAt: now,
       rawTotalMinorUnits, orderIdsToClose: [quickOrderId],
       ordersSnapshot: [{
-        id: quickOrderId, tableId: 'quick-sale', userId: actorId, userName: actorName, status: 'closed',
-        createdAt: now.toISOString(), updatedAt: now.toISOString(), items: snapItems,
+        id: quickOrderId, orderNumber, tableId: 'quick-sale', userId: actorId, userName: actorName,
+        status: 'closed', createdAt: now.toISOString(), updatedAt: now.toISOString(), items: snapItems,
       }],
       billLinesForStock,
     };
