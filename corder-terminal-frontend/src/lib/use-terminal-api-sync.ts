@@ -4,6 +4,7 @@ import { api, getBase, getToken, notifyAuthExpired } from "./api"
 import {
   getTerminalNotificationPrefs,
   normalizeWaiterCallPayload,
+  syncTerminalWebPushSubscription,
   triggerTerminalPushNotification,
   type ActiveWaiterCall,
 } from "./terminal-notifications"
@@ -85,14 +86,40 @@ export function useTerminalApiSync(params: {
     }
 
     void checkLatestSystemUpdate()
+    void syncTerminalWebPushSubscription(token)
 
     socket.on("auth:expired", handleAuthExpired)
     socket.on("platform:system_update", handleSystemUpdate)
-    socket.on("platform:notification", (payload?: { id?: string; level?: string; title?: string; message?: string; sentAt?: string }) => {
-      if (payload?.level === "system_update") {
-        handleSystemUpdate(payload)
+    socket.on(
+      "platform:notification",
+      (payload?: {
+        id?: string
+        level?: string
+        title?: string
+        message?: string
+        targetApps?: string[]
+        sentAt?: string
+      }) => {
+        if (payload?.level === "system_update") {
+          handleSystemUpdate(payload)
+          return
+        }
+        if (
+          Array.isArray(payload?.targetApps) &&
+          !payload.targetApps.includes("terminal")
+        ) {
+          return
+        }
+        const prefs = getTerminalNotificationPrefs()
+        if (prefs.enabled && prefs.browserPushEnabled) {
+          triggerTerminalPushNotification(
+            `📢 ${payload?.title || "Corder Bildirimi"}`,
+            payload?.message || "",
+            `corder-platform-${payload?.id || Date.now()}`
+          )
+        }
       }
-    })
+    )
     socket.on("order:created", syncLive)
     socket.on("orders:moved", syncLive)
     socket.on("orders:updated", syncLive)
@@ -110,19 +137,6 @@ export function useTerminalApiSync(params: {
     socket.on("waiter:called", (payload: unknown) => {
       const call = normalizeWaiterCallPayload(payload)
       if (!call) return
-      const prefs = getTerminalNotificationPrefs()
-      if (!prefs.enabled) return
-
-      const sectionLabel = call.sectionName || "Salon"
-      const actionLabel =
-        call.requestType === "bill" ? "Hesap İstiyor!" : "Garson Çağırıyor!"
-      const title = `🔔 ${call.tableName} (${sectionLabel}) - ${actionLabel}`
-      const body = call.note ? `Not: ${call.note}` : `${call.tableName} masası çağrı gönderdi.`
-
-      if (prefs.browserPushEnabled) {
-        triggerTerminalPushNotification(title, body, `waiter-call-${call.tableId}`)
-      }
-
       onWaiterCalledRef.current?.(call)
     })
 
@@ -130,6 +144,7 @@ export function useTerminalApiSync(params: {
       setIsOffline(false)
       void refreshLiveState()
       void checkLatestSystemUpdate()
+      void syncTerminalWebPushSubscription(token)
     })
     socket.io.on("reconnect", () => {
       void refreshData()

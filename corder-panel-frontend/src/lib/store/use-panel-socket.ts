@@ -12,6 +12,7 @@ import { mapOrder } from "../mappers/orders-tables.mapper"
 import {
   getNotificationPrefs,
   showBrowserNotification,
+  syncPanelWebPushSubscription,
 } from "../notification-sound"
 import {
   getDismissedNotifIds,
@@ -63,6 +64,7 @@ export function usePanelSocket(params: {
     const handleConnect = () => {
       if (connectedOnce) void refreshPosRef.current?.()
       connectedOnce = true
+      void syncPanelWebPushSubscription(token)
     }
     const handleReconnect = () => void refreshPosRef.current?.()
 
@@ -163,7 +165,7 @@ export function usePanelSocket(params: {
         ]
       })
       showPanelToast(title, "info")
-      showBrowserNotification(title, message, notifId)
+      showBrowserNotification(title, message, `waiter-call-${notifId}`)
     }
 
     const handleFraudAlert = (payload: {

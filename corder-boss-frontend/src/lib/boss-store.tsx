@@ -11,7 +11,7 @@ import { formatTitleCase, normalizeBossBranch } from "./format"
 import {
   getBossDismissedNotifIds, getBossReadNotifIds, getFraudPushSoundEnabled,
   markBossNotifReadLocal, markBossNotifsDismissedLocal, requestBrowserNotificationPermission,
-  setFraudPushSoundEnabled, triggerFraudPushNotification, triggerPlatformPushNotification,
+  setFraudPushSoundEnabled, syncBossWebPushSubscription, triggerFraudPushNotification, triggerPlatformPushNotification,
 } from "./fraud-notifier"
 import type {
   BossOverviewResponse, BossPlatformNotificationDto, BranchSummary, CatalogCategoryDto, CatalogProductDto,
@@ -431,6 +431,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
         void fetchPlatformNotifsSilently(effectiveBranchIdRef.current)
       }
     }
+    socket.on("connect", () => { void syncBossWebPushSubscription(token) })
     socket.on("auth:expired", onAuthExpired)
     socket.on("platform:notification", onPlatformNotification)
     socket.on("platform:system_update", onSystemUpdate)

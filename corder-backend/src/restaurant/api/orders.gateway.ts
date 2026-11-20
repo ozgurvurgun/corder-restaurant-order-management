@@ -8,7 +8,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import {
   buildPaymentSuspendedErrorMessage,
   RestaurantTokenPayload,
@@ -19,6 +19,7 @@ import {
 } from '../application/restaurant-session-validator.service';
 import { TableService } from '../application/table.service';
 import { PrintersService } from '../application/printers.service';
+import { WebPushService } from '../application/web-push.service';
 import { buildCorsOptions } from '../../common/security/cors.config';
 import { requireConfigSecret } from '../../common/security/env.validation';
 
@@ -93,6 +94,7 @@ export class OrdersGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     private readonly sessionValidator: RestaurantSessionValidatorService,
     private readonly tableService: TableService,
     private readonly printersService: PrintersService,
+    @Optional() private readonly webPushService?: WebPushService,
   ) {}
 
   afterInit(server: Server): void {
@@ -266,17 +268,23 @@ export class OrdersGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   }
 
   emitWaiterCalled(restaurantId: string, payload: Record<string, unknown>) {
-    this.server.to(getRestaurantRoom(restaurantId)).emit('waiter:called', payload);
+    if (this.server) {
+      this.server.to(getRestaurantRoom(restaurantId)).emit('waiter:called', payload);
+    }
+    void this.webPushService?.sendWaiterCallPush(restaurantId, payload);
   }
 
   emitNotificationsUpdated(restaurantId: string) {
+    if (!this.server) return;
     this.server.to(getRestaurantRoom(restaurantId)).emit('notifications:updated');
   }
 
   emitFraudAlert(restaurantId: string, payload: Record<string, unknown>) {
-    if (!this.server) return;
-    this.server.to(getPanelRoom(restaurantId)).emit('fraud:alert', payload);
-    this.server.to(getBossRoom(restaurantId)).emit('fraud:alert', payload);
+    if (this.server) {
+      this.server.to(getPanelRoom(restaurantId)).emit('fraud:alert', payload);
+      this.server.to(getBossRoom(restaurantId)).emit('fraud:alert', payload);
+    }
+    void this.webPushService?.sendFraudAlertPush(restaurantId, payload);
   }
 
   emitPrintJob(restaurantId: string, payload: PrintJobSocketPayload) {
@@ -305,7 +313,6 @@ export class OrdersGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       createdAt: string;
     },
   ) {
-    if (!this.server) return;
     const targetApps =
       Array.isArray(payload.targetApps) && payload.targetApps.length > 0
         ? payload.targetApps
@@ -313,18 +320,21 @@ export class OrdersGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     const includePanel =
       targetApps.includes('merchant') || targetApps.includes('panel');
     const includeBoss = targetApps.includes('boss');
-    for (const restaurantId of restaurantIds) {
-      if (includePanel) {
-        this.server
-          .to(getPanelRoom(restaurantId))
-          .emit('platform:notification', payload);
-      }
-      if (includeBoss || includePanel) {
-        this.server
-          .to(getBossRoom(restaurantId))
-          .emit('platform:notification', payload);
+    if (this.server) {
+      for (const restaurantId of restaurantIds) {
+        if (includePanel) {
+          this.server
+            .to(getPanelRoom(restaurantId))
+            .emit('platform:notification', payload);
+        }
+        if (includeBoss || includePanel) {
+          this.server
+            .to(getBossRoom(restaurantId))
+            .emit('platform:notification', payload);
+        }
       }
     }
+    void this.webPushService?.sendPlatformNotificationPush(restaurantIds, payload);
   }
 
   emitSystemUpdateBroadcast(

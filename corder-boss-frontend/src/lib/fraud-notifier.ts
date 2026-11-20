@@ -3,11 +3,158 @@ import type {
   FraudAlertDto,
   FraudSeverity,
 } from "./types"
+import { getApiBase, getBossToken } from "./api"
 import { formatMoney } from "./format"
 
 const PUSH_SOUND_PREF_KEY = "corder-boss-fraud-push-sound-enabled"
 const BOSS_READ_NOTIFS_KEY = "corder-boss-read-notifs"
 const BOSS_DISMISSED_NOTIFS_KEY = "corder-boss-dismissed-notifs"
+
+const recentShownTags = new Map<string, number>()
+const DEDUP_TTL_MS = 45_000
+let swRegistrationPromise: Promise<ServiceWorkerRegistration | null> | null = null
+let pushSetupInstalled = false
+let pushSubscribeInFlight = false
+
+function pruneRecentShownTags(): void {
+  const now = Date.now()
+  for (const [k, ts] of recentShownTags.entries()) {
+    if (now - ts > DEDUP_TTL_MS) {
+      recentShownTags.delete(k)
+    }
+  }
+}
+
+export async function ensureBossServiceWorker(): Promise<ServiceWorkerRegistration | null> {
+  if (typeof window === "undefined" || !("serviceWorker" in navigator)) return null
+  if (!swRegistrationPromise) {
+    swRegistrationPromise = navigator.serviceWorker
+      .register("/sw.js", { scope: "/" })
+      .then((registration) => {
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") {
+            void registration.update().catch(() => {})
+          }
+        })
+        return registration
+      })
+      .catch(() => null)
+  }
+  const reg = await swRegistrationPromise
+  if (reg?.active) return reg
+  try {
+    const readyReg = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 1500)),
+    ])
+    return readyReg ?? reg
+  } catch {
+    return reg
+  }
+}
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/")
+  const rawData = window.atob(base64)
+  const outputArray = new Uint8Array(rawData.length)
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i)
+  }
+  return outputArray
+}
+
+export async function syncBossWebPushSubscription(
+  explicitToken?: string | null
+): Promise<void> {
+  if (typeof window === "undefined" || pushSubscribeInFlight) return
+  if (!("Notification" in window) || Notification.permission !== "granted") return
+  const token = explicitToken ?? getBossToken()
+  if (!token) return
+
+  pushSubscribeInFlight = true
+  try {
+    const reg = await ensureBossServiceWorker()
+    if (!reg || !("pushManager" in reg)) return
+
+    const base = getApiBase()
+    const keyRes = await fetch(`${base}/restaurant/push/vapid-public-key`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!keyRes.ok) return
+    const keyData = (await keyRes.json()) as { publicKey?: string }
+    const publicKey = keyData?.publicKey?.trim()
+    if (!publicKey) return
+
+    let sub = await reg.pushManager.getSubscription()
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey) as unknown as BufferSource,
+      })
+    }
+
+    const subJson = sub.toJSON()
+    if (!subJson?.endpoint || !subJson?.keys?.p256dh || !subJson?.keys?.auth) return
+
+    await fetch(`${base}/restaurant/push/subscribe`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        appType: "boss",
+        subscription: {
+          endpoint: subJson.endpoint,
+          keys: {
+            p256dh: subJson.keys.p256dh,
+            auth: subJson.keys.auth,
+          },
+        },
+      }),
+    })
+  } catch {
+    // Ignore push subscription errors
+  } finally {
+    pushSubscribeInFlight = false
+  }
+}
+
+export function installBossPushAutoSetup(): void {
+  if (typeof window === "undefined" || pushSetupInstalled) return
+  pushSetupInstalled = true
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      const data = event.data as { type?: string; tag?: string } | undefined
+      if (data?.type === "CORDER_TAG_SHOWN" && typeof data.tag === "string" && data.tag) {
+        pruneRecentShownTags()
+        recentShownTags.set(data.tag, Date.now())
+      }
+    })
+    void ensureBossServiceWorker().then(() => {
+      if ("Notification" in window && Notification.permission === "granted") {
+        void syncBossWebPushSubscription()
+      }
+    })
+  }
+
+  let gesturePromptAttempted = false
+  const handleFirstGesture = () => {
+    if (gesturePromptAttempted) return
+    if (!("Notification" in window)) return
+    if (Notification.permission !== "default") {
+      if (Notification.permission === "granted") void syncBossWebPushSubscription()
+      return
+    }
+    if (!getFraudPushSoundEnabled()) return
+    gesturePromptAttempted = true
+    void requestBrowserNotificationPermission()
+  }
+
+  window.addEventListener("click", handleFirstGesture, { passive: true })
+}
 
 export function getBossReadNotifIds(): Set<string> {
   if (typeof window === "undefined") return new Set()
@@ -45,40 +192,60 @@ export function markBossNotifsDismissedLocal(ids: string[]): void {
   localStorage.setItem(BOSS_DISMISSED_NOTIFS_KEY, JSON.stringify(Array.from(set).slice(-500)))
 }
 
-export async function triggerPlatformPushNotification(
-  notif: Pick<BossPlatformNotificationDto, "id" | "title" | "message" | "level">
+async function showBossDeduplicatedNotification(
+  title: string,
+  body: string,
+  tag: string,
+  data?: Record<string, unknown>
 ): Promise<void> {
   if (typeof window === "undefined" || !("Notification" in window)) return
   if (Notification.permission !== "granted") return
 
-  const title = `📢 ${notif.title || "Corder Duyurusu"}`
-  const body = notif.message || ""
-  const tag = `corder-platform-${notif.id}`
+  pruneRecentShownTags()
+  if (recentShownTags.has(tag)) return
+  recentShownTags.set(tag, Date.now())
+
+  const options: NotificationOptions & { renotify?: boolean; vibrate?: number[] } = {
+    body,
+    icon: "/icon-192x192.png",
+    badge: "/icon-96x96.png",
+    tag,
+    renotify: true,
+    silent: false,
+    vibrate: [200, 100, 200],
+    data,
+  }
 
   try {
     if ("serviceWorker" in navigator) {
-      const reg = await navigator.serviceWorker.getRegistration()
+      const reg = await ensureBossServiceWorker()
       if (reg && typeof reg.showNotification === "function") {
-        await reg.showNotification(title, {
-          body,
-          icon: "/corder-logo.png",
-          badge: "/icon-96x96.png",
-          tag,
-          silent: false,
-          data: { notificationId: notif.id },
-        })
+        reg.active?.postMessage({ type: "CORDER_MARK_TAG_SHOWN", tag })
+        if (typeof reg.getNotifications === "function") {
+          try {
+            const existing = await reg.getNotifications({ tag })
+            if (Array.isArray(existing) && existing.length > 0) {
+              return
+            }
+          } catch {}
+        }
+        await reg.showNotification(title, options)
         return
       }
     }
-    new Notification(title, {
-      body,
-      icon: "/corder-logo.png",
-      tag,
-      silent: false,
-    })
+    new Notification(title, options)
   } catch {
     // Ignore push notification errors
   }
+}
+
+export async function triggerPlatformPushNotification(
+  notif: Pick<BossPlatformNotificationDto, "id" | "title" | "message" | "level">
+): Promise<void> {
+  const title = `📢 ${notif.title || "Corder Duyurusu"}`
+  const body = notif.message || ""
+  const tag = `corder-platform-${notif.id}`
+  await showBossDeduplicatedNotification(title, body, tag, { notificationId: notif.id })
 }
 
 export interface FraudAlgorithmSpec {
@@ -156,18 +323,22 @@ export async function requestBrowserNotificationPermission(): Promise<Notificati
   if (typeof window === "undefined" || !("Notification" in window)) {
     return "unsupported"
   }
-  if (Notification.permission === "granted") return "granted"
+  if (Notification.permission === "granted") {
+    void syncBossWebPushSubscription()
+    return "granted"
+  }
   try {
-    return await Notification.requestPermission()
+    const perm = await Notification.requestPermission()
+    if (perm === "granted") {
+      void syncBossWebPushSubscription()
+    }
+    return perm
   } catch {
     return Notification.permission
   }
 }
 
 export async function triggerFraudPushNotification(alert: FraudAlertDto): Promise<void> {
-  if (typeof window === "undefined" || !("Notification" in window)) return
-  if (Notification.permission !== "granted") return
-
   const sevLabel = alert.severity === "critical" ? "KRİTİK" : "YÜKSEK"
   const title = `🚨 [${sevLabel}] ${alert.title}`
   const impactText =
@@ -175,28 +346,8 @@ export async function triggerFraudPushNotification(alert: FraudAlertDto): Promis
   const branchText = alert.branchName ? `[${alert.branchName}] ` : ""
   const body = `${branchText}${alert.description}${impactText}`
 
-  try {
-    if ("serviceWorker" in navigator) {
-      const reg = await navigator.serviceWorker.getRegistration()
-      if (reg && typeof reg.showNotification === "function") {
-        await reg.showNotification(title, {
-          body,
-          icon: "/icon-192x192.png",
-          badge: "/icon-96x96.png",
-          tag: `corder-fraud-${alert.id}`,
-          silent: false,
-          data: { alertId: alert.id, tab: "security" },
-        })
-        return
-      }
-    }
-    new Notification(title, {
-      body,
-      icon: "/icon-192x192.png",
-      tag: `corder-fraud-${alert.id}`,
-      silent: false,
-    })
-  } catch {
-    // Notification errors ignored
-  }
+  await showBossDeduplicatedNotification(title, body, `corder-fraud-${alert.id}`, {
+    alertId: alert.id,
+    tab: "security",
+  })
 }

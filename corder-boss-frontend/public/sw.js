@@ -1,4 +1,16 @@
-const CACHE_NAME = "corder-boss-pwa-v4";
+const CACHE_NAME = "corder-boss-pwa-v5";
+const recentTags = new Map();
+const DEDUP_TTL_MS = 45000;
+
+function pruneRecentTags() {
+  const now = Date.now();
+  for (const [key, ts] of recentTags.entries()) {
+    if (now - ts > DEDUP_TTL_MS) {
+      recentTags.delete(key);
+    }
+  }
+}
+
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -32,13 +44,22 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+self.addEventListener("message", (event) => {
+  const data = event.data;
+  if (!data || typeof data !== "object") return;
+  if (data.type === "CORDER_MARK_TAG_SHOWN" && typeof data.tag === "string" && data.tag) {
+    pruneRecentTags();
+    recentTags.set(data.tag, Date.now());
+  }
+});
+
 self.addEventListener("push", (event) => {
   let payload = {
-    title: "Corder Boss — Güvenlik & Kaçak Uyarısı",
+    title: "Corder Boss - Güvenlik & Kaçak Uyarısı",
     body: "Kritik bir kasa veya adisyon güvenlik uyarısı tespit edildi.",
     icon: "/icon-192x192.png",
     badge: "/icon-96x96.png",
-    tag: "corder-boss-fraud-alert"
+    tag: `corder-boss-${Date.now()}`
   };
   if (event.data) {
     try {
@@ -49,14 +70,40 @@ self.addEventListener("push", (event) => {
     }
   }
   event.waitUntil(
-    self.registration.showNotification(payload.title, {
-      body: payload.body,
-      icon: payload.icon || "/icon-192x192.png",
-      badge: payload.badge || "/icon-96x96.png",
-      tag: payload.tag || "corder-boss-fraud-alert",
-      renotify: true,
-      data: payload.data || { tab: "security" }
-    })
+    (async () => {
+      pruneRecentTags();
+      const tag = payload.tag || `corder-boss-${Date.now()}`;
+      if (recentTags.has(tag)) return;
+      if (typeof self.registration.getNotifications === "function") {
+        try {
+          const existing = await self.registration.getNotifications({ tag });
+          if (Array.isArray(existing) && existing.length > 0) {
+            recentTags.set(tag, Date.now());
+            return;
+          }
+        } catch {}
+      }
+      recentTags.set(tag, Date.now());
+      try {
+        const clientList = await self.clients.matchAll({
+          type: "window",
+          includeUncontrolled: true,
+        });
+        for (const client of clientList) {
+          client.postMessage({ type: "CORDER_TAG_SHOWN", tag });
+        }
+      } catch {}
+      await self.registration.showNotification(payload.title, {
+        body: payload.body,
+        icon: payload.icon || "/icon-192x192.png",
+        badge: payload.badge || "/icon-96x96.png",
+        tag,
+        renotify: true,
+        silent: false,
+        vibrate: [200, 100, 200],
+        data: payload.data || { tab: "security" }
+      });
+    })()
   );
 });
 

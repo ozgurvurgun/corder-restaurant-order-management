@@ -1,9 +1,14 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Menu, UtensilsCrossed, Wine, Hash, RefreshCw, LogOut, Bell } from "lucide-react"
 import { useApp } from "@/lib/store"
 import { formatCurrency } from "@/lib/format"
 import { useToast } from "@/components/ios-toast"
 import { TerminalNotificationSettingsModal } from "@/components/notification-settings-modal"
+import {
+  getTerminalPushPermissionStatus,
+  requestTerminalPushPermission,
+  syncTerminalWebPushSubscription,
+} from "@/lib/terminal-notifications"
 import type { TerminalTable, TerminalUser } from "@/lib/types"
 
 const ALL_SECTIONS = "all"
@@ -30,6 +35,18 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [notifSettingsOpen, setNotifSettingsOpen] = useState(false)
   const [tableNumber, setTableNumber] = useState("")
+  const [pushPerm, setPushPerm] = useState<NotificationPermission | "unsupported">(() =>
+    getTerminalPushPermissionStatus()
+  )
+
+  useEffect(() => {
+    const syncPerm = () => setPushPerm(getTerminalPushPermissionStatus())
+    window.addEventListener("corder:terminal-push-permission", syncPerm)
+    if (getTerminalPushPermissionStatus() === "granted") {
+      void syncTerminalWebPushSubscription()
+    }
+    return () => window.removeEventListener("corder:terminal-push-permission", syncPerm)
+  }, [])
 
   const sectionNames = Array.from(new Set(tables.map((t) => t.section).filter(Boolean)))
   const sections = [ALL_SECTIONS, ...sectionNames]
@@ -155,6 +172,23 @@ export function TablesScreen({ onTableSelect, onLogout }: TablesScreenProps) {
       )}
 
       {/* Fixed Segmented Control */}
+      {pushPerm === "default" && (
+        <div className="px-4 py-2 bg-amber-500/15 border-b border-amber-500/30 flex items-center justify-between gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <Bell className="h-4 w-4 text-[#e63462] flex-shrink-0" />
+            <span className="text-[12px] font-medium text-card-foreground truncate">
+              Garson ve hesap çağrıları için Push bildirimlerini açın
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => void requestTerminalPushPermission()}
+            className="px-3 py-1 rounded-lg bg-[#e63462] text-white text-[12px] font-semibold flex-shrink-0 active:opacity-85"
+          >
+            İzin Ver
+          </button>
+        </div>
+      )}
       <div className="px-4 py-3 bg-background flex-shrink-0 border-b border-border">
         <div className="bg-muted rounded-lg p-0.5 flex overflow-x-auto">
           {sections.map((section) => (

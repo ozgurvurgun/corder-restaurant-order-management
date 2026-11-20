@@ -96,6 +96,8 @@ import { OrdersGateway } from './api/orders.gateway';
 import { PrintAgentController } from './api/print-agent.controller';
 import { FraudAlertsController } from './api/fraud-alerts.controller';
 import { NotificationsController } from './api/notifications.controller';
+import { WebPushController } from './api/web-push.controller';
+import { WebPushService } from './application/web-push.service';
 import { MenuModule } from '../menu/menu.module';
 import { PrintAgentGuard } from './infrastructure/print-agent.guard';
 import { PanelRootGuard } from './infrastructure/panel-root.guard';
@@ -182,6 +184,7 @@ import { ActorNameSyncService } from '../common/text/actor-name-sync.service';
     PrintAgentController,
     FraudAlertsController,
     NotificationsController,
+    WebPushController,
   ],
   providers: [
     RestaurantAuthService,
@@ -210,6 +213,7 @@ import { ActorNameSyncService } from '../common/text/actor-name-sync.service';
     CampaignService,
     CompletedOrdersService,
     RestaurantJwtStrategy,
+    WebPushService,
     OrdersGateway,
     StockMaterialsService,
     SuppliersService,
@@ -234,6 +238,7 @@ import { ActorNameSyncService } from '../common/text/actor-name-sync.service';
     CashShiftService,
     FraudDetectionService,
     PrintersService,
+    WebPushService,
     OrdersGateway,
     ActorNameSyncService,
   ],

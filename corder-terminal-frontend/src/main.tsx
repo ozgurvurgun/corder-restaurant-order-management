@@ -5,9 +5,11 @@ import { AppProvider } from "@/lib/store"
 import { IOSToastProvider } from "@/components/ios-toast"
 import App from "./App"
 import { installCustomFormValidation } from "./lib/custom-form-validation"
+import { installTerminalPushAutoSetup } from "./lib/terminal-notifications"
 import "./index.css"
 
 installCustomFormValidation()
+installTerminalPushAutoSetup()
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

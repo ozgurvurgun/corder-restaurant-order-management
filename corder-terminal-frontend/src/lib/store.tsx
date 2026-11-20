@@ -45,7 +45,9 @@ import {
   useTerminalSessionActions,
 } from "./use-terminal-session-actions"
 import {
+  getTerminalNotificationPrefs,
   normalizeWaiterCallPayload,
+  triggerTerminalPushNotification,
   type ActiveWaiterCall,
 } from "./terminal-notifications"
 
@@ -66,8 +68,6 @@ interface TerminalContextType {
   selectedCategory: string | null
   isLoading: boolean
   error: string | null
-  waiterCalls: ActiveWaiterCall[]
-  dismissWaiterCall: (id: string, acknowledgeOnServer?: boolean) => void
   login: (email: string, password: string) => Promise<boolean>
   loginWithPin: (pin: string, staffId?: string) => Promise<{ ok: boolean; error?: string }>
   logout: () => void
@@ -138,31 +138,25 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [waiterCalls, setWaiterCalls] = useState<ActiveWaiterCall[]>([])
   const seenWaiterCallIdsRef = useRef<Set<string>>(new Set())
+  const initialWaiterSyncDoneRef = useRef(false)
 
   const handleWaiterCalled = useCallback((call: ActiveWaiterCall) => {
     if (seenWaiterCallIdsRef.current.has(call.id)) return
     seenWaiterCallIdsRef.current.add(call.id)
-    setWaiterCalls((prev) => {
-      const withoutSameIdOrTable = prev.filter(
-        (c) => c.id !== call.id && c.tableId !== call.tableId
-      )
-      return [call, ...withoutSameIdOrTable].slice(0, 20)
-    })
+    const prefs = getTerminalNotificationPrefs()
+    if (prefs.enabled && prefs.browserPushEnabled) {
+      const sectionLabel = call.sectionName || "Salon"
+      const actionLabel =
+        call.requestType === "bill" ? "Hesap İstiyor!" : "Garson Çağırıyor!"
+      const title = `🔔 ${call.tableName} (${sectionLabel}) - ${actionLabel}`
+      const body = call.note
+        ? `Not: ${call.note}`
+        : `${call.tableName} masası çağrı gönderdi.`
+      triggerTerminalPushNotification(title, body, `waiter-call-${call.id}`)
+    }
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("corder:waiter-called", { detail: call }))
-    }
-  }, [])
-
-  const dismissWaiterCall = useCallback((id: string, acknowledgeOnServer = false) => {
-    seenWaiterCallIdsRef.current.add(id)
-    setWaiterCalls((prev) => prev.filter((c) => c.id !== id))
-    if (acknowledgeOnServer) {
-      const token = getToken()
-      if (token) {
-        void api.notifications.dismiss(token, [id]).catch(() => undefined)
-      }
     }
   }, [])
 
@@ -177,16 +171,27 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
           new CustomEvent("corder:system-update", { detail: state.latestSystemUpdate })
         )
       }
-      const activeServerIds = new Set(
-        (state.waiterCalls ?? [])
-          .map((c) => normalizeWaiterCallPayload(c)?.id)
-          .filter((id): id is string => Boolean(id))
-      )
-      setWaiterCalls((prev) => prev.filter((c) => activeServerIds.has(c.id)))
+      const normalizedCalls = (state.waiterCalls ?? [])
+        .map((c) => normalizeWaiterCallPayload(c))
+        .filter((c): c is ActiveWaiterCall => Boolean(c))
+
+      if (!initialWaiterSyncDoneRef.current) {
+        initialWaiterSyncDoneRef.current = true
+        for (const call of normalizedCalls) {
+          seenWaiterCallIdsRef.current.add(call.id)
+        }
+        return
+      }
+
+      for (const call of normalizedCalls) {
+        if (!seenWaiterCallIdsRef.current.has(call.id)) {
+          handleWaiterCalled(call)
+        }
+      }
     } catch {
       /* ignore background notification sync errors */
     }
-  }, [])
+  }, [handleWaiterCalled])
 
   const lockedTableIdRef = useRef<string | null>(null)
   const pendingUnlockTableIdRef = useRef<string | null>(null)
@@ -412,8 +417,6 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
         selectedCategory,
         isLoading,
         error,
-        waiterCalls,
-        dismissWaiterCall,
         setActiveScreen,
         toggleOffline,
         refreshData,
