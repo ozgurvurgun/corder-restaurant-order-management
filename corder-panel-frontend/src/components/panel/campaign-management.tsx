@@ -189,6 +189,8 @@ export default function CampaignManagement() {
                   <img
                     src={resolveAssetUrl(campaign.image)}
                     alt={campaign.title}
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover"
                   />
                   {campaign.discountPercent && (

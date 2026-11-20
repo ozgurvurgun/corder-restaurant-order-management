@@ -295,6 +295,7 @@ export function OperationsCatalogTab() {
                         src={p.imageUrl}
                         alt={p.name}
                         loading="lazy"
+                        decoding="async"
                         className="h-11 w-11 flex-shrink-0 rounded-xl object-cover border border-[#e5e5ea] bg-[#f5f5f7]"
                       />
                     ) : (

@@ -34,7 +34,7 @@ function ProductCard({
       {showImage && (
         <div className="aspect-square bg-[#f5f5f7] relative overflow-hidden">
           {imgSrc ? (
-            <img src={imgSrc} alt={product.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+            <img src={imgSrc} alt={product.name} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
               <ShoppingBag className="w-10 h-10 text-[#d1d1d6]" />
@@ -328,7 +328,7 @@ export default function QuickSaleView() {
                     {showImages && (
                       <div className="w-12 h-12 rounded-lg bg-[#e8e8ed] overflow-hidden flex-shrink-0">
                         {imgSrc ? (
-                          <img src={imgSrc} alt={item.name} className="w-full h-full object-cover" />
+                          <img src={imgSrc} alt={item.name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
                             <ShoppingBag className="w-5 h-5 text-[#aeaeb2]" />

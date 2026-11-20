@@ -129,9 +129,100 @@ export const campaignsApi = {
     }),
 }
 
-export const uploadFile = (token: string, file: File) => {
+export interface ImageOptimizeOptions {
+  maxWidth?: number
+  maxHeight?: number
+  quality?: number
+}
+
+export async function optimizeImageForUpload(
+  file: File,
+  options?: ImageOptimizeOptions,
+): Promise<File> {
+  if (
+    typeof window === "undefined" ||
+    typeof document === "undefined" ||
+    !file.type.startsWith("image/") ||
+    file.type === "image/gif"
+  ) {
+    return file
+  }
+
+  const maxWidth = options?.maxWidth ?? 1200
+  const maxHeight = options?.maxHeight ?? 1200
+  const quality = options?.quality ?? 0.82
+
+  return new Promise<File>((resolve) => {
+    const objectUrl = URL.createObjectURL(file)
+    const img = new Image()
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl)
+      let targetW = img.naturalWidth || img.width
+      let targetH = img.naturalHeight || img.height
+      if (!targetW || !targetH) {
+        resolve(file)
+        return
+      }
+
+      const needsResize = targetW > maxWidth || targetH > maxHeight
+      if (needsResize) {
+        const ratio = Math.min(maxWidth / targetW, maxHeight / targetH)
+        targetW = Math.max(1, Math.round(targetW * ratio))
+        targetH = Math.max(1, Math.round(targetH * ratio))
+      }
+
+      const canvas = document.createElement("canvas")
+      canvas.width = targetW
+      canvas.height = targetH
+      const ctx = canvas.getContext("2d")
+      if (!ctx) {
+        resolve(file)
+        return
+      }
+      ctx.drawImage(img, 0, 0, targetW, targetH)
+
+      const baseName = file.name.replace(/\.[^.]+$/, "") || "image"
+      canvas.toBlob(
+        (blob) => {
+          if (!blob || (blob.type !== "image/webp" && blob.type !== "image/jpeg")) {
+            resolve(file)
+            return
+          }
+          if (!needsResize && blob.size >= file.size) {
+            resolve(file)
+            return
+          }
+          const ext = blob.type === "image/webp" ? ".webp" : ".jpg"
+          resolve(
+            new File([blob], `${baseName}${ext}`, {
+              type: blob.type,
+              lastModified: Date.now(),
+            }),
+          )
+        },
+        "image/webp",
+        quality,
+      )
+    }
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl)
+      resolve(file)
+    }
+
+    img.src = objectUrl
+  })
+}
+
+export const uploadFile = async (token: string, file: File) => {
+  const optimized = await optimizeImageForUpload(file, {
+    maxWidth: 1200,
+    maxHeight: 1200,
+    quality: 0.82,
+  })
   const form = new FormData()
-  form.append("file", file)
+  form.append("file", optimized)
   return request<{ url: string }>("/restaurant/upload", {
     method: "POST",
     token,

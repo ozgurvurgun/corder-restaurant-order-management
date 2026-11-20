@@ -39,7 +39,7 @@ function ProductCard({
       {showImage && (
         <div className="aspect-square bg-[#f5f5f7] relative overflow-hidden">
           {imgSrc ? (
-            <img src={imgSrc} alt={product.name} loading="lazy" className="w-full h-full object-cover" />
+            <img src={imgSrc} alt={product.name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
               <ShoppingBag className="w-8 h-8 text-[#d1d1d6]" />

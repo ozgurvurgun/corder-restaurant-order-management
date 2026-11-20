@@ -365,7 +365,7 @@ export default function ProductManagement() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         {product.image ? (
-                          <img src={resolveAssetUrl(product.image)} alt={product.name} className="w-8 h-8 rounded-lg object-cover" />
+                          <img src={resolveAssetUrl(product.image)} alt={product.name} loading="lazy" decoding="async" className="w-8 h-8 rounded-lg object-cover" />
                         ) : (
                           <div className="w-8 h-8 rounded-lg bg-[#f5f5f7] flex items-center justify-center">
                             <ImageIcon className="w-3.5 h-3.5 text-[#d1d1d6]" />

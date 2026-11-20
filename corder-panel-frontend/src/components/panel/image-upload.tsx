@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from "react"
 import { Upload, Loader2 } from "lucide-react"
 import { resolveAssetUrl } from "@/lib/format"
+import { optimizeImageForUpload } from "@/lib/api/catalog.api"
 
 interface ImageUploadProps {
   value: string
@@ -40,16 +41,23 @@ export default function ImageUpload({ value, onChange, label, placeholder, requi
         })
       return
     }
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      onChange((e.target?.result as string) ?? "")
-      setIsLoading(false)
-    }
-    reader.onerror = () => {
-      setError("Dosya okunamadı")
-      setIsLoading(false)
-    }
-    reader.readAsDataURL(file)
+    optimizeImageForUpload(file, { maxWidth: 1200, maxHeight: 1200, quality: 0.82 })
+      .then((optimized) => {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          onChange((e.target?.result as string) ?? "")
+          setIsLoading(false)
+        }
+        reader.onerror = () => {
+          setError("Dosya okunamadı")
+          setIsLoading(false)
+        }
+        reader.readAsDataURL(optimized)
+      })
+      .catch(() => {
+        setError("Dosya işlenemedi")
+        setIsLoading(false)
+      })
   }, [onChange, onUpload])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
