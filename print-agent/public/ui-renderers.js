@@ -180,7 +180,7 @@ function renderPrinters() {
       const isNet = p.mode === "network"
       const label = printerLabel(p)
       const hardware = isNet
-        ? `${p.host || "?"}:${p.port || 9100}${p.mac ? ` · MAC: ${p.mac} (Otomatik IP Takibi)` : ""}`
+        ? `${p.host || "?"}:${p.port || 9100}`
         : p.systemPrinterName || p.name || "-"
       const nextW = Number(p.paperWidth) === 58 ? 80 : 58
       return `<div class="printer-item">
