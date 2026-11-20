@@ -98,12 +98,25 @@ function startAgent({ config: initialConfig, store, printer, onContextInvalidate
     }
   }
 
-  const enqueueKitchenJobsFromPayload = (payload) => {
-    const base = normalizeOrderCreated(payload, config.restaurantId)
-    if (base) enqueueJobs(expandKitchenPrintJobs(base, config))
+  const isStaleBacklogJob = (evt) => {
+    if (!evt || evt.isReprint) return false
+    const ts = evt.createdAt ? Date.parse(evt.createdAt) : NaN
+    if (!Number.isFinite(ts)) return false
+    return Date.now() - ts > 3 * 60 * 1000
   }
 
-  const enqueueOrderPrintJobsFromPayload = (payload) => {
+  const enqueueKitchenJobsFromPayload = (payload, fromHttpPoll = false) => {
+    const base = normalizeOrderCreated(payload, config.restaurantId)
+    if (!base) return
+    const expanded = expandKitchenPrintJobs(base, config)
+    if (fromHttpPoll && isStaleBacklogJob(base)) {
+      if (expanded.length) settleJobsAsSkipped(expanded)
+      return
+    }
+    enqueueJobs(expanded)
+  }
+
+  const enqueueOrderPrintJobsFromPayload = (payload, fromHttpPoll = false) => {
     const evt = normalizePrintJob(payload, config.restaurantId)
     if (!evt) return
     if (evt.emptyJobId) {
@@ -117,7 +130,12 @@ function startAgent({ config: initialConfig, store, printer, onContextInvalidate
       }
       return
     }
-    enqueueJobs(expandOrderPrintJob(evt, config))
+    const expanded = expandOrderPrintJob(evt, config)
+    if (fromHttpPoll && isStaleBacklogJob(evt)) {
+      if (expanded.length) settleJobsAsSkipped(expanded)
+      return
+    }
+    enqueueJobs(expanded)
   }
 
   const drainQueue = async () => {
@@ -203,8 +221,12 @@ function startAgent({ config: initialConfig, store, printer, onContextInvalidate
       return
     }
     statusState.lastHttpSyncAt = new Date().toISOString()
-    void fetchPendingKitchenOrders(config).then((list) => list.forEach(enqueueKitchenJobsFromPayload))
-    void fetchPendingPrintJobs(config).then((list) => list.forEach(enqueueOrderPrintJobsFromPayload))
+    void fetchPendingKitchenOrders(config).then((list) =>
+      list.forEach((p) => enqueueKitchenJobsFromPayload(p, true)),
+    )
+    void fetchPendingPrintJobs(config).then((list) =>
+      list.forEach((p) => enqueueOrderPrintJobsFromPayload(p, true)),
+    )
   }
 
   const scheduleReconnect = (delayMs = 3000) => {

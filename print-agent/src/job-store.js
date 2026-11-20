@@ -5,6 +5,7 @@ const MAX_PRINTED_ENTRIES = 2000
 const MAX_PRINTED_AGE_MS = 24 * 60 * 60 * 1000
 const MAX_QUEUE_ENTRIES = 500
 const MAX_ACKED_ENTRIES = 1000
+const MAX_AUTO_RETRIES = 2
 
 function ensureDir(filePath) {
   const dir = path.dirname(filePath)
@@ -175,13 +176,19 @@ class JobStore {
 
   peekReady(limit = 20) {
     const now = Date.now()
-    return this.state.queue.filter((item) => (item.nextAttemptAt || 0) <= now).slice(0, limit)
+    return this.state.queue
+      .filter(
+        (item) =>
+          (item.retryCount || 0) <= MAX_AUTO_RETRIES && (item.nextAttemptAt || 0) <= now,
+      )
+      .slice(0, limit)
   }
 
   resetRetryTimers() {
     if (!this.state.queue.length) return
     const now = Date.now()
     for (const item of this.state.queue) {
+      item.retryCount = 0
       item.nextAttemptAt = now
     }
     this.save()

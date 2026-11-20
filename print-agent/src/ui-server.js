@@ -307,7 +307,11 @@ function createUiServer({ store, agent }) {
         if (idx >= 0) printers[idx] = entry
         else printers.push(entry)
 
+        const hadNoPrinters = current.printers.length === 0
         const { settings, publicSettings, runtimeConfig } = applyAndReload({ printers })
+        if (hadNoPrinters && typeof agent.clearPendingQueue === "function") {
+          await agent.clearPendingQueue()
+        }
         void pushPrintersToBackend(runtimeConfig, settings)
         info("Printer saved", { id: entry.id, name: entry.name, mode: entry.mode })
         return { statusCode: 200, payload: { ok: true, printer: entry, settings: publicSettings } }
