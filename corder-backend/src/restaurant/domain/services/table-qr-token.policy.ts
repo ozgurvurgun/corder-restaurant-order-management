@@ -14,29 +14,29 @@ export class TableQrTokenPolicy {
     return 'corder-table-qr-secret';
   }
 
-  static generateToken(restaurantId: string, tableNameOrKey: string): string {
-    const canonicalTableKey = normalizeStorageText(tableNameOrKey);
+  static generateToken(restaurantId: string, tableName: string): string {
+    const canonicalTableName = normalizeStorageText(tableName);
     return createHmac('sha256', TableQrTokenPolicy.getSecret())
-      .update(`table-qr:${restaurantId}:${canonicalTableKey}`)
+      .update(`table-qr:${restaurantId}:${canonicalTableName}`)
       .digest('base64url')
       .slice(0, 16);
   }
 
   static verifyToken(
     restaurantId: string,
-    tableNameOrKey: string,
+    tableName: string,
     candidate: string | undefined | null,
   ): boolean {
     const clean = (candidate ?? '').trim();
     if (!clean || clean.length !== 16) return false;
-    const expected = TableQrTokenPolicy.generateToken(restaurantId, tableNameOrKey);
+    const expected = TableQrTokenPolicy.generateToken(restaurantId, tableName);
     const a = Buffer.from(clean, 'utf8');
     const b = Buffer.from(expected, 'utf8');
     if (a.length !== b.length) return false;
     return timingSafeEqual(a, b);
   }
 
-  static findMatchingTable<T extends { id?: string; name?: string }>(
+  static findMatchingTable<T extends { name: string }>(
     restaurantId: string,
     token: string | undefined | null,
     tables: T[],
@@ -44,8 +44,7 @@ export class TableQrTokenPolicy {
     const clean = (token ?? '').trim();
     if (!clean) return null;
     for (const table of tables) {
-      const key = table.name ?? table.id ?? '';
-      if (key && TableQrTokenPolicy.verifyToken(restaurantId, key, clean)) {
+      if (TableQrTokenPolicy.verifyToken(restaurantId, table.name, clean)) {
         return table;
       }
     }
