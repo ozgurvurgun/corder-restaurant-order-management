@@ -7,7 +7,6 @@ import {
   formatMoney,
   getWaiterDisplayName,
 } from "@/lib/format"
-import { formatCloudflareImageUrl } from "@/lib/image"
 import { LiveTableDetailSheet } from "./live-table-detail-sheet"
 import { CustomSelect } from "./ui/custom-inputs"
 import { PaginationBar } from "./ui/pagination-bar"
@@ -285,28 +284,17 @@ export function OperationsCatalogTab() {
           <div className="divide-y divide-[#f0f0f0]">
             {pagedProducts.map((p) => {
               const catName = categoryNameById.get(p.categoryId)
-              const transformedImageUrl = formatCloudflareImageUrl(p.imageUrl, {
-                width: 96,
-                height: 96,
-                fit: "cover",
-                quality: 82,
-              })
               return (
                 <div
                   key={p.id}
                   className="flex items-center justify-between gap-3 py-3"
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
-                    {transformedImageUrl && p.imageUrl ? (
+                    {p.imageUrl ? (
                       <img
-                        src={transformedImageUrl}
+                        src={p.imageUrl}
                         alt={p.name}
                         loading="lazy"
-                        onError={(e) => {
-                          if (p.imageUrl && e.currentTarget.src !== p.imageUrl) {
-                            e.currentTarget.src = p.imageUrl
-                          }
-                        }}
                         className="h-11 w-11 flex-shrink-0 rounded-xl object-cover border border-[#e5e5ea] bg-[#f5f5f7]"
                       />
                     ) : (

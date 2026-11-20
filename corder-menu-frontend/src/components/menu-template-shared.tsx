@@ -1,6 +1,5 @@
 import { useState } from "react"
 import {
-  applyCfImageFallback,
   formatMenuPrice,
   resolveImageUrl,
   type MenuCampaign,
@@ -307,7 +306,7 @@ export function ActiveCampaignsShowcaseStrip(props: {
       <div className="overflow-x-auto scrollbar-hide">
         <div className="flex gap-3 px-5">
           {campaigns.map((camp, idx) => {
-            const imgUrl = resolveImageUrl(camp.imageUrl, { width: 420 })
+            const imgUrl = resolveImageUrl(camp.imageUrl)
             const hasDiscountPrice = camp.discountedPrice != null && camp.discountedPrice >= 0
             const hasOrigPrice = camp.originalPrice != null && camp.originalPrice > 0
             return (
@@ -328,10 +327,8 @@ export function ActiveCampaignsShowcaseStrip(props: {
                       alt={camp.title}
                       loading="lazy"
                       decoding="async"
-                      onError={(e) =>
-                        applyCfImageFallback(e.currentTarget, () =>
-                          setFailedImgs((prev) => ({ ...prev, [camp.id]: true }))
-                        )
+                      onError={() =>
+                        setFailedImgs((prev) => ({ ...prev, [camp.id]: true }))
                       }
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />

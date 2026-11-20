@@ -13,10 +13,11 @@ import dataSource from '../src/data-source';
 import * as crypto from 'node:crypto';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
+import { WebPushService } from '../src/restaurant/application/web-push.service';
 import {
+  encryptWebPushPayload,
   isAllowedWebPushEndpoint,
-  WebPushService,
-} from '../src/restaurant/application/web-push.service';
+} from '../src/restaurant/domain/services/web-push.policy';
 import {
   SubscribeWebPushDto,
   UnsubscribeWebPushDto,
@@ -278,7 +279,7 @@ describe('WebPushService, DTO validation & CompletedOrderEditLogPolicy', () => {
     );
     assert.equal(blockedSsrf, false);
 
-    const encrypted = svc.encryptPayload(p256dh, auth, '{"title":"Test"}');
+    const encrypted = encryptWebPushPayload(p256dh, auth, '{"title":"Test"}');
     assert.ok(encrypted.length > 86);
     assert.equal(encrypted[20], 65);
 

@@ -6,7 +6,6 @@ import {
   isValidMenuTemplateId,
   MenuFetchError,
   resolveImageUrl,
-  resolveMenuImageUrl,
   type MenuErrorKind,
   type MenuResponse,
   type MenuTemplateId,
@@ -232,7 +231,7 @@ export function MenuContent({
 
   const business = data
   const rawLogoUrl = business.logoUrl ?? business.logo ?? business.restaurant?.logoUrl ?? null
-  const logoUrl = resolveMenuImageUrl(rawLogoUrl, { width: 120 })
+  const logoUrl = resolveImageUrl(rawLogoUrl)
   const verifiedTable =
     tableToken &&
     business.tableContext?.tableId &&

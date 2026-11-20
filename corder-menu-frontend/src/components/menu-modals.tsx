@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { MapPin, Phone, Search, X, Instagram, MessageCircle, Globe } from "lucide-react"
-import { applyCfImageFallback, type MenuProduct, type MenuResponse } from "@/lib/api"
+import { type MenuProduct, type MenuResponse } from "@/lib/api"
 import type { MenuWidgetTheme } from "./waiter-call-modal"
 import { ProductMetaTags } from "./menu-template-shared"
 
@@ -312,10 +312,7 @@ export function MenuSearchOverlay(props: {
                         loading="lazy"
                         decoding="async"
                         onError={(e) => {
-                          const el = e.currentTarget
-                          applyCfImageFallback(el, () => {
-                            el.style.display = "none"
-                          })
+                          e.currentTarget.style.display = "none"
                         }}
                         className="w-14 h-14 rounded-xl object-cover bg-stone-200/50 flex-shrink-0"
                       />
@@ -375,7 +372,7 @@ export function ProductDetailModal(props: {
               src={product.image}
               alt={product.name}
               decoding="async"
-              onError={(e) => applyCfImageFallback(e.currentTarget, () => setImgFailed(true))}
+              onError={() => setImgFailed(true)}
               className="w-full h-full object-cover"
             />
           </div>

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react"
 import { ChevronLeft, ShoppingCart, Search, X, Utensils, AlertTriangle } from "lucide-react"
 import { useApp } from "@/lib/store"
-import { applyCfImageFallback, formatCurrency, resolveImageUrl } from "@/lib/format"
+import { formatCurrency, resolveImageUrl } from "@/lib/format"
 import { useToast } from "@/components/ios-toast"
 import type { TerminalCategory, TerminalProduct } from "@/lib/types"
 
@@ -87,7 +87,7 @@ function ProductCard({
             alt={product.name}
             loading="lazy"
             decoding="async"
-            onError={(e) => applyCfImageFallback(e.currentTarget, () => setImgFailed(true))}
+            onError={() => setImgFailed(true)}
             className="w-full h-full object-cover"
           />
         ) : (

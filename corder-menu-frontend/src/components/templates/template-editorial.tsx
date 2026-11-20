@@ -1,7 +1,6 @@
 import { useState } from "react"
 import { Clock, MapPin, Search } from "lucide-react"
 import {
-  applyCfImageFallback,
   formatMenuPrice,
   resolveImageUrl,
   type MenuCategory,
@@ -20,10 +19,10 @@ function EditorialProductRow(props: {
 }) {
   const { product, onSelect } = props
   const [imgFailed, setImgFailed] = useState(false)
-  const resolvedImage = resolveImageUrl(product.imageUrl, { width: 180 })
+  const resolvedImage = resolveImageUrl(product.imageUrl)
   const display: ProductDisplay = {
     ...product,
-    image: imgFailed ? undefined : resolveImageUrl(product.imageUrl),
+    image: imgFailed ? undefined : resolvedImage,
   }
 
   return (
@@ -46,7 +45,7 @@ function EditorialProductRow(props: {
               alt={product.name}
               loading="lazy"
               decoding="async"
-              onError={(e) => applyCfImageFallback(e.currentTarget, () => setImgFailed(true))}
+              onError={() => setImgFailed(true)}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
           </div>
@@ -155,7 +154,7 @@ export function EditorialMenuTemplate(props: MenuTemplateProps) {
                 <img
                   src={logoUrl}
                   alt={business.name}
-                  onError={(e) => applyCfImageFallback(e.currentTarget, onLogoError)}
+                  onError={onLogoError}
                   className="w-full h-full object-cover"
                 />
               ) : (

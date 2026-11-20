@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { X, ChevronLeft, ChevronRight } from "lucide-react"
-import { applyCfImageFallback, resolveImageUrl, type MenuCampaign } from "@/lib/api"
+import { resolveImageUrl, type MenuCampaign } from "@/lib/api"
 
 export function CampaignsModal(props: {
   campaigns: MenuCampaign[]
@@ -50,11 +50,8 @@ export function CampaignsModal(props: {
                     alt={campaign.title}
                     loading="lazy"
                     decoding="async"
-                    onError={(e) => {
-                      const el = e.currentTarget
-                      applyCfImageFallback(el, () => {
-                        setFailedImages((prev) => ({ ...prev, [campaign.id]: true }))
-                      })
+                    onError={() => {
+                      setFailedImages((prev) => ({ ...prev, [campaign.id]: true }))
                     }}
                     className="w-full h-full object-cover"
                   />
@@ -79,11 +76,8 @@ export function CampaignsModal(props: {
                 src={currentImgUrl}
                 alt={currentCampaign.title}
                 decoding="async"
-                onError={(e) => {
-                  const el = e.currentTarget
-                  applyCfImageFallback(el, () => {
-                    setFailedImages((prev) => ({ ...prev, [currentCampaign.id]: true }))
-                  })
+                onError={() => {
+                  setFailedImages((prev) => ({ ...prev, [currentCampaign.id]: true }))
                 }}
                 className="w-full h-full object-cover"
               />

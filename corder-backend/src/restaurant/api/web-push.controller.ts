@@ -10,10 +10,7 @@ import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
 import { RestaurantId } from '../infrastructure/restaurant-id.decorator';
 import { RestaurantUser } from '../infrastructure/restaurant-user.decorator';
 import { WebPushAppType } from '../domain/web-push-subscription.entity';
-import {
-  WebPushService,
-  WebPushSubscriptionInput,
-} from '../application/web-push.service';
+import { WebPushService } from '../application/web-push.service';
 import {
   SubscribeWebPushDto,
   UnsubscribeWebPushDto,
@@ -56,10 +53,6 @@ export class WebPushController {
       throw new ForbiddenException('Unauthorized push subscription');
     }
     const appType = this.resolveAppType(dto?.appType, user.role);
-    const sub: WebPushSubscriptionInput = dto?.subscription ?? {
-      endpoint: dto?.endpoint,
-      keys: dto?.keys,
-    };
     const rootAdminId =
       user.role === 'root' && typeof user.id === 'string' && user.id.trim()
         ? user.id.trim()
@@ -67,7 +60,7 @@ export class WebPushController {
     const ok = await this.webPushService.saveSubscription(
       restaurantId,
       appType,
-      sub,
+      dto.subscription,
       rootAdminId,
     );
     return { ok };

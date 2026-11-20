@@ -16,7 +16,6 @@ import {
 } from '../domain/services/web-push.policy';
 
 export {
-  isAllowedWebPushEndpoint,
   type WebPushAppType,
   type WebPushNotificationPayload,
   type WebPushSubscriptionInput,
@@ -175,10 +174,6 @@ export class WebPushService implements OnModuleInit {
         // Ignore DB cleanup errors
       }
     }
-  }
-
-  encryptPayload(p256dh: string, auth: string, payloadText: string): Buffer {
-    return encryptWebPushPayload(p256dh, auth, payloadText);
   }
 
   private async queryTargetSubscriptions(

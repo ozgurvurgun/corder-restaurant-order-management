@@ -115,11 +115,6 @@ export class MenuFetchError extends Error {
   }
 }
 
-export interface ImageTransformOptions {
-  width?: number
-  quality?: number
-}
-
 const CACHE_PREFIX = "corder_menu_cache_v4:"
 const CACHE_TTL_MS = 60_000
 const memoryCache = new Map<string, { timestamp: number; data: MenuResponse }>()
@@ -159,68 +154,25 @@ function writeCachedMenu(cacheKey: string, data: MenuResponse) {
   }
 }
 
-export function stripCfImageTransform(url: string): string {
-  return url.replace(/\/cdn-cgi\/image\/[^/]+\//, "/")
-}
-
-export function applyCfImageFallback(
-  img: HTMLImageElement,
-  onFinalError?: () => void
-): void {
-  if (img.dataset.cfFallbackSrc !== img.src && img.src.includes("/cdn-cgi/image/")) {
-    const stripped = stripCfImageTransform(img.src)
-    img.dataset.cfFallbackSrc = stripped
-    img.src = stripped
-    return
-  }
-  onFinalError?.()
-}
-
-export function resolveAssetUrl(
-  url: string | null | undefined,
-  options?: ImageTransformOptions
-): string | undefined {
+export function resolveAssetUrl(url: string | null | undefined): string | undefined {
   if (!url) return undefined
   const trimmed = url.trim()
   if (!trimmed) return undefined
-  if (trimmed.startsWith("data:") || trimmed.startsWith("blob:")) return trimmed
-
-  let resolved = trimmed
-  if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
-    const base = getBase()
-    const path = trimmed.startsWith("/") ? trimmed : `/${trimmed}`
-    resolved = base ? `${base.replace(/\/$/, "")}${path}` : path
+  if (
+    trimmed.startsWith("data:") ||
+    trimmed.startsWith("blob:") ||
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://")
+  ) {
+    return trimmed
   }
 
-  if (options?.width && resolved.startsWith("https://")) {
-    try {
-      const parsed = new URL(resolved)
-      const host = parsed.hostname.toLowerCase()
-      const isDirectStorageOrLocal =
-        host === "localhost" ||
-        host === "127.0.0.1" ||
-        host.endsWith(".local") ||
-        host.endsWith(".r2.dev") ||
-        host.endsWith(".r2.cloudflarestorage.com") ||
-        /^\d+\.\d+\.\d+\.\d+$/.test(host)
-      if (!isDirectStorageOrLocal && !parsed.pathname.startsWith("/cdn-cgi/image/")) {
-        const width = options.width
-        const quality = options.quality ?? 82
-        const cleanPath = parsed.pathname.replace(/^\/+/, "")
-        if (cleanPath) {
-          parsed.pathname = `/cdn-cgi/image/width=${width},quality=${quality},format=auto/${cleanPath}`
-          return parsed.toString()
-        }
-      }
-    } catch {
-      return resolved
-    }
-  }
-  return resolved
+  const base = getBase()
+  const path = trimmed.startsWith("/") ? trimmed : `/${trimmed}`
+  return base ? `${base.replace(/\/$/, "")}${path}` : path
 }
 
 export const resolveImageUrl = resolveAssetUrl
-export const resolveMenuImageUrl = resolveAssetUrl
 
 export function isCampaignCurrentlyValid(campaign: MenuCampaign): boolean {
   if (!campaign || campaign.isActive === false) return false

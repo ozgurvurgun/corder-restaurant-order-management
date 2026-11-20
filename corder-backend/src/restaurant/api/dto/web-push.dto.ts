@@ -40,22 +40,10 @@ export class SubscribeWebPushDto {
   @IsIn(['terminal', 'merchant', 'boss'])
   appType?: WebPushAppType;
 
-  @IsOptional()
   @IsObject()
   @ValidateNested()
   @Type(() => WebPushSubscriptionPayloadDto)
-  subscription?: WebPushSubscriptionPayloadDto;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(2048)
-  endpoint?: string;
-
-  @IsOptional()
-  @IsObject()
-  @ValidateNested()
-  @Type(() => WebPushKeysDto)
-  keys?: WebPushKeysDto;
+  subscription!: WebPushSubscriptionPayloadDto;
 }
 
 export class UnsubscribeWebPushDto {
