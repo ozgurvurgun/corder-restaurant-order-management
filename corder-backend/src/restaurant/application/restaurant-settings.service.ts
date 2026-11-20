@@ -14,6 +14,7 @@ import {
   toPaymentRecordDto,
 } from '../../platform/domain/subscription-billing.policy';
 import { OrdersGateway } from '../api/orders.gateway';
+import { normalizeStorageText } from '../../common/text/text-normalizer';
 
 export interface RestaurantSettingsDto {
   name: string;
@@ -209,7 +210,7 @@ export class RestaurantSettingsService {
       throw new NotFoundException('Restaurant not found');
     }
     if (dto.name !== undefined) {
-      const name = dto.name.trim();
+      const name = normalizeStorageText(dto.name);
       if (!name) throw new BadRequestException('Restaurant name cannot be empty');
       r.name = name;
     }

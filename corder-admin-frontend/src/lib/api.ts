@@ -1,27 +1,14 @@
 import type {
-  BossDto,
-  BossTier,
-  CreatePlatformNotificationPayload,
-  PlatformBillingConfig,
-  PlatformNotificationDto,
-  PlatformRestaurantDto,
-  RecordPaymentPayload,
-  RestaurantBranchType,
-  RestaurantDiagnosticsDto,
-  RestaurantSupportActionBody,
-  SubscriptionPaymentMethod,
-  UpdatePaymentPayload,
+  BossDto, BossTier, CreatePlatformNotificationPayload, PlatformBillingConfig,
+  PlatformNotificationDto, PlatformRestaurantDto, RecordPaymentPayload,
+  RestaurantBranchType, RestaurantDiagnosticsDto, RestaurantSupportActionBody,
+  SubscriptionPaymentMethod, UpdatePaymentPayload,
 } from "./types"
+import { formatTitleCase } from "./restaurant-mapper"
 
 export type {
-  BossDto,
-  CreatePlatformNotificationPayload,
-  PlatformNotificationDto,
-  PlatformRestaurantDto,
-  RecordPaymentPayload,
-  RestaurantDiagnosticsDto,
-  RestaurantSupportActionBody,
-  UpdatePaymentPayload,
+  BossDto, CreatePlatformNotificationPayload, PlatformNotificationDto, PlatformRestaurantDto,
+  RecordPaymentPayload, RestaurantDiagnosticsDto, RestaurantSupportActionBody, UpdatePaymentPayload,
 }
 
 const RAW_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:4000"
@@ -167,11 +154,18 @@ export async function getRestaurantDiagnostics(
   const hasExplicitToken = typeof maybeRestaurantId === "string"
   const token = hasExplicitToken ? tokenOrRestaurantId : undefined
   const restaurantId = hasExplicitToken ? maybeRestaurantId : tokenOrRestaurantId
-  return platformFetch<RestaurantDiagnosticsDto>(
+  const d = await platformFetch<RestaurantDiagnosticsDto>(
     `/platform/restaurants/${restaurantId}/diagnostics`,
     { method: "GET" },
     token
   )
+  return {
+    ...d,
+    restaurant: { ...d.restaurant, name: formatTitleCase(d.restaurant.name), brandName: d.restaurant.brandName ? formatTitleCase(d.restaurant.brandName) : null },
+    openShift: d.openShift ? { ...d.openShift, openedBy: formatTitleCase(d.openShift.openedBy) } : null,
+    printers: (d.printers ?? []).map((p) => ({ ...p, name: formatTitleCase(p.name), department: p.department ? formatTitleCase(p.department) : null })),
+    staffMembers: (d.staffMembers ?? []).map((s) => ({ ...s, name: formatTitleCase(s.name) })),
+  }
 }
 
 export async function runRestaurantSupportAction(

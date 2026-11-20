@@ -9,6 +9,7 @@ import { OrdersGateway } from '../../api/orders.gateway';
 import { CashShiftService } from '../cash-shift.service';
 import { TableService } from '../table.service';
 import { OrderQueryService } from './order-query.service';
+import { normalizeStorageText } from '../../../common/text/text-normalizer';
 
 export interface MoveItemsToTableInput {
   fromTableId: string;
@@ -361,9 +362,9 @@ export class TransferOrderUseCase {
           restaurantId,
           tableId: toTableId,
           userId: newUserId,
-          userDisplayName: moverName,
+          userDisplayName: moverName ? normalizeStorageText(moverName) : null,
           status: 'active',
-          mergedFrom: (fromTable.name ?? '').trim() || fromTableId,
+          mergedFrom: normalizeStorageText(fromTable.name ?? '') || fromTableId,
           kitchenTicketPrintedAt: affectedOrders.every((o) => o.kitchenTicketPrintedAt != null)
             ? now
             : null,

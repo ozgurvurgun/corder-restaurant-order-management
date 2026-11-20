@@ -2,6 +2,32 @@ import type { BossTier, Restaurant, RootAdmin } from "./types"
 import type { BossDto, PlatformRestaurantDto } from "./api"
 import { fromMinorUnits, toMinorUnits } from "./money"
 
+const TURKIC_CHAR_RE = /[çğıöşüÇĞİÖŞÜ]/u
+
+function resolveCasingLocale(text: string, explicitLocale?: string): string | undefined {
+  if (explicitLocale) return explicitLocale
+  if (TURKIC_CHAR_RE.test(text)) return "tr"
+  return undefined
+}
+
+export function formatTitleCase(
+  input: string | null | undefined,
+  locale?: string,
+): string {
+  if (!input) return ""
+  const raw = String(input).trim().replace(/\s+/g, " ")
+  if (!raw) return ""
+  const resolvedLocale = resolveCasingLocale(raw, locale)
+  const lower = (
+    resolvedLocale ? raw.toLocaleLowerCase(resolvedLocale) : raw.toLowerCase()
+  ).replace(/\u0307/g, "")
+  return lower.replace(
+    /([^\p{L}']|^)(\p{L})/gu,
+    (_match, prefix: string, letter: string) =>
+      `${prefix}${resolvedLocale ? letter.toLocaleUpperCase(resolvedLocale) : letter.toUpperCase()}`,
+  )
+}
+
 export interface BossMutationBody {
   name?: string
   email?: string
@@ -16,7 +42,7 @@ export interface BossMutationBody {
 export function toRestaurant(r: PlatformRestaurantDto): Restaurant {
   return {
     id: r.id,
-    name: r.name,
+    name: formatTitleCase(r.name),
     slug: r.slug,
     address: r.address ?? undefined,
     phone: r.phone ?? undefined,
@@ -28,9 +54,11 @@ export function toRestaurant(r: PlatformRestaurantDto): Restaurant {
     website: r.website ?? null,
     workingHours: r.workingHours ?? null,
     status: r.status === "inactive" ? "inactive" : "active",
-    brandName: r.brandName ?? null,
+    brandName: r.brandName ? formatTitleCase(r.brandName) : null,
     branchType: r.branchType ?? "independent",
-    franchiseeCompanyName: r.franchiseeCompanyName ?? null,
+    franchiseeCompanyName: r.franchiseeCompanyName
+      ? formatTitleCase(r.franchiseeCompanyName)
+      : null,
     royaltyRate: Number(r.royaltyRate ?? 0),
     monthlyFee: fromMinorUnits(toMinorUnits(r.monthlyFee ?? 0)),
     billingStartPeriod: r.billingStartPeriod,
@@ -59,7 +87,10 @@ export function toRestaurant(r: PlatformRestaurantDto): Restaurant {
       paymentMethod: p.paymentMethod || "bank_transfer",
       amount: fromMinorUnits(toMinorUnits(p.amount)),
     })),
-    bosses: r.bosses ?? [],
+    bosses: (r.bosses ?? []).map((b) => ({
+      ...b,
+      name: formatTitleCase(b.name),
+    })),
     createdAt:
       typeof r.createdAt === "string"
         ? r.createdAt
@@ -75,12 +106,16 @@ export function toRootAdmin(a: BossDto): RootAdmin {
     id: a.id,
     restaurantId: a.restaurantId ?? null,
     email: a.email,
-    name: a.name,
+    name: formatTitleCase(a.name),
     phone: a.phone ?? null,
     bossTier: a.bossTier ?? "franchise_owner",
-    brandName: a.brandName ?? null,
+    brandName: a.brandName ? formatTitleCase(a.brandName) : null,
     isActive: a.isActive ?? true,
-    restaurants: a.restaurants ?? [],
+    restaurants: (a.restaurants ?? []).map((rest) => ({
+      ...rest,
+      name: formatTitleCase(rest.name),
+      brandName: rest.brandName ? formatTitleCase(rest.brandName) : null,
+    })),
     createdAt:
       typeof a.createdAt === "string"
         ? a.createdAt

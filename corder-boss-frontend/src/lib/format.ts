@@ -1,4 +1,11 @@
-import type { LiveOrderDto, TableDiscountDto } from "./types"
+import type {
+  BossOverviewResponse,
+  BranchSummary,
+  LiveOrderDto,
+  LiveTableDto,
+  SubBossItemDto,
+  TableDiscountDto,
+} from "./types"
 
 const ISTANBUL_TZ = "Europe/Istanbul"
 
@@ -159,6 +166,87 @@ export function formatTitleCase(
 export function getWaiterDisplayName(order: LiveOrderDto): string | null {
   const name = (order.userName ?? "").trim()
   return name ? formatTitleCase(name) : null
+}
+
+export function normalizeBossBranch(b: BranchSummary): BranchSummary {
+  return {
+    ...b,
+    name: formatTitleCase(b.name),
+    brandName: b.brandName ? formatTitleCase(b.brandName) : b.brandName,
+  }
+}
+
+export function normalizeBossTable(t: LiveTableDto): LiveTableDto {
+  return {
+    ...t,
+    name: formatTitleCase(t.name),
+    section: formatTitleCase(t.section),
+    sessionStaffName: t.sessionStaffName ? formatTitleCase(t.sessionStaffName) : t.sessionStaffName,
+  }
+}
+
+export function normalizeBossSubBoss(sb: SubBossItemDto): SubBossItemDto {
+  return {
+    ...sb,
+    name: formatTitleCase(sb.name),
+    brandName: sb.brandName ? formatTitleCase(sb.brandName) : sb.brandName,
+    branches: (sb.branches ?? []).map((br) => ({
+      ...br,
+      name: formatTitleCase(br.name),
+    })),
+  }
+}
+
+export function normalizeBossOverview(ov: BossOverviewResponse): BossOverviewResponse {
+  return {
+    ...ov,
+    allOwnedBranches: ov.allOwnedBranches
+      ? ov.allOwnedBranches.map((b) => ({
+          ...b,
+          name: formatTitleCase(b.name),
+          brandName: b.brandName ? formatTitleCase(b.brandName) : b.brandName,
+          franchiseeCompanyName: b.franchiseeCompanyName
+            ? formatTitleCase(b.franchiseeCompanyName)
+            : b.franchiseeCompanyName,
+        }))
+      : ov.allOwnedBranches,
+    branches: (ov.branches ?? []).map((b) => ({
+      ...b,
+      name: formatTitleCase(b.name),
+      brandName: b.brandName ? formatTitleCase(b.brandName) : b.brandName,
+      franchiseeCompanyName: b.franchiseeCompanyName
+        ? formatTitleCase(b.franchiseeCompanyName)
+        : b.franchiseeCompanyName,
+    })),
+    categoryBreakdown: (ov.categoryBreakdown ?? []).map((c) => ({
+      ...c,
+      categoryName: formatTitleCase(c.categoryName),
+    })),
+    topProducts: (ov.topProducts ?? []).map((p) => ({
+      ...p,
+      productName: formatTitleCase(p.productName),
+    })),
+    waiterPerformance: (ov.waiterPerformance ?? []).map((w) => ({
+      ...w,
+      waiterName: formatTitleCase(w.waiterName),
+    })),
+    shiftSummaries: (ov.shiftSummaries ?? []).map((s) => ({
+      ...s,
+      branchName: formatTitleCase(s.branchName),
+      openedBy: formatTitleCase(s.openedBy),
+      closedBy: s.closedBy ? formatTitleCase(s.closedBy) : s.closedBy,
+    })),
+    criticalMaterials: (ov.criticalMaterials ?? []).map((m) => ({
+      ...m,
+      name: formatTitleCase(m.name),
+      branchName: formatTitleCase(m.branchName),
+    })),
+    recentAudits: (ov.recentAudits ?? []).map((a) => ({
+      ...a,
+      userName: formatTitleCase(a.userName),
+      branchName: formatTitleCase(a.branchName),
+    })),
+  }
 }
 
 const ERROR_TRANSLATIONS: Array<[RegExp, string | ((m: RegExpMatchArray) => string)]> = [

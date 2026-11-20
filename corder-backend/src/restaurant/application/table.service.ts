@@ -18,6 +18,7 @@ import { TableQrTokenPolicy } from '../domain/services/table-qr-token.policy';
 import { BulkCreateTablesDto, CreateTableDto } from '../api/dto/create-table.dto';
 import { UpdateTableDto } from '../api/dto/update-table.dto';
 import { computeDiscountMinorUnits, toMinorUnits } from '../../common/money/minor-units';
+import { normalizeStorageText } from '../../common/text/text-normalizer';
 
 /** Grace period (ms) to automatically take over a stale lock after disconnect. */
 export const SESSION_LOCK_STALE_MS = 120_000;
@@ -154,11 +155,11 @@ export class TableService {
   }
 
   async create(restaurantId: string, dto: CreateTableDto): Promise<TableEntity> {
-    const name = (dto.name ?? '').trim();
+    const name = normalizeStorageText(dto.name ?? '');
     if (!name) {
       throw new BadRequestException('Table name is required');
     }
-    const section = (dto.section ?? 'default').trim() || 'default';
+    const section = normalizeStorageText(dto.section ?? 'default') || 'default';
     const entity = this.repo.create({
       restaurantId,
       name,
@@ -173,7 +174,7 @@ export class TableService {
     restaurantId: string,
     dto: BulkCreateTablesDto,
   ): Promise<TableEntity[]> {
-    const section = (dto.section ?? 'default').trim() || 'default';
+    const section = normalizeStorageText(dto.section ?? 'default') || 'default';
     const rawPrefix =
       dto.prefix !== undefined ? String(dto.prefix).replace(/^\s+/, '') : 'Masa ';
     const startNumber = Number.isFinite(Number(dto.startNumber))
@@ -189,7 +190,7 @@ export class TableService {
     const entities: TableEntity[] = [];
     for (let i = 0; i < count; i++) {
       const num = startNumber + i;
-      const name = `${rawPrefix}${num}`.trim() || `Masa ${num}`;
+      const name = normalizeStorageText(`${rawPrefix}${num}`) || `masa ${num}`;
       entities.push(
         this.repo.create({
           restaurantId,
@@ -219,12 +220,12 @@ export class TableService {
       if (!entity) throw new NotFoundException('Table not found');
 
       if (dto.name !== undefined) {
-        const trimmedName = dto.name.trim();
+        const trimmedName = normalizeStorageText(dto.name);
         if (!trimmedName) throw new BadRequestException('Table name cannot be empty');
         entity.name = trimmedName;
       }
       if (dto.section !== undefined) {
-        entity.section = dto.section.trim() || 'default';
+        entity.section = normalizeStorageText(dto.section) || 'default';
       }
       if (dto.discount !== undefined) {
         if (dto.discount !== null && actor && !actor.isBoss) {
@@ -384,7 +385,7 @@ export class TableService {
         const holderName = (table.sessionStaffName ?? 'Waiter').trim() || 'Waiter';
         return { ok: false, holderName };
       }
-      table.lockSession(staffId, staffName, now);
+      table.lockSession(staffId, normalizeStorageText(staffName) || 'waiter', now);
       await em.save(table);
       return { ok: true };
     });

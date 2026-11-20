@@ -15,6 +15,7 @@ import {
   type PrinterConfigDto,
 } from "../api"
 import { resolveStaffNameForTable } from "../mappers/orders-tables.mapper"
+import { formatTitleCase } from "../format"
 import { DEFAULT_SETTINGS } from "./panel-local-storage"
 
 export { usePanelApiSync } from "./use-panel-api-sync"
@@ -84,7 +85,7 @@ export function usePanelHydration(params: {
       .then((s) => {
         setSettings((prev) => ({
           ...prev,
-          name: s.name ?? prev.name,
+          name: s.name ? formatTitleCase(s.name) : prev.name,
           logoUrl: s.logoUrl !== undefined ? s.logoUrl : prev.logoUrl,
           address: s.address ?? undefined,
           phone: s.phone ?? undefined,
@@ -113,12 +114,12 @@ export function usePanelHydration(params: {
           setPrinters(
             prs.map((p) => ({
               id: p.id,
-              name: p.name,
+              name: formatTitleCase(p.name),
               type: p.type,
               connection: p.connection,
               ipAddress: p.ipAddress ?? undefined,
               port: p.port ?? undefined,
-              department: p.department ?? undefined,
+              department: p.department ? formatTitleCase(p.department) : undefined,
               status: p.status,
               paperWidth: p.paperWidth === 58 ? 58 : 80,
               autoCut: p.autoCut,
@@ -139,7 +140,7 @@ export function usePanelHydration(params: {
           logs.map((l) => ({
             id: l.id,
             userId: l.userId,
-            userName: l.userName,
+            userName: formatTitleCase(l.userName),
             action: l.action,
             category: l.category as AuditLog["category"],
             details: l.details,
@@ -150,12 +151,12 @@ export function usePanelHydration(params: {
         setPrinters(
           prs.map((p) => ({
             id: p.id,
-            name: p.name,
+            name: formatTitleCase(p.name),
             type: p.type,
             connection: p.connection,
             ipAddress: p.ipAddress ?? undefined,
             port: p.port ?? undefined,
-            department: p.department ?? undefined,
+            department: p.department ? formatTitleCase(p.department) : undefined,
             status: p.status,
             paperWidth: p.paperWidth === 58 ? 58 : 80,
             autoCut: p.autoCut,

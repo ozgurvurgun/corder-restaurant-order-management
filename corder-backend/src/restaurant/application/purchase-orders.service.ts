@@ -12,6 +12,7 @@ import {
 import { StockMaterialEntity } from '../domain/stock-material.entity';
 import { SupplierEntity } from '../domain/supplier.entity';
 import { StockMovementsService } from './stock-movements.service';
+import { normalizeStorageText } from '../../common/text/text-normalizer';
 import {
   CreatePurchaseOrderDto,
   PurchaseOrderItemInputDto,
@@ -149,7 +150,7 @@ export class PurchaseOrdersService {
       totalAmount,
       status: dto.status ?? 'ordered',
       notes: dto.notes?.trim() || null,
-      createdBy: (dto.createdBy || '').trim() || 'System',
+      createdBy: normalizeStorageText(dto.createdBy || '') || 'system',
     });
     return this.repo.save(entity);
   }

@@ -120,7 +120,7 @@ export function usePanelSocket(params: {
           return {
             ...t,
             lockedByStaffId: hit?.staffId,
-            lockedByStaffName: hit?.staffName,
+            lockedByStaffName: hit?.staffName ? formatTitleCase(hit.staffName) : undefined,
           }
         }),
       )
@@ -140,8 +140,8 @@ export function usePanelSocket(params: {
     }) => {
       const prefs = getNotificationPrefs()
       if (!prefs.waiterCallEnabled) return
-      const tableName = payload.tableName || "Masa"
-      const sectionName = payload.sectionName || "Salon"
+      const tableName = payload.tableName ? formatTitleCase(payload.tableName) : "Masa"
+      const sectionName = payload.sectionName ? formatTitleCase(payload.sectionName) : "Salon"
       const isBill = payload.requestType === "bill"
       const title = `🔔 ${tableName} (${sectionName}) - ${isBill ? "Hesap İstiyor!" : "Garson Çağırıyor!"}`
       const message = payload.note
@@ -320,14 +320,15 @@ export function usePanelSocket(params: {
           const activeWaiterIds = new Set((state.waiterCalls ?? []).map((wc) => wc.id))
           const waiterNotifs: PanelNotification[] = (state.waiterCalls ?? []).map((wc) => {
             const isBill = wc.requestType === "bill"
-            const section = wc.sectionName || "Salon"
+            const tName = formatTitleCase(wc.tableName) || "Masa"
+            const section = wc.sectionName ? formatTitleCase(wc.sectionName) : "Salon"
             return {
               id: wc.id,
               type: "waiter-call" as const,
-              title: `🔔 ${wc.tableName} (${section}) - ${isBill ? "Hesap İstiyor!" : "Garson Çağırıyor!"}`,
+              title: `🔔 ${tName} (${section}) - ${isBill ? "Hesap İstiyor!" : "Garson Çağırıyor!"}`,
               message: wc.note
                 ? `Not: ${wc.note}`
-                : `${wc.tableName} masasından ${isBill ? "hesap talebi" : "garson çağrısı"} geldi.`,
+                : `${tName} masasından ${isBill ? "hesap talebi" : "garson çağrısı"} geldi.`,
               read: readIds.has(wc.id),
               createdAt: new Date(wc.createdAt),
             }

@@ -14,11 +14,26 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 1. Normalize root_admins, products, categories, restaurant_staff
-UPDATE root_admins SET name = pg_temp.tr_norm(name) WHERE name IS DISTINCT FROM pg_temp.tr_norm(name);
+-- 1. Normalize entity names, titles, sections, and actor display names across all tables
+UPDATE root_admins SET name = pg_temp.tr_norm(name), brand_name = CASE WHEN brand_name IS NOT NULL THEN pg_temp.tr_norm(brand_name) ELSE NULL END WHERE name IS DISTINCT FROM pg_temp.tr_norm(name) OR (brand_name IS NOT NULL AND brand_name IS DISTINCT FROM pg_temp.tr_norm(brand_name));
+UPDATE restaurants SET name = pg_temp.tr_norm(name), brand_name = CASE WHEN brand_name IS NOT NULL THEN pg_temp.tr_norm(brand_name) ELSE NULL END, franchisee_company_name = CASE WHEN franchisee_company_name IS NOT NULL THEN pg_temp.tr_norm(franchisee_company_name) ELSE NULL END WHERE name IS DISTINCT FROM pg_temp.tr_norm(name) OR (brand_name IS NOT NULL AND brand_name IS DISTINCT FROM pg_temp.tr_norm(brand_name)) OR (franchisee_company_name IS NOT NULL AND franchisee_company_name IS DISTINCT FROM pg_temp.tr_norm(franchisee_company_name));
+UPDATE tables SET name = pg_temp.tr_norm(name), section = pg_temp.tr_norm(section), session_staff_name = CASE WHEN session_staff_name IS NOT NULL THEN pg_temp.tr_norm(session_staff_name) ELSE NULL END WHERE name IS DISTINCT FROM pg_temp.tr_norm(name) OR section IS DISTINCT FROM pg_temp.tr_norm(section) OR (session_staff_name IS NOT NULL AND session_staff_name IS DISTINCT FROM pg_temp.tr_norm(session_staff_name));
 UPDATE products SET name = pg_temp.tr_norm(name) WHERE name IS DISTINCT FROM pg_temp.tr_norm(name);
 UPDATE categories SET name = pg_temp.tr_norm(name) WHERE name IS DISTINCT FROM pg_temp.tr_norm(name);
 UPDATE restaurant_staff SET name = pg_temp.tr_norm(name) WHERE name IS DISTINCT FROM pg_temp.tr_norm(name);
+UPDATE campaigns SET title = pg_temp.tr_norm(title) WHERE title IS DISTINCT FROM pg_temp.tr_norm(title);
+UPDATE stock_materials SET name = pg_temp.tr_norm(name) WHERE name IS DISTINCT FROM pg_temp.tr_norm(name);
+UPDATE suppliers SET name = pg_temp.tr_norm(name), contact_person = CASE WHEN contact_person IS NOT NULL THEN pg_temp.tr_norm(contact_person) ELSE NULL END WHERE name IS DISTINCT FROM pg_temp.tr_norm(name) OR (contact_person IS NOT NULL AND contact_person IS DISTINCT FROM pg_temp.tr_norm(contact_person));
+UPDATE ledger_customers SET name = pg_temp.tr_norm(name) WHERE name IS DISTINCT FROM pg_temp.tr_norm(name);
+UPDATE ledger_entries SET table_name = pg_temp.tr_norm(table_name) WHERE table_name IS NOT NULL AND table_name IS DISTINCT FROM pg_temp.tr_norm(table_name);
+UPDATE open_accounts SET customer_name = pg_temp.tr_norm(customer_name) WHERE customer_name IS DISTINCT FROM pg_temp.tr_norm(customer_name);
+UPDATE open_account_items SET product_name = pg_temp.tr_norm(product_name) WHERE product_name IS DISTINCT FROM pg_temp.tr_norm(product_name);
+UPDATE printers SET name = pg_temp.tr_norm(name), department = CASE WHEN department IS NOT NULL THEN pg_temp.tr_norm(department) ELSE NULL END WHERE name IS DISTINCT FROM pg_temp.tr_norm(name) OR (department IS NOT NULL AND department IS DISTINCT FROM pg_temp.tr_norm(department));
+UPDATE waiter_calls SET table_name = pg_temp.tr_norm(table_name), section_name = CASE WHEN section_name IS NOT NULL THEN pg_temp.tr_norm(section_name) ELSE NULL END WHERE table_name IS DISTINCT FROM pg_temp.tr_norm(table_name) OR (section_name IS NOT NULL AND section_name IS DISTINCT FROM pg_temp.tr_norm(section_name));
+UPDATE orders SET merged_from = pg_temp.tr_norm(merged_from) WHERE merged_from IS NOT NULL AND merged_from IS DISTINCT FROM pg_temp.tr_norm(merged_from);
+UPDATE stock_movements SET material_name = pg_temp.tr_norm(material_name) WHERE material_name IS DISTINCT FROM pg_temp.tr_norm(material_name);
+UPDATE purchase_orders SET supplier_name = pg_temp.tr_norm(supplier_name) WHERE supplier_name IS DISTINCT FROM pg_temp.tr_norm(supplier_name);
+UPDATE completed_orders SET table_name = pg_temp.tr_norm(table_name), section = pg_temp.tr_norm(section), payment_snapshot = CASE WHEN payment_snapshot ? 'tableName' AND (payment_snapshot->>'tableName') IS NOT NULL THEN jsonb_set(payment_snapshot, '{tableName}', to_jsonb(pg_temp.tr_norm(payment_snapshot->>'tableName'))) ELSE payment_snapshot END WHERE table_name IS DISTINCT FROM pg_temp.tr_norm(table_name) OR section IS DISTINCT FROM pg_temp.tr_norm(section) OR ((payment_snapshot->>'tableName') IS NOT NULL AND (payment_snapshot->>'tableName') IS DISTINCT FROM pg_temp.tr_norm(payment_snapshot->>'tableName'));
 
 -- 2. Ensure canonical @<slug>.corder.app format on device & staff credentials
 UPDATE restaurants

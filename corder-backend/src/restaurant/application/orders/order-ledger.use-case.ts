@@ -12,6 +12,7 @@ import { LedgerService } from '../ledger.service';
 import { StockMovementsService } from '../stock-movements.service';
 import { SESSION_LOCK_STALE_MS, TableService } from '../table.service';
 import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
+import { normalizeStorageText } from '../../../common/text/text-normalizer';
 
 interface StagedLedgerItem {
   line: { itemId: string; quantity?: number };
@@ -70,7 +71,7 @@ export class OrderLedgerUseCase {
         actorStaffId,
       );
       const tableId = table.id;
-      const tableName = (table.name ?? '').trim() || null;
+      const tableName = normalizeStorageText(table.name ?? '') || null;
 
       const customer = await em.findOne(LedgerCustomerEntity, {
         where: { id: ledgerCustomerId, restaurantId },
@@ -143,14 +144,14 @@ export class OrderLedgerUseCase {
         tableId,
         tableName,
         snapshot: { items: snapshotLines, tableId, tableName },
-        recordedBy: (staffName ?? '').trim() || null,
+        recordedBy: normalizeStorageText(staffName ?? '') || null,
       });
 
       await this.stockMovementsService.deductRecipeIngredients(
         em,
         restaurantId,
         stockLines,
-        (staffName ?? '').trim() || 'System',
+        normalizeStorageText(staffName ?? '') || 'system',
         'Ledger item',
       );
 
@@ -357,7 +358,7 @@ export class OrderLedgerUseCase {
       }
       amountOut = fromMinorUnits(lineMinorUnits);
 
-      const tableName = (table.name ?? '').trim() || null;
+      const tableName = normalizeStorageText(table.name ?? '') || null;
       await this.ledgerService.recordStandaloneCredit(em, {
         restaurantId,
         customerId: debtEntry.customerId,
@@ -371,7 +372,7 @@ export class OrderLedgerUseCase {
           productName: item.productName,
           quantity: item.quantity,
         },
-        recordedBy: (actorName ?? '').trim() || null,
+        recordedBy: normalizeStorageText(actorName ?? '') || null,
       });
 
       await this.stockMovementsService.reverseRecipeIngredients(
@@ -384,7 +385,7 @@ export class OrderLedgerUseCase {
             quantity: item.quantity,
           },
         ],
-        (actorName ?? '').trim() || 'System',
+        normalizeStorageText(actorName ?? '') || 'system',
         'Ledger revert',
       );
 

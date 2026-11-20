@@ -21,6 +21,7 @@ import { LedgerService } from '../ledger.service';
 import { StockMovementsService } from '../stock-movements.service';
 import { SESSION_LOCK_STALE_MS, TableService } from '../table.service';
 import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
+import { normalizeStorageText } from '../../../common/text/text-normalizer';
 import {
   buildClosedOrderSnapshot,
   buildCompletedPaymentSnapshot,
@@ -90,7 +91,7 @@ export class CloseCheckUseCase {
 
       const now = new Date();
       const actorId = (actor.id || '').trim() || restaurantId;
-      const actorName = (actor.name || '').trim() || 'Register';
+      const actorName = normalizeStorageText(actor.name || '') || 'register';
       const actorStaffId = !actor.isBoss
         ? ((actor.staffId !== undefined ? actor.staffId : actor.id) || '').trim() || null
         : null;
@@ -109,8 +110,8 @@ export class CloseCheckUseCase {
         ? {
             ...sourceDiscount,
             appliedBy:
-              sourceDiscount.appliedBy?.trim() ||
-              billContext.table?.discount?.appliedBy?.trim() ||
+              normalizeStorageText(sourceDiscount.appliedBy || '') ||
+              normalizeStorageText(billContext.table?.discount?.appliedBy || '') ||
               actorName,
           }
         : null;
@@ -230,16 +231,16 @@ export class CloseCheckUseCase {
       : [[], []];
     const staffNameById = new Map<string, string>();
     for (const b of bossRows) {
-      const n = (b.name || '').trim();
+      const n = normalizeStorageText(b.name || '');
       if (n) staffNameById.set(b.id, n);
     }
     for (const s of staffRows) {
-      const n = (s.name || '').trim();
+      const n = normalizeStorageText(s.name || '');
       if (n) staffNameById.set(s.id, n);
     }
     const latestOrder = [...activeOrders].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0];
     const latestUid = latestOrder?.userId?.trim() || '';
-    const waiterName = (latestUid ? staffNameById.get(latestUid) : '') || latestOrder?.userDisplayName?.trim() || actorName;
+    const waiterName = (latestUid ? staffNameById.get(latestUid) : '') || normalizeStorageText(latestOrder?.userDisplayName || '') || actorName;
 
     if (requestedLines && requestedLines.length > 0) {
       return this.buildPartialTableBillContext(
@@ -272,7 +273,7 @@ export class CloseCheckUseCase {
     }
 
     return {
-      table, tableName: (table.name || '').trim() || table.id, section: (table.section || '').trim() || 'default',
+      table, tableName: normalizeStorageText(table.name || '') || table.id, section: normalizeStorageText(table.section || '') || 'default',
       waiterName, openedAt: activeOrders[0].createdAt ?? now, rawTotalMinorUnits,
       orderIdsToClose: activeOrderIds, ordersSnapshot, billLinesForStock,
     };
@@ -321,7 +322,7 @@ export class CloseCheckUseCase {
     }
 
     return {
-      table, tableName: (table.name || '').trim() || table.id, section: (table.section || '').trim() || 'default',
+      table, tableName: normalizeStorageText(table.name || '') || table.id, section: normalizeStorageText(table.section || '') || 'default',
       waiterName, openedAt: activeOrders[0].createdAt ?? now, rawTotalMinorUnits,
       orderIdsToClose: affectedOrderIds, ordersSnapshot, billLinesForStock,
       activeOrders, itemsByOrderId, allOrderItems: orderItems, partialMutations,
@@ -433,7 +434,7 @@ export class CloseCheckUseCase {
 
     const quickOrderId = randomUUID();
     return {
-      table: null, tableName: 'Walk-in Sale', section: 'Register', waiterName: actorName, openedAt: now,
+      table: null, tableName: 'walk-in sale', section: 'register', waiterName: actorName, openedAt: now,
       rawTotalMinorUnits, orderIdsToClose: [quickOrderId],
       ordersSnapshot: [{
         id: quickOrderId, tableId: 'quick-sale', userId: actorId, userName: actorName, status: 'closed',

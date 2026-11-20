@@ -13,6 +13,7 @@ import { TableService } from '../table.service';
 import { FraudDetectionService } from '../fraud-detection.service';
 import { OrderQueryService } from './order-query.service';
 import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
+import { normalizeStorageText } from '../../../common/text/text-normalizer';
 
 @Injectable()
 export class CancelOrderItemUseCase {
@@ -72,10 +73,11 @@ export class CancelOrderItemUseCase {
       if (!item) throw new NotFoundException('Order item not found');
 
       const now = new Date();
+      const normalizedActor = cancelledByName ? normalizeStorageText(cancelledByName) : undefined;
       const taken = item.takeQuantity(quantity);
       let cancelledLine: OrderItemEntity;
       if (taken.full) {
-        item.cancel(reason, cancelledByName, now);
+        item.cancel(reason, normalizedActor, now);
         cancelledLine = await em.save(OrderItemEntity, item);
       } else {
         // Keep remaining units on the original line; audit the void as its own cancelled row.
@@ -89,7 +91,7 @@ export class CancelOrderItemUseCase {
           note: item.note ?? undefined,
           status: 'sent',
         });
-        voidRow.cancel(reason, cancelledByName, now);
+        voidRow.cancel(reason, normalizedActor, now);
         cancelledLine = await em.save(OrderItemEntity, voidRow);
       }
 

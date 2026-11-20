@@ -5,6 +5,7 @@ import { PrinterConfigEntity } from '../domain/printer-config.entity';
 import { CreatePrinterDto } from '../api/dto/create-printer.dto';
 import { UpdatePrinterDto } from '../api/dto/update-printer.dto';
 import { OrdersGateway } from '../api/orders.gateway';
+import { normalizeStorageText } from '../../common/text/text-normalizer';
 
 export { CreatePrinterDto, UpdatePrinterDto };
 
@@ -109,7 +110,7 @@ export class PrintersService {
     const connection = dto.connection;
     const entity = this.repo.create({
       restaurantId,
-      name: dto.name.trim(),
+      name: normalizeStorageText(dto.name),
       type: dto.type.trim(),
       connection,
       ipAddress:
@@ -117,7 +118,7 @@ export class PrintersService {
           ? dto.ipAddress?.trim() || null
           : dto.ipAddress?.trim() || null,
       port: connection === 'network' ? (dto.port ?? 9100) : (dto.port ?? null),
-      department: dto.department?.trim() || null,
+      department: dto.department ? normalizeStorageText(dto.department) || null : null,
       paperWidth: dto.paperWidth ?? 80,
       autoCut: dto.autoCut ?? true,
       status: this.isAgentOnline(restaurantId) ? 'online' : 'offline',
@@ -132,7 +133,7 @@ export class PrintersService {
     }
     const nextConnection = dto.connection ?? existing.connection;
     Object.assign(existing, {
-      name: dto.name !== undefined ? dto.name.trim() : existing.name,
+      name: dto.name !== undefined ? normalizeStorageText(dto.name) : existing.name,
       type: dto.type !== undefined ? dto.type.trim() : existing.type,
       connection: nextConnection,
       ipAddress:
@@ -149,7 +150,9 @@ export class PrintersService {
             : existing.port,
       department:
         dto.department !== undefined
-          ? dto.department?.trim() || null
+          ? dto.department
+            ? normalizeStorageText(dto.department) || null
+            : null
           : existing.department,
       status: dto.status ?? existing.status,
       paperWidth: dto.paperWidth ?? existing.paperWidth,
@@ -206,9 +209,9 @@ export class PrintersService {
       let rowsChanged = false;
 
       for (const p of incoming) {
-        const name = String(p.name || p.systemPrinterName || p.host || 'Yazıcı')
-          .trim()
-          .slice(0, 100);
+        const name = normalizeStorageText(
+          String(p.name || p.systemPrinterName || p.host || 'yazıcı'),
+        ).slice(0, 100);
         if (!name) continue;
         const isReceipt =
           Boolean(p.id && receiptId && p.id === receiptId) ||
@@ -222,8 +225,8 @@ export class PrintersService {
           : (p.systemPrinterName?.trim() || 'USB').slice(0, 100);
         const port = isNetwork ? Number(p.port) || 9100 : null;
         const paperWidth = Number(p.paperWidth) === 58 ? 58 : 80;
-        const department = (
-          p.department?.trim() || (isReceipt ? 'Kasa' : 'Mutfak')
+        const department = normalizeStorageText(
+          p.department?.trim() || (isReceipt ? 'kasa' : 'mutfak'),
         ).slice(0, 100);
         const autoCut = p.autoCut !== false;
 

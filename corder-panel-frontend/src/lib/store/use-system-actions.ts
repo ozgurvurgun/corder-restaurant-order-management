@@ -211,7 +211,11 @@ export function useSystemActions(params: {
 
   const updateSettings = useCallback(
     (s: Partial<RestaurantSettings>) => {
-      setSettings((prev) => ({ ...prev, ...s }))
+      setSettings((prev) => ({
+        ...prev,
+        ...s,
+        ...(s.name ? { name: formatTitleCase(s.name) } : {}),
+      }))
       const appearanceFields = ["fontSize", "tableCardSize", "showProductImages", "quickActionsEnabled", "sidebarCollapsed"] as const
       if (appearanceFields.some((k) => s[k] !== undefined)) {
         saveAppearanceSettings(s)
@@ -337,12 +341,12 @@ export function useSystemActions(params: {
             ...prev,
             {
               id: created.id,
-              name: created.name,
+              name: formatTitleCase(created.name),
               type: created.type,
               connection: created.connection,
               ipAddress: created.ipAddress ?? undefined,
               port: created.port ?? undefined,
-              department: created.department ?? undefined,
+              department: created.department ? formatTitleCase(created.department) : undefined,
               status: created.status,
               paperWidth: created.paperWidth === 58 ? 58 : 80,
               autoCut: created.autoCut,
@@ -382,12 +386,12 @@ export function useSystemActions(params: {
               p.id === id
                 ? {
                     id: updated.id,
-                    name: updated.name,
+                    name: formatTitleCase(updated.name),
                     type: updated.type,
                     connection: updated.connection,
                     ipAddress: updated.ipAddress ?? undefined,
                     port: updated.port ?? undefined,
-                    department: updated.department ?? undefined,
+                    department: updated.department ? formatTitleCase(updated.department) : undefined,
                     status: updated.status,
                     paperWidth: updated.paperWidth === 58 ? 58 : 80,
                     autoCut: updated.autoCut,

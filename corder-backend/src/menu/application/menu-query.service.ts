@@ -22,6 +22,7 @@ import {
 import { isRestaurantPaymentSuspended } from '../../restaurant/domain/services/billing-suspension.policy';
 import { TableQrTokenPolicy } from '../../restaurant/domain/services/table-qr-token.policy';
 import { OrdersGateway } from '../../restaurant/api/orders.gateway';
+import { normalizeStorageText } from '../../common/text/text-normalizer';
 import {
   buildMenuCategoryTree,
   isCampaignValidNow,
@@ -181,8 +182,8 @@ export class MenuQueryService {
       this.waiterCallRepo.create({
         restaurantId: restaurant.id,
         tableId: matched.id,
-        tableName: matched.name,
-        sectionName: matched.section || null,
+        tableName: normalizeStorageText(matched.name),
+        sectionName: matched.section ? normalizeStorageText(matched.section) : null,
         requestType,
         note,
         acknowledged: false,

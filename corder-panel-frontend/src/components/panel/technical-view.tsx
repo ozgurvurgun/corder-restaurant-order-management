@@ -14,7 +14,7 @@ import {
   RefreshCw,
   Trash2,
 } from "lucide-react"
-import { computeDateFilterBounds, formatIstanbulDateTime } from "@/lib/format"
+import { computeDateFilterBounds, formatIstanbulDateTime, formatTitleCase } from "@/lib/format"
 import { CustomDatePicker } from "@/components/ui/custom-inputs"
 import { PaginationBar } from "@/components/ui/pagination-bar"
 import { SecurityFraudTab } from "./security-fraud-tab"
@@ -86,12 +86,12 @@ export default function TechnicalView() {
         setLocalPrinters(
           prs.map((p) => ({
             id: p.id,
-            name: p.name,
+            name: formatTitleCase(p.name),
             type: p.type,
             connection: p.connection,
             ipAddress: p.ipAddress ?? undefined,
             port: p.port ?? undefined,
-            department: p.department ?? undefined,
+            department: p.department ? formatTitleCase(p.department) : undefined,
             status: p.status,
             paperWidth: p.paperWidth === 58 ? 58 : 80,
             autoCut: p.autoCut,
@@ -118,12 +118,12 @@ export default function TechnicalView() {
       setLocalPrinters(
         prs.map((p) => ({
           id: p.id,
-          name: p.name,
+          name: formatTitleCase(p.name),
           type: p.type,
           connection: p.connection,
           ipAddress: p.ipAddress ?? undefined,
           port: p.port ?? undefined,
-          department: p.department ?? undefined,
+          department: p.department ? formatTitleCase(p.department) : undefined,
           status: p.status,
           paperWidth: p.paperWidth === 58 ? 58 : 80,
           autoCut: p.autoCut,

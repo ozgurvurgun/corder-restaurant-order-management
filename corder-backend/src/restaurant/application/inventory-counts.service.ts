@@ -13,6 +13,7 @@ import {
 } from '../domain/inventory-count.entity';
 import { StockMaterialEntity } from '../domain/stock-material.entity';
 import { StockMovementsService } from './stock-movements.service';
+import { normalizeStorageText } from '../../common/text/text-normalizer';
 
 @Injectable()
 export class InventoryCountsService {
@@ -70,7 +71,7 @@ export class InventoryCountsService {
       const entity = em.create(InventoryCountEntity, {
         restaurantId,
         date: new Date(),
-        countedBy: (countedBy || '').trim() || 'System',
+        countedBy: normalizeStorageText(countedBy || '') || 'system',
         items,
         status: 'in-progress',
         notes: null,
@@ -239,7 +240,7 @@ export class InventoryCountsService {
           materialName: item.materialName,
           type: 'count-adjustment',
           quantity: item.difference,
-          createdBy: userName,
+          createdBy: normalizeStorageText(userName || '') || 'system',
           reason: `Inventory count adjustment: ${item.difference > 0 ? '+' : ''}${item.difference}`,
         });
       }

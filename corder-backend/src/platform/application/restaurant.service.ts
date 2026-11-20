@@ -17,6 +17,7 @@ import {
 import { CreateRestaurantDto } from '../api/dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from '../api/dto/update-restaurant.dto';
 import { formatCanonicalCorderEmail, toCorderEmailTenantSlug } from '../../common/text/corder-email.policy';
+import { normalizeStorageText } from '../../common/text/text-normalizer';
 import { OrdersGateway } from '../../restaurant/api/orders.gateway';
 import { buildPaymentSuspendedErrorMessage } from '../../restaurant/domain/services/billing-suspension.policy';
 
@@ -342,11 +343,12 @@ export class RestaurantService {
     const saved = await this.repo.save(
       this.repo.create({
         ...restDto,
+        name: normalizeStorageText(restDto.name),
         slug,
         email: rawEmail?.trim().toLowerCase() || undefined,
-        brandName: brandName?.trim() || null,
+        brandName: brandName?.trim() ? normalizeStorageText(brandName) : null,
         branchType: branchType ?? 'independent',
-        franchiseeCompanyName: franchiseeCompanyName?.trim() || null,
+        franchiseeCompanyName: franchiseeCompanyName?.trim() ? normalizeStorageText(franchiseeCompanyName) : null,
         royaltyRate: royaltyRate != null ? String(Number(royaltyRate)) : '0',
         monthlyFee: String(feeValue),
         billingStartPeriod,
@@ -381,17 +383,17 @@ export class RestaurantService {
   }
 
   private applyMutableScalarFields(entity: RestaurantEntity, dto: UpdateRestaurantDto): void {
-    if (dto.name !== undefined) entity.name = dto.name;
+    if (dto.name !== undefined) entity.name = normalizeStorageText(dto.name);
     if (dto.address !== undefined) entity.address = dto.address;
     if (dto.phone !== undefined) entity.phone = dto.phone;
     if (dto.email !== undefined) {
       entity.email = dto.email?.trim().toLowerCase() || (null as unknown as string);
     }
     if (dto.status !== undefined) entity.status = dto.status;
-    if (dto.brandName !== undefined) entity.brandName = dto.brandName?.trim() || null;
+    if (dto.brandName !== undefined) entity.brandName = dto.brandName?.trim() ? normalizeStorageText(dto.brandName) : null;
     if (dto.branchType !== undefined) entity.branchType = dto.branchType;
     if (dto.franchiseeCompanyName !== undefined) {
-      entity.franchiseeCompanyName = dto.franchiseeCompanyName?.trim() || null;
+      entity.franchiseeCompanyName = dto.franchiseeCompanyName?.trim() ? normalizeStorageText(dto.franchiseeCompanyName) : null;
     }
     if (dto.royaltyRate !== undefined) {
       entity.royaltyRate = String(Math.max(0, Math.min(100, Number(dto.royaltyRate) || 0)));

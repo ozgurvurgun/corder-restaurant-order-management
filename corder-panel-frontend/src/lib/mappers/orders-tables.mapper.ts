@@ -36,7 +36,7 @@ export function mapOrder(o: OrderDto): PanelOrder {
     status: (o.status as PanelOrder["status"]) || "active",
     createdAt: new Date(o.createdAt),
     updatedAt: new Date(o.updatedAt),
-    mergedFrom: o.mergedFrom ?? undefined,
+    mergedFrom: o.mergedFrom ? formatTitleCase(o.mergedFrom) : undefined,
   }
 }
 
@@ -176,8 +176,8 @@ export function mapApiTablesToPanel(
 
     return {
       id: t.id,
-      name: t.name,
-      section: t.section,
+      name: formatTitleCase(t.name),
+      section: formatTitleCase(t.section),
       status,
       ...(t.qrToken ? { qrToken: t.qrToken } : {}),
       ...(t.capacity != null ? { capacity: Number(t.capacity) } : {}),
@@ -200,8 +200,8 @@ export function deriveSectionsFromTables(
   apiTables: { id: string; name: string; section: string }[],
   restaurantId?: string | null,
 ): PanelSection[] {
-  const fromTables = apiTables.map((t) => t.section).filter(Boolean)
-  const stored = getStoredCustomSections(restaurantId)
+  const fromTables = apiTables.map((t) => formatTitleCase(t.section)).filter(Boolean)
+  const stored = getStoredCustomSections(restaurantId).map((s) => formatTitleCase(s)).filter(Boolean)
   const names = Array.from(new Set([...fromTables, ...stored]))
   return names.map((name, i) => ({ id: `section-${i}`, name }))
 }

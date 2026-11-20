@@ -4,7 +4,7 @@ import type {
   FraudSeverity, LiveOrderDto, LiveTableDto, PermissionCatalogResponse,
   RoleDefinition, StaffMemberDto, SubBossItemDto,
 } from "./types"
-import { localizeApiError } from "./format"
+import { formatTitleCase, localizeApiError, normalizeBossOverview, normalizeBossSubBoss, normalizeBossTable } from "./format"
 
 const rawEnvUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim()
 const BASE = rawEnvUrl !== undefined ? rawEnvUrl.replace(/\/+$/, "") : "http://localhost:4000"
@@ -209,7 +209,7 @@ function normalizeFraudAlert(raw: Record<string, unknown>, idx: number): FraudAl
     id: String(raw.id ?? `fraud-${idx}`),
     restaurantId: typeof raw.restaurantId === "string" ? raw.restaurantId : undefined,
     branchId: typeof raw.branchId === "string" ? raw.branchId : undefined,
-    branchName: typeof raw.branchName === "string" ? raw.branchName : undefined,
+    branchName: typeof raw.branchName === "string" ? formatTitleCase(raw.branchName) : undefined,
     ruleKey: String(raw.ruleCode ?? raw.ruleKey ?? "SUSPICIOUS_ACTIVITY"),
     title: String(raw.title ?? "Şüpheli İşlem Tespiti"),
     description: String(raw.description ?? ""),
@@ -217,11 +217,11 @@ function normalizeFraudAlert(raw: Record<string, unknown>, idx: number): FraudAl
     status,
     amountImpact: Number(raw.amountImpact ?? 0) || 0,
     staffId: typeof raw.actorId === "string" ? raw.actorId : null,
-    staffName: typeof raw.actorName === "string" ? raw.actorName : null,
-    tableName: typeof raw.tableName === "string" ? raw.tableName : null,
+    staffName: typeof raw.actorName === "string" ? formatTitleCase(raw.actorName) : null,
+    tableName: typeof raw.tableName === "string" ? formatTitleCase(raw.tableName) : null,
     orderId: typeof raw.orderId === "string" ? raw.orderId : null,
     resolutionNote: typeof raw.resolutionNote === "string" ? raw.resolutionNote : null,
-    resolvedBy: typeof raw.resolvedBy === "string" ? raw.resolvedBy : null,
+    resolvedBy: typeof raw.resolvedBy === "string" ? formatTitleCase(raw.resolvedBy) : null,
     resolvedAt: typeof raw.resolvedAt === "string" ? raw.resolvedAt : null,
     metadata:
       raw.evidence && typeof raw.evidence === "object"
@@ -341,7 +341,7 @@ export const bossApi = {
   overview: {
     async get(branchId?: string) {
       const q = branchId ? `?branchId=${encodeURIComponent(branchId)}` : ""
-      return bossFetch<BossOverviewResponse>(`/restaurant/boss/overview${q}`)
+      return normalizeBossOverview(await bossFetch<BossOverviewResponse>(`/restaurant/boss/overview${q}`))
     },
     async syncRoles(sourceRestaurantId: string, targetRestaurantIds?: string[]) {
       const payload = {
@@ -355,26 +355,16 @@ export const bossApi = {
       )
     },
     async listSubBosses() {
-      return bossFetch<SubBossItemDto[]>("/restaurant/boss/sub-bosses")
+      return (await bossFetch<SubBossItemDto[]>("/restaurant/boss/sub-bosses")).map(normalizeBossSubBoss)
     },
     async createSubBoss(body: {
-      name: string
-      email: string
-      phone?: string
-      password?: string
-      bossTier?: "franchise_owner" | "regional_manager"
-      restaurantIds: string[]
+      name: string; email: string; phone?: string; password?: string
+      bossTier?: "franchise_owner" | "regional_manager"; restaurantIds: string[]
     }) {
-      return bossFetch<SubBossItemDto[]>("/restaurant/boss/sub-bosses", {
-        method: "POST",
-        body: JSON.stringify(body),
-      })
+      return (await bossFetch<SubBossItemDto[]>("/restaurant/boss/sub-bosses", { method: "POST", body: JSON.stringify(body) })).map(normalizeBossSubBoss)
     },
     async unlinkSubBoss(subBossId: string, branchId: string) {
-      return bossFetch<SubBossItemDto[]>(
-        `/restaurant/boss/sub-bosses/${encodeURIComponent(subBossId)}/branch/${encodeURIComponent(branchId)}`,
-        { method: "DELETE" }
-      )
+      return (await bossFetch<SubBossItemDto[]>(`/restaurant/boss/sub-bosses/${encodeURIComponent(subBossId)}/branch/${encodeURIComponent(branchId)}`, { method: "DELETE" })).map(normalizeBossSubBoss)
     },
   },
   roles: {
@@ -438,16 +428,17 @@ export const bossApi = {
       if (params?.from) qs.set("from", params.from)
       if (params?.to) qs.set("to", params.to)
       const query = qs.toString()
-      return bossFetch<AuditLogDto[]>(
+      const list = await bossFetch<AuditLogDto[]>(
         `/restaurant/audit-logs${query ? `?${query}` : ""}`,
         {},
         branchId
       )
+      return list.map((l) => ({ ...l, userName: formatTitleCase(l.userName) }))
     },
   },
   operations: {
     async tables(branchId: string) {
-      return bossFetch<LiveTableDto[]>("/restaurant/tables", {}, branchId)
+      return (await bossFetch<LiveTableDto[]>("/restaurant/tables", {}, branchId)).map(normalizeBossTable)
     },
     async orders(branchId: string) {
       return bossFetch<LiveOrderDto[]>("/restaurant/orders", {}, branchId)

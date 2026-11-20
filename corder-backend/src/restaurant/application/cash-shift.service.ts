@@ -11,6 +11,7 @@ import { CheckSettlementPolicy } from '../domain/services/check-settlement.polic
 import { OrdersGateway, PrintJobSocketPayload } from '../api/orders.gateway';
 import { FraudDetectionService } from './fraud-detection.service';
 import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
+import { normalizeStorageText } from '../../common/text/text-normalizer';
 import { serializeCashShift } from './orders/order.mapper';
 
 export { serializeCashShift };
@@ -60,7 +61,7 @@ export class CashShiftService {
       }
       const shift = em.create(CashShiftEntity, {
         restaurantId,
-        openedBy,
+        openedBy: normalizeStorageText(openedBy) || 'system',
         openedAt: new Date(),
         status: 'open',
         openingBalance: fromMinorUnits(openingMinorUnits),
@@ -94,7 +95,7 @@ export class CashShiftService {
       if (shift.status !== 'open') {
         throw new BadRequestException('This cash shift is already closed.');
       }
-      shift.closeShift(closedBy, closingMinorUnits, notes);
+      shift.closeShift(normalizeStorageText(closedBy) || 'system', closingMinorUnits, notes);
       return em.save(CashShiftEntity, shift);
     });
     void this.fraudDetection?.analyzeRestaurantAnomalies(restaurantId).catch(() => undefined);

@@ -105,7 +105,7 @@ export function mapOrderDtoToTerminalOrder(
   productsById?: Map<string, TerminalProduct>
 ): TerminalOrder {
   const matchedTable = rawTables.find((table) => table.id === dto.tableId)
-  const tableName = matchedTable?.name ?? dto.tableId
+  const tableName = formatTitleCase(matchedTable?.name ?? dto.tableId)
   const tableNumber = extractTableNumber(tableName, 0)
 
   const items: TerminalOrderItem[] = dto.items
@@ -146,7 +146,7 @@ export function mapOrderDtoToTerminalOrder(
     updatedAt: dto.updatedAt,
     status: (dto.status as OrderStatus) || "active",
     totalAmount: calculateOrderItemsTotal(items),
-    mergedFrom: dto.mergedFrom ?? undefined,
+    mergedFrom: dto.mergedFrom ? formatTitleCase(dto.mergedFrom) : undefined,
   }
 }
 
@@ -205,10 +205,10 @@ export function mapTablesWithOrders(
     return {
       id: rawTable.id,
       number: extractTableNumber(rawTable.name, index),
-      name: rawTable.name,
+      name: formatTitleCase(rawTable.name),
       capacity: rawTable.capacity ?? 4,
       status: resolveTableStatus(rawTable.status, tableOrders.length > 0),
-      section: rawTable.section,
+      section: formatTitleCase(rawTable.section),
       openedAt: latestOrder?.updatedAt ?? earliestOrder?.createdAt,
       guestCount: tableOrders.length > 0 ? 1 : undefined,
       activeWaiter,

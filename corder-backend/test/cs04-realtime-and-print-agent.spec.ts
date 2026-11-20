@@ -61,9 +61,9 @@ describe('CS-04: FIX-08 (FE-01, CC-02) — Print-Agent ↔ Backend infinite sync
     const printerId = '11111111-1111-4111-8111-111111111111';
     let dbPrinters: PrinterConfigEntity[] = [
       Object.assign(new PrinterConfigEntity(), {
-        id: printerId, restaurantId: 'rest-1', name: 'Mutfak Yazıcı', type: 'kitchen',
+        id: printerId, restaurantId: 'rest-1', name: 'mutfak yazıcı', type: 'kitchen',
         connection: 'usb', ipAddress: 'EPSON_TM_T20II', port: null,
-        department: 'Mutfak', paperWidth: 80, autoCut: true, status: 'online',
+        department: 'mutfak', paperWidth: 80, autoCut: true, status: 'online',
       }),
     ];
     let emittedCount = 0;

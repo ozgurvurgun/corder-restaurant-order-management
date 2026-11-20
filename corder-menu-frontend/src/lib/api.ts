@@ -297,20 +297,21 @@ function normalizeMenuResponse(data: MenuResponse, tableToken?: string): MenuRes
     rawCtx && typeof rawCtx.tableId === "string" && typeof rawCtx.tableName === "string"
       ? {
           tableId: rawCtx.tableId,
-          tableName: rawCtx.tableName,
-          sectionName: rawCtx.sectionName ?? null,
+          tableName: formatTitleCase(rawCtx.tableName),
+          sectionName: rawCtx.sectionName ? formatTitleCase(rawCtx.sectionName) : null,
           tableToken: rawCtx.tableToken || cleanToken,
         }
       : null
 
   return {
     ...data,
+    name: formatTitleCase(data.name),
     logo: resolvedLogo ?? undefined,
     logoUrl: resolvedLogo,
     menuTemplate: resolvedTemplate,
     restaurant: {
       id: data.restaurant?.id ?? data.id,
-      name: data.restaurant?.name ?? data.name,
+      name: formatTitleCase(data.restaurant?.name ?? data.name),
       slug: data.restaurant?.slug ?? data.slug,
       logo: resolvedLogo,
       logoUrl: resolvedLogo,

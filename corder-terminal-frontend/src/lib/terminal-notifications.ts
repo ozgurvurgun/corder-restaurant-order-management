@@ -1,3 +1,5 @@
+import { formatTitleCase } from "./format"
+
 export const TERMINAL_NOTIF_PREFS_KEY = "corder_terminal_notif_prefs_v1"
 
 export interface TerminalNotificationPrefs {
@@ -127,9 +129,11 @@ export function normalizeWaiterCallPayload(raw: unknown): ActiveWaiterCall | nul
   return {
     id,
     tableId: tableId || id,
-    tableName: tableName || "Masa",
+    tableName: tableName ? formatTitleCase(tableName) : "Masa",
     sectionName:
-      typeof obj.sectionName === "string" && obj.sectionName.trim() ? obj.sectionName.trim() : null,
+      typeof obj.sectionName === "string" && obj.sectionName.trim()
+        ? formatTitleCase(obj.sectionName)
+        : null,
     requestType: obj.requestType === "bill" ? "bill" : "waiter",
     note: typeof obj.note === "string" && obj.note.trim() ? obj.note.trim() : null,
     createdAt:

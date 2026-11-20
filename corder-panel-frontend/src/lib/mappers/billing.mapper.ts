@@ -93,13 +93,13 @@ export function mapCompletedOrderDtoToClosedTable(
     status: o.status as PanelOrder["status"],
     createdAt: new Date(o.createdAt),
     updatedAt: new Date(o.updatedAt),
-    mergedFrom: o.mergedFrom,
+    mergedFrom: o.mergedFrom ? formatTitleCase(o.mergedFrom) : undefined,
   }))
 
   const payment: Payment = {
     id: dto.payment.id,
     tableId: dto.payment.tableId,
-    tableName: dto.payment.tableName,
+    tableName: formatTitleCase(dto.payment.tableName),
     orderIds: dto.payment.orderIds,
     amount: dto.payment.amount,
     method: dto.payment.method as Payment["method"],
@@ -129,8 +129,8 @@ export function mapCompletedOrderDtoToClosedTable(
 
   return {
     id: dto.id,
-    tableName: dto.tableName,
-    section: dto.section,
+    tableName: formatTitleCase(dto.tableName),
+    section: formatTitleCase(dto.section),
     waiter: formatTitleCase(dto.waiter),
     orders,
     payment,

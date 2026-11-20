@@ -66,7 +66,7 @@ export function usePanelAuth() {
 }
 
 function toBusiness(restaurant: { id: string; name: string; slug: string }): Business {
-  return { id: restaurant.id, slug: restaurant.slug, name: restaurant.name }
+  return { id: restaurant.id, slug: restaurant.slug, name: formatTitleCase(restaurant.name) }
 }
 
 export function PanelAuthProvider({ children }: { children: ReactNode }) {

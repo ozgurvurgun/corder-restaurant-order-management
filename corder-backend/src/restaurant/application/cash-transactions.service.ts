@@ -7,6 +7,7 @@ import { CashShiftService } from './cash-shift.service';
 import { FraudDetectionService } from './fraud-detection.service';
 import { CreateCashTransactionDto } from '../api/dto/create-cash-transaction.dto';
 import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
+import { normalizeStorageText } from '../../common/text/text-normalizer';
 import { serializeCashTransaction } from './orders/order.mapper';
 
 export { serializeCashTransaction };
@@ -54,7 +55,7 @@ export class CashTransactionsService {
         amount: fromMinorUnits(amountMinorUnits),
         description,
         reference: dto.reference?.trim() || null,
-        createdBy: createdBy.trim() || 'System',
+        createdBy: normalizeStorageText(createdBy) || 'system',
       });
       const savedTx = await em.save(CashTransactionEntity, tx);
 

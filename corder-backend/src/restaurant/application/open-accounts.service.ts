@@ -9,6 +9,7 @@ import { CashTransactionEntity } from '../domain/cash-transaction.entity';
 import { BilledOrderLineForStock } from '../domain/services/recipe-stock.policy';
 import { StockMovementsService } from './stock-movements.service';
 import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
+import { normalizeStorageText } from '../../common/text/text-normalizer';
 import {
   CreateOpenAccountDto,
   CreateOpenAccountItemDto,
@@ -154,13 +155,13 @@ export class OpenAccountsService {
 
       const acc = em.create(OpenAccountEntity, {
         restaurantId,
-        customerName: dto.customerName.trim(),
+        customerName: normalizeStorageText(dto.customerName),
         customerPhone: dto.customerPhone?.trim() || null,
         amount: fromMinorUnits(amountMinorUnits),
         paidAmount: 0,
         status: 'open',
         description,
-        createdBy: dto.createdBy,
+        createdBy: normalizeStorageText(dto.createdBy) || 'system',
       });
       const saved = await em.save(OpenAccountEntity, acc);
 
@@ -170,7 +171,7 @@ export class OpenAccountsService {
           em.create(OpenAccountItemEntity, {
             openAccountId: saved.id,
             productId: it.productId?.trim() || null,
-            productName: (it.productName || '').trim(),
+            productName: normalizeStorageText(it.productName || ''),
             quantity: Math.max(1, Math.floor(Number(it.quantity) || 1)),
             price: fromMinorUnits(toMinorUnits(it.price)),
             note: it.note?.trim() || null,
@@ -214,7 +215,7 @@ export class OpenAccountsService {
       throw new BadRequestException('Invalid payment amount');
     }
     const normalizedAmount = fromMinorUnits(payMinorUnits);
-    const actorName = receivedBy.trim() || 'Unknown';
+    const actorName = normalizeStorageText(receivedBy) || 'unknown';
 
     return this.dataSource.transaction(async (em) => {
       const shift = await em.findOne(CashShiftEntity, {

@@ -64,6 +64,7 @@ import {
   saveNotifsClearedAt,
 } from "./panel-local-storage"
 import { usePanelSocket } from "./use-panel-socket"
+import { formatTitleCase } from "../format"
 
 function buildHydratedCancelledItems(
   orders: PanelOrder[],
@@ -201,14 +202,13 @@ function buildDerivedNotifications(
 
   const waiterNotifs: PanelNotification[] = (serverWaiterCalls ?? []).map((wc) => {
     const isBill = wc.requestType === "bill"
-    const section = wc.sectionName || "Salon"
+    const tName = formatTitleCase(wc.tableName) || "Masa"
+    const section = wc.sectionName ? formatTitleCase(wc.sectionName) : "Salon"
     return {
       id: wc.id,
       type: "waiter-call" as const,
-      title: `🔔 ${wc.tableName} (${section}) - ${isBill ? "Hesap İstiyor!" : "Garson Çağırıyor!"}`,
-      message: wc.note
-        ? `Not: ${wc.note}`
-        : `${wc.tableName} masasından ${isBill ? "hesap talebi" : "garson çağrısı"} geldi.`,
+      title: `🔔 ${tName} (${section}) - ${isBill ? "Hesap İstiyor!" : "Garson Çağırıyor!"}`,
+      message: wc.note ? `Not: ${wc.note}` : `${tName} masasından ${isBill ? "hesap talebi" : "garson çağrısı"} geldi.`,
       read: readIds.has(wc.id),
       createdAt: new Date(wc.createdAt),
     }

@@ -13,6 +13,7 @@ import {
   BilledOrderLineForStock,
   RecipeStockPolicy,
 } from '../domain/services/recipe-stock.policy';
+import { normalizeStorageText } from '../../common/text/text-normalizer';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -132,7 +133,7 @@ export class StockMovementsService {
       totalCost: effectiveTotalCost,
       supplierId: validSupplierId,
       reason: dto.reason?.trim() || null,
-      createdBy: (dto.createdBy || '').trim() || 'System',
+      createdBy: normalizeStorageText(dto.createdBy || '') || 'system',
     });
     return em.save(StockMovementEntity, movement);
   }
@@ -192,7 +193,7 @@ export class StockMovementsService {
     if (!deductions.length) return [];
 
     const savedMovements: StockMovementEntity[] = [];
-    const safeActor = (actorName || '').trim() || 'System';
+    const safeActor = normalizeStorageText(actorName || '') || 'system';
 
     for (const deduction of deductions) {
       const material = materialById.get(deduction.materialId);
@@ -321,7 +322,7 @@ export class StockMovementsService {
     if (!netDeltas.length) return [];
 
     const savedMovements: StockMovementEntity[] = [];
-    const safeActor = (actorName || '').trim() || 'System';
+    const safeActor = normalizeStorageText(actorName || '') || 'system';
 
     for (const net of netDeltas) {
       const material = materialById.get(net.materialId);

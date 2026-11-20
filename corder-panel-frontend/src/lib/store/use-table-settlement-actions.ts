@@ -13,7 +13,7 @@ import {
   type PanelUser,
 } from "../panel-types"
 import { api } from "../api"
-import { computeDiscountMinorUnits, fromMinorUnits, toMinorUnits } from "../format"
+import { computeDiscountMinorUnits, formatTitleCase, fromMinorUnits, toMinorUnits } from "../format"
 import { showPanelToast } from "@/components/panel/panel-toast"
 import { genId, getStoredCustomSections, setStoredCustomSections } from "./panel-local-storage"
 import type { LogActivityFn } from "./panel-store-context"
@@ -51,7 +51,7 @@ export function useTableSettlementActions(params: {
 
   const addSection = useCallback(
     (name: string) => {
-      const trimmed = name.trim()
+      const trimmed = formatTitleCase(name)
       if (!trimmed) return
       setSections((prev) => {
         if (prev.some((s) => s.name === trimmed)) return prev
@@ -65,7 +65,7 @@ export function useTableSettlementActions(params: {
 
   const updateSection = useCallback(
     async (id: string, name: string): Promise<boolean> => {
-      const trimmed = name.trim()
+      const trimmed = formatTitleCase(name)
       const oldSec = sections.find((s) => s.id === id)
       if (!trimmed || !oldSec || oldSec.name === trimmed) return false
       const sectionTables = tables.filter((t) => t.section === oldSec.name)
@@ -80,7 +80,7 @@ export function useTableSettlementActions(params: {
       setSections((prev) => prev.map((s) => (s.id === id ? { ...s, name: trimmed } : s)))
       setTables((prev) => prev.map((t) => (t.section === oldSec.name ? { ...t, section: trimmed } : t)))
       setStoredCustomSections(
-        getStoredCustomSections(restaurantId).map((n) => (n === oldSec.name ? trimmed : n)),
+        getStoredCustomSections(restaurantId).map((n) => (formatTitleCase(n) === oldSec.name ? trimmed : formatTitleCase(n))),
         restaurantId,
       )
       showPanelToast("Bölüm güncellendi", "success")
@@ -124,12 +124,14 @@ export function useTableSettlementActions(params: {
       api.tables
         .create(token, { name, section })
         .then((created) => {
+          const formattedName = formatTitleCase(created.name)
+          const formattedSection = formatTitleCase(created.section)
           setTables((prev) => [
             ...prev,
             {
               id: created.id,
-              name: created.name,
-              section: created.section,
+              name: formattedName,
+              section: formattedSection,
               status: "empty",
               ...(created.qrToken ? { qrToken: created.qrToken } : {}),
               ...(created.capacity != null ? { capacity: Number(created.capacity) } : {}),
@@ -140,10 +142,10 @@ export function useTableSettlementActions(params: {
           logActivity({
             action: "table_created",
             category: "table",
-            details: `Masa eklendi: ${created.name}`,
-            metadata: { tableId: created.id, section: created.section },
+            details: `Masa eklendi: ${formattedName}`,
+            metadata: { tableId: created.id, section: formattedSection },
           })
-          showPanelToast(`Masa eklendi: ${created.name}`, "success")
+          showPanelToast(`Masa eklendi: ${formattedName}`, "success")
         })
         .catch((err) => showPanelToast(err instanceof Error ? err.message : "Masa eklenemedi", "error"))
     },
@@ -159,14 +161,14 @@ export function useTableSettlementActions(params: {
       capacity?: number
     }): Promise<PanelTable[]> => {
       if (!token) return []
-      const sectionName = body.section.trim()
+      const sectionName = formatTitleCase(body.section)
       if (!sectionName) return []
       try {
         const createdList = await api.tables.bulkCreate(token, { ...body, section: sectionName })
         const mapped: PanelTable[] = createdList.map((c) => ({
           id: c.id,
-          name: c.name,
-          section: c.section,
+          name: formatTitleCase(c.name),
+          section: formatTitleCase(c.section),
           status: "empty",
           ...(c.qrToken ? { qrToken: c.qrToken } : {}),
           ...(c.capacity != null ? { capacity: Number(c.capacity) } : {}),

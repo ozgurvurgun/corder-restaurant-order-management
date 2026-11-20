@@ -7,7 +7,7 @@ import {
   getStoredActiveBranchId, getStoredBossUser, getStoredBranches, notifyUnauthorized, setBossSession,
   setStoredActiveBranchId, setStoredBranches, type StoredBossUser,
 } from "./api"
-import { formatTitleCase } from "./format"
+import { formatTitleCase, normalizeBossBranch } from "./format"
 import {
   getBossDismissedNotifIds, getBossReadNotifIds, getFraudPushSoundEnabled,
   markBossNotifReadLocal, markBossNotifsDismissedLocal, requestBrowserNotificationPermission,
@@ -50,7 +50,12 @@ function normalizeOrders(ordersRes: LiveOrderDto[]): LiveOrderDto[] {
   return ordersRes.map((o) => ({
     ...o,
     userName: o.userName ? formatTitleCase(o.userName) : o.userName,
-    items: (o.items ?? []).map((it) => ({ ...it, productName: formatTitleCase(it.productName) })),
+    mergedFrom: o.mergedFrom ? formatTitleCase(o.mergedFrom) : o.mergedFrom,
+    items: (o.items ?? []).map((it) => ({
+      ...it,
+      productName: formatTitleCase(it.productName),
+      cancelledBy: it.cancelledBy ? formatTitleCase(it.cancelledBy) : it.cancelledBy,
+    })),
   }))
 }
 
@@ -339,11 +344,13 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
         return
       }
       const u: StoredBossUser = {
-        id: meRes.user.id, name: meRes.user.name, email: meRes.user.email, phone: meRes.user.phone,
-        roleLabel: meRes.user.roleLabel, bossTier: meRes.user.bossTier, brandName: meRes.user.brandName,
+        id: meRes.user.id, name: formatTitleCase(meRes.user.name), email: meRes.user.email, phone: meRes.user.phone,
+        roleLabel: meRes.user.roleLabel, bossTier: meRes.user.bossTier,
+        brandName: meRes.user.brandName ? formatTitleCase(meRes.user.brandName) : meRes.user.brandName,
       }
-      setBranches(meRes.restaurants)
-      setStoredBranches(meRes.restaurants)
+      const normRestaurants = meRes.restaurants.map(normalizeBossBranch)
+      setBranches(normRestaurants)
+      setStoredBranches(normRestaurants)
       setUser(u)
       setOverview(ovRes)
       void fetchFraudAlertsSilently(selectedBranchId)
@@ -396,7 +403,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
         prev.map((t) => ({
           ...t,
           sessionStaffId: presenceMap[t.id]?.staffId ?? null,
-          sessionStaffName: presenceMap[t.id]?.staffName ?? null,
+          sessionStaffName: presenceMap[t.id]?.staffName ? formatTitleCase(presenceMap[t.id]!.staffName) : null,
         }))
       )
     }
@@ -455,14 +462,16 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
       const initialBranch =
         res.restaurants.length > 1 ? "ALL" : (res.restaurant?.id ?? res.restaurants[0]?.id ?? "")
       const u: StoredBossUser = {
-        id: res.user.id, name: res.user.name, email: res.user.email, phone: res.user.phone,
+        id: res.user.id, name: formatTitleCase(res.user.name), email: res.user.email, phone: res.user.phone,
         roleLabel: res.user.roleLabel || "İşletme Sahibi (Boss)",
-        bossTier: res.user.bossTier, brandName: res.user.brandName,
+        bossTier: res.user.bossTier,
+        brandName: res.user.brandName ? formatTitleCase(res.user.brandName) : res.user.brandName,
       }
-      setBossSession({ accessToken: res.accessToken, user: u, restaurants: res.restaurants, activeBranchId: initialBranch })
+      const normRestaurants = res.restaurants.map(normalizeBossBranch)
+      setBossSession({ accessToken: res.accessToken, user: u, restaurants: normRestaurants, activeBranchId: initialBranch })
       setError(null)
       setUser(u)
-      setBranches(res.restaurants)
+      setBranches(normRestaurants)
       setSelectedBranchIdState(initialBranch)
       setTokenVersion((v) => v + 1)
       return { ok: true }

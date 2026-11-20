@@ -267,7 +267,7 @@ export class RootAdminService {
     return this.runInTransaction(async (em) => {
       const { rootAdminRepo, restaurantRepo } = this.getRepos(em);
       const bossTier: BossTier = dto.bossTier ?? 'franchise_owner';
-      const brandName = dto.brandName?.trim() || null;
+      const brandName = dto.brandName?.trim() ? normalizeStorageText(dto.brandName) : null;
       const brandBranchIds =
         bossTier === 'brand_owner' && brandName
           ? await this.resolveBrandRestaurantIds(brandName, restaurantRepo)
@@ -387,7 +387,7 @@ export class RootAdminService {
       if (dto.phone !== undefined) entity.phone = dto.phone?.trim() || null;
       if (dto.isActive !== undefined) entity.isActive = Boolean(dto.isActive);
       if (dto.bossTier !== undefined) entity.bossTier = dto.bossTier;
-      if (dto.brandName !== undefined) entity.brandName = dto.brandName?.trim() || null;
+      if (dto.brandName !== undefined) entity.brandName = dto.brandName?.trim() ? normalizeStorageText(dto.brandName) : null;
 
       if (dto.restaurantIds !== undefined || dto.brandName !== undefined || dto.bossTier !== undefined) {
         const brandBranchIds =
