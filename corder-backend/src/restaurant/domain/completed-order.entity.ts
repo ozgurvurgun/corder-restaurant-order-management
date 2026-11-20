@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 import { numericColumnTransformer } from '../../common/database/numeric-column.transformer';
+import type { CompletedOrderEditLogEntry } from './services/completed-order-edit-log.policy';
 
 @Entity('completed_orders')
 @Index(['restaurantId', 'closedAt'])
@@ -94,6 +95,9 @@ export class CompletedOrderEntity {
 
   @Column({ name: 'payment_snapshot', type: 'jsonb' })
   paymentSnapshot: unknown;
+
+  @Column({ name: 'edit_history', type: 'jsonb', default: () => "'[]'::jsonb" })
+  editHistory: CompletedOrderEditLogEntry[];
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

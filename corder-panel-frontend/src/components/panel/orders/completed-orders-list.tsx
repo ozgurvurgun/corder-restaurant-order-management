@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, CreditCard, DoorClosed, DoorOpen, MapPin, Pencil, Printer, Receipt, User } from "lucide-react"
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, CreditCard, DoorClosed, DoorOpen, History, MapPin, Pencil, Printer, Receipt, User } from "lucide-react"
 import { itemCountsTowardBill, type ClosedTable, type LedgerCustomer, type PanelOrder, type PanelUser, type Payment } from "@/lib/panel-types"
 import { formatCurrency, formatIstanbulDateTime, formatIstanbulTime, fromMinorUnits, toMinorUnits } from "@/lib/format"
 
@@ -37,10 +37,11 @@ export function CompletedOrdersList(props: {
   canEditCompletedOrder?: boolean
   canPrintReceipt?: boolean
   onEditClosed: (ct: ClosedTable) => void
+  onViewEditHistory?: (ct: ClosedTable) => void
   onPrintTable: (ct: ClosedTable) => void
   onPrintOrder: (orderId: string) => void
 }) {
-  const { paginatedTables, expandedId, setExpandedId, mounted, locale, users, ledgerCustomers, currentPage, totalPages, setCurrentPage, canEditCompletedOrder = false, canPrintReceipt = true, onEditClosed, onPrintTable, onPrintOrder } = props
+  const { paginatedTables, expandedId, setExpandedId, mounted, locale, users, ledgerCustomers, currentPage, totalPages, setCurrentPage, canEditCompletedOrder = false, canPrintReceipt = true, onEditClosed, onViewEditHistory, onPrintTable, onPrintOrder } = props
 
   const getPaymentMethodLabel = (method: string) => {
     switch (method) {
@@ -161,16 +162,24 @@ export function CompletedOrdersList(props: {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {closedTable.editHistory && closedTable.editHistory.length > 0 && onViewEditHistory && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onViewEditHistory(closedTable) }}
+                    className="flex items-center gap-1.5 h-[26px] px-2.5 bg-amber-50 border border-amber-300/90 hover:bg-amber-100 text-amber-900 rounded-lg text-[11px] font-semibold transition-colors"
+                    title="Kapanış Sonrası Düzenleme Geçmişini (Log) Gör"
+                  >
+                    <History className="w-3 h-3 text-amber-700" />
+                    Log ({closedTable.editHistory.length})
+                  </button>
+                )}
                 {canEditCompletedOrder && (
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation(); onEditClosed(closedTable)
-                    }}
+                    onClick={(e) => { e.stopPropagation(); onEditClosed(closedTable) }}
                     className="flex items-center gap-1.5 h-[26px] px-2.5 bg-white border border-[#d1d1d6]/60 hover:bg-[#f5f5f7] text-[#1d1d1f] rounded-lg text-[11px] font-medium transition-colors"
                   >
-                    <Pencil className="w-3 h-3" />{" "}
-                    {locale === "tr" ? "Düzenle" : "Edit"}
+                    <Pencil className="w-3 h-3" /> {locale === "tr" ? "Düzenle" : "Edit"}
                   </button>
                 )}
                 {canPrintReceipt && (

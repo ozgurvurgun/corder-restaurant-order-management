@@ -102,6 +102,7 @@ export interface PanelOrderItem {
 
 export interface PanelOrder {
   id: string
+  orderNumber?: string
   tableId: string
   userId: string
   userName?: string
@@ -112,7 +113,11 @@ export interface PanelOrder {
   mergedFrom?: string
 }
 
-import { itemCountsTowardBill, type PanelSplitSharePayment } from "./panel-domain-types"
+import {
+  itemCountsTowardBill,
+  type CompletedOrderEditLogEntry,
+  type PanelSplitSharePayment,
+} from "./panel-domain-types"
 export { itemCountsTowardBill }
 
 export type PanelTableStatus = "empty" | "occupied" | "ordering" | "checkout"
@@ -177,6 +182,7 @@ export interface ClosedTable {
   closedBy: string
   openedAt: Date
   closedAt: Date
+  editHistory?: CompletedOrderEditLogEntry[]
 }
 
 export interface OpenAccountLine {

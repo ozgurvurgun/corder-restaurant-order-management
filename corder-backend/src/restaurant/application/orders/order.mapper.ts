@@ -140,6 +140,7 @@ export function serializeCompletedOrder(entity: CompletedOrderEntity) {
     paymentSplit: entity.paymentSplit,
     paymentDiscount: entity.paymentDiscount,
     paymentTip: Number(entity.paymentTip),
+    editHistory: Array.isArray(entity.editHistory) ? entity.editHistory : [],
     createdAt: entity.createdAt,
   };
 }

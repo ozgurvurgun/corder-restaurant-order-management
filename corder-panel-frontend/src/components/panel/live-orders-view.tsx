@@ -3,6 +3,7 @@ import type { ClosedTable } from "@/lib/panel-types"
 import { itemCountsTowardBill } from "@/lib/panel-types"
 import { usePanelStore } from "@/lib/panel-store"
 import { EditCompletedOrderModal } from "./edit-completed-order-modal"
+import { CompletedOrderEditHistoryModal } from "./completed-order-edit-history-modal"
 import { usePanelI18n } from "@/lib/panel-i18n"
 import { usePanelToast } from "./panel-toast"
 import { Filter } from "lucide-react"
@@ -35,6 +36,7 @@ export default function CompletedOrdersView() {
   const [customEndDate, setCustomEndDate] = useState("")
   const [mounted, setMounted] = useState(false)
   const [editingClosed, setEditingClosed] = useState<ClosedTable | null>(null)
+  const [viewingHistoryClosed, setViewingHistoryClosed] = useState<ClosedTable | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
 
@@ -242,6 +244,7 @@ export default function CompletedOrdersView() {
           canEditCompletedOrder={canEditCompletedOrder}
           canPrintReceipt={canPrintReceipt}
           onEditClosed={setEditingClosed}
+          onViewEditHistory={setViewingHistoryClosed}
           onPrintTable={(ct) => void handlePrint(ct)}
           onPrintOrder={(id) => void handlePrintOrder(id)}
         />
@@ -250,6 +253,12 @@ export default function CompletedOrdersView() {
         <EditCompletedOrderModal
           closedTable={editingClosed}
           onClose={() => setEditingClosed(null)}
+        />
+      )}
+      {viewingHistoryClosed && (
+        <CompletedOrderEditHistoryModal
+          closedTable={viewingHistoryClosed}
+          onClose={() => setViewingHistoryClosed(null)}
         />
       )}
     </div>

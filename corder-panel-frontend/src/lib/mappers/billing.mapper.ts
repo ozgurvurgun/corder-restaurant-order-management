@@ -74,6 +74,7 @@ export function mapCompletedOrderDtoToClosedTable(
 ): ClosedTable {
   const orders: PanelOrder[] = dto.orders.map((o) => ({
     id: o.id,
+    ...(o.orderNumber ? { orderNumber: o.orderNumber } : {}),
     tableId: o.tableId ?? "",
     userId: o.userId ?? "",
     userName: o.userName?.trim() ? formatTitleCase(o.userName) : undefined,
@@ -127,6 +128,33 @@ export function mapCompletedOrderDtoToClosedTable(
       : {}),
   }
 
+  const editHistory = Array.isArray(dto.editHistory)
+    ? dto.editHistory.map((entry) => ({
+        ...entry,
+        editedBy: formatTitleCase(entry.editedBy) || "Yönetici",
+        previousLedgerCustomerName: entry.previousLedgerCustomerName
+          ? formatTitleCase(entry.previousLedgerCustomerName)
+          : null,
+        nextLedgerCustomerName: entry.nextLedgerCustomerName
+          ? formatTitleCase(entry.nextLedgerCustomerName)
+          : null,
+        changes: Array.isArray(entry.changes)
+          ? entry.changes.map((ch) => ({
+              ...ch,
+              ...(ch.productName
+                ? { productName: formatTitleCase(ch.productName) }
+                : {}),
+              ...(ch.previousCustomerName
+                ? { previousCustomerName: formatTitleCase(ch.previousCustomerName) }
+                : {}),
+              ...(ch.nextCustomerName
+                ? { nextCustomerName: formatTitleCase(ch.nextCustomerName) }
+                : {}),
+            }))
+          : [],
+      }))
+    : []
+
   return {
     id: dto.id,
     tableName: formatTitleCase(dto.tableName),
@@ -140,6 +168,7 @@ export function mapCompletedOrderDtoToClosedTable(
     closedBy: formatTitleCase(dto.closedBy),
     openedAt: new Date(dto.openedAt),
     closedAt: new Date(dto.closedAt),
+    editHistory,
   }
 }
 

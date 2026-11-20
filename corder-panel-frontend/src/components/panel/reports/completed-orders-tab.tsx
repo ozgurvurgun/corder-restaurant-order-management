@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react"
-import { ChevronDown, ChevronUp } from "lucide-react"
+import { ChevronDown, ChevronUp, History } from "lucide-react"
 import type {
   CancelledItem,
   ClosedTable,
@@ -12,6 +12,7 @@ import {
   toMinorUnits,
 } from "@/lib/format"
 import { PaginationBar } from "@/components/ui/pagination-bar"
+import { CompletedOrderEditHistoryModal } from "../completed-order-edit-history-modal"
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: "Nakit",
@@ -32,6 +33,7 @@ export function HistoryTab(props: {
   const [showCancelledDetail, setShowCancelledDetail] = useState(true)
   const [closedPage, setClosedPage] = useState(1)
   const [cancelledPage, setCancelledPage] = useState(1)
+  const [viewingHistoryClosed, setViewingHistoryClosed] = useState<ClosedTable | null>(null)
   const pageSize = 10
 
   const paginatedClosed = useMemo(
@@ -139,7 +141,19 @@ export function HistoryTab(props: {
                     {formatPaymentLabel(ct)}
                   </td>
                   <td className="px-4 py-2 text-[12px] text-right text-[#86868b]">
-                    {formatIstanbulDateTime(ct.closedAt)}
+                    <div className="inline-flex items-center justify-end gap-2">
+                      {ct.editHistory && ct.editHistory.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setViewingHistoryClosed(ct)}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-300 text-amber-900 text-[10.5px] font-semibold hover:bg-amber-100"
+                        >
+                          <History className="w-3 h-3 text-amber-700" />
+                          Log ({ct.editHistory.length})
+                        </button>
+                      )}
+                      <span>{formatIstanbulDateTime(ct.closedAt)}</span>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -239,6 +253,12 @@ export function HistoryTab(props: {
           </div>
         )}
       </div>
+      {viewingHistoryClosed && (
+        <CompletedOrderEditHistoryModal
+          closedTable={viewingHistoryClosed}
+          onClose={() => setViewingHistoryClosed(null)}
+        />
+      )}
     </>
   )
 }

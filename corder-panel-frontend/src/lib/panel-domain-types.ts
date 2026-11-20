@@ -225,3 +225,68 @@ export interface Campaign {
   createdAt: Date
 }
 
+export type CompletedOrderEditChangeType =
+  | "item_cancelled"
+  | "item_restored"
+  | "item_quantity_changed"
+  | "item_cancel_reason_changed"
+  | "payment_method_changed"
+  | "payment_split_changed"
+  | "ledger_customer_changed"
+  | "discount_changed"
+  | "net_amount_changed"
+
+export interface CompletedOrderEditSplitPart {
+  method: string
+  amount: number
+}
+
+export interface CompletedOrderEditChangeItem {
+  type: CompletedOrderEditChangeType
+  orderIndex?: number
+  orderNumber?: string | null
+  productName?: string
+  unitPrice?: number
+  quantity?: number
+  previousQuantity?: number
+  nextQuantity?: number
+  lineTotal?: number
+  previousLineTotal?: number
+  nextLineTotal?: number
+  cancelReason?: string | null
+  previousCancelReason?: string | null
+  previousMethod?: string
+  nextMethod?: string
+  previousSplit?: CompletedOrderEditSplitPart[] | null
+  nextSplit?: CompletedOrderEditSplitPart[] | null
+  previousCustomerName?: string | null
+  nextCustomerName?: string | null
+  previousDiscountAmount?: number
+  nextDiscountAmount?: number
+  previousTotalAmount?: number
+  nextTotalAmount?: number
+  previousNetAmount?: number
+  nextNetAmount?: number
+}
+
+export interface CompletedOrderEditLogEntry {
+  id: string
+  editedAt: string
+  editedBy: string
+  editedByUserId?: string | null
+  previousTotalAmount: number
+  nextTotalAmount: number
+  previousDiscountAmount: number
+  nextDiscountAmount: number
+  previousNetAmount: number
+  nextNetAmount: number
+  previousMethod: string
+  nextMethod: string
+  previousSplit?: CompletedOrderEditSplitPart[] | null
+  nextSplit?: CompletedOrderEditSplitPart[] | null
+  previousLedgerCustomerName?: string | null
+  nextLedgerCustomerName?: string | null
+  changes: CompletedOrderEditChangeItem[]
+}
+
+

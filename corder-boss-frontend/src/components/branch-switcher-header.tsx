@@ -114,7 +114,7 @@ export function BranchSwitcherHeader({ activeTab = "dashboard" }: { activeTab?: 
             </button>
 
             {showNotifs && (
-              <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 rounded-2xl border border-[#e5e5ea] bg-white shadow-2xl overflow-hidden z-50">
+              <div className="fixed left-3 right-3 top-[58px] sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-96 rounded-2xl border border-[#e5e5ea] bg-white shadow-2xl overflow-hidden z-50">
                 <div className="flex items-center justify-between border-b border-[#e5e5ea] px-4 py-3">
                   <div className="flex items-center gap-2">
                     <Megaphone className="h-4 w-4 text-[#e63462]" />

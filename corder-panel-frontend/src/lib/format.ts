@@ -169,6 +169,22 @@ export function formatIstanbulDateTime(d: Date | string | number): string {
   return `${datePart} ${timePart}`
 }
 
+export function formatIstanbulDateTimeWithSeconds(
+  d: Date | string | number,
+): string {
+  const date = d instanceof Date ? d : new Date(d)
+  if (Number.isNaN(date.getTime())) return ""
+  const datePart = formatIstanbulDate(date)
+  const timePart = date.toLocaleTimeString("tr-TR", {
+    timeZone: ISTANBUL_TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  })
+  if (!datePart) return ""
+  return `${datePart} ${timePart}`
+}
+
 export function getIstanbulYmd(d: Date | string | number = new Date()): string {
   const date = d instanceof Date ? d : new Date(d)
   const validDate = Number.isNaN(date.getTime()) ? new Date() : date

@@ -1,6 +1,7 @@
 import type {
   CloseCheckPaymentMethod,
   CloseCheckSplitMethod,
+  CompletedOrderEditLogEntry,
   MenuTemplateId,
   PanelDiscountType,
   PanelTable,
@@ -148,6 +149,7 @@ export interface CompletedOrderItemSnapshotDto {
 
 export interface CompletedOrderSnapshotDto {
   id: string
+  orderNumber?: string | null
   tableId: string
   userId: string
   userName?: string | null
@@ -203,6 +205,7 @@ export interface CompletedOrderDto {
   paymentSplit?: CompletedPaymentSplitDto[]
   paymentDiscount?: CompletedPaymentDiscountDto
   paymentTip?: number
+  editHistory?: CompletedOrderEditLogEntry[]
   createdAt: string
 }
 

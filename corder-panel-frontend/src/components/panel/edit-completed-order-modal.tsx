@@ -26,6 +26,7 @@ function ordersToSnapshots(orders: PanelOrder[]): CompletedOrderSnapshotDto[] {
   const now = new Date().toISOString()
   return orders.map((o) => ({
     id: o.id,
+    ...(o.orderNumber ? { orderNumber: o.orderNumber } : {}),
     tableId: o.tableId || "",
     userId: o.userId || "",
     ...(o.userName ? { userName: o.userName } : {}),

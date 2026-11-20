@@ -232,17 +232,17 @@ export function StaffUsersTab() {
                     key={u.id}
                     className="rounded-2xl border border-[#e5e5ea] bg-[#f9f9fb] p-3.5"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
                         <div
                           className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-[14px] font-semibold text-white"
                           style={{ backgroundColor: u.roleColor || "#e63462" }}
                         >
                           {u.name.charAt(0).toLocaleUpperCase("tr-TR")}
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <h3 className="truncate text-[14px] font-semibold text-[#1d1d1f]">
+                            <h3 className="text-[14px] font-semibold text-[#1d1d1f] break-words">
                               {u.name}
                             </h3>
                             <span
@@ -257,24 +257,24 @@ export function StaffUsersTab() {
                               </span>
                             )}
                           </div>
-                          <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-[#86868b]">
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#86868b]">
                             {u.email && (
-                              <span className="flex items-center gap-1">
-                                <Mail className="h-3 w-3" />
-                                <span>{u.email}</span>
+                              <span className="inline-flex items-center gap-1 min-w-0 max-w-full">
+                                <Mail className="h-3 w-3 flex-shrink-0" />
+                                <span className="truncate">{u.email}</span>
                                 <CopyEmailButton email={u.email} />
                               </span>
                             )}
                             {u.phone && (
-                              <span className="flex items-center gap-1">
-                                <Phone className="h-3 w-3" /> {u.phone}
+                              <span className="inline-flex items-center gap-1">
+                                <Phone className="h-3 w-3 flex-shrink-0" /> {u.phone}
                               </span>
                             )}
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+                      <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 flex-shrink-0 pt-2.5 sm:pt-0 border-t border-[#e5e5ea]/80 sm:border-t-0">
                         <div
                           onClick={() => void handleToggleTerminalAccess(u)}
                           title={
@@ -305,33 +305,35 @@ export function StaffUsersTab() {
                             />
                           </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => void handleToggleActive(u)}
-                          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                            u.isActive
-                              ? "bg-green-100 text-green-700"
-                              : "bg-red-100 text-red-600"
-                          }`}
-                        >
-                          {u.isActive ? "Aktif" : "Pasif"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openEditModal(u)}
-                          className="flex h-8 w-8 items-center justify-center rounded-xl bg-white border border-[#e5e5ea] text-[#1d1d1f] hover:bg-[#e8e8ed]"
-                          title="Düzenle & Yetkileri Özelleştir"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleDelete(u)}
-                          className="flex h-8 w-8 items-center justify-center rounded-xl bg-white border border-[#e5e5ea] text-red-500 hover:bg-red-50"
-                          title="Sil"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleToggleActive(u)}
+                            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                              u.isActive
+                                ? "bg-green-100 text-green-700"
+                                : "bg-red-100 text-red-600"
+                            }`}
+                          >
+                            {u.isActive ? "Aktif" : "Pasif"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(u)}
+                            className="flex h-8 w-8 items-center justify-center rounded-xl bg-white border border-[#e5e5ea] text-[#1d1d1f] hover:bg-[#e8e8ed]"
+                            title="Düzenle & Yetkileri Özelleştir"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleDelete(u)}
+                            className="flex h-8 w-8 items-center justify-center rounded-xl bg-white border border-[#e5e5ea] text-red-500 hover:bg-red-50"
+                            title="Sil"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
 

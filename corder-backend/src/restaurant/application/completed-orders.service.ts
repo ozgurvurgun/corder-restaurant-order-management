@@ -10,6 +10,7 @@ import {
   SettlementActorPolicy,
 } from '../domain/services/check-settlement.policy';
 import { OrderStatusPolicy } from '../domain/services/order-status.policy';
+import { buildCompletedOrderEditLogEntry } from '../domain/services/completed-order-edit-log.policy';
 import { BilledOrderLineForStock } from '../domain/services/recipe-stock.policy';
 import { CloseCheckSplitDto } from '../api/dto/close-check.dto';
 import { UpdateCompletedOrderDto } from '../api/dto/update-completed-order.dto';
@@ -144,8 +145,12 @@ export class CompletedOrdersService {
       }
 
       const prevMethod = row.paymentMethod;
+      const prevTotalAmount = Number(row.totalAmount);
+      const prevDiscountAmount = Number(row.discountAmount);
+      const prevNetAmount = Number(row.netAmount);
       const prevNetMinor = toMinorUnits(row.netAmount);
       const prevDiscountMinor = toMinorUnits(row.discountAmount);
+      const prevOrdersSnapshot = row.ordersSnapshot;
       const prevSplits = Array.isArray(row.paymentSplit)
         ? (row.paymentSplit as Array<{ method: string; amount: number }>)
         : null;
@@ -234,6 +239,26 @@ export class CompletedOrdersService {
       const discountAmount = fromMinorUnits(settlement.discountMinorUnits);
       const netAmount = fromMinorUnits(settlement.netMinorUnits);
 
+      const editEntry = buildCompletedOrderEditLogEntry({
+        editedBy: safeActorName,
+        editedByUserId: actor?.id?.trim() || null,
+        previousOrdersSnapshot: prevOrdersSnapshot,
+        nextOrdersSnapshot: dto.orders,
+        previousTotalAmount: prevTotalAmount,
+        nextTotalAmount: totalAmount,
+        previousDiscountAmount: prevDiscountAmount,
+        nextDiscountAmount: discountAmount,
+        previousNetAmount: prevNetAmount,
+        nextNetAmount: netAmount,
+        previousMethod: prevMethod,
+        nextMethod: dto.payment.method,
+        previousSplit: prevSplits,
+        nextSplit: settlement.normalizedSplits ?? null,
+        previousLedgerCustomerName: prevPaymentSnap.ledgerCustomerName ?? null,
+        nextLedgerCustomerName:
+          ledgerCustomer?.name ?? dto.payment.ledgerCustomerName ?? null,
+      });
+
       row.ordersSnapshot = dto.orders as unknown[];
       row.paymentSnapshot = {
         ...dto.payment,
@@ -255,6 +280,10 @@ export class CompletedOrdersService {
       row.paymentTip = fromMinorUnits(settlement.tipMinorUnits);
       row.paymentSplit = settlement.normalizedSplits ?? null;
       row.paymentDiscount = settlement.discountSnapshot ?? null;
+      row.editHistory = [
+        ...(Array.isArray(row.editHistory) ? row.editHistory : []),
+        editEntry,
+      ];
 
       const savedRow = await em.save(CompletedOrderEntity, row);
 
@@ -284,6 +313,7 @@ export class CompletedOrdersService {
             nextMethod: dto.payment.method,
             previousNetAmount: fromMinorUnits(prevNetMinor),
             nextNetAmount: netAmount,
+            changes: editEntry.changes,
           },
         }),
       );
