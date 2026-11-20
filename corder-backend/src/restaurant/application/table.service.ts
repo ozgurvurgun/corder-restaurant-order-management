@@ -36,7 +36,7 @@ export class TableService {
     if (table.sessionStaffId && !table.hasActiveLock(SESSION_LOCK_STALE_MS, now)) {
       table.releaseSession();
     }
-    table.qrToken = TableQrTokenPolicy.generateToken(table.restaurantId, table.id);
+    table.qrToken = TableQrTokenPolicy.generateToken(table.restaurantId, table.name);
     return table;
   }
 
@@ -166,7 +166,7 @@ export class TableService {
       section,
     });
     const saved = await this.repo.save(entity);
-    saved.qrToken = TableQrTokenPolicy.generateToken(restaurantId, saved.id);
+    saved.qrToken = TableQrTokenPolicy.generateToken(restaurantId, saved.name);
     return saved;
   }
 
@@ -201,7 +201,7 @@ export class TableService {
     }
     const saved = await this.repo.save(entities);
     for (const table of saved) {
-      table.qrToken = TableQrTokenPolicy.generateToken(restaurantId, table.id);
+      table.qrToken = TableQrTokenPolicy.generateToken(restaurantId, table.name);
     }
     return saved;
   }
@@ -269,7 +269,7 @@ export class TableService {
         }
       }
       const saved = await em.save(TableEntity, entity);
-      saved.qrToken = TableQrTokenPolicy.generateToken(restaurantId, saved.id);
+      saved.qrToken = TableQrTokenPolicy.generateToken(restaurantId, saved.name);
       return saved;
     });
   }
