@@ -151,6 +151,19 @@ export class CompletedOrdersService {
       const prevNetMinor = toMinorUnits(row.netAmount);
       const prevDiscountMinor = toMinorUnits(row.discountAmount);
       const prevOrdersSnapshot = row.ordersSnapshot;
+      const prevOrderNumberById = new Map<string, string>();
+      if (Array.isArray(prevOrdersSnapshot)) {
+        for (const snap of prevOrdersSnapshot as Array<{ id?: unknown; orderNumber?: unknown }>) {
+          if (typeof snap?.id === 'string' && typeof snap?.orderNumber === 'string' && snap.orderNumber.trim()) {
+            prevOrderNumberById.set(snap.id, snap.orderNumber.trim());
+          }
+        }
+      }
+      for (const ord of dto.orders) {
+        if (!ord.orderNumber && prevOrderNumberById.has(ord.id)) {
+          ord.orderNumber = prevOrderNumberById.get(ord.id);
+        }
+      }
       const prevSplits = Array.isArray(row.paymentSplit)
         ? (row.paymentSplit as Array<{ method: string; amount: number }>)
         : null;

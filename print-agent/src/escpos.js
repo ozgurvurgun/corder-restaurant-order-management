@@ -1,8 +1,6 @@
 const {
   BOLD_ON,
   BOLD_OFF,
-  SIZE_DOUBLE_HEIGHT,
-  SIZE_NORMAL,
   trSafe,
   formatTitleCase,
   encodeCp857,
@@ -49,12 +47,7 @@ function appendKitchenItemsBlock(chunks, push, items, width, showLineNotes) {
   push(hrLine("-", width))
 }
 
-function appendTicketBanner(chunks, push, width, isReprint, stamp, heading) {
-  if (isReprint) {
-    chunks.push(BOLD_ON, SIZE_DOUBLE_HEIGHT)
-    push(centerLine("*** TEKRAR BASKI ***", width))
-    chunks.push(SIZE_NORMAL, BOLD_OFF)
-  }
+function appendTicketBanner(chunks, push, width, stamp, heading) {
   if (stamp) {
     chunks.push(BOLD_ON)
     push(centerLine(stamp, width))
@@ -78,14 +71,13 @@ function resolveDepartmentTicketHeading(printerName, suffix) {
 
 function buildKitchenTicket(payload, options = {}) {
   const width = clampWidth(options.charsPerLine)
-  const footerLine = formatTitleCase(options.footerLine)
   const feedBeforeCut = Math.min(255, Math.max(0, Number(options.feedLinesBeforeCut) ?? 6))
   const asciiOnly = Boolean(options.asciiFallback)
   const chunks = []
   const push = (s) => chunks.push(encodeCp857(s, asciiOnly))
   const heading = resolveDepartmentTicketHeading(payload.targetPrinter?.name, "SİPARİŞ FİŞİ")
 
-  appendTicketBanner(chunks, push, width, payload.isReprint, "", heading)
+  appendTicketBanner(chunks, push, width, "", heading)
   push(kvLine("Tarih/Saat", formatTicketDate(payload.createdAt), width))
   push(kvLine("Sipariş No", String(payload.orderNumber || "-").trim(), width))
   chunks.push(BOLD_ON)
@@ -94,15 +86,11 @@ function buildKitchenTicket(payload, options = {}) {
   push(kvLine("Garson", formatTitleCase(payload.waiterName) || "-", width))
 
   appendKitchenItemsBlock(chunks, push, payload.items, width, options.includeLineNotes !== false)
-  if (footerLine) {
-    push(centerLine(footerLine, width))
-  }
   return escposBytes(Buffer.concat(chunks), feedBeforeCut, { autoCut: options.autoCut !== false })
 }
 
 function buildShiftReportTicket(payload, options = {}) {
   const width = clampWidth(options.charsPerLine)
-  const footerLine = formatTitleCase(options.footerLine)
   const feedBeforeCut = Math.min(255, Math.max(0, Number(options.feedLinesBeforeCut) ?? 6))
   const asciiOnly = Boolean(options.asciiFallback)
   const chunks = []
@@ -112,10 +100,9 @@ function buildShiftReportTicket(payload, options = {}) {
   const heading = isZ ? "Z RAPORU (KAPANIŞ RAPORU)" : "X RAPORU (ANLIK ÖZET)"
   const stamp = formatTitleCase(r.restaurantName)
 
-  appendTicketBanner(chunks, push, width, payload.isReprint, stamp, heading)
+  appendTicketBanner(chunks, push, width, stamp, heading)
   push(hrLine("-", width))
   push(kvLine("Rapor Tarihi", formatTicketDate(payload.createdAt), width))
-  push(kvLine("Vardiya Açan", formatTitleCase(r.openedBy) || "-", width))
   push(kvLine("Vardiya Açan", formatTitleCase(r.openedBy) || "-", width))
   if (r.closedBy) {
     push(kvLine("Vardiya Kapatan", formatTitleCase(r.closedBy), width))
@@ -165,7 +152,6 @@ function buildShiftReportTicket(payload, options = {}) {
   chunks.push(BOLD_ON)
   push(centerLine("DAHİLİ VARDİYA ÖZET RAPORUDUR", width))
   chunks.push(BOLD_OFF)
-  if (footerLine) push(centerLine(footerLine, width))
 
   return escposBytes(Buffer.concat(chunks), feedBeforeCut, {
     autoCut: options.autoCut !== false,
@@ -184,7 +170,7 @@ function buildReceipt(payload, options = {}) {
   const chunks = []
   const push = (s) => chunks.push(encodeCp857(s, asciiOnly))
 
-  appendTicketBanner(chunks, push, width, payload.isReprint, "", "ADİSYON / HESAP FİŞİ")
+  appendTicketBanner(chunks, push, width, "", "ADİSYON / HESAP FİŞİ")
   push(kvLine("Tarih/Saat", formatTicketDate(payload.createdAt), width))
   push(kvLine("Sipariş No", String(payload.orderNumber || "-").trim(), width))
   push(kvLine("Masa", formatTitleCase(payload.tableName) || "-", width))
@@ -263,14 +249,13 @@ function buildReceipt(payload, options = {}) {
 
 function buildKitchenCancelTicket(payload, options = {}) {
   const width = clampWidth(options.charsPerLine)
-  const footerLine = formatTitleCase(options.footerLine)
   const feedBeforeCut = Math.min(255, Math.max(0, Number(options.feedLinesBeforeCut) ?? 6))
   const asciiOnly = Boolean(options.asciiFallback)
   const chunks = []
   const push = (s) => chunks.push(encodeCp857(s, asciiOnly))
   const heading = resolveDepartmentTicketHeading(payload.targetPrinter?.name, "İPTAL FİŞİ")
 
-  appendTicketBanner(chunks, push, width, false, "", heading)
+  appendTicketBanner(chunks, push, width, "", heading)
   push(kvLine("Tarih/Saat", formatTicketDate(payload.createdAt), width))
   push(kvLine("Sipariş No", String(payload.orderNumber || "-").trim(), width))
   chunks.push(BOLD_ON)
@@ -280,9 +265,6 @@ function buildKitchenCancelTicket(payload, options = {}) {
   push(kvWrappedLines("İptal Nedeni", formatTitleCase(payload.cancelReason) || "-", width))
 
   appendKitchenItemsBlock(chunks, push, payload.items, width, options.includeLineNotes !== false)
-  if (footerLine) {
-    push(centerLine(footerLine, width))
-  }
   return escposBytes(Buffer.concat(chunks), feedBeforeCut, { autoCut: options.autoCut !== false })
 }
 

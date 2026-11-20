@@ -64,6 +64,10 @@ export class CompletedOrderDto {
   @IsString()
   id!: string;
 
+  @IsOptional()
+  @IsString()
+  orderNumber?: string;
+
   @IsString()
   tableId!: string;
 

@@ -36,6 +36,41 @@ export function formatIstanbulOrderDatePrefix(date = new Date()): string {
   return `${yy}${mm}${dd}`;
 }
 
+export async function allocateNextOrderNumber(
+  em: EntityManager,
+  restaurantId: string,
+  now = new Date(),
+): Promise<string> {
+  const datePrefix = formatIstanbulOrderDatePrefix(now);
+  const queryFn = (em as unknown as { query?: (sql: string, params?: unknown[]) => Promise<unknown[]> }).query;
+  if (typeof queryFn !== 'function') {
+    return `${datePrefix}-001`;
+  }
+  await queryFn.call(
+    em,
+    `SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`,
+    [restaurantId, datePrefix],
+  );
+  const rows = (await queryFn.call(
+    em,
+    `SELECT COALESCE(
+       MAX(
+         CASE
+           WHEN SUBSTRING("order_number" FROM '^' || $2 || '-([0-9]+)$') IS NOT NULL
+           THEN CAST(SUBSTRING("order_number" FROM '^' || $2 || '-([0-9]+)$') AS INTEGER)
+           ELSE 0
+         END
+       ),
+       0
+     ) + 1 AS next_seq
+     FROM "orders"
+     WHERE "restaurant_id" = $1 AND "order_number" LIKE ($2 || '-%')`,
+    [restaurantId, datePrefix],
+  )) as Array<{ next_seq?: number | string }>;
+  const nextSeq = Math.max(1, Number(rows?.[0]?.next_seq) || 1);
+  return `${datePrefix}-${String(nextSeq).padStart(3, '0')}`;
+}
+
 @Injectable()
 export class CreateOrderUseCase {
   constructor(
@@ -88,34 +123,7 @@ export class CreateOrderUseCase {
     restaurantId: string,
     now = new Date(),
   ): Promise<string> {
-    const datePrefix = formatIstanbulOrderDatePrefix(now);
-    const queryFn = (em as unknown as { query?: (sql: string, params?: unknown[]) => Promise<unknown[]> }).query;
-    if (typeof queryFn !== 'function') {
-      return `${datePrefix}-001`;
-    }
-    await queryFn.call(
-      em,
-      `SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`,
-      [restaurantId, datePrefix],
-    );
-    const rows = (await queryFn.call(
-      em,
-      `SELECT COALESCE(
-         MAX(
-           CASE
-             WHEN SUBSTRING("order_number" FROM '^' || $2 || '-([0-9]+)$') IS NOT NULL
-             THEN CAST(SUBSTRING("order_number" FROM '^' || $2 || '-([0-9]+)$') AS INTEGER)
-             ELSE 0
-           END
-         ),
-         0
-       ) + 1 AS next_seq
-       FROM "orders"
-       WHERE "restaurant_id" = $1 AND "order_number" LIKE ($2 || '-%')`,
-      [restaurantId, datePrefix],
-    )) as Array<{ next_seq?: number | string }>;
-    const nextSeq = Math.max(1, Number(rows?.[0]?.next_seq) || 1);
-    return `${datePrefix}-${String(nextSeq).padStart(3, '0')}`;
+    return allocateNextOrderNumber(em, restaurantId, now);
   }
 
   async execute(

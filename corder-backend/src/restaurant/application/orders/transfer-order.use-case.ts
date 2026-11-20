@@ -9,6 +9,7 @@ import { OrdersGateway } from '../../api/orders.gateway';
 import { CashShiftService } from '../cash-shift.service';
 import { TableService } from '../table.service';
 import { OrderQueryService } from './order-query.service';
+import { allocateNextOrderNumber } from './create-order.use-case';
 import { normalizeStorageText } from '../../../common/text/text-normalizer';
 
 export interface MoveItemsToTableInput {
@@ -339,6 +340,7 @@ export class TransferOrderUseCase {
       );
 
       const now = new Date();
+      const orderNumber = await allocateNextOrderNumber(em, restaurantId, now);
       const movedSnapshots = await this.takeSelectedQuantitiesAndPruneSourceOrders(
         em,
         restaurantId,
@@ -360,6 +362,7 @@ export class TransferOrderUseCase {
         OrderEntity,
         em.create(OrderEntity, {
           restaurantId,
+          orderNumber,
           tableId: toTableId,
           userId: newUserId,
           userDisplayName: moverName ? normalizeStorageText(moverName) : null,
