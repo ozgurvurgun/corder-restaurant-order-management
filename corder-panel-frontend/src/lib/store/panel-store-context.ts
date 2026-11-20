@@ -198,6 +198,7 @@ export interface PanelStore {
     target:
       | string
       | { orderId: string }
+      | { completedOrderId: string }
       | {
           tableName: string
           waiterName?: string

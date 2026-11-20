@@ -182,7 +182,7 @@ export function CompletedOrdersList(props: {
                     <Pencil className="w-3 h-3" /> {locale === "tr" ? "Düzenle" : "Edit"}
                   </button>
                 )}
-                {canPrintReceipt && (
+                {canPrintReceipt && activeItems.length > 0 && (
                   <button type="button" onClick={(e) => { e.stopPropagation(); onPrintTable(closedTable) }} className="flex items-center gap-1.5 h-[26px] px-3 bg-[#1d1d1f] hover:bg-[#3a3a3c] text-white rounded-lg text-[11px] font-medium transition-colors">
                     <Printer className="w-3 h-3" />{" "}
                     {locale === "tr" ? "Fiş Yazdır" : "Print Receipt"}

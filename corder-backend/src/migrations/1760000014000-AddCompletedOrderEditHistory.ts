@@ -34,20 +34,40 @@ export class AddCompletedOrderEditHistory1760000014000
               'nextSplit', co_inner.payment_split,
               'changes', COALESCE(
                 al.metadata->'changes',
-                jsonb_build_array(
-                  jsonb_build_object(
-                    'type', 'payment_method_changed',
-                    'previousMethod', COALESCE(al.metadata->>'previousMethod', co_inner.payment_method),
-                    'nextMethod', COALESCE(al.metadata->>'nextMethod', co_inner.payment_method),
-                    'nextSplit', co_inner.payment_split
-                  ),
-                  jsonb_build_object(
-                    'type', 'net_amount_changed',
-                    'previousTotalAmount', COALESCE((al.metadata->>'previousNetAmount')::numeric, co_inner.total_amount),
-                    'nextTotalAmount', COALESCE((al.metadata->>'nextNetAmount')::numeric, co_inner.total_amount),
-                    'previousNetAmount', COALESCE((al.metadata->>'previousNetAmount')::numeric, co_inner.net_amount),
-                    'nextNetAmount', COALESCE((al.metadata->>'nextNetAmount')::numeric, co_inner.net_amount)
-                  )
+                (
+                  SELECT COALESCE(jsonb_agg(ch), '[]'::jsonb)
+                  FROM (
+                    SELECT jsonb_build_object(
+                      'type', 'item_cancelled',
+                      'orderIndex', ord_idx,
+                      'orderNumber', ord_elem->>'orderNumber',
+                      'productName', it_elem->>'productName',
+                      'quantity', COALESCE((it_elem->>'quantity')::int, 1),
+                      'unitPrice', COALESCE((it_elem->>'price')::numeric, 0),
+                      'lineTotal', COALESCE((it_elem->>'price')::numeric, 0) * COALESCE((it_elem->>'quantity')::int, 1),
+                      'cancelReason', it_elem->>'cancelReason'
+                    ) AS ch
+                    FROM jsonb_array_elements(co_inner.orders_snapshot) WITH ORDINALITY AS ord(ord_elem, ord_idx),
+                         jsonb_array_elements(COALESCE(ord_elem->'items', '[]'::jsonb)) AS it(it_elem)
+                    WHERE it_elem->>'status' = 'cancelled'
+                    UNION ALL
+                    SELECT jsonb_build_object(
+                      'type', 'payment_method_changed',
+                      'previousMethod', COALESCE(al.metadata->>'previousMethod', co_inner.payment_method),
+                      'nextMethod', COALESCE(al.metadata->>'nextMethod', co_inner.payment_method),
+                      'nextSplit', co_inner.payment_split
+                    ) AS ch
+                    WHERE COALESCE(al.metadata->>'previousMethod', co_inner.payment_method) <> COALESCE(al.metadata->>'nextMethod', co_inner.payment_method)
+                    UNION ALL
+                    SELECT jsonb_build_object(
+                      'type', 'net_amount_changed',
+                      'previousTotalAmount', COALESCE((al.metadata->>'previousNetAmount')::numeric, co_inner.total_amount),
+                      'nextTotalAmount', COALESCE((al.metadata->>'nextNetAmount')::numeric, co_inner.total_amount),
+                      'previousNetAmount', COALESCE((al.metadata->>'previousNetAmount')::numeric, co_inner.net_amount),
+                      'nextNetAmount', COALESCE((al.metadata->>'nextNetAmount')::numeric, co_inner.net_amount)
+                    ) AS ch
+                    WHERE COALESCE((al.metadata->>'previousNetAmount')::numeric, co_inner.net_amount) <> COALESCE((al.metadata->>'nextNetAmount')::numeric, co_inner.net_amount)
+                  ) diff_items
                 )
               )
             )

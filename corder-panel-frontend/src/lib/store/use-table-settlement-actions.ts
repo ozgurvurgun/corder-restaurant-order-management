@@ -225,6 +225,7 @@ export function useTableSettlementActions(params: {
       target:
         | string
         | { orderId: string }
+        | { completedOrderId: string }
         | {
             tableName: string
             waiterName?: string
@@ -236,6 +237,7 @@ export function useTableSettlementActions(params: {
       try {
         if (typeof target === "string") await api.orders.printReceipt(token, { tableId: target })
         else if ("orderId" in target) await api.orders.printReceipt(token, { orderId: target.orderId })
+        else if ("completedOrderId" in target) await api.orders.printReceipt(token, { completedOrderId: target.completedOrderId })
         else await api.orders.printReceipt(token, target)
         return true
       } catch (err) {

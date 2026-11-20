@@ -111,26 +111,19 @@ export default function CompletedOrdersView() {
 
   const handlePrint = async (closedTable: ClosedTable) => {
     if (!canPrintReceipt) return
-    const items = closedTable.orders.flatMap((o) =>
-      o.items
-        .filter(itemCountsTowardBill)
-        .map((i) => ({
-          productName: i.productName,
-          quantity: i.quantity,
-          price: i.price,
-          note: i.note,
-        })),
+    const hasBillableItems = closedTable.orders.some((o) =>
+      o.items.some(itemCountsTowardBill),
     )
-    const lineSum = fromMinorUnits(
-      items.reduce((s, i) => s + toMinorUnits(i.price) * i.quantity, 0),
-    )
-    const total = closedTable.netAmount > 0 ? closedTable.netAmount : lineSum
-    const ok = await reprintReceipt({
-      tableName: closedTable.tableName,
-      waiterName: closedTable.waiter,
-      items,
-      total,
-    })
+    if (!hasBillableItems) {
+      showToast(
+        locale === "tr"
+          ? "Bu hesapta tüm ürünler iptal edildiği için yazdırılacak aktif ürün bulunmuyor"
+          : "No active billable items to print on this check",
+        "error",
+      )
+      return
+    }
+    const ok = await reprintReceipt({ completedOrderId: closedTable.id })
     if (ok) {
       showToast(
         locale === "tr" ? "Fiş gönderildi" : "Receipt sent",

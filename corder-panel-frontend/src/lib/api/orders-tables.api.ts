@@ -120,6 +120,7 @@ export const ordersApi = {
     body:
       | { tableId: string }
       | { orderId: string }
+      | { completedOrderId: string }
       | {
           tableName: string
           waiterName?: string

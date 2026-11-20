@@ -158,7 +158,7 @@ export class PrintReceiptUseCase {
       }
     }
     if (!extracted.length) {
-      throw new BadRequestException('No billable items found on this completed order');
+      throw new BadRequestException('Bu tamamlanan hesapta yazdırılacak aktif (iptal edilmemiş) ürün bulunmuyor');
     }
     await this.orderQuery.attachCategoryIdsToItems(extracted, restaurantId);
     const items =
@@ -208,7 +208,7 @@ export class PrintReceiptUseCase {
       if (completed) {
         return this.resolveCompletedOrderReceipt(restaurantId, completed, receiptMode);
       }
-      throw new NotFoundException('Order not found');
+      throw new NotFoundException('Sipariş bulunamadı');
     }
     const tableName = order.table?.name ?? '-';
     const rawItems =
@@ -221,7 +221,7 @@ export class PrintReceiptUseCase {
       productId: i.productId,
     }));
     if (!items.length) {
-      throw new BadRequestException('No billable items found on this order');
+      throw new BadRequestException('Bu adisyonda yazdırılacak aktif (iptal edilmemiş) ürün bulunmuyor');
     }
     await this.orderQuery.attachCategoryIdsToItems(items, restaurantId);
     const subtotalMinor = this.sumLinesMinorUnits(items);
@@ -266,7 +266,7 @@ export class PrintReceiptUseCase {
           return this.resolveCompletedOrderReceipt(restaurantId, recentCompleted, receiptMode);
         }
       }
-      throw new BadRequestException('No active orders found on this table');
+      throw new BadRequestException('Bu masada aktif sipariş bulunmuyor');
     }
     const tableName = table?.name ?? tableId;
     const flat = orders.flatMap((o) =>
@@ -280,7 +280,7 @@ export class PrintReceiptUseCase {
       productId: i.productId,
     }));
     if (!items.length) {
-      throw new BadRequestException('No active billable items found on this table');
+      throw new BadRequestException('Bu masada yazdırılacak aktif (iptal edilmemiş) ürün bulunmuyor');
     }
     await this.orderQuery.attachCategoryIdsToItems(items, restaurantId);
     if (receiptMode === 'consolidated') {
@@ -332,7 +332,7 @@ export class PrintReceiptUseCase {
   ): Promise<ResolvedReceiptData> {
     if (!dto.tableName?.trim() || !dto.items?.length || dto.total === undefined) {
       throw new BadRequestException(
-        'tableName, items, and total are required when tableId is not provided',
+        'Bu hesapta yazdırılacak aktif (iptal edilmemiş) ürün bulunmuyor',
       );
     }
     const tableName = dto.tableName.trim();
@@ -348,7 +348,7 @@ export class PrintReceiptUseCase {
         categoryId: i.categoryId,
       }));
     if (!items.length) {
-      throw new BadRequestException('Receipt must contain at least one billable item');
+      throw new BadRequestException('Fiş yazdırabilmek için en az bir aktif ürün bulunmalıdır');
     }
     await this.orderQuery.attachCategoryIdsToItems(items, restaurantId);
     if (receiptMode === 'consolidated') {

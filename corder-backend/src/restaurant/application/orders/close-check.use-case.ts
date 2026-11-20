@@ -427,7 +427,7 @@ export class CloseCheckUseCase {
     const quickOrderId = randomUUID();
     const orderNumber = await allocateNextOrderNumber(em, restaurantId, now);
     return {
-      table: null, tableName: 'walk-in sale', section: 'register', waiterName: actorName, openedAt: now,
+      table: null, tableName: 'hızlı satış', section: 'kasa', waiterName: actorName, openedAt: now,
       rawTotalMinorUnits, orderIdsToClose: [quickOrderId],
       ordersSnapshot: [{
         id: quickOrderId, orderNumber, tableId: 'quick-sale', userId: actorId, userName: actorName,

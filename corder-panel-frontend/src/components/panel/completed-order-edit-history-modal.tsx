@@ -174,6 +174,7 @@ function renderChangeRow(change: CompletedOrderEditChangeItem, idx: number) {
       )
 
     case "payment_method_changed":
+      if (change.previousMethod === change.nextMethod) return null
       return (
         <div
           key={idx}
@@ -357,13 +358,21 @@ export function CompletedOrderEditHistoryModal(props: {
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <DoorClosed className="w-3.5 h-3.5 text-[#86868b]" />
                           <span>Ödeme:</span>
-                          <strong className="text-[#1d1d1f]">
-                            {getMethodLabel(entry.previousMethod)}
-                          </strong>
-                          <ArrowRight className="w-3 h-3 text-[#86868b]" />
-                          <strong className="text-[#1d1d1f]">
-                            {getMethodLabel(entry.nextMethod)}
-                          </strong>
+                          {entry.previousMethod !== entry.nextMethod ? (
+                            <>
+                              <strong className="text-[#1d1d1f]">
+                                {getMethodLabel(entry.previousMethod)}
+                              </strong>
+                              <ArrowRight className="w-3 h-3 text-[#86868b]" />
+                              <strong className="text-[#1d1d1f]">
+                                {getMethodLabel(entry.nextMethod)}
+                              </strong>
+                            </>
+                          ) : (
+                            <strong className="text-[#1d1d1f]">
+                              {getMethodLabel(entry.nextMethod)}
+                            </strong>
+                          )}
                           {entry.nextSplit && entry.nextSplit.length > 0 && (
                             <span className="text-[#86868b]">
                               ({formatSplitParts(entry.nextSplit)})

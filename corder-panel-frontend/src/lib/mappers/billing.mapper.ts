@@ -155,13 +155,23 @@ export function mapCompletedOrderDtoToClosedTable(
       }))
     : []
 
+  const rawTableLower = (dto.tableName || "").trim().toLowerCase()
+  const resolvedTableName =
+    rawTableLower === "walk-in sale" ? "Hızlı Satış" : formatTitleCase(dto.tableName)
+  const rawSectionLower = (dto.section || "").trim().toLowerCase()
+  const resolvedSection =
+    rawSectionLower === "register" ? "Kasa" : formatTitleCase(dto.section)
+
   return {
     id: dto.id,
-    tableName: formatTitleCase(dto.tableName),
-    section: formatTitleCase(dto.section),
+    tableName: resolvedTableName,
+    section: resolvedSection,
     waiter: formatTitleCase(dto.waiter),
     orders,
-    payment,
+    payment: {
+      ...payment,
+      tableName: resolvedTableName,
+    },
     totalAmount: dto.totalAmount,
     discountAmount: dto.discountAmount,
     netAmount: dto.netAmount,
