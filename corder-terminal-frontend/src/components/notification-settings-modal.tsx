@@ -14,7 +14,7 @@ const WAITER_TOAST_DURATION_MS = 10_000
 
 function WaiterCallToastItem(props: {
   call: ActiveWaiterCall
-  onDismiss: (id: string) => void
+  onDismiss: (id: string, acknowledgeOnServer?: boolean) => void
 }) {
   const { call, onDismiss } = props
   const [remainingMs, setRemainingMs] = useState(WAITER_TOAST_DURATION_MS)
@@ -27,7 +27,7 @@ function WaiterCallToastItem(props: {
       setRemainingMs(next)
       if (next <= 0) {
         window.clearInterval(timer)
-        onDismiss(call.id)
+        onDismiss(call.id, false)
       }
     }, 100)
     return () => window.clearInterval(timer)
@@ -71,7 +71,7 @@ function WaiterCallToastItem(props: {
           </span>
           <button
             type="button"
-            onClick={() => onDismiss(call.id)}
+            onClick={() => onDismiss(call.id, true)}
             aria-label="Bildirimi kapat"
             className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 active:scale-95 transition-all"
           >
@@ -93,7 +93,7 @@ function WaiterCallToastItem(props: {
 
 export function WaiterCallAlertBanner(props: {
   calls: ActiveWaiterCall[]
-  onDismiss: (id: string) => void
+  onDismiss: (id: string, acknowledgeOnServer?: boolean) => void
 }) {
   const { calls, onDismiss } = props
   if (calls.length === 0) return null

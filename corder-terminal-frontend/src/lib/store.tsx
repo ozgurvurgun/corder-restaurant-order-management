@@ -67,7 +67,7 @@ interface TerminalContextType {
   isLoading: boolean
   error: string | null
   waiterCalls: ActiveWaiterCall[]
-  dismissWaiterCall: (id: string) => void
+  dismissWaiterCall: (id: string, acknowledgeOnServer?: boolean) => void
   login: (email: string, password: string) => Promise<boolean>
   loginWithPin: (pin: string, staffId?: string) => Promise<{ ok: boolean; error?: string }>
   logout: () => void
@@ -139,11 +139,14 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [waiterCalls, setWaiterCalls] = useState<ActiveWaiterCall[]>([])
+  const seenWaiterCallIdsRef = useRef<Set<string>>(new Set())
 
   const handleWaiterCalled = useCallback((call: ActiveWaiterCall) => {
+    if (seenWaiterCallIdsRef.current.has(call.id)) return
+    seenWaiterCallIdsRef.current.add(call.id)
     setWaiterCalls((prev) => {
       const withoutSameIdOrTable = prev.filter(
-        (c) => c.id !== call.id && !(c.tableId === call.tableId && c.requestType === call.requestType)
+        (c) => c.id !== call.id && c.tableId !== call.tableId
       )
       return [call, ...withoutSameIdOrTable].slice(0, 20)
     })
@@ -152,8 +155,15 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const dismissWaiterCall = useCallback((id: string) => {
+  const dismissWaiterCall = useCallback((id: string, acknowledgeOnServer = false) => {
+    seenWaiterCallIdsRef.current.add(id)
     setWaiterCalls((prev) => prev.filter((c) => c.id !== id))
+    if (acknowledgeOnServer) {
+      const token = getToken()
+      if (token) {
+        void api.notifications.dismiss(token, [id]).catch(() => undefined)
+      }
+    }
   }, [])
 
   const syncNotifications = useCallback(async () => {
@@ -167,10 +177,12 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
           new CustomEvent("corder:system-update", { detail: state.latestSystemUpdate })
         )
       }
-      const calls = (state.waiterCalls ?? [])
-        .map((c) => normalizeWaiterCallPayload(c))
-        .filter((c): c is ActiveWaiterCall => c !== null)
-      setWaiterCalls(calls.slice(0, 20))
+      const activeServerIds = new Set(
+        (state.waiterCalls ?? [])
+          .map((c) => normalizeWaiterCallPayload(c)?.id)
+          .filter((id): id is string => Boolean(id))
+      )
+      setWaiterCalls((prev) => prev.filter((c) => activeServerIds.has(c.id)))
     } catch {
       /* ignore background notification sync errors */
     }

@@ -178,6 +178,17 @@ export class MenuQueryService {
       dto.requestType === 'bill' ? 'bill' : 'waiter';
     const note = dto.note?.trim().slice(0, 255) || null;
 
+    if (typeof this.waiterCallRepo.update === 'function') {
+      await this.waiterCallRepo.update(
+        {
+          restaurantId: restaurant.id,
+          tableId: matched.id,
+          acknowledged: false,
+        },
+        { acknowledged: true },
+      );
+    }
+
     const saved = await this.waiterCallRepo.save(
       this.waiterCallRepo.create({
         restaurantId: restaurant.id,

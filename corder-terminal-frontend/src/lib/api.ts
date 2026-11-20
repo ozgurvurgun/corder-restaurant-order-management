@@ -408,36 +408,18 @@ export const api = {
   notifications: {
     getState: (token: string) =>
       request<{
-        clearedAt: string | null
-        dismissedIds: string[]
-        waiterCalls?: Array<{
-          id: string
-          tableId: string
-          tableName: string
-          sectionName?: string
-          requestType?: string
-          note?: string | null
-          createdAt: string
-        }>
-        latestSystemUpdate?: {
-          id: string
-          title?: string
-          message?: string
-          sentAt?: string
-        } | null
+        clearedAt: string | null; dismissedIds: string[]
+        waiterCalls?: Array<{ id: string; tableId: string; tableName: string; sectionName?: string; requestType?: string; note?: string | null; createdAt: string }>
+        latestSystemUpdate?: { id: string; title?: string; message?: string; sentAt?: string } | null
       }>("/restaurant/notifications", { token, skipAuthExpired: true }),
     getSystemUpdate: (token: string) =>
-      request<{
-        latestSystemUpdate?: {
-          id: string
-          title?: string
-          message?: string
-          sentAt?: string
-        } | null
-      }>("/restaurant/notifications/system-update", {
-        token,
-        skipAuthExpired: true,
-        skipStaffToken: true,
+      request<{ latestSystemUpdate?: { id: string; title?: string; message?: string; sentAt?: string } | null }>(
+        "/restaurant/notifications/system-update",
+        { token, skipAuthExpired: true, skipStaffToken: true }
+      ),
+    dismiss: (token: string, ids: string[]) =>
+      request<{ ok: boolean }>("/restaurant/notifications/dismiss", {
+        method: "POST", token, skipAuthExpired: true, body: JSON.stringify({ ids }),
       }),
   },
   staff: {
