@@ -115,7 +115,7 @@ export class MenuFetchError extends Error {
   }
 }
 
-const CACHE_PREFIX = "corder_menu_cache_v4:"
+const CACHE_PREFIX = "corder_menu_cache_v5:"
 const CACHE_TTL_MS = 60_000
 const memoryCache = new Map<string, { timestamp: number; data: MenuResponse }>()
 

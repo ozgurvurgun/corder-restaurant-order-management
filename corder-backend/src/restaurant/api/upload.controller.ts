@@ -21,6 +21,7 @@ import { PanelRootGuard, RequirePermissions } from '../infrastructure/panel-root
 import { R2UploadService } from '../infrastructure/r2-upload.service';
 import {
   detectImageMimeFromMagicBytes,
+  optimizeUploadedImageToWebp,
   validateOriginalImageFilename,
 } from '../../common/security/image-upload';
 
@@ -97,12 +98,18 @@ export class UploadController {
       );
     }
 
+    const optimized = await optimizeUploadedImageToWebp(
+      file.buffer,
+      detectedMime,
+      parsed.ext,
+    );
+
     const tenant = tenantPrefix(req.user);
-    const key = `${tenant}/menu/${randomUUID()}${parsed.ext}`;
+    const key = `${tenant}/menu/${randomUUID()}${optimized.ext}`;
 
     if (this.r2.isConfigured()) {
       try {
-        const url = await this.r2.putObject(key, file.buffer, detectedMime);
+        const url = await this.r2.putObject(key, optimized.buffer, optimized.mime);
         return { url };
       } catch (err: unknown) {
         this.logger.error('R2 upload failed', err instanceof Error ? err.stack : err);
@@ -117,7 +124,7 @@ export class UploadController {
     }
     try {
       await mkdir(dirname(dest), { recursive: true });
-      await writeFile(dest, file.buffer);
+      await writeFile(dest, optimized.buffer);
     } catch (err) {
       this.logger.error('Local upload write failed', err instanceof Error ? err.stack : err);
       throw new InternalServerErrorException('Failed to write file to disk');

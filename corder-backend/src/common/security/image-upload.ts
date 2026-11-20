@@ -1,4 +1,11 @@
-import { extname } from 'path';
+import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { extname, join } from 'path';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 export const ALLOWED_IMAGE_CONTENT_TYPES: Readonly<Record<string, string>> = {
   '.jpg': 'image/jpeg',
@@ -64,5 +71,46 @@ export function validateOriginalImageFilename(
 export function contentTypeForUploadPath(filePath: string): string {
   const ext = extname(filePath || '').toLowerCase();
   return ALLOWED_IMAGE_CONTENT_TYPES[ext] ?? 'application/octet-stream';
+}
+
+export async function optimizeUploadedImageToWebp(
+  buffer: Buffer,
+  detectedMime: string,
+  originalExt: string,
+): Promise<{ buffer: Buffer; mime: string; ext: string }> {
+  if (detectedMime === 'image/gif') {
+    return { buffer, mime: detectedMime, ext: originalExt };
+  }
+
+  const id = randomUUID();
+  const inPath = join(tmpdir(), `corder-img-in-${id}${originalExt}`);
+  const outPath = join(tmpdir(), `corder-img-out-${id}.webp`);
+
+  try {
+    await writeFile(inPath, buffer);
+    await execFileAsync('ffmpeg', [
+      '-y',
+      '-i',
+      inPath,
+      '-vf',
+      "scale='min(1200,iw)':'min(1200,ih)':force_original_aspect_ratio=decrease",
+      '-c:v',
+      'libwebp',
+      '-quality',
+      '82',
+      outPath,
+    ]);
+    const webpBuf = await readFile(outPath);
+    if (webpBuf.length > 0 && detectImageMimeFromMagicBytes(webpBuf) === 'image/webp') {
+      return { buffer: webpBuf, mime: 'image/webp', ext: '.webp' };
+    }
+  } catch {
+    // Fallback to original verified buffer if ffmpeg is unavailable
+  } finally {
+    await rm(inPath, { force: true }).catch(() => undefined);
+    await rm(outPath, { force: true }).catch(() => undefined);
+  }
+
+  return { buffer, mime: detectedMime, ext: originalExt };
 }
 

@@ -11,7 +11,8 @@ FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package.json pnpm-lock.yaml .npmrc ./
-RUN corepack enable pnpm \
+RUN apk add --no-cache libwebp-tools ffmpeg \
+  && corepack enable pnpm \
   && pnpm install --frozen-lockfile --prod --ignore-scripts \
   && pnpm store prune \
   && mkdir -p /app/uploads \
