@@ -28,7 +28,7 @@ UPDATE ledger_customers SET name = pg_temp.tr_norm(name) WHERE name IS DISTINCT 
 UPDATE ledger_entries SET table_name = pg_temp.tr_norm(table_name) WHERE table_name IS NOT NULL AND table_name IS DISTINCT FROM pg_temp.tr_norm(table_name);
 UPDATE open_accounts SET customer_name = pg_temp.tr_norm(customer_name) WHERE customer_name IS DISTINCT FROM pg_temp.tr_norm(customer_name);
 UPDATE open_account_items SET product_name = pg_temp.tr_norm(product_name) WHERE product_name IS DISTINCT FROM pg_temp.tr_norm(product_name);
-UPDATE printers SET name = pg_temp.tr_norm(name), department = CASE WHEN department IS NOT NULL THEN pg_temp.tr_norm(department) ELSE NULL END WHERE name IS DISTINCT FROM pg_temp.tr_norm(name) OR (department IS NOT NULL AND department IS DISTINCT FROM pg_temp.tr_norm(department));
+UPDATE restaurant_printer_configs SET name = pg_temp.tr_norm(name), department = CASE WHEN department IS NOT NULL THEN pg_temp.tr_norm(department) ELSE NULL END WHERE name IS DISTINCT FROM pg_temp.tr_norm(name) OR (department IS NOT NULL AND department IS DISTINCT FROM pg_temp.tr_norm(department));
 UPDATE waiter_calls SET table_name = pg_temp.tr_norm(table_name), section_name = CASE WHEN section_name IS NOT NULL THEN pg_temp.tr_norm(section_name) ELSE NULL END WHERE table_name IS DISTINCT FROM pg_temp.tr_norm(table_name) OR (section_name IS NOT NULL AND section_name IS DISTINCT FROM pg_temp.tr_norm(section_name));
 UPDATE orders SET merged_from = pg_temp.tr_norm(merged_from) WHERE merged_from IS NOT NULL AND merged_from IS DISTINCT FROM pg_temp.tr_norm(merged_from);
 UPDATE stock_movements SET material_name = pg_temp.tr_norm(material_name) WHERE material_name IS DISTINCT FROM pg_temp.tr_norm(material_name);
