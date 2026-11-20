@@ -113,8 +113,14 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
       ledger: "",
     }
     if (closedTable.payment.splitDetails) {
+      const minorByMethod: Record<string, number> = {}
       for (const sd of closedTable.payment.splitDetails) {
-        if (sd.amount > 0) {map[sd.method] = String(sd.amount)}
+        if (sd.amount > 0) {
+          minorByMethod[sd.method] = (minorByMethod[sd.method] || 0) + toMinorUnits(sd.amount)
+        }
+      }
+      for (const [m, minor] of Object.entries(minorByMethod)) {
+        if (minor > 0) map[m] = String(fromMinorUnits(minor))
       }
     }
     return map

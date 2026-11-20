@@ -198,10 +198,11 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill,
         method === "ledger" || (method === "split" && splitLedgerVal > 0) ? effectiveLedgerCustomerId : undefined
       let finalLedgerDebtAmount: number | undefined = method === "split" && splitLedgerVal > 0 ? splitLedgerVal : undefined
       if (!splitTarget && paidShares.length > 0) {
-        const byMethodMinorUnits = new Map<CloseCheckSplitMethod, number>()
+        const parts: { method: CloseCheckSplitMethod; amount: number }[] = []
         let ledgerDebtMinorUnits = method === "ledger" ? netMinorUnits : method === "split" ? toMinorUnits(splitLedgerVal) : 0
         for (const s of paidShares) {
-          byMethodMinorUnits.set(s.method, (byMethodMinorUnits.get(s.method) ?? 0) + toMinorUnits(s.amount)); if (s.method === "ledger" && s.ledgerCustomerId) {
+          parts.push({ method: s.method, amount: fromMinorUnits(toMinorUnits(s.amount)) })
+          if (s.method === "ledger" && s.ledgerCustomerId) {
             finalLedgerCustomerId = s.ledgerCustomerId
             ledgerDebtMinorUnits += toMinorUnits(s.amount)
           }
@@ -209,14 +210,14 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill,
         if (netMinorUnits > 0) {
           if (method === "split" && rawSplitDetails) {
             for (const sd of rawSplitDetails) {
-              byMethodMinorUnits.set(sd.method, (byMethodMinorUnits.get(sd.method) ?? 0) + toMinorUnits(sd.amount))
+              parts.push({ method: sd.method, amount: fromMinorUnits(toMinorUnits(sd.amount)) })
             }
           } else if (method !== "split") {
-            byMethodMinorUnits.set(method, (byMethodMinorUnits.get(method) ?? 0) + netMinorUnits)
+            parts.push({ method, amount: fromMinorUnits(netMinorUnits) })
           }
         }
         finalMethod = "split"
-        finalSplitDetails = Array.from(byMethodMinorUnits.entries()).map(([m, k]) => ({ method: m, amount: fromMinorUnits(k) })); if (finalLedgerCustomerId && ledgerDebtMinorUnits > 0) finalLedgerDebtAmount = fromMinorUnits(ledgerDebtMinorUnits)
+        finalSplitDetails = parts; if (finalLedgerCustomerId && ledgerDebtMinorUnits > 0) finalLedgerDebtAmount = fromMinorUnits(ledgerDebtMinorUnits)
       }
       const res = await closeTableWithPayment(tableId, finalMethod, discount, finalSplitDetails, {
         ...(finalLedgerCustomerId ? { ledgerCustomerId: finalLedgerCustomerId } : {}),

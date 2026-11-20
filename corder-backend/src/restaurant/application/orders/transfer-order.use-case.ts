@@ -250,11 +250,18 @@ export class TransferOrderUseCase {
     fromTable: TableEntity,
     toTable: TableEntity,
   ): Promise<boolean> {
-    const remainingSourceOrders = await em.count(OrderEntity, {
-      where: { restaurantId, tableId: fromTable.id, status: 'active' },
-    });
+    const sourceHasBillable = await this.targetTableHasBillableItems(
+      em,
+      restaurantId,
+      fromTable.id,
+    );
     let fromTableEmptied = false;
-    if (remainingSourceOrders === 0) {
+    if (!sourceHasBillable) {
+      await em.update(
+        OrderEntity,
+        { restaurantId, tableId: fromTable.id, status: 'active' },
+        { status: 'closed', updatedAt: new Date() },
+      );
       fromTable.markEmpty();
       await em.save(TableEntity, fromTable);
       fromTableEmptied = true;

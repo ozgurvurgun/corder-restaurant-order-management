@@ -212,7 +212,11 @@ export class PrintReceiptUseCase {
     }
     const tableName = order.table?.name ?? '-';
     const rawItems =
-      order.items?.filter((i) => OrderStatusPolicy.isItemOnActiveBill(i.status)) ?? [];
+      order.items?.filter(
+        (i) =>
+          OrderStatusPolicy.isItemOnActiveBill(i.status) ||
+          (order.status === 'closed' && i.status === 'paid'),
+      ) ?? [];
     const items: ReceiptLineItem[] = rawItems.map((i) => ({
       productName: i.productName,
       quantity: i.quantity,

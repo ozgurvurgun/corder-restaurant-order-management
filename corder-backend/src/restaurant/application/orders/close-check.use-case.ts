@@ -23,6 +23,10 @@ import { SESSION_LOCK_STALE_MS, TableService } from '../table.service';
 import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
 import { normalizeStorageText } from '../../../common/text/text-normalizer';
 import { allocateNextOrderNumber } from './create-order.use-case';
+import {
+  applyConsolidatedCompletedOrderUpdate,
+  findExistingSessionCompletedOrder,
+} from './completed-order-consolidation.helper';
 import { buildClosedOrderSnapshot, buildCompletedPaymentSnapshot, serializeCashShift, serializeCashTransaction, serializeCompletedOrder, serializeStockMovement } from './order.mapper';
 
 interface PartialItemMutation {
@@ -95,11 +99,7 @@ export class CloseCheckUseCase {
         : await this.buildWalkInBillContext(em, restaurantId, dto.items!, actorId, actorName, now);
 
       const sourceDiscount =
-        dto.discount !== undefined
-          ? dto.discount
-          : !hasPartialLines
-            ? (billContext.table?.discount ?? null)
-            : null;
+        dto.discount !== undefined ? dto.discount : !hasPartialLines ? (billContext.table?.discount ?? null) : null;
       const effectiveDiscount = sourceDiscount
         ? {
             ...sourceDiscount,
@@ -135,14 +135,7 @@ export class CloseCheckUseCase {
       }
 
       const tableFullyClosed = billContext.table
-        ? await this.applyTableOrderSettlement(
-            em,
-            restaurantId,
-            billContext,
-            settlement.discountMinorUnits,
-            effectiveDiscount,
-            now,
-          )
+        ? await this.applyTableOrderSettlement(em, restaurantId, billContext, settlement.discountMinorUnits, effectiveDiscount, now)
         : true;
 
       const savedCashTx = await this.recordCashSaleIfNeeded(
@@ -269,7 +262,7 @@ export class CloseCheckUseCase {
     return {
       table, tableName: normalizeStorageText(table.name || '') || table.id, section: normalizeStorageText(table.section || '') || 'default',
       waiterName, openedAt: activeOrders[0].createdAt ?? now, rawTotalMinorUnits,
-      orderIdsToClose: activeOrderIds, ordersSnapshot, billLinesForStock,
+      orderIdsToClose: activeOrderIds, ordersSnapshot, billLinesForStock, activeOrders,
     };
   }
 
@@ -285,9 +278,7 @@ export class CloseCheckUseCase {
     const billLinesForStock: BilledOrderLineForStock[] = [];
 
     for (const reqLine of requestedLines) {
-      if (paidQtyByItemId.has(reqLine.itemId)) {
-        throw new BadRequestException('Duplicate order item in partial checkout lines');
-      }
+      if (paidQtyByItemId.has(reqLine.itemId)) throw new BadRequestException('Duplicate order item in partial checkout lines');
       const item = itemById.get(reqLine.itemId);
       if (!item || !OrderStatusPolicy.isItemOnActiveBill(item.status)) {
         throw new BadRequestException('Selected order item is not active on this table bill');
@@ -303,15 +294,23 @@ export class CloseCheckUseCase {
       billLinesForStock.push({ productId: item.productId, productName: item.productName, quantity: reqLine.quantity });
     }
 
+    const willCloseAllBillable = orderItems.every((i) =>
+      !OrderStatusPolicy.isItemOnActiveBill(i.status) || (paidQtyByItemId.get(i.id) ?? 0) >= i.quantity,
+    );
     const ordersSnapshot: Array<Record<string, unknown>> = [];
     const affectedOrderIds: string[] = [];
     for (const order of activeOrders) {
-      const paidLines = (itemsByOrderId.get(order.id) ?? [])
+      const orderLines = itemsByOrderId.get(order.id) ?? [];
+      const paidLines = orderLines
         .filter((i) => paidQtyByItemId.has(i.id))
         .map((i) => Object.assign(new OrderItemEntity(), i, { quantity: paidQtyByItemId.get(i.id)! }));
-      if (paidLines.length > 0) {
+      const extraLines = willCloseAllBillable
+        ? orderLines.filter((i) => i.status === 'cancelled' || i.status === 'ledger')
+        : [];
+      const snapshotLines = [...paidLines, ...extraLines];
+      if (snapshotLines.length > 0) {
         affectedOrderIds.push(order.id);
-        ordersSnapshot.push(buildClosedOrderSnapshot(order, paidLines, staffNameById, actorId, now));
+        ordersSnapshot.push(buildClosedOrderSnapshot(order, snapshotLines, staffNameById, actorId, now));
       }
     }
 
@@ -324,12 +323,8 @@ export class CloseCheckUseCase {
   }
 
   private async applyTableOrderSettlement(
-    em: EntityManager,
-    restaurantId: string,
-    ctx: BillContext,
-    discountMinorUnits: number,
-    appliedDiscount: CloseCheckDto['discount'] | null,
-    now: Date,
+    em: EntityManager, restaurantId: string, ctx: BillContext,
+    discountMinorUnits: number, appliedDiscount: CloseCheckDto['discount'] | null, now: Date,
   ): Promise<boolean> {
     const table = ctx.table!;
     if (!ctx.partialMutations) {
@@ -355,36 +350,14 @@ export class CloseCheckUseCase {
     }
 
     const activeOrders = ctx.activeOrders ?? [];
-    const itemsByOrderId = ctx.itemsByOrderId ?? new Map<string, OrderItemEntity[]>();
     const allOrderItems = ctx.allOrderItems ?? [];
-    const hasRemainingBillable = allOrderItems.some((i) =>
-      OrderStatusPolicy.isItemOnActiveBill(i.status),
-    );
+    const hasRemainingBillable = allOrderItems.some((i) => OrderStatusPolicy.isItemOnActiveBill(i.status));
 
     if (hasRemainingBillable) {
-      for (const order of activeOrders) {
-        const remainingInOrder = itemsByOrderId.get(order.id) ?? [];
-        const hasBillableInOrder = remainingInOrder.some((i) =>
-          OrderStatusPolicy.isItemOnActiveBill(i.status),
-        );
-        const patch = !hasBillableInOrder
-          ? { status: 'closed', updatedAt: now }
-          : { updatedAt: now };
-        await em.update(OrderEntity, { id: order.id, restaurantId }, patch);
-      }
-      if (
-        table.discount?.type === 'amount' &&
-        appliedDiscount?.type === 'amount' &&
-        discountMinorUnits > 0
-      ) {
-        const remDiscountMinor = Math.max(
-          0,
-          toMinorUnits(table.discount.value) - discountMinorUnits,
-        );
-        table.discount =
-          remDiscountMinor > 0
-            ? { ...table.discount, value: fromMinorUnits(remDiscountMinor) }
-            : null;
+      await em.update(OrderEntity, { id: In(activeOrders.map((o) => o.id)), restaurantId }, { updatedAt: now });
+      if (table.discount?.type === 'amount' && appliedDiscount?.type === 'amount' && discountMinorUnits > 0) {
+        const remDiscountMinor = Math.max(0, toMinorUnits(table.discount.value) - discountMinorUnits);
+        table.discount = remDiscountMinor > 0 ? { ...table.discount, value: fromMinorUnits(remDiscountMinor) } : null;
       }
       table.status = 'occupied';
       table.splitInfo = null;
@@ -453,6 +426,20 @@ export class CloseCheckUseCase {
     em: EntityManager, restaurantId: string, ctx: BillContext, settlement: CheckSettlementResult,
     method: string, actorId: string, actorName: string, ledgerCustomer: LedgerCustomerEntity | null, now: Date,
   ): Promise<CompletedOrderEntity> {
+    if (ctx.table) {
+      const sessionOrderIds = [...new Set([...(ctx.activeOrders ?? []).map((o) => o.id), ...ctx.orderIdsToClose])];
+      const existing = await findExistingSessionCompletedOrder(
+        em, restaurantId, ctx.tableName, ctx.openedAt, sessionOrderIds,
+      );
+      if (existing) {
+        applyConsolidatedCompletedOrderUpdate({
+          existing, tableId: ctx.table.id, tableName: ctx.tableName, section: ctx.section,
+          waiterName: ctx.waiterName, orderIdsToClose: ctx.orderIdsToClose,
+          ordersSnapshot: ctx.ordersSnapshot, settlement, method, actorName, ledgerCustomer, now,
+        });
+        return em.save(CompletedOrderEntity, existing);
+      }
+    }
     const paymentSnapshot = buildCompletedPaymentSnapshot({
       tableId: ctx.table ? ctx.table.id : 'quick-sale', tableName: ctx.tableName, orderIds: ctx.orderIdsToClose,
       method, settlement, processedBy: actorName, createdAt: now, ledgerCustomer,
@@ -473,6 +460,17 @@ export class CloseCheckUseCase {
     em: EntityManager, restaurantId: string, shiftId: string, tableName: string, completedOrderId: string, method: string, cashMinorUnits: number, actorName: string,
   ): Promise<CashTransactionEntity | null> {
     if (cashMinorUnits <= 0) return null;
+    if (typeof em.findOne === 'function') {
+      const existingTx = await em.findOne(CashTransactionEntity, {
+        where: { restaurantId, shiftId, type: 'sale', reference: completedOrderId },
+      });
+      if (existingTx) {
+        existingTx.amount = fromMinorUnits(toMinorUnits(existingTx.amount) + cashMinorUnits);
+        existingTx.description = `${tableName} - Check (split cash)`;
+        existingTx.createdBy = actorName;
+        return em.save(CashTransactionEntity, existingTx);
+      }
+    }
     const tx = em.create(CashTransactionEntity, {
       restaurantId, shiftId, type: 'sale', amount: fromMinorUnits(cashMinorUnits),
       description: method === 'split' ? `${tableName} - Check (split cash)` : `${tableName} - Check`,

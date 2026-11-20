@@ -440,22 +440,23 @@ export function useTableSettlementActions(params: {
       const paidShares = [...existingShares, newShare].sort((a, b) => a.shareIndex - b.shareIndex)
 
       if (paidShares.length >= personCount) {
-        const byMethodMinorUnits = new Map<CloseCheckSplitMethod, number>()
         let ledgerCustomerId: string | undefined
         let ledgerDebtMinorUnits = 0
         for (const s of paidShares) {
-          byMethodMinorUnits.set(s.method, (byMethodMinorUnits.get(s.method) ?? 0) + toMinorUnits(s.amount))
           if (s.method === "ledger" && s.ledgerCustomerId) {
             ledgerCustomerId = s.ledgerCustomerId
             ledgerDebtMinorUnits += toMinorUnits(s.amount)
           }
         }
-        const aggregatedSplitDetails = Array.from(byMethodMinorUnits.entries()).map(([m, k]) => ({ method: m, amount: fromMinorUnits(k) }))
+        const shareSplitDetails = paidShares.map((s) => ({
+          method: s.method,
+          amount: fromMinorUnits(toMinorUnits(s.amount)),
+        }))
         const closeRes = await closeTableWithPayment(
           tableId,
           "split",
           table.discount ? { type: table.discount.type, value: table.discount.value, reason: table.discount.reason } : undefined,
-          aggregatedSplitDetails,
+          shareSplitDetails,
           ledgerCustomerId ? { ledgerCustomerId, ledgerDebtAmount: fromMinorUnits(ledgerDebtMinorUnits) } : undefined,
         )
         return { ok: closeRes.ok, fullyClosed: closeRes.ok, completedOrder: closeRes.completedOrder, error: closeRes.error }

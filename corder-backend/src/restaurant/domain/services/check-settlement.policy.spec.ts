@@ -18,6 +18,10 @@ import { TableEntity } from '../table.entity';
 import { OrderItemEntity } from '../order-item.entity';
 import { CompletedOrderEntity } from '../completed-order.entity';
 import { RestaurantEntity } from '../../../platform/domain/restaurant.entity';
+import {
+  applyConsolidatedCompletedOrderUpdate,
+  mergeCompletedOrdersSnapshots,
+} from '../../application/orders/completed-order-consolidation.helper';
 
 describe('Money VO & CheckSettlementPolicy', () => {
   it('handles IEEE-754 floating point amounts without minor-unit drift', () => {
@@ -311,5 +315,102 @@ describe('BossOverviewPolicy (Europe/Istanbul & Minor Units)', () => {
       ledger: 50.1,
     });
     assert.equal(pulse.openLedgerBalance, 50.1);
+  });
+
+  it('consolidates multi-step partial check payments into a single CompletedOrderEntity with split breakdown', () => {
+    const openedAt = new Date('2026-11-20T11:33:00.000Z');
+    const step1At = new Date('2026-11-20T13:02:00.000Z');
+    const step2At = new Date('2026-11-20T13:04:00.000Z');
+
+    const existing = new CompletedOrderEntity();
+    existing.id = 'co-b12';
+    existing.restaurantId = 'rest-1';
+    existing.tableName = 'b12';
+    existing.section = 'bahçe';
+    existing.waiter = 'şehmus y.';
+    existing.totalAmount = 50;
+    existing.discountAmount = 0;
+    existing.netAmount = 50;
+    existing.closedBy = 'şehmus y.';
+    existing.openedAt = openedAt;
+    existing.closedAt = step1At;
+    existing.paymentMethod = 'cash';
+    existing.paymentSplit = null;
+    existing.paymentDiscount = null;
+    existing.paymentTip = 0;
+    existing.ordersSnapshot = [
+      {
+        id: 'ord-1',
+        orderNumber: '20261120-001',
+        items: [
+          {
+            id: 'item-1',
+            productId: 'p-1',
+            productName: 'türk kahvesi',
+            price: 50,
+            quantity: 1,
+            status: 'served',
+          },
+        ],
+      },
+    ];
+    existing.paymentSnapshot = {
+      id: 'pay-1',
+      tableId: 'tbl-1',
+      tableName: 'b12',
+      orderIds: ['ord-1'],
+      amount: 50,
+      method: 'cash',
+      processedBy: 'şehmus y.',
+      createdAt: step1At.toISOString(),
+    };
+
+    const step2Settlement = CheckSettlementPolicy.computeSettlement({
+      rawTotalMinorUnits: 5000,
+      method: 'credit-card',
+    });
+
+    applyConsolidatedCompletedOrderUpdate({
+      existing,
+      tableId: 'tbl-1',
+      tableName: 'b12',
+      section: 'bahçe',
+      waiterName: 'şehmus y.',
+      orderIdsToClose: ['ord-1'],
+      ordersSnapshot: [
+        {
+          id: 'ord-1',
+          orderNumber: '20261120-001',
+          items: [
+            {
+              id: 'item-1',
+              productId: 'p-1',
+              productName: 'türk kahvesi',
+              price: 50,
+              quantity: 1,
+              status: 'served',
+            },
+          ],
+        },
+      ],
+      settlement: step2Settlement,
+      method: 'credit-card',
+      actorName: 'şehmus y.',
+      ledgerCustomer: null,
+      now: step2At,
+    });
+
+    assert.equal(existing.totalAmount, 100);
+    assert.equal(existing.netAmount, 100);
+    assert.equal(existing.paymentMethod, 'split');
+    assert.deepEqual(existing.paymentSplit, [
+      { method: 'cash', amount: 50 },
+      { method: 'credit-card', amount: 50 },
+    ]);
+    const orders = existing.ordersSnapshot as Array<{ items: Array<{ quantity: number }> }>;
+    assert.equal(orders.length, 1);
+    assert.equal(orders[0].items.length, 1);
+    assert.equal(orders[0].items[0].quantity, 2);
+    assert.equal(mergeCompletedOrdersSnapshots(existing.ordersSnapshot, [], step2At).length, 1);
   });
 });
