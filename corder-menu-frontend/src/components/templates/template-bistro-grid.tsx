@@ -12,6 +12,7 @@ import {
   ActiveCampaignsShowcaseStrip,
   categoryHasProducts,
   countCategoryProducts,
+  ProductMetaTags,
   type MenuTemplateProps,
 } from "../menu-template-shared"
 
@@ -74,6 +75,7 @@ function BistroGridProductCard(props: {
         ) : (
           <p className="text-[11px] text-stone-400 mt-1">Detaylar için dokunun</p>
         )}
+        <ProductMetaTags product={product} variant="bistro" className="mt-2" />
       </div>
     </button>
   )

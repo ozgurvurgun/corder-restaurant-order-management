@@ -11,6 +11,7 @@ import type { ProductDisplay } from "../menu-modals"
 import {
   categoryHasProducts,
   countCategoryProducts,
+  ProductMetaTags,
   type MenuTemplateProps,
 } from "../menu-template-shared"
 
@@ -72,6 +73,7 @@ function VibrantBentoProductCard(props: {
               {product.description}
             </p>
           )}
+          <ProductMetaTags product={product} variant="vibrant" className="mt-2" />
           <div className="mt-2.5 flex items-center justify-between">
             <span className="inline-flex items-baseline gap-1 px-3 py-1 rounded-xl bg-rose-50 text-rose-600 font-extrabold text-sm">
               {formatMenuPrice(product.price)}

@@ -98,6 +98,8 @@ export interface ProductDto {
   inStock: boolean
   order: number
   createdAt: string
+  calories?: number | null
+  allergens?: string[] | null
   ingredients?: ProductIngredientDto[] | null
   category?: CategoryDto
 }
@@ -111,6 +113,8 @@ export interface CreateProductBody {
   imageUrl?: string
   inStock?: boolean
   order?: number
+  calories?: number | null
+  allergens?: string[] | null
   ingredients?: ProductIngredientDto[] | null
 }
 
@@ -123,6 +127,8 @@ export interface UpdateProductBody {
   imageUrl?: string
   inStock?: boolean
   order?: number
+  calories?: number | null
+  allergens?: string[] | null
   ingredients?: ProductIngredientDto[] | null
 }
 

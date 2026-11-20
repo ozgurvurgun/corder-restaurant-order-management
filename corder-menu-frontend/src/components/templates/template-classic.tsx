@@ -10,6 +10,7 @@ import {
 import type { ProductDisplay } from "../menu-modals"
 import {
   categoryHasProducts,
+  ProductMetaTags,
   type MenuTemplateProps,
 } from "../menu-template-shared"
 
@@ -54,6 +55,7 @@ function ClassicProductItem(props: {
               {product.description}
             </p>
           )}
+          <ProductMetaTags product={product} variant="classic" />
           <p className="mt-2.5 font-bold text-stone-900 text-[15px]">
             {formatMenuPrice(product.price)}{" "}
             <span className="text-xs font-medium text-stone-400">TL</span>

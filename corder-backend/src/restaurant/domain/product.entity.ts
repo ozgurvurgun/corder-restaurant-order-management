@@ -62,6 +62,14 @@ export class ProductEntity {
   @Column({ type: 'jsonb', nullable: true })
   ingredients: { materialId: string; quantity: number; unit?: string }[] | null;
 
+  /** Optional nutritional energy value in kcal; null when not specified. */
+  @Column({ type: 'int', nullable: true, default: null })
+  calories: number | null;
+
+  /** Optional normalized allergen list in lowercase; null when not specified. */
+  @Column({ type: 'jsonb', nullable: true, default: null })
+  allergens: string[] | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }

@@ -1,19 +1,8 @@
 import { useState } from "react"
-import {
-  MapPin,
-  Phone,
-  Search,
-  X,
-  Instagram,
-  MessageCircle,
-  Globe,
-} from "lucide-react"
-import {
-  applyCfImageFallback,
-  type MenuProduct,
-  type MenuResponse,
-} from "@/lib/api"
+import { MapPin, Phone, Search, X, Instagram, MessageCircle, Globe } from "lucide-react"
+import { applyCfImageFallback, type MenuProduct, type MenuResponse } from "@/lib/api"
 import type { MenuWidgetTheme } from "./waiter-call-modal"
+import { ProductMetaTags } from "./menu-template-shared"
 
 export { CampaignsModal } from "./campaigns-modal"
 
@@ -47,12 +36,7 @@ export function ContactPopover(props: {
   const whatsappDigits = business.whatsapp ? sanitizeWhatsappNumber(business.whatsapp) : ""
   const instagramHandle = business.instagram ? sanitizeInstagramHandle(business.instagram) : ""
   const hasAnyContact = Boolean(
-    business.phone ||
-      whatsappDigits ||
-      instagramHandle ||
-      business.facebook ||
-      business.website ||
-      business.address
+    business.phone || whatsappDigits || instagramHandle || business.facebook || business.website || business.address
   )
 
   if (!hasAnyContact) return null
@@ -109,9 +93,7 @@ export function ContactPopover(props: {
                   <Phone className="w-4 h-4 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-medium group-hover:text-green-500 transition-colors ${itemTitleClass}`}>
-                    Telefon
-                  </p>
+                  <p className={`text-sm font-medium group-hover:text-green-500 transition-colors ${itemTitleClass}`}>Telefon</p>
                   <p className={`text-xs truncate ${itemSubClass}`}>{business.phone}</p>
                 </div>
               </a>
@@ -127,9 +109,7 @@ export function ContactPopover(props: {
                   <MessageCircle className="w-4 h-4 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-medium group-hover:text-[#25D366] transition-colors ${itemTitleClass}`}>
-                    WhatsApp
-                  </p>
+                  <p className={`text-sm font-medium group-hover:text-[#25D366] transition-colors ${itemTitleClass}`}>WhatsApp</p>
                   <p className={`text-xs ${itemSubClass}`}>Mesaj gönder</p>
                 </div>
               </a>
@@ -145,9 +125,7 @@ export function ContactPopover(props: {
                   <Instagram className="w-4 h-4 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-medium group-hover:text-pink-500 transition-colors ${itemTitleClass}`}>
-                    Instagram
-                  </p>
+                  <p className={`text-sm font-medium group-hover:text-pink-500 transition-colors ${itemTitleClass}`}>Instagram</p>
                   <p className={`text-xs truncate ${itemSubClass}`}>@{instagramHandle}</p>
                 </div>
               </a>
@@ -179,9 +157,7 @@ export function ContactPopover(props: {
                   <MapPin className="w-4 h-4 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-medium group-hover:text-blue-500 transition-colors ${itemTitleClass}`}>
-                    Konum
-                  </p>
+                  <p className={`text-sm font-medium group-hover:text-blue-500 transition-colors ${itemTitleClass}`}>Konum</p>
                   <p className={`text-xs truncate ${itemSubClass}`}>{business.address.split(",")[0]}</p>
                 </div>
               </a>
@@ -201,10 +177,7 @@ export function ContactPopover(props: {
         </button>
       </div>
       {showContact && (
-        <div
-          className="fixed inset-0 z-[60] bg-black/25 backdrop-blur-[3px]"
-          onClick={onClose}
-        />
+        <div className="fixed inset-0 z-[60] bg-black/25 backdrop-blur-[3px]" onClick={onClose} />
       )}
     </>
   )
@@ -230,6 +203,7 @@ export function MenuSearchOverlay(props: {
   } = props
 
   const isDark = theme === "dark"
+  const metaVariant = isDark ? "noir" : theme === "editorial" ? "editorial" : "classic"
 
   return (
     <div
@@ -245,11 +219,7 @@ export function MenuSearchOverlay(props: {
       }`}
     >
       <div className="flex flex-col h-full max-w-2xl mx-auto">
-        <div
-          className={`flex items-center gap-3 p-4 border-b ${
-            isDark ? "border-white/10" : "border-stone-200/70"
-          }`}
-        >
+        <div className={`flex items-center gap-3 p-4 border-b ${isDark ? "border-white/10" : "border-stone-200/70"}`}>
           <div
             className={`flex-1 flex items-center gap-3 h-11 px-4 rounded-xl ${
               isDark
@@ -267,9 +237,7 @@ export function MenuSearchOverlay(props: {
               placeholder="Ürün ara..."
               autoFocus
               className={`flex-1 bg-transparent text-sm focus:outline-none ${
-                isDark
-                  ? "text-[#F5F2EB] placeholder:text-stone-500"
-                  : "text-stone-900 placeholder:text-stone-400"
+                isDark ? "text-[#F5F2EB] placeholder:text-stone-500" : "text-stone-900 placeholder:text-stone-400"
               }`}
             />
             {searchQuery && (
@@ -281,9 +249,7 @@ export function MenuSearchOverlay(props: {
           <button
             type="button"
             onClick={onClose}
-            className={`text-sm font-medium px-2 py-2 ${
-              isDark ? "text-amber-300" : "text-stone-600"
-            }`}
+            className={`text-sm font-medium px-2 py-2 ${isDark ? "text-amber-300" : "text-stone-600"}`}
           >
             İptal
           </button>
@@ -292,12 +258,8 @@ export function MenuSearchOverlay(props: {
           {searchQuery.trim() ? (
             filteredProducts.length === 0 ? (
               <div className="text-center py-16">
-                <p className={isDark ? "text-stone-300 font-medium" : "text-stone-500 font-medium"}>
-                  Sonuç bulunamadı
-                </p>
-                <p className="text-stone-400 text-xs mt-1">
-                  Farklı bir ürün adı ile tekrar deneyin.
-                </p>
+                <p className={isDark ? "text-stone-300 font-medium" : "text-stone-500 font-medium"}>Sonuç bulunamadı</p>
+                <p className="text-stone-400 text-xs mt-1">Farklı bir ürün adı ile tekrar deneyin.</p>
               </div>
             ) : (
               <div className="space-y-2.5">
@@ -322,11 +284,7 @@ export function MenuSearchOverlay(props: {
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <h3
-                          className={`font-semibold truncate ${
-                            isDark ? "text-[#F5F2EB]" : "text-stone-900"
-                          }`}
-                        >
+                        <h3 className={`font-semibold truncate ${isDark ? "text-[#F5F2EB]" : "text-stone-900"}`}>
                           {product.name}
                         </h3>
                         {!product.inStock && (
@@ -336,17 +294,12 @@ export function MenuSearchOverlay(props: {
                         )}
                       </div>
                       {product.description && (
-                        <p className="text-xs text-stone-400 truncate mt-0.5">
-                          {product.description}
-                        </p>
+                        <p className="text-xs text-stone-400 truncate mt-0.5">{product.description}</p>
                       )}
+                      <ProductMetaTags product={product} variant={metaVariant} className="mt-1.5" />
                       <p
-                        className={`text-sm font-bold mt-1 ${
-                          isDark
-                            ? "text-amber-300"
-                            : theme === "editorial"
-                              ? "text-[#8C2D19]"
-                              : "text-stone-900"
+                        className={`text-sm font-bold mt-1.5 ${
+                          isDark ? "text-amber-300" : theme === "editorial" ? "text-[#8C2D19]" : "text-stone-900"
                         }`}
                       >
                         {formatCurrency(product.price)} TL
@@ -391,6 +344,9 @@ export function ProductDetailModal(props: {
   const { product, formatCurrency, onClose, theme = "light" } = props
   const [imgFailed, setImgFailed] = useState(false)
   const isDark = theme === "dark"
+  const hasCalories = typeof product.calories === "number" && product.calories > 0
+  const allergens =
+    Array.isArray(product.allergens) && product.allergens.length > 0 ? product.allergens : null
 
   return (
     <div
@@ -419,60 +375,86 @@ export function ProductDetailModal(props: {
               src={product.image}
               alt={product.name}
               decoding="async"
-              onError={(e) =>
-                applyCfImageFallback(e.currentTarget, () => setImgFailed(true))
-              }
+              onError={(e) => applyCfImageFallback(e.currentTarget, () => setImgFailed(true))}
               className="w-full h-full object-cover"
             />
           </div>
         )}
         <div className="p-6">
-          <h2
-            className={`text-xl font-bold mb-2 ${
-              theme === "editorial" ? "font-serif text-2xl" : ""
-            }`}
-          >
-            {product.name}
-          </h2>
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <h2 className={`text-xl font-bold ${theme === "editorial" ? "font-serif text-2xl" : ""}`}>
+              {product.name}
+            </h2>
+            {hasCalories && (
+              <span
+                className={`flex-shrink-0 inline-flex items-center px-2.5 py-1 rounded-lg border text-xs font-semibold ${
+                  isDark
+                    ? "bg-amber-400/10 text-amber-300 border-amber-400/25"
+                    : theme === "editorial"
+                      ? "bg-[#EAE2D3] text-[#8C2D19] border-[#8C2D19]/25 font-sans"
+                      : "bg-orange-50 text-orange-700 border-orange-200"
+                }`}
+              >
+                {product.calories} kcal
+              </span>
+            )}
+          </div>
           {product.description && (
             <p
-              className={`leading-relaxed mb-6 text-sm sm:text-base ${
-                isDark
-                  ? "text-stone-300"
-                  : theme === "editorial"
-                    ? "font-serif italic text-[#57534E]"
-                    : "text-stone-500"
+              className={`leading-relaxed mb-4 text-sm sm:text-base ${
+                isDark ? "text-stone-300" : theme === "editorial" ? "font-serif italic text-[#57534E]" : "text-stone-500"
               }`}
             >
               {product.description}
             </p>
           )}
+          {allergens && (
+            <div
+              className={`mb-5 p-3 rounded-xl border ${
+                isDark
+                  ? "bg-white/[0.03] border-white/10"
+                  : theme === "editorial"
+                    ? "bg-[#EFE9DC] border-[#1C1917]/15"
+                    : "bg-amber-50/50 border-amber-200/70"
+              }`}
+            >
+              <p
+                className={`text-[11px] font-bold uppercase tracking-wider mb-1.5 ${
+                  isDark ? "text-amber-300/80" : theme === "editorial" ? "text-[#8C2D19]" : "text-amber-900/80"
+                }`}
+              >
+                Alerjen Bilgisi
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {allergens.map((allergen) => (
+                  <span
+                    key={allergen}
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-md border text-xs font-medium ${
+                      isDark
+                        ? "bg-white/[0.06] text-stone-200 border-white/15"
+                        : theme === "editorial"
+                          ? "bg-[#F6F1E7] text-[#1C1917] border-[#1C1917]/15"
+                          : "bg-white text-amber-900 border-amber-200"
+                    }`}
+                  >
+                    {allergen}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
           <div
             className={`flex items-center justify-between pt-4 border-t ${
-              isDark
-                ? "border-white/10"
-                : theme === "editorial"
-                  ? "border-[#1C1917]/15"
-                  : "border-stone-100"
+              isDark ? "border-white/10" : theme === "editorial" ? "border-[#1C1917]/15" : "border-stone-100"
             }`}
           >
             <span
               className={`text-2xl font-bold ${
-                isDark
-                  ? "text-amber-300"
-                  : theme === "editorial"
-                    ? "font-serif text-[#8C2D19]"
-                    : "text-stone-900"
+                isDark ? "text-amber-300" : theme === "editorial" ? "font-serif text-[#8C2D19]" : "text-stone-900"
               }`}
             >
               {formatCurrency(product.price)}{" "}
-              <span
-                className={`text-sm font-normal ${
-                  isDark ? "text-amber-300/70" : "text-stone-400"
-                }`}
-              >
-                TL
-              </span>
+              <span className={`text-sm font-normal ${isDark ? "text-amber-300/70" : "text-stone-400"}`}>TL</span>
             </span>
             <button
               type="button"

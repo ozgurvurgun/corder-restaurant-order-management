@@ -75,6 +75,12 @@ export function mapApiProductsToPanel(
       order: p.order,
       description: p.description ?? undefined,
       image: p.imageUrl ?? undefined,
+      ...(p.calories != null && Number(p.calories) > 0
+        ? { calories: Math.round(Number(p.calories)) }
+        : {}),
+      ...(Array.isArray(p.allergens) && p.allergens.length > 0
+        ? { allergens: p.allergens.map((a) => formatTitleCase(a)).filter(Boolean) }
+        : {}),
       ...(ing?.length ? { ingredients: ing } : {}),
     }
   })

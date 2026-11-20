@@ -7,6 +7,8 @@ export interface MenuProduct {
   price: number
   imageUrl?: string
   inStock: boolean
+  calories?: number
+  allergens?: string[]
 }
 
 export interface MenuCategory {
@@ -118,7 +120,7 @@ export interface ImageTransformOptions {
   quality?: number
 }
 
-const CACHE_PREFIX = "corder_menu_cache_v3:"
+const CACHE_PREFIX = "corder_menu_cache_v4:"
 const CACHE_TTL_MS = 60_000
 const memoryCache = new Map<string, { timestamp: number; data: MenuResponse }>()
 
@@ -276,10 +278,21 @@ function normalizeMenuCategoryTree(cat: MenuCategory): MenuCategory {
   return {
     ...cat,
     name: formatTitleCase(cat.name),
-    products: (cat.products ?? []).map((p) => ({
-      ...p,
-      name: formatTitleCase(p.name),
-    })),
+    products: (cat.products ?? []).map((p) => {
+      const calories =
+        typeof p.calories === "number" && Number.isFinite(p.calories) && p.calories > 0
+          ? Math.round(p.calories)
+          : undefined
+      const allergens = Array.isArray(p.allergens)
+        ? p.allergens.map((item) => formatTitleCase(item)).filter(Boolean)
+        : []
+      return {
+        ...p,
+        name: formatTitleCase(p.name),
+        calories,
+        allergens: allergens.length > 0 ? allergens : undefined,
+      }
+    }),
     children: cat.children ? cat.children.map(normalizeMenuCategoryTree) : undefined,
   }
 }

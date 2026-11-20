@@ -80,6 +80,8 @@ export interface PanelProduct {
   order?: number
   description?: string
   costPrice?: number
+  calories?: number | null
+  allergens?: string[]
   ingredients?: ProductIngredient[]
 }
 

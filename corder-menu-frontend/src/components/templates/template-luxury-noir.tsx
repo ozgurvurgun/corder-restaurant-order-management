@@ -10,6 +10,7 @@ import {
 import type { ProductDisplay } from "../menu-modals"
 import {
   categoryHasProducts,
+  ProductMetaTags,
   type MenuTemplateProps,
 } from "../menu-template-shared"
 
@@ -50,10 +51,11 @@ function LuxuryNoirProductItem(props: {
             )}
           </div>
           {product.description && (
-            <p className="text-xs sm:text-sm text-stone-400 line-clamp-2 leading-relaxed mb-3">
+            <p className="text-xs sm:text-sm text-stone-400 line-clamp-2 leading-relaxed mb-2.5">
               {product.description}
             </p>
           )}
+          <ProductMetaTags product={product} variant="noir" className="mb-2.5" />
           <div className="inline-flex items-baseline gap-1">
             <span className="text-base font-semibold text-amber-300 tracking-wide">
               {formatMenuPrice(product.price)}

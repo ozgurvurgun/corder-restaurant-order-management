@@ -10,6 +10,7 @@ import {
 import type { ProductDisplay } from "../menu-modals"
 import {
   categoryHasProducts,
+  ProductMetaTags,
   type MenuTemplateProps,
 } from "../menu-template-shared"
 
@@ -74,6 +75,7 @@ function EditorialProductRow(props: {
               {product.description}
             </p>
           )}
+          <ProductMetaTags product={product} variant="editorial" className="mt-2" />
         </div>
       </div>
     </button>

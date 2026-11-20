@@ -108,6 +108,24 @@ export class ProductService {
     return out.length ? out : null;
   }
 
+  private normalizeCalories(raw: number | null | undefined): number | null {
+    if (raw == null) return null;
+    const num = Math.round(Number(raw));
+    return Number.isFinite(num) && num > 0 ? num : null;
+  }
+
+  private normalizeAllergens(raw: string[] | null | undefined): string[] | null {
+    if (!Array.isArray(raw) || raw.length === 0) return null;
+    const unique = [
+      ...new Set(
+        raw
+          .map((item) => (typeof item === 'string' ? normalizeStorageText(item) : ''))
+          .filter(Boolean),
+      ),
+    ];
+    return unique.length > 0 ? unique : null;
+  }
+
   private async nextOrderInCategory(categoryId: string): Promise<number> {
     const row = await this.repo
       .createQueryBuilder('p')
@@ -139,6 +157,8 @@ export class ProductService {
       restaurantId,
       dto.ingredients ?? null,
     );
+    entity.calories = this.normalizeCalories(dto.calories);
+    entity.allergens = this.normalizeAllergens(dto.allergens);
     const saved = await this.repo.save(entity);
     return this.findOne(saved.id, restaurantId);
   }
@@ -181,6 +201,12 @@ export class ProductService {
         restaurantId,
         dto.ingredients,
       );
+    }
+    if (dto.calories !== undefined) {
+      entity.calories = this.normalizeCalories(dto.calories);
+    }
+    if (dto.allergens !== undefined) {
+      entity.allergens = this.normalizeAllergens(dto.allergens);
     }
     await this.repo.save(entity);
     return this.findOne(id, restaurantId);

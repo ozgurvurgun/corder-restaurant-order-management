@@ -56,6 +56,8 @@ export default function ProductManagement() {
   const [productName, setProductName] = useState("")
   const [productPrice, setProductPrice] = useState("")
   const [productDesc, setProductDesc] = useState("")
+  const [productCalories, setProductCalories] = useState("")
+  const [productAllergens, setProductAllergens] = useState<string[]>([])
   const [productImage, setProductImage] = useState("")
   const [catName, setCatName] = useState(""); useEffect(() => {
     if (!categories.length) return
@@ -70,6 +72,8 @@ export default function ProductManagement() {
   const [editPrice, setEditPrice] = useState("")
   const [editCostPrice, setEditCostPrice] = useState("")
   const [editDesc, setEditDesc] = useState("")
+  const [editCalories, setEditCalories] = useState("")
+  const [editAllergens, setEditAllergens] = useState<string[]>([])
   const [editImage, setEditImage] = useState("")
 
   const catProducts = products.filter((p) => {
@@ -97,14 +101,17 @@ export default function ProductManagement() {
       showToast("Geçerli bir ürün adı ve fiyat girin.", "error")
       return
     }
+    const calVal = productCalories.trim() ? Math.round(Number(productCalories)) : null
     addProduct({
       name: productName.trim(),
       price: priceVal,
       categoryId: selectedCat,
       inStock: true,
       description: productDesc.trim() || undefined,
+      calories: calVal != null && Number.isFinite(calVal) && calVal > 0 ? calVal : null,
+      allergens: productAllergens.length > 0 ? productAllergens : undefined,
       image: productImage || undefined,
-    }); setProductName(""); setProductPrice(""); setProductDesc(""); setProductImage(""); setShowAddProduct(false)
+    }); setProductName(""); setProductPrice(""); setProductDesc(""); setProductCalories(""); setProductAllergens([]); setProductImage(""); setShowAddProduct(false)
   }
 
   const handleAddCategory = () => {
@@ -115,7 +122,7 @@ export default function ProductManagement() {
   }
 
   const openEditModal = (product: PanelProduct) => {
-    setEditingProduct(product); setEditName(product.name); setEditCategoryId(product.categoryId); setEditPrice(product.price.toString()); setEditCostPrice(product.costPrice != null ? product.costPrice.toString() : "",); setEditDesc(product.description || ""); setEditImage(product.image || "")
+    setEditingProduct(product); setEditName(product.name); setEditCategoryId(product.categoryId); setEditPrice(product.price.toString()); setEditCostPrice(product.costPrice != null ? product.costPrice.toString() : "",); setEditDesc(product.description || ""); setEditCalories(product.calories != null && product.calories > 0 ? String(product.calories) : ""); setEditAllergens(product.allergens ?? []); setEditImage(product.image || "")
   }
 
   const handleUpdateProduct = () => {
@@ -134,6 +141,8 @@ export default function ProductManagement() {
     }
     const parsedCost =
       editCostPrice.trim() !== "" ? parseFloat(editCostPrice) : undefined
+    const parsedCalories =
+      editCalories.trim() !== "" ? Math.round(Number(editCalories)) : null
     updateProduct(editingProduct.id, {
       name: editName.trim(),
       categoryId: editCategoryId || editingProduct.categoryId,
@@ -142,6 +151,8 @@ export default function ProductManagement() {
         ? { costPrice: parsedCost }
         : {}),
       description: editDesc.trim(),
+      calories: parsedCalories != null && Number.isFinite(parsedCalories) && parsedCalories > 0 ? parsedCalories : null,
+      allergens: editAllergens,
       image: editImage,
     }); setEditingProduct(null)
   }
@@ -287,7 +298,7 @@ export default function ProductManagement() {
             {canManageProducts && (
               <button
                 onClick={() => {
-                  setShowAddProduct(true); setProductName(""); setProductPrice(""); setProductDesc(""); setProductImage("")
+                  setShowAddProduct(true); setProductName(""); setProductPrice(""); setProductDesc(""); setProductCalories(""); setProductAllergens([]); setProductImage("")
                 }}
                 className="h-[30px] px-3 flex items-center gap-1.5 bg-[#e63462] text-white rounded-lg text-[12px] font-medium hover:bg-[#d42d56] transition-colors"
               >
@@ -306,6 +317,10 @@ export default function ProductManagement() {
               setProductPrice={setProductPrice}
               productDesc={productDesc}
               setProductDesc={setProductDesc}
+              productCalories={productCalories}
+              setProductCalories={setProductCalories}
+              productAllergens={productAllergens}
+              setProductAllergens={setProductAllergens}
               productImage={productImage}
               setProductImage={setProductImage}
               onUpload={token ? handleUpload : undefined}
@@ -357,9 +372,21 @@ export default function ProductManagement() {
                           </div>
                         )}
                         <div>
-                          <span className="text-[13px] font-medium text-[#1d1d1f]">
-                            {product.name}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[13px] font-medium text-[#1d1d1f]">
+                              {product.name}
+                            </span>
+                            {product.calories != null && product.calories > 0 && (
+                              <span className="px-1.5 py-0.5 rounded bg-orange-50 text-orange-600 text-[10px] font-semibold">
+                                {product.calories} kcal
+                              </span>
+                            )}
+                            {product.allergens && product.allergens.length > 0 && (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 text-[10px] font-medium">
+                                Alerjen: {product.allergens.join(", ")}
+                              </span>
+                            )}
+                          </div>
                           {product.description && (
                             <p className="text-[11px] text-[#86868b] mt-0.5 line-clamp-1">
                               {product.description}
@@ -418,6 +445,10 @@ export default function ProductManagement() {
           setEditCostPrice={setEditCostPrice}
           editDesc={editDesc}
           setEditDesc={setEditDesc}
+          editCalories={editCalories}
+          setEditCalories={setEditCalories}
+          editAllergens={editAllergens}
+          setEditAllergens={setEditAllergens}
           editImage={editImage}
           setEditImage={setEditImage}
           canEditDetails={canManageProducts}

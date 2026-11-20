@@ -221,6 +221,55 @@ export function searchProductsWithLevenshtein(
     .map((entry) => entry.product)
 }
 
+export function ProductMetaTags(props: {
+  product: Pick<MenuProduct, "calories" | "allergens">
+  variant?: "classic" | "bistro" | "vibrant" | "editorial" | "noir"
+  className?: string
+}) {
+  const { product, variant = "classic", className = "mt-2" } = props
+  const hasCalories = typeof product.calories === "number" && product.calories > 0
+  const allergens =
+    Array.isArray(product.allergens) && product.allergens.length > 0
+      ? product.allergens
+      : null
+
+  if (!hasCalories && !allergens) return null
+
+  const calorieBadgeClass =
+    variant === "noir"
+      ? "bg-amber-400/10 text-amber-300 border-amber-400/25"
+      : variant === "editorial"
+        ? "bg-[#EAE2D3] text-[#8C2D19] border-[#8C2D19]/20 font-sans"
+        : "bg-orange-50 text-orange-700 border-orange-200/80"
+
+  const allergenBadgeClass =
+    variant === "noir"
+      ? "bg-white/[0.05] text-stone-300 border-white/10"
+      : variant === "editorial"
+        ? "bg-[#EFE9DC] text-[#57534E] border-[#1C1917]/15 font-sans"
+        : "bg-amber-50/90 text-amber-800 border-amber-200/80"
+
+  return (
+    <div className={`flex flex-wrap items-center gap-1 ${className}`}>
+      {hasCalories && (
+        <span
+          className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-semibold leading-tight ${calorieBadgeClass}`}
+        >
+          {product.calories} kcal
+        </span>
+      )}
+      {allergens?.map((allergen) => (
+        <span
+          key={allergen}
+          className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-medium leading-tight ${allergenBadgeClass}`}
+        >
+          {allergen}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 export function ActiveCampaignsShowcaseStrip(props: {
   campaigns: MenuCampaign[]
   onSelectCampaign: (index: number) => void

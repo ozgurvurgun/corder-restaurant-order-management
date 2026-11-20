@@ -4,11 +4,13 @@ import {
   IsUUID,
   IsOptional,
   IsNumber,
+  IsInt,
   IsBoolean,
   IsArray,
   ValidateNested,
   ValidateIf,
   Min,
+  Max,
   MinLength,
 } from 'class-validator';
 import { ProductIngredientInputDto } from './product-ingredient-input.dto';
@@ -52,4 +54,17 @@ export class CreateProductDto {
   @ValidateNested({ each: true })
   @Type(() => ProductIngredientInputDto)
   ingredients?: ProductIngredientInputDto[] | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsInt()
+  @Min(0)
+  @Max(50000)
+  calories?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsArray()
+  @IsString({ each: true })
+  allergens?: string[] | null;
 }

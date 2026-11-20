@@ -8,6 +8,8 @@ export interface MenuProductRow {
   price: number;
   imageUrl?: string;
   inStock: boolean;
+  calories?: number;
+  allergens?: string[];
 }
 
 export interface MenuCategoryTreeDto {
@@ -103,6 +105,14 @@ export function buildMenuCategoryTree(
   const productsByCatId = new Map<string, MenuProductRow[]>();
   for (const p of products) {
     const list = productsByCatId.get(p.categoryId) ?? [];
+    const calories =
+      p.calories != null && Number.isFinite(Number(p.calories)) && Number(p.calories) > 0
+        ? Math.round(Number(p.calories))
+        : undefined;
+    const allergens =
+      Array.isArray(p.allergens) && p.allergens.length > 0
+        ? p.allergens.filter((a) => typeof a === 'string' && a.trim().length > 0)
+        : undefined;
     list.push({
       id: p.id,
       name: p.name,
@@ -110,6 +120,8 @@ export function buildMenuCategoryTree(
       price: Number(p.price),
       imageUrl: p.imageUrl ?? undefined,
       inStock: p.inStock,
+      ...(calories ? { calories } : {}),
+      ...(allergens?.length ? { allergens } : {}),
     });
     productsByCatId.set(p.categoryId, list);
   }

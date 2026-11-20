@@ -1,10 +1,163 @@
-import { useEffect } from "react"
-import { AlertTriangle, X } from "lucide-react"
+import { useEffect, useState } from "react"
+import { AlertTriangle, Flame, Plus, X } from "lucide-react"
 import type { PanelCategory, PanelProduct } from "@/lib/panel-types"
 import { orderedCategoryList } from "@/lib/mappers/catalog-inventory.mapper"
 import { categoryDepth } from "./category-modals"
 import ImageUpload from "../image-upload"
 import { CustomSelect } from "@/components/ui/custom-inputs"
+import { formatTitleCase } from "@/lib/format"
+
+export const STANDARD_ALLERGEN_OPTIONS: readonly string[] = [
+  "Gluten",
+  "Süt Ürünleri",
+  "Yumurta",
+  "Sert Kabuklu Yemişler",
+  "Yer Fıstığı",
+  "Soya",
+  "Susam",
+  "Balık",
+  "Kabuklu Deniz Ürünleri",
+  "Hardal",
+  "Kereviz",
+  "Sülfit",
+]
+
+function ProductNutritionAllergensFields(props: {
+  calories: string
+  setCalories: (v: string) => void
+  allergens: string[]
+  setAllergens: (v: string[]) => void
+  compact?: boolean
+}) {
+  const { calories, setCalories, allergens, setAllergens, compact = false } = props
+  const [customAllergen, setCustomAllergen] = useState("")
+
+  const hasAllergen = (candidate: string) => {
+    const key = candidate.trim().toLocaleLowerCase("tr-TR")
+    return allergens.some((a) => a.trim().toLocaleLowerCase("tr-TR") === key)
+  }
+
+  const toggleAllergen = (label: string) => {
+    const formatted = formatTitleCase(label)
+    if (!formatted) return
+    const key = formatted.toLocaleLowerCase("tr-TR")
+    if (allergens.some((a) => a.trim().toLocaleLowerCase("tr-TR") === key)) {
+      setAllergens(allergens.filter((a) => a.trim().toLocaleLowerCase("tr-TR") !== key))
+    } else {
+      setAllergens([...allergens, formatted])
+    }
+  }
+
+  const addCustomAllergen = () => {
+    const formatted = formatTitleCase(customAllergen)
+    if (!formatted) return
+    if (!hasAllergen(formatted)) {
+      setAllergens([...allergens, formatted])
+    }
+    setCustomAllergen("")
+  }
+
+  return (
+    <div className={compact ? "mt-2.5 space-y-2.5" : "space-y-3"}>
+      <div>
+        <label className="block text-[11px] font-medium text-[#86868b] mb-1">
+          Kalori (kcal, opsiyonel - girilmezse QR menüde görünmez)
+        </label>
+        <div className="relative">
+          <Flame className="w-3.5 h-3.5 text-orange-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="number"
+            min={0}
+            max={50000}
+            step={1}
+            value={calories}
+            onChange={(e) => setCalories(e.target.value)}
+            placeholder="Örn: 420"
+            className="w-full h-[36px] pl-8 pr-12 text-[13px] bg-[#f5f5f7] rounded-xl border border-[#d1d1d6]/60 focus:border-[#e63462]/50 focus:outline-none"
+          />
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#86868b] pointer-events-none">
+            kcal
+          </span>
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <label className="block text-[11px] font-medium text-[#86868b]">
+            Alerjen Bilgileri (opsiyonel - seçilmezse QR menüde görünmez)
+          </label>
+          {allergens.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setAllergens([])}
+              className="text-[10px] font-medium text-[#e63462] hover:underline"
+            >
+              Temizle ({allergens.length})
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {STANDARD_ALLERGEN_OPTIONS.map((opt) => {
+            const active = hasAllergen(opt)
+            return (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => toggleAllergen(opt)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
+                  active
+                    ? "bg-[#e63462] text-white border-[#e63462]"
+                    : "bg-[#f5f5f7] text-[#48484a] border-[#d1d1d6]/60 hover:bg-[#ebebf0]"
+                }`}
+              >
+                {opt}
+              </button>
+            )
+          })}
+        </div>
+        {allergens.some((a) => !STANDARD_ALLERGEN_OPTIONS.some((s) => s.toLocaleLowerCase("tr-TR") === a.toLocaleLowerCase("tr-TR"))) && (
+          <div className="flex flex-wrap gap-1.5 mt-1.5">
+            {allergens
+              .filter((a) => !STANDARD_ALLERGEN_OPTIONS.some((s) => s.toLocaleLowerCase("tr-TR") === a.toLocaleLowerCase("tr-TR")))
+              .map((custom) => (
+                <span
+                  key={custom}
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-medium bg-[#1d1d1f] text-white"
+                >
+                  {custom}
+                  <button type="button" onClick={() => toggleAllergen(custom)} className="hover:opacity-75">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+          </div>
+        )}
+        <div className="flex gap-1.5 mt-2">
+          <input
+            type="text"
+            value={customAllergen}
+            onChange={(e) => setCustomAllergen(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault()
+                addCustomAllergen()
+              }
+            }}
+            placeholder="Özel alerjen ekle (örn: Acı Biber, Sarımsak)..."
+            className="flex-1 h-[32px] px-2.5 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:border-[#e63462]/50 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={addCustomAllergen}
+            className="h-[32px] px-2.5 rounded-lg bg-[#f5f5f7] hover:bg-[#e8e8ed] border border-[#d1d1d6]/60 text-[11px] font-medium text-[#1d1d1f] inline-flex items-center gap-1"
+          >
+            <Plus className="w-3 h-3" /> Ekle
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export function AddProductInlineForm(props: {
   productName: string
@@ -13,6 +166,10 @@ export function AddProductInlineForm(props: {
   setProductPrice: (v: string) => void
   productDesc: string
   setProductDesc: (v: string) => void
+  productCalories: string
+  setProductCalories: (v: string) => void
+  productAllergens: string[]
+  setProductAllergens: (v: string[]) => void
   productImage: string
   setProductImage: (v: string) => void
   onUpload?: (file: File) => Promise<string>
@@ -20,17 +177,10 @@ export function AddProductInlineForm(props: {
   onSubmit: () => void
 }) {
   const {
-    productName,
-    setProductName,
-    productPrice,
-    setProductPrice,
-    productDesc,
-    setProductDesc,
-    productImage,
-    setProductImage,
-    onUpload,
-    onClose,
-    onSubmit,
+    productName, setProductName, productPrice, setProductPrice,
+    productDesc, setProductDesc, productCalories, setProductCalories,
+    productAllergens, setProductAllergens, productImage, setProductImage,
+    onUpload, onClose, onSubmit,
   } = props
 
   return (
@@ -69,6 +219,13 @@ export function AddProductInlineForm(props: {
         onChange={(e) => setProductDesc(e.target.value)}
         placeholder="Açıklama (opsiyonel)"
         className="w-full mt-2 h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
+      />
+      <ProductNutritionAllergensFields
+        calories={productCalories}
+        setCalories={setProductCalories}
+        allergens={productAllergens}
+        setAllergens={setProductAllergens}
+        compact
       />
       <div className="mt-3">
         <ImageUpload
@@ -110,6 +267,10 @@ export function EditProductModal(props: {
   setEditCostPrice: (v: string) => void
   editDesc: string
   setEditDesc: (v: string) => void
+  editCalories: string
+  setEditCalories: (v: string) => void
+  editAllergens: string[]
+  setEditAllergens: (v: string[]) => void
   editImage: string
   setEditImage: (v: string) => void
   canEditDetails?: boolean
@@ -119,24 +280,11 @@ export function EditProductModal(props: {
   onSave: () => void
 }) {
   const {
-    categories,
-    editName,
-    setEditName,
-    editCategoryId,
-    setEditCategoryId,
-    editPrice,
-    setEditPrice,
-    editCostPrice,
-    setEditCostPrice,
-    editDesc,
-    setEditDesc,
-    editImage,
-    setEditImage,
-    canEditDetails = true,
-    canChangePrice = true,
-    onUpload,
-    onClose,
-    onSave,
+    categories, editName, setEditName, editCategoryId, setEditCategoryId,
+    editPrice, setEditPrice, editCostPrice, setEditCostPrice,
+    editDesc, setEditDesc, editCalories, setEditCalories,
+    editAllergens, setEditAllergens, editImage, setEditImage,
+    canEditDetails = true, canChangePrice = true, onUpload, onClose, onSave,
   } = props
 
   useEffect(() => {
@@ -148,12 +296,10 @@ export function EditProductModal(props: {
   }, [onClose])
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-[440px] max-h-[90vh] overflow-auto">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm p-3">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[480px] max-h-[90vh] overflow-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#e8e8ed]">
-          <h3 className="text-[15px] font-semibold text-[#1d1d1f]">
-            Ürün Düzenle
-          </h3>
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Ürün Düzenle</h3>
           <button
             type="button"
             onClick={onClose}
@@ -166,9 +312,7 @@ export function EditProductModal(props: {
           {canEditDetails && (
             <>
               <div>
-                <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
-                  Ürün Adı
-                </label>
+                <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">Ürün Adı</label>
                 <input
                   type="text"
                   value={editName}
@@ -177,9 +321,7 @@ export function EditProductModal(props: {
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
-                  Kategori
-                </label>
+                <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">Kategori</label>
                 <CustomSelect
                   value={editCategoryId}
                   onChange={(e) => setEditCategoryId(e.target.value)}
@@ -198,9 +340,7 @@ export function EditProductModal(props: {
           <div className={canEditDetails ? "grid grid-cols-2 gap-3" : ""}>
             {canChangePrice && (
               <div>
-                <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
-                  Satış Fiyatı (TL)
-                </label>
+                <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">Satış Fiyatı (TL)</label>
                 <input
                   type="number"
                   min={0}
@@ -213,9 +353,7 @@ export function EditProductModal(props: {
             )}
             {canEditDetails && (
               <div>
-                <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
-                  Maliyet Fiyatı (TL, opsiyonel)
-                </label>
+                <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">Maliyet Fiyatı (TL, opsiyonel)</label>
                 <input
                   type="number"
                   min={0}
@@ -231,25 +369,23 @@ export function EditProductModal(props: {
           {canEditDetails && (
             <>
               <div>
-                <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
-                  Açıklama (opsiyonel)
-                </label>
+                <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">Açıklama (opsiyonel)</label>
                 <textarea
                   value={editDesc}
                   onChange={(e) => setEditDesc(e.target.value)}
-                  rows={3}
+                  rows={2}
                   className="w-full px-3 py-2 text-[14px] bg-[#f5f5f7] rounded-xl border border-transparent focus:border-[#e63462]/50 focus:outline-none resize-none"
                 />
               </div>
+              <ProductNutritionAllergensFields
+                calories={editCalories}
+                setCalories={setEditCalories}
+                allergens={editAllergens}
+                setAllergens={setEditAllergens}
+              />
               <div>
-                <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">
-                  Fotoğraf
-                </label>
-                <ImageUpload
-                  value={editImage}
-                  onChange={setEditImage}
-                  onUpload={onUpload}
-                />
+                <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">Fotoğraf</label>
+                <ImageUpload value={editImage} onChange={setEditImage} onUpload={onUpload} />
               </div>
             </>
           )}
@@ -298,29 +434,26 @@ export function DeleteProductConfirmModal(props: {
             <AlertTriangle className="w-5 h-5 text-red-500" />
           </div>
           <div>
-            <h3 className="text-[15px] font-semibold text-[#1d1d1f]">
-              Ürünü Sil
-            </h3>
-            <p className="text-[13px] text-[#86868b] mt-1.5 leading-relaxed">
-              <span className="font-medium text-[#1d1d1f]">{product.name}</span>{" "}
-              ürününü silmek istediğinize emin misiniz? Bu işlem geri alınamaz.
+            <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Ürünü Sil</h3>
+            <p className="text-[12px] text-[#86868b] mt-1 leading-relaxed">
+              <span className="font-semibold text-[#1d1d1f]">{product.name}</span> ürünü menüden kalıcı olarak silinecek.
             </p>
           </div>
         </div>
-        <div className="px-5 py-4 flex justify-end gap-2 border-t border-[#e8e8ed] mt-4">
+        <div className="flex justify-end gap-2 px-5 py-4 mt-2">
           <button
             type="button"
             onClick={onCancel}
-            className="h-[38px] px-4 text-[13px] font-medium text-[#86868b] rounded-xl border border-[#d1d1d6]/60 hover:bg-[#f5f5f7]"
+            className="h-[34px] px-4 text-[12px] font-medium text-[#636366] bg-[#f5f5f7] rounded-lg hover:bg-[#e8e8ed]"
           >
             İptal
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className="h-[38px] px-4 text-[13px] font-medium text-white bg-red-500 rounded-xl hover:bg-red-600"
+            className="h-[34px] px-4 text-[12px] font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600"
           >
-            Evet, sil
+            Sil
           </button>
         </div>
       </div>

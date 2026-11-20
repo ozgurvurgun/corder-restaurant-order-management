@@ -36,6 +36,8 @@ export function useCatalogActions(params: {
           description: p.description?.trim() || undefined,
           imageUrl: p.image || undefined,
           inStock: p.inStock ?? true,
+          calories: p.calories != null && p.calories > 0 ? Math.round(p.calories) : null,
+          allergens: p.allergens && p.allergens.length > 0 ? p.allergens : null,
           ingredients:
             p.ingredients?.map((i) => ({ materialId: i.materialId, quantity: i.quantity })) ?? undefined,
         })
@@ -66,6 +68,12 @@ export function useCatalogActions(params: {
       if (data.costPrice !== undefined) body.costPrice = data.costPrice
       if (data.image !== undefined) body.imageUrl = data.image
       if (data.inStock !== undefined) body.inStock = data.inStock
+      if (data.calories !== undefined) {
+        body.calories = data.calories != null && data.calories > 0 ? Math.round(data.calories) : null
+      }
+      if (data.allergens !== undefined) {
+        body.allergens = data.allergens && data.allergens.length > 0 ? data.allergens : null
+      }
       if (data.ingredients !== undefined) {
         body.ingredients =
           data.ingredients.length > 0
