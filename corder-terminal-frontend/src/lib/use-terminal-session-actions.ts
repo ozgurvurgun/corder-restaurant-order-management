@@ -197,12 +197,13 @@ export function useTerminalSessionActions(params: {
         lastActivityRef.current = Date.now()
         setCurrentUser(mapSessionToTerminalUser(session))
         setActiveScreen("tables")
+        void refreshData()
         return { ok: true }
       } catch (err) {
         return { ok: false, error: translateApiError(err, "Geçersiz PIN kodu") }
       }
     },
-    [lastActivityRef, setActiveScreen, setCurrentUser]
+    [lastActivityRef, refreshData, setActiveScreen, setCurrentUser]
   )
 
   const selectTable = useCallback(

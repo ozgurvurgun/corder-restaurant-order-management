@@ -144,6 +144,18 @@ export function translateApiError(raw: unknown, fallback = "İşlem gerçekleşt
   if (lower.includes("terminal access is disabled")) {
     return "Bu personelin terminal erişim yetkisi kapatılmış."
   }
+  if (lower.includes("staff pin verification is required")) {
+    return "Lütfen personel seçip PIN kodunuzla giriş yapın."
+  }
+  if (lower.includes("staff pin has been changed")) {
+    return "Personel PIN kodunuz güncellendi. Lütfen yeni PIN kodunuzla tekrar giriş yapın."
+  }
+  if (lower.includes("staff member not found or pin disabled")) {
+    return "Personel hesabı bulunamadı veya PIN girişi kapatıldı."
+  }
+  if (lower.includes("invalid staff session") || lower.includes("actor session could not be verified")) {
+    return "Personel oturumunuz sona erdi. Lütfen PIN kodunuzla tekrar giriş yapın."
+  }
   if (lower.includes("no open cash shift") || lower.includes("cash shift") || lower.includes("açık kasa")) {
     return "Açık kasa vardiyası bulunmuyor. Lütfen kasa panelinden vardiya açın."
   }

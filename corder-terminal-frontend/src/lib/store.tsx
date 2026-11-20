@@ -224,7 +224,8 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
 
   const pullTables = useCallback(async () => {
     const token = getToken()
-    if (!token) return
+    const staffSession = getStaffSession()
+    if (!token || !staffSession?.staffToken) return
     try {
       setRawTables(await api.tables.list(token))
     } catch {
@@ -234,7 +235,8 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
 
   const refreshLiveState = useCallback(async () => {
     const token = getToken()
-    if (!token) return
+    const staffSession = getStaffSession()
+    if (!token || !staffSession?.staffToken) return
     try {
       const [tablesRes, ordersRes] = await Promise.all([
         api.tables.list(token),
@@ -254,18 +256,20 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     setError(null)
     setUsersError(null)
     try {
+      const existingSession = getStaffSession()
+      const hasStaffToken = Boolean(existingSession?.staffToken)
+
       const [tablesRes, ordersRes, menuRes, staffUsersRes] = await Promise.all([
-        api.tables.list(token),
-        api.orders.list(token),
-        api.menu.terminal(token).catch(() => null),
+        hasStaffToken ? api.tables.list(token).catch(() => null) : Promise.resolve(null),
+        hasStaffToken ? api.orders.list(token).catch(() => null) : Promise.resolve(null),
+        hasStaffToken ? api.menu.terminal(token).catch(() => null) : Promise.resolve(null),
         api.staff.listTerminalUsers(token).catch((err: unknown) => {
           setUsersError(translateApiError(err, "Personel listesi yüklenemedi"))
           return null
         }),
       ])
-      setRawTables(tablesRes)
-      setRawOrders(ordersRes)
-      const existingSession = getStaffSession()
+      if (tablesRes) setRawTables(tablesRes)
+      if (ordersRes) setRawOrders(ordersRes)
       if (staffUsersRes) {
         const normalizedUsers = staffUsersRes.map((u) => ({
           ...u,
@@ -273,32 +277,33 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
         }))
         setUsers(normalizedUsers)
         setUsersLoaded(true)
-        if (existingSession) {
+        const latestSession = getStaffSession()
+        if (latestSession?.staffToken) {
           const matchingMember = normalizedUsers.find(
-            (u) => u.id === existingSession.staffId
+            (u) => u.id === latestSession.staffId
           )
           if (matchingMember) {
             const updatedSession = setStaffSession({
-              ...existingSession,
+              ...latestSession,
               name: matchingMember.name,
               role: matchingMember.role,
-              roleLabel: matchingMember.roleLabel ?? existingSession.roleLabel,
+              roleLabel: matchingMember.roleLabel ?? latestSession.roleLabel,
               permissions: Array.isArray(matchingMember.permissions)
                 ? matchingMember.permissions
-                : existingSession.permissions,
-              limits: matchingMember.limits ?? existingSession.limits,
+                : latestSession.permissions,
+              limits: matchingMember.limits ?? latestSession.limits,
               effectiveEndTime:
-                matchingMember.effectiveEndTime ?? existingSession.effectiveEndTime,
+                matchingMember.effectiveEndTime ?? latestSession.effectiveEndTime,
             })
             setCurrentUser(mapSessionToTerminalUser(updatedSession))
           } else {
-            setCurrentUser(mapSessionToTerminalUser(existingSession))
+            setCurrentUser(mapSessionToTerminalUser(latestSession))
           }
         } else {
           setCurrentUser(null)
         }
       } else {
-        setCurrentUser(mapSessionToTerminalUser(existingSession))
+        setCurrentUser(mapSessionToTerminalUser(getStaffSession()))
       }
       if (menuRes) {
         const mapped = mapMenuTreeToCategoriesAndProducts(menuRes.categories)

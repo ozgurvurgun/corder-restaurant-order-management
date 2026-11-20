@@ -228,9 +228,32 @@ async function request<T>(
       if (isLocationGeofenceError(res.status, message)) {
         // Location/geofence warning: do not expire staff PIN session
       } else if (isStaffAuthError(res.status, message)) {
-        if (typeof message === "string" && message.trim()) {
+        const hadStaffSession = Boolean(getStaffSession()?.staffToken)
+        const rawMsg = typeof message === "string" ? message.trim() : ""
+        if (
+          hadStaffSession &&
+          rawMsg &&
+          !rawMsg.toLowerCase().includes("pin verification is required")
+        ) {
           try {
-            sessionStorage.setItem("terminal_staff_kick_notice", message.trim())
+            const localized = rawMsg
+              .replace(
+                /Staff PIN has been changed; please sign in again/i,
+                "Personel PIN kodunuz güncellendi. Lütfen yeni PIN kodunuzla tekrar giriş yapın."
+              )
+              .replace(
+                /Terminal access is disabled for this user/i,
+                "Bu personel için el terminali erişimi kapatıldı."
+              )
+              .replace(
+                /Staff member not found or PIN disabled/i,
+                "Personel hesabı bulunamadı veya PIN girişi kapatıldı."
+              )
+              .replace(
+                /Invalid staff session/i,
+                "Personel oturumunuz sona erdi. Lütfen tekrar giriş yapın."
+              )
+            sessionStorage.setItem("terminal_staff_kick_notice", localized)
           } catch {}
         }
         staffExpiredHandler?.()
