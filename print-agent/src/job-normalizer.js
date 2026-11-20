@@ -143,15 +143,6 @@ async function printJob(job, printer, agentConfig) {
     (agentConfig.asciiFallback !== false && (tp?.mode === "system" || !tp?.mode))
   const printOpts = {
     footerLine: agentConfig.printFooterLine,
-    receiptFooterEnabled: agentConfig.receiptFooterEnabled !== false,
-    receiptFooterTitle:
-      agentConfig.receiptFooterTitle !== undefined
-        ? agentConfig.receiptFooterTitle
-        : "Compart Software",
-    receiptFooterUrl:
-      agentConfig.receiptFooterUrl !== undefined
-        ? agentConfig.receiptFooterUrl
-        : "compartsoftware.com",
     charsPerLine,
     feedLinesBeforeCut,
     ticketStamp: agentConfig.printTicketStamp,

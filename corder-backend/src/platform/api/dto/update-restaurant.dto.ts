@@ -118,16 +118,4 @@ export class UpdateRestaurantDto {
   @IsString()
   @MinLength(6, { message: 'Print agent password must be at least 6 characters' })
   printAgentPassword?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  receiptFooterEnabled?: boolean;
-
-  @IsOptional()
-  @IsString()
-  receiptFooterTitle?: string | null;
-
-  @IsOptional()
-  @IsString()
-  receiptFooterUrl?: string | null;
 }

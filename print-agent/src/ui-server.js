@@ -92,25 +92,37 @@ function parseCookies(cookieHeader) {
 
 function isLoopbackHost(req) {
   const host = String(req.headers.host || "").toLowerCase().trim()
-  return host === "127.0.0.1" || host === "localhost" || host.startsWith("127.0.0.1:") || host.startsWith("localhost:")
+  return (
+    host === "127.0.0.1" ||
+    host === "localhost" ||
+    host.startsWith("127.0.0.1:") ||
+    host.startsWith("localhost:")
+  )
 }
 
 function safeTokenEqual(candidate, expected) {
   if (!candidate || !expected) return false
   const a = Buffer.from(String(candidate), "utf8")
   const b = Buffer.from(String(expected), "utf8")
-  return a.length === b.length && crypto.timingSafeEqual(a, b)
+  if (a.length !== b.length) return false
+  return crypto.timingSafeEqual(a, b)
 }
 
 function isAllowedLoopbackRequest(req, sessionToken) {
-  if (!isLoopbackHost(req)) return false
+  if (!isLoopbackHost(req)) {
+    return false
+  }
   const headerToken = String(req.headers["x-corder-session"] || "").trim()
   if (safeTokenEqual(headerToken, sessionToken)) return true
+
   const cookies = parseCookies(req.headers.cookie)
   if (!safeTokenEqual(cookies.corder_pa_session, sessionToken)) return false
+
   if (req.method !== "GET" && req.method !== "HEAD") {
     const origin = String(req.headers.origin || "").toLowerCase()
-    if (!origin.startsWith("http://127.0.0.1:") && !origin.startsWith("http://localhost:")) return false
+    if (!origin.startsWith("http://127.0.0.1:") && !origin.startsWith("http://localhost:")) {
+      return false
+    }
   }
   return true
 }
@@ -159,37 +171,27 @@ function createUiServer({ store, agent }) {
     return { settings: saved, publicSettings: getPublicSettings(saved), runtimeConfig }
   }
 
-  const resolveFooterPatch = (rest, fallback) => ({
-    receiptFooterEnabled:
-      rest?.receiptFooterEnabled !== undefined
-        ? Boolean(rest.receiptFooterEnabled)
-        : fallback.receiptFooterEnabled !== false,
-    receiptFooterTitle:
-      rest?.receiptFooterTitle !== undefined
-        ? String(rest.receiptFooterTitle ?? "").trim()
-        : fallback.receiptFooterTitle,
-    receiptFooterUrl:
-      rest?.receiptFooterUrl !== undefined
-        ? String(rest.receiptFooterUrl ?? "").trim()
-        : fallback.receiptFooterUrl,
-  })
-
   const syncContextFromBackend = async (reason = "manual") => {
     const current = loadSettings()
     const runtimeConfig = buildRuntimeConfig(current)
     const ctx = await fetchAgentContext(runtimeConfig)
     const nextCategories = ctx.categories || []
     const nextPrinters = mergePrintersWithBackend(current.printers, ctx.printers)
-    const nextRoutes = seedDepartmentCategoryRoutes(current.categoryRoutes, nextCategories, nextPrinters)
+    const nextRoutes = seedDepartmentCategoryRoutes(
+      current.categoryRoutes,
+      nextCategories,
+      nextPrinters,
+    )
     const res = applyAndReload({
       restaurantId: ctx.restaurant?.id || current.restaurantId,
       restaurantName: ctx.restaurant?.name || current.restaurantName,
-      ...resolveFooterPatch(ctx.restaurant, current),
       categories: nextCategories,
       printers: nextPrinters,
       categoryRoutes: nextRoutes,
     })
-    if (reason !== "ws-printers-updated") void pushPrintersToBackend(res.runtimeConfig, res.settings)
+    if (reason !== "ws-printers-updated") {
+      void pushPrintersToBackend(res.runtimeConfig, res.settings)
+    }
     return res
   }
 
@@ -231,7 +233,8 @@ function createUiServer({ store, agent }) {
       if (method === "POST" && pathname === "/api/login") {
         const current = loadSettings()
         const loginResult = await loginPrintAgent(body.username, body.password, current.backendUrl)
-        const isSameRestaurant = !current.restaurantId || current.restaurantId === loginResult.restaurant?.id
+        const isSameRestaurant =
+          !current.restaurantId || current.restaurantId === loginResult.restaurant?.id
         const basePrinters = isSameRestaurant ? current.printers : []
         const nextPrinters = mergePrintersWithBackend(basePrinters, loginResult.printers)
         const nextCategories = loginResult.categories || []
@@ -247,11 +250,6 @@ function createUiServer({ store, agent }) {
           username: String(body.username || "").trim().toLowerCase(),
           restaurantId: loginResult.restaurant?.id || "",
           restaurantName: loginResult.restaurant?.name || "",
-          ...resolveFooterPatch(loginResult.restaurant, {
-            receiptFooterEnabled: true,
-            receiptFooterTitle: "Compart Software",
-            receiptFooterUrl: "compartsoftware.com",
-          }),
           categories: nextCategories,
           printers: nextPrinters,
           categoryRoutes: nextRoutes,
@@ -386,9 +384,6 @@ function createUiServer({ store, agent }) {
           asciiFallback,
           feedLinesBeforeCut: Number(target.feedLinesBeforeCut ?? runtimeConfig.ticketFeedLinesBeforeCut ?? 3),
           charsPerLine: target.paperWidth === 58 ? 32 : 42,
-          receiptFooterEnabled: runtimeConfig.receiptFooterEnabled !== false,
-          receiptFooterTitle: runtimeConfig.receiptFooterTitle,
-          receiptFooterUrl: runtimeConfig.receiptFooterUrl,
         })
         await printBytes(runtimeConfig, ticket, { printer: target })
         info("Diagnostic test ticket printed", {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Check, Monitor, Printer, Receipt } from "lucide-react"
+import { Monitor, Printer } from "lucide-react"
 import { CorderEmailInput } from "@/components/CorderEmailInput"
 import { PasswordInputWithGenerator } from "@/components/ui/password-input"
 import { formatCanonicalCorderEmail } from "@/lib/corder-email"
@@ -9,17 +9,11 @@ interface PrintAgentTokenSectionProps {
   restaurantSlug?: string
   initialTerminalEmail?: string | null
   initialPrintAgentUsername?: string | null
-  initialReceiptFooterEnabled?: boolean
-  initialReceiptFooterTitle?: string | null
-  initialReceiptFooterUrl?: string | null
   onSaveTerminalConfig: (config: {
     terminalEmail?: string | null
     terminalPassword?: string
     printAgentUsername?: string | null
     printAgentPassword?: string
-    receiptFooterEnabled?: boolean
-    receiptFooterTitle?: string | null
-    receiptFooterUrl?: string | null
   }) => Promise<void>
 }
 
@@ -27,9 +21,6 @@ export function PrintAgentTokenSection({
   restaurantSlug,
   initialTerminalEmail,
   initialPrintAgentUsername,
-  initialReceiptFooterEnabled = true,
-  initialReceiptFooterTitle = "Compart Software",
-  initialReceiptFooterUrl = "compartsoftware.com",
   onSaveTerminalConfig,
 }: PrintAgentTokenSectionProps) {
   const [terminalEmail, setTerminalEmail] = useState(initialTerminalEmail ?? "")
@@ -46,53 +37,10 @@ export function PrintAgentTokenSection({
   const [printAgentSuccess, setPrintAgentSuccess] = useState("")
   const [printAgentSaveLoading, setPrintAgentSaveLoading] = useState(false)
 
-  const [receiptFooterEnabled, setReceiptFooterEnabled] = useState(
-    initialReceiptFooterEnabled !== false
-  )
-  const [receiptFooterTitle, setReceiptFooterTitle] = useState(
-    initialReceiptFooterTitle ?? "Compart Software"
-  )
-  const [receiptFooterUrl, setReceiptFooterUrl] = useState(
-    initialReceiptFooterUrl ?? "compartsoftware.com"
-  )
-  const [footerError, setFooterError] = useState("")
-  const [footerSuccess, setFooterSuccess] = useState("")
-  const [footerSaveLoading, setFooterSaveLoading] = useState(false)
-
   useEffect(() => {
     setTerminalEmail(initialTerminalEmail ?? "")
     setPrintAgentUsername(initialPrintAgentUsername ?? "")
-    setReceiptFooterEnabled(initialReceiptFooterEnabled !== false)
-    setReceiptFooterTitle(initialReceiptFooterTitle ?? "Compart Software")
-    setReceiptFooterUrl(initialReceiptFooterUrl ?? "compartsoftware.com")
-  }, [
-    initialTerminalEmail,
-    initialPrintAgentUsername,
-    initialReceiptFooterEnabled,
-    initialReceiptFooterTitle,
-    initialReceiptFooterUrl,
-  ])
-
-  const handleSaveReceiptFooter = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setFooterError("")
-    setFooterSuccess("")
-    setFooterSaveLoading(true)
-    try {
-      await onSaveTerminalConfig({
-        receiptFooterEnabled,
-        receiptFooterTitle: receiptFooterTitle.trim(),
-        receiptFooterUrl: receiptFooterUrl.trim(),
-      })
-      setFooterSuccess(
-        "Termal fiş altı marka ve web adresi ayarları kaydedildi ve Print Agent'a anlık iletildi."
-      )
-    } catch (err) {
-      setFooterError(err instanceof Error ? err.message : "Kayıt başarısız")
-    } finally {
-      setFooterSaveLoading(false)
-    }
-  }
+  }, [initialTerminalEmail, initialPrintAgentUsername])
 
   const handleSaveTerminal = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -268,119 +216,6 @@ export function PrintAgentTokenSection({
             <Monitor className="h-4 w-4" />
             {terminalSaveLoading ? "Kaydediliyor…" : "Terminal Bilgilerini Kaydet"}
           </button>
-        </form>
-      </div>
-
-      <div className="rounded-2xl border border-[#e5e5ea] bg-white p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-[15px] font-semibold text-[#1d1d1f]">
-              Termal Fiş Altı Çatı Firma &amp; Web Adresi
-            </h2>
-            <p className="mt-1 text-[12px] text-[#86868b]">
-              Yazıcıdan çıkan tüm adisyon, mutfak ve rapor fişlerinin en altında yer alacak
-              çatı firma adı ve web adresi. İşletme talebine göre gizleyebilir veya
-              özelleştirebilirsiniz.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setReceiptFooterEnabled((v) => !v)}
-            className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-[12px] font-semibold transition-colors cursor-pointer select-none flex-shrink-0 ${
-              receiptFooterEnabled
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                : "border-[#d1d1d6] bg-[#f5f5f7] text-[#636366]"
-            }`}
-          >
-            <span
-              className={`w-4 h-4 rounded-md border flex items-center justify-center ${
-                receiptFooterEnabled
-                  ? "bg-emerald-600 border-emerald-600 text-white"
-                  : "bg-white border-[#d1d1d6]"
-              }`}
-            >
-              {receiptFooterEnabled && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-            </span>
-            <span>{receiptFooterEnabled ? "Fişlerde Görünür" : "Gizli"}</span>
-          </button>
-        </div>
-
-        <form onSubmit={handleSaveReceiptFooter} className="mt-4 space-y-3.5">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                Çatı Firma / Marka Adı (1. Satır)
-              </label>
-              <input
-                type="text"
-                value={receiptFooterTitle}
-                onChange={(e) => setReceiptFooterTitle(e.target.value)}
-                placeholder="Compart Software"
-                maxLength={120}
-                className={inputCls}
-                disabled={footerSaveLoading}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">
-                Web Adresi / Alt Metin (2. Satır)
-              </label>
-              <input
-                type="text"
-                value={receiptFooterUrl}
-                onChange={(e) => setReceiptFooterUrl(e.target.value)}
-                placeholder="compartsoftware.com"
-                maxLength={160}
-                className={inputCls}
-                disabled={footerSaveLoading}
-              />
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-dashed border-[#d1d1d6] bg-[#f9f9fb] p-3 text-center font-mono text-[11.5px] text-[#1d1d1f]">
-            <div className="text-[10px] font-sans font-semibold uppercase tracking-wide text-[#86868b] mb-1">
-              Termal Fiş En Alt Satır Önizlemesi
-            </div>
-            {receiptFooterEnabled && (receiptFooterTitle.trim() || receiptFooterUrl.trim()) ? (
-              <div className="space-y-0.5">
-                <div className="text-[#86868b]">--------------------------------</div>
-                {receiptFooterTitle.trim() && (
-                  <div className="font-bold">{receiptFooterTitle.trim()}</div>
-                )}
-                {receiptFooterUrl.trim() && <div>{receiptFooterUrl.trim()}</div>}
-              </div>
-            ) : (
-              <div className="text-[#86868b] font-sans">
-                Bu işletmede fiş altı çatı firma bilgisi basılmayacak.
-              </div>
-            )}
-          </div>
-
-          {footerError && <p className="text-[12px] font-medium text-red-600">{footerError}</p>}
-          {footerSuccess && (
-            <p className="text-[12px] font-medium text-emerald-700">{footerSuccess}</p>
-          )}
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <button
-              type="submit"
-              disabled={footerSaveLoading}
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#e63462] px-4 text-[13px] font-semibold text-white hover:bg-[#d42d56] disabled:opacity-50"
-            >
-              <Receipt className="h-4 w-4" />
-              {footerSaveLoading ? "Kaydediliyor…" : "Fiş Altı Ayarlarını Kaydet"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setReceiptFooterEnabled(true)
-                setReceiptFooterTitle("Compart Software")
-                setReceiptFooterUrl("compartsoftware.com")
-              }}
-              className="text-[12px] font-medium text-[#636366] hover:text-[#1d1d1f] underline"
-            >
-              Varsayılana Sıfırla (Compart Software)
-            </button>
-          </div>
         </form>
       </div>
     </div>

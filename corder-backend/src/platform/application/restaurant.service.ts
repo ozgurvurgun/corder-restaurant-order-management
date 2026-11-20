@@ -130,15 +130,20 @@ export class RestaurantService {
       ]),
     );
     const hasAnyBrand = restaurants.some((r) => Boolean(r.brandName?.trim()));
-    const bossWhere =
-      hasAnyBrand && candidateBossIds.length > 0
-        ? [{ id: In(candidateBossIds) }, { bossTier: 'brand_owner' as const }]
-        : hasAnyBrand
-          ? { bossTier: 'brand_owner' as const }
-          : candidateBossIds.length > 0
-            ? { id: In(candidateBossIds) }
-            : null;
-    const allBosses = bossWhere ? await this.rootAdminRepo.find({ where: bossWhere }) : [];
+    let allBosses: RootAdminEntity[] = [];
+    if (hasAnyBrand && candidateBossIds.length > 0) {
+      allBosses = await this.rootAdminRepo.find({
+        where: [{ id: In(candidateBossIds) }, { bossTier: 'brand_owner' }],
+      });
+    } else if (hasAnyBrand) {
+      allBosses = await this.rootAdminRepo.find({
+        where: { bossTier: 'brand_owner' },
+      });
+    } else if (candidateBossIds.length > 0) {
+      allBosses = await this.rootAdminRepo.find({
+        where: { id: In(candidateBossIds) },
+      });
+    }
     const bossById = new Map(allBosses.map((b) => [b.id, b]));
     const paymentsByRestId = new Map<string, RestaurantSubscriptionPaymentEntity[]>();
     for (const p of allPayments) {
@@ -148,6 +153,7 @@ export class RestaurantService {
     }
 
     const now = new Date();
+
     return restaurants.map((r) => {
       const restPayments = paymentsByRestId.get(r.id) ?? [];
       const summary = computeRestaurantBillingSummary({
@@ -160,6 +166,7 @@ export class RestaurantService {
         collectionEndDay,
         now,
       });
+
       return {
         ...r,
         monthlyFee: Number(r.monthlyFee || 0),
@@ -318,8 +325,7 @@ export class RestaurantService {
       printAgentUsername: rawUsername, printAgentPassword: rawPassword,
       monthlyFee, royaltyRate, brandName, branchType, franchiseeCompanyName,
       billingStartPeriod: rawStartPeriod, recordInitialPayment, initialPaidMonths,
-      initialPaymentMethod, isAccessSuspended, billingNotes, email: rawEmail,
-      receiptFooterEnabled, receiptFooterTitle, receiptFooterUrl, ...restDto
+      initialPaymentMethod, isAccessSuspended, billingNotes, email: rawEmail, ...restDto
     } = dto;
 
     const creds = await this.resolveDeviceCredentials({
@@ -353,11 +359,6 @@ export class RestaurantService {
         lastPaymentDate: null,
         lastPaidPeriod: null,
         billingNotes: billingNotes?.trim() || null,
-        receiptFooterEnabled: receiptFooterEnabled !== false,
-        receiptFooterTitle:
-          receiptFooterTitle !== undefined ? (receiptFooterTitle?.trim().slice(0, 120) ?? 'Compart Software') : 'Compart Software',
-        receiptFooterUrl:
-          receiptFooterUrl !== undefined ? (receiptFooterUrl?.trim().slice(0, 160) ?? 'compartsoftware.com') : 'compartsoftware.com',
         ...creds,
       }),
     );
@@ -412,15 +413,6 @@ export class RestaurantService {
     if (dto.facebook !== undefined) entity.facebook = dto.facebook ?? null;
     if (dto.website !== undefined) entity.website = dto.website ?? null;
     if (dto.workingHours !== undefined) entity.workingHours = dto.workingHours ?? null;
-    if (dto.receiptFooterEnabled !== undefined) {
-      entity.receiptFooterEnabled = Boolean(dto.receiptFooterEnabled);
-    }
-    if (dto.receiptFooterTitle !== undefined) {
-      entity.receiptFooterTitle = (dto.receiptFooterTitle ?? '').trim().slice(0, 120);
-    }
-    if (dto.receiptFooterUrl !== undefined) {
-      entity.receiptFooterUrl = (dto.receiptFooterUrl ?? '').trim().slice(0, 160);
-    }
   }
 
   async update(id: string, dto: UpdateRestaurantDto) {
@@ -449,32 +441,36 @@ export class RestaurantService {
     if (dto.terminalEmail !== undefined || dto.printAgentUsername !== undefined) {
       const creds = await this.resolveDeviceCredentials({
         tenantSlug: entity.slug,
-        terminalEmail: dto.terminalEmail !== undefined ? dto.terminalEmail : entity.terminalEmail,
+        terminalEmail:
+          dto.terminalEmail !== undefined ? dto.terminalEmail : entity.terminalEmail,
         terminalPassword: dto.terminalPassword,
-        printAgentUsername: dto.printAgentUsername !== undefined ? dto.printAgentUsername : entity.printAgentUsername,
+        printAgentUsername:
+          dto.printAgentUsername !== undefined
+            ? dto.printAgentUsername
+            : entity.printAgentUsername,
         printAgentPassword: dto.printAgentPassword,
         excludeRestaurantId: entity.id,
       });
       if (dto.terminalEmail !== undefined) entity.terminalEmail = creds.terminalEmail;
       if (creds.terminalPasswordHash) entity.terminalPasswordHash = creds.terminalPasswordHash;
-      if (dto.printAgentUsername !== undefined) entity.printAgentUsername = creds.printAgentUsername;
-      if (creds.printAgentPasswordHash) entity.printAgentPasswordHash = creds.printAgentPasswordHash;
+      if (dto.printAgentUsername !== undefined) {
+        entity.printAgentUsername = creds.printAgentUsername;
+      }
+      if (creds.printAgentPasswordHash) {
+        entity.printAgentPasswordHash = creds.printAgentPasswordHash;
+      }
     } else {
-      if (dto.terminalPassword?.length) entity.terminalPasswordHash = await bcrypt.hash(dto.terminalPassword, 10);
-      if (dto.printAgentPassword?.length) entity.printAgentPasswordHash = await bcrypt.hash(dto.printAgentPassword, 10);
+      if (dto.terminalPassword && dto.terminalPassword.length > 0) {
+        entity.terminalPasswordHash = await bcrypt.hash(dto.terminalPassword, 10);
+      }
+      if (dto.printAgentPassword && dto.printAgentPassword.length > 0) {
+        entity.printAgentPasswordHash = await bcrypt.hash(dto.printAgentPassword, 10);
+      }
     }
 
     const saved = await this.repo.save(entity);
     await this.syncPersistedBillingSummary(saved.id);
     await this.autoLinkBrandOwners(saved);
-    if (
-      dto.receiptFooterEnabled !== undefined ||
-      dto.receiptFooterTitle !== undefined ||
-      dto.receiptFooterUrl !== undefined ||
-      dto.name !== undefined
-    ) {
-      this.ordersGateway.emitPrintersUpdated(saved.id);
-    }
     if (saved.isAccessSuspended || saved.status !== 'active') {
       this.ordersGateway.emitAuthExpired(saved.id, buildPaymentSuspendedErrorMessage(saved.name));
     }

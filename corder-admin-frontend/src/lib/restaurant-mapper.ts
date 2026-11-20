@@ -98,15 +98,6 @@ export function toRestaurant(r: PlatformRestaurantDto): Restaurant {
     rootAdminId: r.rootAdminId ?? undefined,
     terminalEmail: r.terminalEmail ?? undefined,
     printAgentUsername: r.printAgentUsername ?? undefined,
-    receiptFooterEnabled: r.receiptFooterEnabled !== false,
-    receiptFooterTitle:
-      r.receiptFooterTitle !== undefined && r.receiptFooterTitle !== null
-        ? r.receiptFooterTitle
-        : "Compart Software",
-    receiptFooterUrl:
-      r.receiptFooterUrl !== undefined && r.receiptFooterUrl !== null
-        ? r.receiptFooterUrl
-        : "compartsoftware.com",
   }
 }
 

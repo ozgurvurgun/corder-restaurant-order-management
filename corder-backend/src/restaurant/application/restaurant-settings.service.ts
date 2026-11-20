@@ -33,9 +33,6 @@ export interface RestaurantSettingsDto {
   locationLatitude?: number | null;
   locationLongitude?: number | null;
   locationRadiusMeters?: number;
-  receiptFooterEnabled?: boolean;
-  receiptFooterTitle?: string;
-  receiptFooterUrl?: string;
 }
 
 export interface MerchantBillingInfoDto {
@@ -119,15 +116,6 @@ export class RestaurantSettingsService {
       locationLatitude: r.locationLatitude != null ? Number(r.locationLatitude) : null,
       locationLongitude: r.locationLongitude != null ? Number(r.locationLongitude) : null,
       locationRadiusMeters: Number(r.locationRadiusMeters || 150),
-      receiptFooterEnabled: r.receiptFooterEnabled !== false,
-      receiptFooterTitle:
-        r.receiptFooterTitle !== undefined && r.receiptFooterTitle !== null
-          ? r.receiptFooterTitle
-          : 'Compart Software',
-      receiptFooterUrl:
-        r.receiptFooterUrl !== undefined && r.receiptFooterUrl !== null
-          ? r.receiptFooterUrl
-          : 'compartsoftware.com',
     };
   }
 

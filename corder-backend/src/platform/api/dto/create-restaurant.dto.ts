@@ -106,16 +106,4 @@ export class CreateRestaurantDto {
   @IsString()
   @MinLength(6)
   printAgentPassword?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  receiptFooterEnabled?: boolean;
-
-  @IsOptional()
-  @IsString()
-  receiptFooterTitle?: string | null;
-
-  @IsOptional()
-  @IsString()
-  receiptFooterUrl?: string | null;
 }

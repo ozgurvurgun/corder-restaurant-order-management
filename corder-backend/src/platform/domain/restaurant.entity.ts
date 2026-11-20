@@ -195,26 +195,6 @@ export class RestaurantEntity {
   @Column({ name: 'print_agent_password_hash', type: 'varchar', nullable: true })
   printAgentPasswordHash: string | null;
 
-  /** Thermal receipt bottom umbrella brand footer (controlled from Platform Admin Panel). */
-  @Column({ name: 'receipt_footer_enabled', type: 'boolean', default: true })
-  receiptFooterEnabled: boolean;
-
-  @Column({
-    name: 'receipt_footer_title',
-    type: 'varchar',
-    length: 120,
-    default: 'Compart Software',
-  })
-  receiptFooterTitle: string;
-
-  @Column({
-    name: 'receipt_footer_url',
-    type: 'varchar',
-    length: 160,
-    default: 'compartsoftware.com',
-  })
-  receiptFooterUrl: string;
-
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }

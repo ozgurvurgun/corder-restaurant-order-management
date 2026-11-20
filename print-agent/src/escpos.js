@@ -66,28 +66,6 @@ function appendTicketBanner(chunks, push, width, isReprint, stamp, heading) {
   chunks.push(BOLD_OFF)
 }
 
-function appendBrandFooter(chunks, push, width, options = {}) {
-  if (options.receiptFooterEnabled === false) return
-  const title =
-    options.receiptFooterTitle !== undefined && options.receiptFooterTitle !== null
-      ? String(options.receiptFooterTitle).trim()
-      : "Compart Software"
-  const url =
-    options.receiptFooterUrl !== undefined && options.receiptFooterUrl !== null
-      ? String(options.receiptFooterUrl).trim()
-      : "compartsoftware.com"
-  if (!title && !url) return
-  push(hrLine("-", width))
-  if (title) {
-    chunks.push(BOLD_ON)
-    push(centerLine(title, width))
-    chunks.push(BOLD_OFF)
-  }
-  if (url) {
-    push(centerLine(url, width))
-  }
-}
-
 function buildKitchenTicket(payload, options = {}) {
   const width = clampWidth(options.charsPerLine)
   const footerLine = String(options.footerLine || "").trim()
@@ -109,7 +87,6 @@ function buildKitchenTicket(payload, options = {}) {
   if (footerLine) {
     push(centerLine(footerLine, width))
   }
-  appendBrandFooter(chunks, push, width, options)
   return escposBytes(Buffer.concat(chunks), feedBeforeCut, { autoCut: options.autoCut !== false })
 }
 
@@ -179,7 +156,6 @@ function buildShiftReportTicket(payload, options = {}) {
   push(centerLine("DAHİLİ VARDİYA ÖZET RAPORUDUR", width))
   chunks.push(BOLD_OFF)
   if (footerLine) push(centerLine(footerLine, width))
-  appendBrandFooter(chunks, push, width, options)
 
   return escposBytes(Buffer.concat(chunks), feedBeforeCut, {
     autoCut: options.autoCut !== false,
@@ -264,7 +240,6 @@ function buildReceipt(payload, options = {}) {
   push(centerLine("BİLGİ FİŞİDİR / MALİ DEĞERİ YOKTUR", width))
   chunks.push(BOLD_OFF)
   if (footerLine) push(centerLine(footerLine, width))
-  appendBrandFooter(chunks, push, width, options)
 
   const shouldKickDrawer =
     options.openCashDrawer !== undefined
@@ -298,7 +273,6 @@ function buildKitchenCancelTicket(payload, options = {}) {
   if (footerLine) {
     push(centerLine(footerLine, width))
   }
-  appendBrandFooter(chunks, push, width, options)
   return escposBytes(Buffer.concat(chunks), feedBeforeCut, { autoCut: options.autoCut !== false })
 }
 
@@ -330,7 +304,6 @@ function buildTestTicket(printerInfo = {}, options = {}) {
   push(`${"1234567890".repeat(Math.ceil(width / 10)).slice(0, width)}\n`)
   push(hrLine("-", width))
   push(centerLine("BAGLANTI BASARILI - CORDER POS", width))
-  appendBrandFooter(chunks, push, width, options)
   return escposBytes(Buffer.concat(chunks), feedBeforeCut, {
     autoCut: printerInfo.autoCut !== false && options.autoCut !== false,
   })
