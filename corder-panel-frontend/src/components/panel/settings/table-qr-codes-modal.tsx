@@ -5,11 +5,11 @@ import {
 import { CustomSelect } from "@/components/ui/custom-inputs"
 import type { PanelTable } from "@/lib/panel-types"
 import {
-  buildPrintableQrDocumentHtml, buildStandaloneVectorCardSvg, DEFAULT_QR_DESCRIPTION,
-  downloadBulkVectorSvgZip, downloadVectorSvgFile, loadQrStudioPreferences, QR_CARD_SIZES,
-  QR_DESCRIPTION_PRESETS, QR_DESIGN_TEMPLATES, QR_PRINT_MEDIUMS, sanitizeQrFilenameSegment,
-  saveQrStudioPreferences, type QrCardSizeId, type QrDesignTemplateId, type QrPrintMediumId,
-  type QrStudioPreferences,
+  buildPrintableQrDocumentHtml, buildStandaloneVectorCardSvg, clampCutMarginRatio,
+  DEFAULT_QR_DESCRIPTION, downloadBulkVectorSvgZip, downloadVectorSvgFile,
+  loadQrStudioPreferences, QR_CARD_SIZES, QR_DESCRIPTION_PRESETS, QR_DESIGN_TEMPLATES,
+  QR_PRINT_MEDIUMS, sanitizeQrFilenameSegment, saveQrStudioPreferences,
+  type QrCardSizeId, type QrDesignTemplateId, type QrPrintMediumId, type QrStudioPreferences,
 } from "@/lib/qr-print-studio"
 import { showPanelToast } from "../panel-toast"
 
@@ -54,18 +54,10 @@ export function TableQrCodesModal(props: {
   }
   const previewUrl = buildTableUrl(previewTable) || generalMenuUrl
 
-  // Live preview renders the exact same SVG string as the downloaded .SVG file
   const previewSvgMarkup = useMemo(
-    () =>
-      buildStandaloneVectorCardSvg({
-        tableName: previewTable.name,
-        url: previewUrl,
-        prefs,
-        forInlinePreview: true,
-      }),
+    () => buildStandaloneVectorCardSvg({ tableName: previewTable.name, url: previewUrl, prefs, forInlinePreview: true }),
     [previewTable.name, previewUrl, prefs],
   )
-
   const isLaser = prefs.printMedium === "laser" || prefs.designTemplate === "laser-stencil"
 
   const copyUrl = (url: string, label: string) => {
@@ -74,15 +66,9 @@ export function TableQrCodesModal(props: {
   }
 
   const printQrItems = (items: Array<{ tableName: string; url: string }>) => {
-    if (items.length === 0) {
-      showPanelToast("Yazdırılacak imzalı QR kodlu masa bulunamadı", "error")
-      return
-    }
+    if (items.length === 0) return showPanelToast("Yazdırılacak imzalı QR kodlu masa bulunamadı", "error")
     const win = window.open("", "_blank")
-    if (!win) {
-      showPanelToast("Lütfen tarayıcıda açılır pencere (pop-up) izni verin", "error")
-      return
-    }
+    if (!win) return showPanelToast("Lütfen tarayıcıda açılır pencere (pop-up) izni verin", "error")
     win.document.write(buildPrintableQrDocumentHtml({ items, prefs }))
     win.document.close()
   }
@@ -92,21 +78,12 @@ export function TableQrCodesModal(props: {
       .map((t) => ({ tableName: t.name, section: t.section, url: buildTableUrl(t) }))
       .filter((item): item is { tableName: string; section: string; url: string } => Boolean(item.url))
 
-  const handlePrintFiltered = () => {
-    printQrItems(getPrintableFilteredItems())
-  }
+  const handlePrintFiltered = () => printQrItems(getPrintableFilteredItems())
 
   const handleDownloadBulkZip = () => {
     const items = getPrintableFilteredItems()
-    if (items.length === 0) {
-      showPanelToast("İndirilecek imzalı QR kodlu masa bulunamadı", "error")
-      return
-    }
-    const count = downloadBulkVectorSvgZip({
-      restaurantSlug: slug,
-      items,
-      prefs,
-    })
+    if (items.length === 0) return showPanelToast("İndirilecek imzalı QR kodlu masa bulunamadı", "error")
+    const count = downloadBulkVectorSvgZip({ restaurantSlug: slug, items, prefs })
     showPanelToast(`${count} adet vektörel SVG dosyası ZIP olarak indirildi`, "success")
   }
 
@@ -291,6 +268,56 @@ export function TableQrCodesModal(props: {
                       Kesim kılavuz çizgilerini (kros) göster
                     </span>
                   </button>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl border border-[#d1d1d6]/70 p-3">
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <label className="text-[11px] font-semibold text-[#1d1d1f] uppercase tracking-wide flex items-center gap-1.5">
+                    <Scissors className="w-3.5 h-3.5 text-[#e63462]" />
+                    <span>5. Kesim Kılavuz Çizgisi - QR Uzaklık Oranı (%)</span>
+                  </label>
+                  <div className="flex items-center gap-1">
+                    {[6, 10, 15, 22].map((presetPct) => (
+                      <button
+                        key={presetPct}
+                        type="button"
+                        onClick={() => updatePrefs({ cutMarginRatio: presetPct })}
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border transition-colors ${
+                          prefs.cutMarginRatio === presetPct
+                            ? "bg-[#1d1d1f] text-white border-[#1d1d1f]"
+                            : "bg-[#f5f5f7] text-[#636366] border-[#d1d1d6]/60 hover:bg-[#e8e8ed]"
+                        }`}
+                      >
+                        %{presetPct}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={3}
+                    max={35}
+                    step={1}
+                    value={prefs.cutMarginRatio}
+                    onChange={(e) => updatePrefs({ cutMarginRatio: clampCutMarginRatio(e.target.value) })}
+                    className="flex-1 accent-[#e63462] h-1.5 bg-[#e5e5ea] rounded-lg cursor-pointer"
+                  />
+                  <div className="relative w-[78px] flex-shrink-0">
+                    <input
+                      type="number"
+                      min={3}
+                      max={38}
+                      step={1}
+                      value={prefs.cutMarginRatio}
+                      onChange={(e) => updatePrefs({ cutMarginRatio: clampCutMarginRatio(e.target.value) })}
+                      className="w-full h-[32px] pl-2.5 pr-6 text-[12px] font-bold bg-[#f9f9fb] rounded-lg border border-[#d1d1d6] text-[#1d1d1f] focus:outline-none focus:border-[#e63462] text-right"
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-[#86868b] pointer-events-none">
+                      %
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

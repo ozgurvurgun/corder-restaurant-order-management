@@ -18,9 +18,18 @@ export interface QrStudioPreferences {
   printMedium: QrPrintMediumId
   cardSize: QrCardSizeId
   showCropMarks: boolean
+  /** Distance ratio (%) from the QR code to the outer cut guide line / border (3..38, default 10) */
+  cutMarginRatio: number
 }
 
 export const DEFAULT_QR_DESCRIPTION = "Menüyü görmek ve garson çağırmak için okutun"
+export const DEFAULT_CUT_MARGIN_RATIO = 10
+
+export function clampCutMarginRatio(value: unknown): number {
+  const num = typeof value === "number" ? value : Number(value)
+  if (!Number.isFinite(num)) return DEFAULT_CUT_MARGIN_RATIO
+  return Math.max(3, Math.min(38, Math.round(num)))
+}
 
 export const QR_DESCRIPTION_PRESETS: readonly string[] = [
   "Menüyü görmek ve garson çağırmak için okutun",
@@ -114,6 +123,7 @@ export function loadQrStudioPreferences(restaurantSlug?: string): QrStudioPrefer
     printMedium: "paper",
     cardSize: "65x90",
     showCropMarks: true,
+    cutMarginRatio: DEFAULT_CUT_MARGIN_RATIO,
   }
   if (typeof window === "undefined") return fallback
   try {
@@ -136,6 +146,10 @@ export function loadQrStudioPreferences(restaurantSlug?: string): QrStudioPrefer
         : fallback.cardSize,
       showCropMarks:
         typeof parsed.showCropMarks === "boolean" ? parsed.showCropMarks : fallback.showCropMarks,
+      cutMarginRatio:
+        parsed.cutMarginRatio !== undefined
+          ? clampCutMarginRatio(parsed.cutMarginRatio)
+          : fallback.cutMarginRatio,
     }
   } catch {
     return fallback
@@ -209,15 +223,19 @@ export function buildStandaloneVectorCardSvg(params: {
   let descSvg = ""
   let qrModulesTop = 0
   const qrPlatePad = isDark || isLaser ? 14 : 0
-  // Tight, uniform margin from inner frame (28 units = 14px in 220px preview)
-  const sideMarginFromFrame = 28 + qrPlatePad
-  const qrModulesLeft = frameInset + sideMarginFromFrame
-  const qrModulesSize = w - qrModulesLeft * 2
+  const ratioPct = clampCutMarginRatio(prefs.cutMarginRatio)
+  // User-configurable distance ratio (%) from the outer cut guide line / border to the QR code
+  const cutDistanceUnits = Math.round((w * ratioPct) / 100)
+  const minSafeLeft = frameInset + 10 + qrPlatePad
+  const qrModulesLeft = Math.max(minSafeLeft, cutDistanceUnits + qrPlatePad)
+  const qrModulesSize = Math.max(120, w - qrModulesLeft * 2)
+  const verticalPad = Math.max(14, Math.round(cutDistanceUnits * 0.55))
+  const innerGap = Math.max(14, Math.round(cutDistanceUnits * 0.48))
 
   if (hasDesc) {
     if (isBadge) {
-      const boxX = frameInset + 22
-      const boxY = frameInset + 18
+      const boxX = Math.max(frameInset + 16, qrModulesLeft - qrPlatePad)
+      const boxY = frameInset + verticalPad
       const boxW = w - boxX * 2
       const padY = 13
       const boxH = descLines.length * descLineHeight + padY * 2 - 6
@@ -230,21 +248,20 @@ export function buildStandaloneVectorCardSvg(params: {
             `<text class="qr-svg-desc" x="${w / 2}" y="${firstLineY + idx * descLineHeight}" text-anchor="middle" font-family="${SVG_FONT_STACK}" font-size="${descFontSize - 1}" font-weight="700" fill="${fgColor}">${escapeHtml(line)}</text>`,
         )
         .join("")
-      qrModulesTop = boxY + boxH + 18 + qrPlatePad
+      qrModulesTop = boxY + boxH + innerGap + qrPlatePad
     } else {
-      const topPad = 20
-      const firstLineY = frameInset + topPad + 19
+      const firstLineY = frameInset + verticalPad + 19
       descSvg += descLines
         .map(
           (line, idx) =>
             `<text class="qr-svg-desc" x="${w / 2}" y="${firstLineY + idx * descLineHeight}" text-anchor="middle" font-family="${SVG_FONT_STACK}" font-size="${descFontSize}" font-weight="700" fill="${fgColor}">${escapeHtml(line)}</text>`,
         )
         .join("")
-      const descBottom = frameInset + topPad + descLines.length * descLineHeight - 6
-      qrModulesTop = descBottom + 18 + qrPlatePad
+      const descBottom = frameInset + verticalPad + descLines.length * descLineHeight - 6
+      qrModulesTop = descBottom + innerGap + qrPlatePad
     }
   } else {
-    // When there is no text, top margin matches left/right margin exactly (zero excess top/side whitespace)
+    // When there is no text, top distance from cut line to QR equals left/right distance
     qrModulesTop = qrModulesLeft
   }
 
@@ -274,11 +291,12 @@ export function buildStandaloneVectorCardSvg(params: {
   const safeTable = escapeHtml(tableName)
 
   let dividerSvg = ""
-  let tableSectionTop = qrVisualBottom + 22
+  let tableSectionTop = qrVisualBottom + innerGap
   if (isLuxury) {
-    const lineY = qrVisualBottom + 24
-    dividerSvg = `<line x1="${qrModulesLeft}" y1="${lineY}" x2="${w - qrModulesLeft}" y2="${lineY}" stroke="${fgColor}" stroke-width="2.2"/>`
-    tableSectionTop = lineY + 18
+    const lineY = qrVisualBottom + innerGap
+    const lineLeft = qrModulesLeft - qrPlatePad
+    dividerSvg = `<line x1="${lineLeft}" y1="${lineY}" x2="${w - lineLeft}" y2="${lineY}" stroke="${fgColor}" stroke-width="2.2"/>`
+    tableSectionTop = lineY + Math.max(14, Math.round(innerGap * 0.85))
   }
 
   let tableSvg = ""
@@ -304,28 +322,41 @@ export function buildStandaloneVectorCardSvg(params: {
     bottomContentEnd = tableBaselineY + 8
   }
 
-  const bottomPad = 24
+  const bottomPad = Math.max(16, Math.round(cutDistanceUnits * 0.6))
   const h = Math.round(bottomContentEnd + bottomPad + frameInset)
-  const effectiveHeightMm = Number(((sizeSpec.widthMm * h) / w).toFixed(2))
 
   let frameSvg = `<rect x="4" y="4" width="${w - 8}" height="${h - 8}" rx="32" ry="32" fill="${bgFill}" stroke="${borderColor}" stroke-width="${isLaser ? 4.5 : 4}"/>`
   if (isLuxury) {
     frameSvg += `<rect x="14" y="14" width="${w - 28}" height="${h - 28}" rx="23" ry="23" fill="none" stroke="${fgColor}" stroke-width="2.2"/>`
   }
 
+  const showCrops = prefs.showCropMarks && prefs.printMedium !== "sticker"
+  const cropBleed = showCrops ? 18 : 0
+  const cropColor = isLaser ? "#000000" : "#8e8e93"
+  const cropSvg = showCrops
+    ? `<rect x="${-10}" y="${-10}" width="${w + 20}" height="${h + 20}" rx="38" ry="38" fill="none" stroke="${cropColor}" stroke-width="2" stroke-dasharray="10 7"/>`
+    : ""
+
+  const vbX = -cropBleed
+  const vbY = -cropBleed
+  const vbW = w + cropBleed * 2
+  const vbH = h + cropBleed * 2
+  const effectiveHeightMm = Number(((sizeSpec.widthMm * vbH) / vbW).toFixed(2))
+
   const sizeAttrs = forInlinePreview
-    ? `width="100%" height="auto" style="max-width:220px;display:block;"`
+    ? `width="100%" height="auto" style="max-width:225px;display:block;"`
     : `width="${sizeSpec.widthMm}mm" height="${effectiveHeightMm}mm"`
 
   const xmlHeader = forInlinePreview ? "" : `<?xml version="1.0" encoding="UTF-8"?>\n`
 
-  return `${xmlHeader}<svg xmlns="http://www.w3.org/2000/svg" ${sizeAttrs} viewBox="0 0 ${w} ${h}" shape-rendering="geometricPrecision">
+  return `${xmlHeader}<svg xmlns="http://www.w3.org/2000/svg" ${sizeAttrs} viewBox="${vbX} ${vbY} ${vbW} ${vbH}" shape-rendering="geometricPrecision">
   <defs>
     <style>
       .qr-svg-desc { font-family: ${SVG_FONT_STACK}; font-weight: 700; }
       .qr-svg-table { font-family: ${SVG_FONT_STACK}; font-weight: 900; }
     </style>
   </defs>
+  ${cropSvg}
   ${frameSvg}
   ${descSvg}
   ${qrPlateSvg}
@@ -405,9 +436,7 @@ export function buildPrintableQrDocumentHtml(params: {
   const cardsHtml = items
     .map(({ tableName, url }) => {
       const cardSvg = buildStandaloneVectorCardSvg({ tableName, url, prefs })
-      return `<div class="card-wrap ${prefs.showCropMarks && !isSticker ? "with-crops" : ""}">
-        ${cardSvg}
-      </div>`
+      return `<div class="card-wrap">${cardSvg}</div>`
     })
     .join("")
 
