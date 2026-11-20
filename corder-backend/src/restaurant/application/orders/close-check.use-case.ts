@@ -460,16 +460,14 @@ export class CloseCheckUseCase {
     em: EntityManager, restaurantId: string, shiftId: string, tableName: string, completedOrderId: string, method: string, cashMinorUnits: number, actorName: string,
   ): Promise<CashTransactionEntity | null> {
     if (cashMinorUnits <= 0) return null;
-    if (typeof em.findOne === 'function') {
-      const existingTx = await em.findOne(CashTransactionEntity, {
-        where: { restaurantId, shiftId, type: 'sale', reference: completedOrderId },
-      });
-      if (existingTx) {
-        existingTx.amount = fromMinorUnits(toMinorUnits(existingTx.amount) + cashMinorUnits);
-        existingTx.description = `${tableName} - Check (split cash)`;
-        existingTx.createdBy = actorName;
-        return em.save(CashTransactionEntity, existingTx);
-      }
+    const existingTx = await em.findOne(CashTransactionEntity, {
+      where: { restaurantId, shiftId, type: 'sale', reference: completedOrderId },
+    });
+    if (existingTx) {
+      existingTx.amount = fromMinorUnits(toMinorUnits(existingTx.amount) + cashMinorUnits);
+      existingTx.description = `${tableName} - Check (split cash)`;
+      existingTx.createdBy = actorName;
+      return em.save(CashTransactionEntity, existingTx);
     }
     const tx = em.create(CashTransactionEntity, {
       restaurantId, shiftId, type: 'sale', amount: fromMinorUnits(cashMinorUnits),

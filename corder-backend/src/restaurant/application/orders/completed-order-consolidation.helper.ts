@@ -49,11 +49,6 @@ export function extractPaymentParts(
   return [];
 }
 
-function normalizeSnapshotItemStatus(status: unknown): string {
-  const s = typeof status === 'string' && status.trim() ? status.trim() : 'served';
-  return s === 'paid' ? 'served' : s;
-}
-
 export function mergeCompletedOrdersSnapshots(
   prevRaw: unknown,
   incomingRaw: Array<Record<string, unknown>>,
@@ -64,12 +59,7 @@ export function mergeCompletedOrdersSnapshots(
     : [];
   const mergedOrders: SnapshotOrderRecord[] = prevList.map((ord) => ({
     ...ord,
-    items: Array.isArray(ord.items)
-      ? ord.items.map((it) => ({
-          ...it,
-          status: normalizeSnapshotItemStatus(it.status),
-        }))
-      : [],
+    items: Array.isArray(ord.items) ? ord.items.map((it) => ({ ...it })) : [],
   }));
 
   const orderById = new Map<string, SnapshotOrderRecord>();
@@ -87,10 +77,7 @@ export function mergeCompletedOrdersSnapshots(
     if (!targetOrd) {
       const cloned: SnapshotOrderRecord = {
         ...incOrd,
-        items: incomingItems.map((it) => ({
-          ...it,
-          status: normalizeSnapshotItemStatus(it.status),
-        })),
+        items: incomingItems.map((it) => ({ ...it })),
       };
       mergedOrders.push(cloned);
       if (ordId) orderById.set(ordId, cloned);
@@ -105,16 +92,16 @@ export function mergeCompletedOrdersSnapshots(
     targetOrd.items = targetItems;
 
     for (const rawIt of incomingItems) {
-      const normalizedStatus = normalizeSnapshotItemStatus(rawIt.status);
+      const itemStatus = typeof rawIt.status === 'string' && rawIt.status ? rawIt.status : 'served';
       const qty = Math.max(0, Math.floor(Number(rawIt.quantity) || 0));
       if (qty <= 0) continue;
       const unitMinor = toMinorUnits(Number(rawIt.price) || 0);
       const noteKey = typeof rawIt.note === 'string' ? rawIt.note.trim() : '';
-      const isBillable = OrderStatusPolicy.isItemOnActiveBill(normalizedStatus);
+      const isBillable = OrderStatusPolicy.isItemOnActiveBill(itemStatus);
 
       if (isBillable) {
         const match = targetItems.find((existingIt) => {
-          const exStatus = normalizeSnapshotItemStatus(existingIt.status);
+          const exStatus = typeof existingIt.status === 'string' && existingIt.status ? existingIt.status : 'served';
           if (!OrderStatusPolicy.isItemOnActiveBill(exStatus)) return false;
           if (rawIt.id && existingIt.id === rawIt.id) return true;
           const exNote = typeof existingIt.note === 'string' ? existingIt.note.trim() : '';
@@ -132,7 +119,7 @@ export function mergeCompletedOrdersSnapshots(
         const duplicateNonBillable = targetItems.some(
           (existingIt) =>
             Boolean(rawIt.id && existingIt.id === rawIt.id) &&
-            normalizeSnapshotItemStatus(existingIt.status) === normalizedStatus,
+            (existingIt.status || 'served') === itemStatus,
         );
         if (duplicateNonBillable) continue;
       }
@@ -141,7 +128,7 @@ export function mergeCompletedOrdersSnapshots(
         ...rawIt,
         price: fromMinorUnits(unitMinor),
         quantity: qty,
-        status: normalizedStatus,
+        status: itemStatus,
       });
     }
   }
@@ -175,7 +162,6 @@ export async function findExistingSessionCompletedOrder(
   openedAt: Date,
   orderIds: string[],
 ): Promise<CompletedOrderEntity | null> {
-  if (typeof em.find !== 'function') return null;
   const candidates = await em.find(CompletedOrderEntity, {
     where: { restaurantId, openedAt },
     order: { closedAt: 'ASC' },
