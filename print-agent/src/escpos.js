@@ -66,6 +66,17 @@ function appendTicketBanner(chunks, push, width, isReprint, stamp, heading) {
   chunks.push(BOLD_OFF)
 }
 
+function resolveDepartmentTicketHeading(printerName, suffix) {
+  const raw = String(printerName || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/\b(termal|thermal)?\s*(yazıcısı|yazicisi|yazıcı|yazici|printer)\s*$/iu, "")
+    .replace(/\b(sipariş|siparis|iptal)?\s*(fişi|fisi)\s*$/iu, "")
+    .trim()
+  const prefix = raw ? raw.toLocaleUpperCase("tr-TR") : "MUTFAK"
+  return `${prefix} ${suffix}`
+}
+
 function buildKitchenTicket(payload, options = {}) {
   const width = clampWidth(options.charsPerLine)
   const footerLine = String(options.footerLine || "").trim()
@@ -73,9 +84,10 @@ function buildKitchenTicket(payload, options = {}) {
   const asciiOnly = Boolean(options.asciiFallback)
   const chunks = []
   const push = (s) => chunks.push(encodeCp857(s, asciiOnly))
-  const stamp = String(options.ticketStamp || payload.targetPrinter?.name || "").trim()
+  const stamp = String(options.ticketStamp || "").trim()
+  const heading = resolveDepartmentTicketHeading(payload.targetPrinter?.name, "SİPARİŞ FİŞİ")
 
-  appendTicketBanner(chunks, push, width, payload.isReprint, stamp, "MUTFAK SİPARİŞ FİŞİ")
+  appendTicketBanner(chunks, push, width, payload.isReprint, stamp, heading)
   push(kvLine("Tarih/Saat", formatTicketDate(payload.createdAt), width))
   push(kvLine("Sipariş No", orderNumberFromId(payload.jobId), width))
   chunks.push(BOLD_ON)
@@ -259,9 +271,10 @@ function buildKitchenCancelTicket(payload, options = {}) {
   const asciiOnly = Boolean(options.asciiFallback)
   const chunks = []
   const push = (s) => chunks.push(encodeCp857(s, asciiOnly))
-  const stamp = String(options.ticketStamp || payload.targetPrinter?.name || "").trim()
+  const stamp = String(options.ticketStamp || "").trim()
+  const heading = resolveDepartmentTicketHeading(payload.targetPrinter?.name, "İPTAL FİŞİ")
 
-  appendTicketBanner(chunks, push, width, false, stamp, "MUTFAK İPTAL FİŞİ")
+  appendTicketBanner(chunks, push, width, false, stamp, heading)
   push(kvLine("Tarih/Saat", formatTicketDate(payload.createdAt), width))
   chunks.push(BOLD_ON)
   push(kvLine("Masa", payload.tableName || "-", width))
