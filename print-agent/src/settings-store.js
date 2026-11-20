@@ -200,6 +200,9 @@ function defaultSettings() {
     categories: [],
     printFooterLine: "",
     printTicketStamp: "",
+    receiptFooterEnabled: true,
+    receiptFooterTitle: "Compart Software",
+    receiptFooterUrl: "compartsoftware.com",
     printUsbDrainMs: baseConfig.printUsbDrainMs,
     autoStartOnBoot: true,
     kitchenSyncIntervalMs: baseConfig.kitchenSyncIntervalMs,
@@ -217,6 +220,15 @@ function normalizeSettings(raw) {
   merged.restaurantName = String(merged.restaurantName || "").trim()
   merged.restaurantSlug = String(merged.restaurantSlug || "").trim()
   merged.autoStartOnBoot = merged.autoStartOnBoot !== false
+  merged.receiptFooterEnabled = merged.receiptFooterEnabled !== false
+  merged.receiptFooterTitle =
+    raw && raw.receiptFooterTitle !== undefined && raw.receiptFooterTitle !== null
+      ? String(raw.receiptFooterTitle).trim()
+      : "Compart Software"
+  merged.receiptFooterUrl =
+    raw && raw.receiptFooterUrl !== undefined && raw.receiptFooterUrl !== null
+      ? String(raw.receiptFooterUrl).trim()
+      : "compartsoftware.com"
   merged.printers = Array.isArray(merged.printers)
     ? merged.printers.map((p, idx) => ({
         id: String(p.id || `p-${idx + 1}`),
@@ -347,6 +359,9 @@ function buildRuntimeConfig(settingsInput) {
     printerPort: Number(defaultKitchenPrinter?.port) || 9100,
     printFooterLine: settings.printFooterLine || "",
     printTicketStamp: settings.printTicketStamp || "",
+    receiptFooterEnabled: settings.receiptFooterEnabled !== false,
+    receiptFooterTitle: settings.receiptFooterTitle,
+    receiptFooterUrl: settings.receiptFooterUrl,
     printUsbDrainMs: Number(settings.printUsbDrainMs ?? baseConfig.printUsbDrainMs),
     kitchenSyncIntervalMs: Number(settings.kitchenSyncIntervalMs || 2500),
     queueDrainIntervalMs: Number(settings.queueDrainIntervalMs || 500),

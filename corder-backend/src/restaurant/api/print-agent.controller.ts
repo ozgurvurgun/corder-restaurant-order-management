@@ -154,6 +154,15 @@ export class PrintAgentController {
         name: settings.name,
         address: settings.address ?? null,
         phone: settings.phone ?? null,
+        receiptFooterEnabled: settings.receiptFooterEnabled !== false,
+        receiptFooterTitle:
+          settings.receiptFooterTitle !== undefined
+            ? settings.receiptFooterTitle
+            : 'Compart Software',
+        receiptFooterUrl:
+          settings.receiptFooterUrl !== undefined
+            ? settings.receiptFooterUrl
+            : 'compartsoftware.com',
       },
       categories: categories.map((c) => ({
         id: c.id,

@@ -83,6 +83,10 @@ export interface Restaurant {
   terminalEmail?: string | null
   /** Print Agent desktop login username. */
   printAgentUsername?: string | null
+  /** Thermal receipt bottom umbrella brand footer settings. */
+  receiptFooterEnabled?: boolean
+  receiptFooterTitle?: string | null
+  receiptFooterUrl?: string | null
 }
 
 export interface BossBranchSummary {

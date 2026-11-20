@@ -440,6 +440,9 @@ export function EditRestaurantPage() {
             restaurantSlug={slug || restaurant.slug}
             initialTerminalEmail={restaurant.terminalEmail}
             initialPrintAgentUsername={restaurant.printAgentUsername}
+            initialReceiptFooterEnabled={restaurant.receiptFooterEnabled}
+            initialReceiptFooterTitle={restaurant.receiptFooterTitle}
+            initialReceiptFooterUrl={restaurant.receiptFooterUrl}
             onSaveTerminalConfig={async (config) => {
               await updateRestaurant(id, config)
             }}

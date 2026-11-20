@@ -253,6 +253,9 @@ export const platform = {
       terminalPassword?: string
       printAgentUsername?: string
       printAgentPassword?: string
+      receiptFooterEnabled?: boolean
+      receiptFooterTitle?: string | null
+      receiptFooterUrl?: string | null
     }) {
       return platformFetch<PlatformRestaurantDto>("/platform/restaurants", {
         method: "POST",
@@ -286,6 +289,9 @@ export const platform = {
         terminalPassword?: string
         printAgentUsername?: string | null
         printAgentPassword?: string
+        receiptFooterEnabled?: boolean
+        receiptFooterTitle?: string | null
+        receiptFooterUrl?: string | null
       }
     ) {
       return platformFetch<PlatformRestaurantDto>(`/platform/restaurants/${id}`, {
