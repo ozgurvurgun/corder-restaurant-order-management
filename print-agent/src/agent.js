@@ -162,6 +162,42 @@ function startAgent({ config: initialConfig, store, printer, onContextInvalidate
     return scheduleDrainQueue()
   }
 
+  const settleJobsAsSkipped = (jobs) => {
+    for (const job of jobs) {
+      const jk = job.jobKey || makeJobKey(job)
+      store.markPrinted(jk, { ...job, jobKey: jk })
+      maybeAckJob(store, config, { ...job, jobKey: jk }, ackInFlightIds)
+    }
+  }
+
+  const clearPendingQueueNow = async () => {
+    const queued = store.getPendingJobs()
+    settleJobsAsSkipped(queued)
+    store.clearQueue()
+
+    if (config.backendWsUrl && (config.agentToken || config.refreshToken) && config.restaurantId) {
+      const [pendingKitchen, pendingJobs] = await Promise.all([
+        fetchPendingKitchenOrders(config).catch(() => []),
+        fetchPendingPrintJobs(config).catch(() => []),
+      ])
+      for (const payload of pendingKitchen) {
+        const base = normalizeOrderCreated(payload, config.restaurantId)
+        if (base) settleJobsAsSkipped(expandKitchenPrintJobs(base, config))
+      }
+      for (const payload of pendingJobs) {
+        const evt = normalizePrintJob(payload, config.restaurantId)
+        if (!evt) continue
+        if (evt.emptyJobId) {
+          void ackPrintJobPrinted(config, evt.emptyJobId).then((ok) => {
+            if (ok) store.markAcked(evt.emptyJobId)
+          })
+          continue
+        }
+        settleJobsAsSkipped(expandOrderPrintJob(evt, config))
+      }
+    }
+  }
+
   const pullPendingFromHttp = () => {
     if (!config.backendWsUrl || (!config.agentToken && !config.refreshToken) || !config.restaurantId) {
       return
@@ -272,7 +308,14 @@ function startAgent({ config: initialConfig, store, printer, onContextInvalidate
       statusState.socketConnected = false
       statusState.lastError = err.message
       error("Socket connect error", { error: err.message })
-      if (config.refreshToken) {
+      const msg = String(err?.message || "").toLowerCase()
+      const isAuthErr =
+        msg.includes("unauthorized") ||
+        msg.includes("jwt") ||
+        msg.includes("token") ||
+        msg.includes("forbidden") ||
+        msg.includes("auth")
+      if (isAuthErr && config.refreshToken) {
         void refreshAgentSession(config).then((refreshed) => {
           if (refreshed?.authToken && socket) socket.auth = { token: refreshed.authToken }
         })
@@ -295,6 +338,7 @@ function startAgent({ config: initialConfig, store, printer, onContextInvalidate
 
   return {
     flushQueue: flushQueueNow,
+    clearPendingQueue: clearPendingQueueNow,
     getStatus() {
       return {
         ...statusState,

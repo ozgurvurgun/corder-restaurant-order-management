@@ -79,16 +79,99 @@ function runExecFile(binary, args, timeoutMs = 25000, extraEnv = null) {
         maxBuffer: 512 * 1024,
         ...(extraEnv ? { env: { ...process.env, ...extraEnv } } : {}),
       },
-      (err, _stdout, stderr) => {
+      (err, stdout, stderr) => {
         if (err) {
           const detail = stderr ? String(stderr).trim().slice(0, 300) : err.message
           reject(new Error(detail || err.message))
           return
         }
-        resolve()
+        resolve(String(stdout || ""))
       },
     )
   })
+}
+
+function hasLinuxUsbPrinterDevice() {
+  for (const devPath of ["/dev/usb/lp0", "/dev/usb/lp1", "/dev/usb/lp2", "/dev/lp0", "/dev/lp1"]) {
+    if (fs.existsSync(devPath)) return true
+  }
+  try {
+    const base = "/sys/bus/usb/devices"
+    if (fs.existsSync(base)) {
+      for (const entry of fs.readdirSync(base)) {
+        const clsFile = path.join(base, entry, "bInterfaceClass")
+        if (fs.existsSync(clsFile) && fs.readFileSync(clsFile, "utf8").trim() === "07") {
+          return true
+        }
+      }
+    }
+  } catch {
+    // ignore sysfs read errors
+  }
+  return false
+}
+
+async function assertLinuxCupsPrinterReady(safeName) {
+  if (process.platform !== "linux") return
+  try {
+    const out = await runExecFile("lpstat", ["-v", safeName], 3000)
+    if (out.toLowerCase().includes("usb://") && !hasLinuxUsbPrinterDevice()) {
+      await runExecFile("cancel", ["-a", safeName], 3000).catch(() => {})
+      throw new Error(`USB yazıcı bilgisayara bağlı değil veya kapalı (${safeName})`)
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("USB yazıcı bilgisayara bağlı değil")) {
+      throw err
+    }
+  }
+}
+
+async function purgeSystemPrintQueues(config = {}) {
+  const names = new Set()
+  if (config?.printerName) names.add(String(config.printerName).trim())
+  if (Array.isArray(config?.printers)) {
+    for (const p of config.printers) {
+      if (p && p.mode !== "network") {
+        const candidate = String(p.systemPrinterName || p.name || "").trim()
+        if (candidate) names.add(candidate)
+      }
+    }
+  }
+
+  const safeNames = []
+  for (const raw of names) {
+    try {
+      const clean = assertSafePrinterName(raw)
+      if (!LINUX_USB_DEV_RE.test(clean)) safeNames.push(clean)
+    } catch {
+      // skip invalid identifier
+    }
+  }
+
+  if (process.platform === "win32") {
+    for (const safeName of safeNames) {
+      const ps = `
+        $p = $env:CORDER_PRINTER_NAME
+        Get-PrintJob -PrinterName $p -ErrorAction SilentlyContinue | Remove-PrintJob -ErrorAction SilentlyContinue
+      `.trim()
+      await runExecFile(
+        "powershell.exe",
+        ["-NoProfile", "-NonInteractive", "-Command", ps],
+        8000,
+        { CORDER_PRINTER_NAME: safeName },
+      ).catch(() => {})
+    }
+    return
+  }
+
+  for (const safeName of safeNames) {
+    await runExecFile("cancel", ["-a", safeName], 4000).catch(() => {})
+    if (process.platform === "linux") {
+      await runExecFile("cupsenable", [safeName], 3000).catch(() => {})
+      await runExecFile("cupsaccept", [safeName], 3000).catch(() => {})
+    }
+  }
+  await runExecFile("cancel", ["-a"], 4000).catch(() => {})
 }
 
 const WIN_RAW_SPOOL_PS = `
@@ -198,6 +281,7 @@ async function sendToSystemPrinter(bytes, printerName, usbDrainMs) {
       await sendToWindowsPrinter(tempFile, safeName)
     } else {
       if (process.platform === "linux") {
+        await assertLinuxCupsPrinterReady(safeName)
         await runExecFile("cupsenable", [safeName], 3000).catch(() => {})
         await runExecFile("cupsaccept", [safeName], 3000).catch(() => {})
       }
@@ -277,4 +361,4 @@ function createPrinter(initialConfig) {
   }
 }
 
-module.exports = { createPrinter, printBytes }
+module.exports = { createPrinter, printBytes, purgeSystemPrintQueues }

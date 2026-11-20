@@ -24,7 +24,7 @@ const {
 } = require("./http-sync")
 const { applyAutoStartSetting } = require("./autostart")
 const { buildTestTicket } = require("./escpos")
-const { printBytes } = require("./printers")
+const { printBytes, purgeSystemPrintQueues } = require("./printers")
 const { info, warn, getRecentLogs, clearLogs } = require("./logger")
 
 const PUBLIC_DIR = path.resolve(__dirname, "..", "public")
@@ -396,8 +396,14 @@ function createUiServer({ store, agent }) {
       }
 
       if (method === "POST" && pathname === "/api/queue/clear") {
-        store.clearQueue()
-        info("Pending print queue cleared via UI")
+        const runtimeConfig = buildRuntimeConfig(loadSettings())
+        if (typeof agent.clearPendingQueue === "function") {
+          await agent.clearPendingQueue()
+        } else {
+          store.clearQueue()
+        }
+        await purgeSystemPrintQueues(runtimeConfig)
+        info("Pending print queue and OS spooler cleared via UI")
         return { statusCode: 200, payload: { ok: true, queue: [] } }
       }
 
