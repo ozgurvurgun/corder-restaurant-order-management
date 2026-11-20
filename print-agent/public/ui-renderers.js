@@ -180,7 +180,7 @@ function renderPrinters() {
       const isNet = p.mode === "network"
       const label = printerLabel(p)
       const hardware = isNet
-        ? `${p.host || "?"}:${p.port || 9100}`
+        ? `${p.host || "?"}:${p.port || 9100}${p.mac ? ` · MAC: ${p.mac} (Otomatik IP Takibi)` : ""}`
         : p.systemPrinterName || p.name || "-"
       const nextW = Number(p.paperWidth) === 58 ? 80 : 58
       return `<div class="printer-item">
@@ -231,10 +231,12 @@ function renderDiscoveredPrinters() {
 function renderDiscoveredNetworkPrinters() {
   const container = $("discoveredNetworkPrintersList")
   if (!container) return
-  const existing = new Set(
-    (state.settings.printers || [])
-      .filter((p) => p.mode === "network")
-      .map((p) => `${p.host}:${Number(p.port) || 9100}`),
+  const netPrinters = (state.settings.printers || []).filter((p) => p.mode === "network")
+  const existingHosts = new Set(
+    netPrinters.map((p) => `${p.host}:${Number(p.port) || 9100}`),
+  )
+  const existingMacs = new Set(
+    netPrinters.map((p) => String(p.mac || "").trim().toUpperCase()).filter(Boolean),
   )
   if (!state.discoveredNetworkPrinters.length) {
     const subnetInfo = state.scannedSubnets.length
@@ -250,8 +252,9 @@ function renderDiscoveredNetworkPrinters() {
   container.innerHTML = state.discoveredNetworkPrinters
     .map((np) => {
       const key = `${np.host}:${Number(np.port) || 9100}`
-      const added = existing.has(key)
-      const macInfo = np.mac ? ` · MAC: ${escapeHtml(np.mac)}` : ""
+      const cleanMac = String(np.mac || "").trim().toUpperCase()
+      const added = existingHosts.has(key) || (cleanMac && existingMacs.has(cleanMac))
+      const macInfo = cleanMac ? ` · MAC: ${escapeHtml(cleanMac)}` : ""
       return `<div class="discovered-item">
         <div class="printer-meta">
           <div class="printer-title">
@@ -263,7 +266,7 @@ function renderDiscoveredNetworkPrinters() {
         ${
           added
             ? '<span class="tag">Eklendi</span>'
-            : `<button class="btn btn-primary btn-sm" data-action="use-network-printer" data-host="${escapeHtml(np.host)}" data-port="${escapeHtml(np.port || 9100)}">+ Kullan</button>`
+            : `<button class="btn btn-primary btn-sm" data-action="use-network-printer" data-host="${escapeHtml(np.host)}" data-port="${escapeHtml(np.port || 9100)}" data-mac="${escapeHtml(cleanMac)}">+ Kullan</button>`
         }
       </div>`
     })

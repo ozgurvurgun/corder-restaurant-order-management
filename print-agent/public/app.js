@@ -254,13 +254,14 @@ function bindPrinterManagementEvents() {
       if (!btn) return
       const host = btn.dataset.host
       const port = Number(btn.dataset.port) || 9100
-      const nickRaw = await askNicknameModal(`Ağ Yazıcısı Ekle (${host}:${port})`, `Mutfak (${host})`)
+      const mac = btn.dataset.mac || ""
+      const nickRaw = await askNicknameModal(`Ağ Yazıcısı Ekle (${host}:${port})`, `Mutfak`)
       if (nickRaw == null) return
       const name = String(nickRaw).trim() || `Yazıcı (${host})`
       try {
         await apiCall("/api/printers", {
           method: "POST",
-          body: JSON.stringify({ name, mode: "network", host, port, paperWidth: 80 }),
+          body: JSON.stringify({ name, mode: "network", host, port, mac, paperWidth: 80 }),
         })
         showToast(`"${name}" ağ yazıcısı eklendi (${host}:${port})`)
         await loadState(true)

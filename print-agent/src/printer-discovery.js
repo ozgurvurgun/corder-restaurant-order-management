@@ -293,6 +293,15 @@ async function discoverNetworkPrinters(opts = {}) {
 
   await Promise.all(workers)
 
+  if (found.some((f) => !f.mac)) {
+    const postArpMap = await readArpMacMap()
+    for (const f of found) {
+      if (!f.mac && postArpMap.has(f.host)) {
+        f.mac = postArpMap.get(f.host) || ""
+      }
+    }
+  }
+
   found.sort((a, b) => {
     const pa = a.host.split(".").map(Number)
     const pb = b.host.split(".").map(Number)
@@ -313,4 +322,5 @@ module.exports = {
   discoverSystemPrinters,
   discoverNetworkPrinters,
   testTcpPrinterConnection,
+  readArpMacMap,
 }

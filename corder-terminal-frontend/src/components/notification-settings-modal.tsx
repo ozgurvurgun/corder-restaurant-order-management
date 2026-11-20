@@ -87,7 +87,7 @@ export function TerminalNotificationSettingsModal(props: {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm bg-card text-card-foreground rounded-2xl shadow-2xl border border-border overflow-hidden"
+        className="w-full max-w-sm bg-card text-card-foreground rounded-2xl shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-4 py-3.5 bg-[#e63462] text-white flex items-center justify-between">

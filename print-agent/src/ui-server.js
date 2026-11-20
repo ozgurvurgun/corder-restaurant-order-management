@@ -17,6 +17,10 @@ const {
   testTcpPrinterConnection,
 } = require("./printer-discovery")
 const {
+  startNetworkPrinterWatchdog,
+  buildSavedPrinterEntry,
+} = require("./network-healer")
+const {
   loginPrintAgent,
   logoutPrintAgent,
   fetchAgentContext,
@@ -167,9 +171,12 @@ function createUiServer({ store, agent }) {
   const applyAndReload = (partial) => {
     const saved = saveSettings(partial)
     const runtimeConfig = buildRuntimeConfig(saved)
+    runtimeConfig.onHealedRuntimeConfig = (nextRuntime) => agent.reloadConfig(nextRuntime)
     agent.reloadConfig(runtimeConfig)
     return { settings: saved, publicSettings: getPublicSettings(saved), runtimeConfig }
   }
+
+  startNetworkPrinterWatchdog({ agent, intervalMs: 45000 })
 
   const syncContextFromBackend = async (reason = "manual") => {
     const current = loadSettings()
@@ -289,21 +296,8 @@ function createUiServer({ store, agent }) {
       if (method === "POST" && pathname === "/api/printers") {
         const current = loadSettings()
         const printers = [...current.printers]
-        const incomingId = body.id ? String(body.id).trim() : crypto.randomUUID()
-        const entry = {
-          id: incomingId,
-          name: String(body.name || body.systemPrinterName || body.host || "Printer").trim(),
-          type: String(body.type || "thermal").trim(),
-          mode: body.mode === "network" ? "network" : "system",
-          systemPrinterName: body.mode === "network" ? "" : String(body.systemPrinterName || "").trim(),
-          host: String(body.host || "127.0.0.1").trim(),
-          port: Number(body.port) || 9100,
-          department: body.department ? String(body.department).trim() : null,
-          paperWidth: Number(body.paperWidth) === 58 ? 58 : 80,
-          feedLinesBeforeCut: Number(body.feedLinesBeforeCut ?? 6),
-          autoCut: body.autoCut !== false,
-        }
-        const idx = printers.findIndex((p) => p.id === incomingId)
+        const entry = await buildSavedPrinterEntry(body, printers)
+        const idx = printers.findIndex((p) => p.id === entry.id)
         if (idx >= 0) printers[idx] = entry
         else printers.push(entry)
 

@@ -117,7 +117,7 @@ export function SystemUpdateModal() {
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
-      <div className="w-full max-w-md rounded-2xl border border-[#e5e5ea] bg-white p-6 shadow-2xl space-y-5">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-5">
         <div className="flex items-start gap-3.5">
           <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-[#e63462] text-white shadow-md">
             <RefreshCw className="h-6 w-6" />

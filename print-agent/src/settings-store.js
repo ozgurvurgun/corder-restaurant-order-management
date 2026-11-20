@@ -113,8 +113,9 @@ function mapBackendPrinters(backendPrinters = [], localPrinters = []) {
         type: String(p.type || "thermal").trim(),
         mode: isNetwork ? "network" : "system",
         systemPrinterName: isNetwork ? "" : String(p.systemPrinterName || p.ipAddress || existing?.systemPrinterName || p.name).trim(),
-        host: isNetwork ? String(p.ipAddress || "127.0.0.1").trim() : "127.0.0.1",
+        host: isNetwork ? String(p.ipAddress || existing?.host || "127.0.0.1").trim() : "127.0.0.1",
         port: isNetwork ? Number(p.port) || 9100 : 9100,
+        mac: isNetwork ? String(p.mac || existing?.mac || "").trim().toUpperCase() : "",
         department: p.department ? String(p.department).trim() : null,
         paperWidth: Number(p.paperWidth) === 58 ? 58 : 80,
         feedLinesBeforeCut: 3,
@@ -143,7 +144,13 @@ function mergePrintersWithBackend(localPrinters = [], backendPrinters = []) {
         paperWidth: cp.paperWidth || existing.paperWidth,
         autoCut: cp.autoCut,
         ...(cp.mode === "network" && cp.host && cp.host !== "127.0.0.1"
-          ? { mode: "network", host: cp.host, port: cp.port, systemPrinterName: "" }
+          ? {
+              mode: "network",
+              host: existing.host && existing.host !== "127.0.0.1" ? existing.host : cp.host,
+              port: existing.port || cp.port,
+              mac: existing.mac || cp.mac || "",
+              systemPrinterName: "",
+            }
           : {
               systemPrinterName: String(
                 (existing.systemPrinterName && existing.systemPrinterName !== existing.name
@@ -225,6 +232,7 @@ function normalizeSettings(raw) {
         systemPrinterName: p.mode === "network" ? "" : String(p.systemPrinterName || p.name || "").trim(),
         host: String(p.host || "127.0.0.1").trim(),
         port: Math.min(65535, Math.max(1, Number(p.port) || 9100)),
+        mac: p.mode === "network" && p.mac ? String(p.mac).trim().toUpperCase().replace(/-/g, ":") : "",
         department: p.department ? String(p.department).trim() : null,
         paperWidth: Number(p.paperWidth) === 58 ? 58 : 80,
         feedLinesBeforeCut: Math.min(255, Math.max(0, Number(p.feedLinesBeforeCut ?? 3))),

@@ -34,6 +34,10 @@ async function startPrintAgentApp(options = {}) {
     onContextInvalidated: (reason = "ws-printers-updated") =>
       uiServer?.syncContextFromBackend?.(reason),
   })
+  config.onHealedRuntimeConfig = (nextRuntime) => {
+    nextRuntime.onHealedRuntimeConfig = config.onHealedRuntimeConfig
+    agent.reloadConfig(nextRuntime)
+  }
   uiServer = createUiServer({ store, agent })
 
   const enableHttpServer = options.enableHttpServer !== false

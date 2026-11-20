@@ -4,6 +4,9 @@ const os = require("os")
 const path = require("path")
 const { execFile } = require("child_process")
 const { info, warn } = require("./logger")
+const { healNetworkPrinters } = require("./network-healer")
+const { buildRuntimeConfig } = require("./settings-store")
+const { pushPrintersToBackend } = require("./http-sync")
 
 const SAFE_PRINTER_NAME_RE = /^[\p{L}\p{N}_. \-()+@#/:]{1,128}$/u
 const LINUX_USB_DEV_RE = /^\/dev\/(usb\/)?lp[0-9]$/
@@ -325,7 +328,30 @@ async function printBytes(config, bytes, opts = {}) {
       host = (parts[0] || "").trim() || host
       port = parsePort(parts[1], port)
     }
-    await sendRawTcp(host, port, bytes)
+    try {
+      await sendRawTcp(host, port, bytes)
+    } catch (tcpErr) {
+      const healRes = await healNetworkPrinters({
+        forceScan: true,
+        targetPrinterId: targetPrinter?.id || null,
+        onHealed: async (savedSettings) => {
+          const nextRuntime = buildRuntimeConfig(savedSettings)
+          if (typeof config.onHealedRuntimeConfig === "function") {
+            config.onHealedRuntimeConfig(nextRuntime)
+          }
+          void pushPrintersToBackend(nextRuntime, savedSettings)
+        },
+      }).catch(() => null)
+      const healed = healRes?.healedPrinter
+      if (healed?.host && healed.host !== host) {
+        if (targetPrinter) targetPrinter.host = healed.host
+        host = healed.host
+        port = parsePort(healed.port, port)
+        await sendRawTcp(host, port, bytes)
+      } else {
+        throw tcpErr
+      }
+    }
     const drain = Math.max(0, Number(config.printUsbDrainMs) || 0)
     if (drain > 0) await sleep(drain)
     return
