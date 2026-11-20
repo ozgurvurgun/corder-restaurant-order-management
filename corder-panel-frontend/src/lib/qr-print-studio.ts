@@ -1,4 +1,5 @@
-import { encodeQrMatrix, escapeHtml, generateQrSvg } from "./qr-svg"
+import { encodeQrMatrix, escapeHtml } from "./qr-svg"
+import { downloadZipArchive, type ZipTextEntry } from "./zip-archive"
 
 export type QrDesignTemplateId =
   | "classic"
@@ -103,6 +104,8 @@ export const QR_CARD_SIZES: ReadonlyArray<{
 ]
 
 const STORAGE_KEY_PREFIX = "corder_qr_studio_prefs_v1:"
+const SVG_FONT_STACK =
+  "'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
 
 export function loadQrStudioPreferences(restaurantSlug?: string): QrStudioPreferences {
   const fallback: QrStudioPreferences = {
@@ -154,7 +157,7 @@ export function saveQrStudioPreferences(
   }
 }
 
-function wrapDescriptionLines(text: string, maxCharsPerLine = 26): string[] {
+function wrapDescriptionLines(text: string, maxCharsPerLine = 25): string[] {
   const clean = text.trim().replace(/\s+/g, " ")
   if (!clean) return []
   const words = clean.split(" ")
@@ -175,100 +178,177 @@ function wrapDescriptionLines(text: string, maxCharsPerLine = 26): string[] {
 }
 
 /**
- * Generates a self-contained, 100% vector SVG file (with millimeter dimensions)
- * suitable for laser engraving (LightBurn, CorelDRAW, Illustrator) or direct UV/PVC printing.
- * Strictly omits restaurant name and section name; renders description on top and table number below.
+ * Single source of truth for live preview, single SVG download, bulk ZIP SVG export, and printing.
+ * Uses a canonical 440-unit horizontal coordinate system (2x of the 220px preview card)
+ * so font sizes, line breaks, borders, and spacing are 100% identical everywhere.
  */
 export function buildStandaloneVectorCardSvg(params: {
   tableName: string
   url: string
   prefs: QrStudioPreferences
+  forInlinePreview?: boolean
 }): string {
-  const { tableName, url, prefs } = params
+  const { tableName, url, prefs, forInlinePreview = false } = params
   const sizeSpec = QR_CARD_SIZES.find((s) => s.id === prefs.cardSize) ?? QR_CARD_SIZES[1]
-  const w = sizeSpec.widthMm * 10
-  const h = sizeSpec.heightMm * 10
+  const w = 440
   const isLaser = prefs.printMedium === "laser" || prefs.designTemplate === "laser-stencil"
   const isDark = !isLaser && prefs.designTemplate === "dark-card"
+  const isLuxury = prefs.designTemplate === "luxury"
+  const isBadge = prefs.designTemplate === "badge"
 
   const bgFill = isDark ? "#111111" : "#ffffff"
   const fgColor = isDark ? "#ffffff" : "#000000"
-  const subTextColor = isLaser ? "#000000" : isDark ? "#f5f5f7" : "#111111"
-  const borderColor = isLaser ? "#000000" : isDark ? "#111111" : "#111111"
+  const borderColor = isLaser ? "#000000" : isDark ? "#111111" : "#000000"
+  const frameInset = isLuxury ? 15 : 6
+
+  const descLines = wrapDescriptionLines(prefs.descriptionText, 25)
+  const hasDesc = descLines.length > 0
+  const descFontSize = 24
+  const descLineHeight = 31
+
+  let descSvg = ""
+  let qrModulesTop = 0
+  const qrPlatePad = isDark || isLaser ? 14 : 0
+  // Tight, uniform margin from inner frame (28 units = 14px in 220px preview)
+  const sideMarginFromFrame = 28 + qrPlatePad
+  const qrModulesLeft = frameInset + sideMarginFromFrame
+  const qrModulesSize = w - qrModulesLeft * 2
+
+  if (hasDesc) {
+    if (isBadge) {
+      const boxX = frameInset + 22
+      const boxY = frameInset + 18
+      const boxW = w - boxX * 2
+      const padY = 13
+      const boxH = descLines.length * descLineHeight + padY * 2 - 6
+      const boxFill = isLaser || isDark ? "none" : "#f2f2f7"
+      descSvg += `<rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" rx="16" ry="16" fill="${boxFill}" stroke="${fgColor}" stroke-width="2"/>`
+      const firstLineY = boxY + padY + 18
+      descSvg += descLines
+        .map(
+          (line, idx) =>
+            `<text class="qr-svg-desc" x="${w / 2}" y="${firstLineY + idx * descLineHeight}" text-anchor="middle" font-family="${SVG_FONT_STACK}" font-size="${descFontSize - 1}" font-weight="700" fill="${fgColor}">${escapeHtml(line)}</text>`,
+        )
+        .join("")
+      qrModulesTop = boxY + boxH + 18 + qrPlatePad
+    } else {
+      const topPad = 20
+      const firstLineY = frameInset + topPad + 19
+      descSvg += descLines
+        .map(
+          (line, idx) =>
+            `<text class="qr-svg-desc" x="${w / 2}" y="${firstLineY + idx * descLineHeight}" text-anchor="middle" font-family="${SVG_FONT_STACK}" font-size="${descFontSize}" font-weight="700" fill="${fgColor}">${escapeHtml(line)}</text>`,
+        )
+        .join("")
+      const descBottom = frameInset + topPad + descLines.length * descLineHeight - 6
+      qrModulesTop = descBottom + 18 + qrPlatePad
+    }
+  } else {
+    // When there is no text, top margin matches left/right margin exactly (zero excess top/side whitespace)
+    qrModulesTop = qrModulesLeft
+  }
 
   const matrix = encodeQrMatrix(url)
   const n = matrix.length
-  const quietModules = 3
-  const totalModules = n + quietModules * 2
-  const qrBoxSize = sizeSpec.qrMm * 10
-  const qrLeft = Math.round((w - qrBoxSize) / 2)
-  const descLines = wrapDescriptionLines(prefs.descriptionText, sizeSpec.widthMm <= 50 ? 22 : 28)
-  const hasDesc = descLines.length > 0
-  const qrTop = hasDesc ? Math.round(h * 0.24) : Math.round(h * 0.14)
-  const moduleScale = qrBoxSize / totalModules
+  const moduleScale = qrModulesSize / n
 
   let qrPath = ""
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
       if (matrix[r][c]) {
-        const x = (qrLeft + (c + quietModules) * moduleScale).toFixed(2)
-        const y = (qrTop + (r + quietModules) * moduleScale).toFixed(2)
+        const x = (qrModulesLeft + c * moduleScale).toFixed(2)
+        const y = (qrModulesTop + r * moduleScale).toFixed(2)
         const ms = moduleScale.toFixed(2)
         qrPath += `M${x} ${y}h${ms}v${ms}h-${ms}z`
       }
     }
   }
 
-  const descFontSize = sizeSpec.widthMm <= 50 ? 24 : 28
-  const descLineHeight = Math.round(descFontSize * 1.28)
-  const descStartY =
-    descLines.length === 1
-      ? Math.round(qrTop * 0.56)
-      : descLines.length === 2
-        ? Math.round(qrTop * 0.44)
-        : Math.round(qrTop * 0.34)
+  const qrPlateSvg =
+    qrPlatePad > 0
+      ? `<rect x="${qrModulesLeft - qrPlatePad}" y="${qrModulesTop - qrPlatePad}" width="${qrModulesSize + qrPlatePad * 2}" height="${qrModulesSize + qrPlatePad * 2}" rx="18" ry="18" fill="#ffffff" ${isLaser ? 'stroke="#000000" stroke-width="2.5"' : ""}/>`
+      : ""
 
-  const descSvg = descLines
-    .map(
-      (line, idx) =>
-        `<text x="${w / 2}" y="${descStartY + idx * descLineHeight}" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="${descFontSize}" font-weight="700" fill="${subTextColor}">${escapeHtml(line)}</text>`,
-    )
-    .join("")
-
-  const bottomAreaTop = qrTop + qrBoxSize
-  const bottomCenterY = Math.round(bottomAreaTop + (h - bottomAreaTop) * 0.56)
-  const tableFontSize = sizeSpec.widthMm <= 50 ? 58 : 72
+  const qrVisualBottom = qrModulesTop + qrModulesSize + qrPlatePad
+  const tableFontSize = 48
   const safeTable = escapeHtml(tableName)
 
-  let frameSvg = `<rect x="12" y="12" width="${w - 24}" height="${h - 24}" rx="42" ry="42" fill="${bgFill}" stroke="${borderColor}" stroke-width="${isLaser ? 8 : 6}"/>`
-  if (prefs.designTemplate === "luxury") {
-    frameSvg += `<rect x="28" y="28" width="${w - 56}" height="${h - 56}" rx="30" ry="30" fill="none" stroke="${fgColor}" stroke-width="3"/>`
-    frameSvg += `<line x1="${Math.round(w * 0.25)}" y1="${bottomAreaTop + 22}" x2="${Math.round(w * 0.75)}" y2="${bottomAreaTop + 22}" stroke="${fgColor}" stroke-width="4"/>`
+  let dividerSvg = ""
+  let tableSectionTop = qrVisualBottom + 22
+  if (isLuxury) {
+    const lineY = qrVisualBottom + 24
+    dividerSvg = `<line x1="${qrModulesLeft}" y1="${lineY}" x2="${w - qrModulesLeft}" y2="${lineY}" stroke="${fgColor}" stroke-width="2.2"/>`
+    tableSectionTop = lineY + 18
   }
 
-  let tableSvg = `<text x="${w / 2}" y="${bottomCenterY + Math.round(tableFontSize * 0.32)}" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="${tableFontSize}" font-weight="900" letter-spacing="1" fill="${fgColor}">${safeTable}</text>`
-  if (prefs.designTemplate === "badge" && !isLaser) {
-    const pillW = Math.max(180, Math.min(w - 100, safeTable.length * 46 + 90))
-    const pillH = tableFontSize + 34
+  let tableSvg = ""
+  let bottomContentEnd = 0
+
+  if (isBadge) {
+    const pillH = 62
+    const pillW = Math.max(136, Math.min(w - 80, safeTable.length * 30 + 76))
     const pillX = Math.round((w - pillW) / 2)
-    const pillY = Math.round(bottomCenterY - pillH / 2)
-    tableSvg = `<rect x="${pillX}" y="${pillY}" width="${pillW}" height="${pillH}" rx="${Math.round(pillH / 2)}" fill="#000000"/><text x="${w / 2}" y="${bottomCenterY + Math.round(tableFontSize * 0.33)}" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="${tableFontSize - 6}" font-weight="900" fill="#ffffff">${safeTable}</text>`
-  } else if (prefs.designTemplate === "badge" && isLaser) {
-    const pillW = Math.max(180, Math.min(w - 100, safeTable.length * 46 + 90))
-    const pillH = tableFontSize + 34
-    const pillX = Math.round((w - pillW) / 2)
-    const pillY = Math.round(bottomCenterY - pillH / 2)
-    tableSvg = `<rect x="${pillX}" y="${pillY}" width="${pillW}" height="${pillH}" rx="${Math.round(pillH / 2)}" fill="none" stroke="#000000" stroke-width="6"/><text x="${w / 2}" y="${bottomCenterY + Math.round(tableFontSize * 0.33)}" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="${tableFontSize - 6}" font-weight="900" fill="#000000">${safeTable}</text>`
+    const pillY = tableSectionTop
+    const pillCenterY = pillY + Math.round(pillH / 2)
+    if (isLaser) {
+      tableSvg = `<rect x="${pillX}" y="${pillY}" width="${pillW}" height="${pillH}" rx="${pillH / 2}" fill="none" stroke="#000000" stroke-width="3.5"/><text class="qr-svg-table" x="${w / 2}" y="${pillCenterY + 14}" text-anchor="middle" font-family="${SVG_FONT_STACK}" font-size="40" font-weight="900" letter-spacing="0.8" fill="#000000">${safeTable}</text>`
+    } else {
+      const pillFill = isDark ? "#ffffff" : "#000000"
+      const pillTextFill = isDark ? "#111111" : "#ffffff"
+      tableSvg = `<rect x="${pillX}" y="${pillY}" width="${pillW}" height="${pillH}" rx="${pillH / 2}" fill="${pillFill}"/><text class="qr-svg-table" x="${w / 2}" y="${pillCenterY + 14}" text-anchor="middle" font-family="${SVG_FONT_STACK}" font-size="40" font-weight="900" letter-spacing="0.8" fill="${pillTextFill}">${safeTable}</text>`
+    }
+    bottomContentEnd = pillY + pillH
+  } else {
+    const tableBaselineY = tableSectionTop + 40
+    tableSvg = `<text class="qr-svg-table" x="${w / 2}" y="${tableBaselineY}" text-anchor="middle" font-family="${SVG_FONT_STACK}" font-size="${tableFontSize}" font-weight="900" letter-spacing="0.8" fill="${fgColor}">${safeTable}</text>`
+    bottomContentEnd = tableBaselineY + 8
   }
 
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${sizeSpec.widthMm}mm" height="${sizeSpec.heightMm}mm" viewBox="0 0 ${w} ${h}" shape-rendering="geometricPrecision">
+  const bottomPad = 24
+  const h = Math.round(bottomContentEnd + bottomPad + frameInset)
+  const effectiveHeightMm = Number(((sizeSpec.widthMm * h) / w).toFixed(2))
+
+  let frameSvg = `<rect x="4" y="4" width="${w - 8}" height="${h - 8}" rx="32" ry="32" fill="${bgFill}" stroke="${borderColor}" stroke-width="${isLaser ? 4.5 : 4}"/>`
+  if (isLuxury) {
+    frameSvg += `<rect x="14" y="14" width="${w - 28}" height="${h - 28}" rx="23" ry="23" fill="none" stroke="${fgColor}" stroke-width="2.2"/>`
+  }
+
+  const sizeAttrs = forInlinePreview
+    ? `width="100%" height="auto" style="max-width:220px;display:block;"`
+    : `width="${sizeSpec.widthMm}mm" height="${effectiveHeightMm}mm"`
+
+  const xmlHeader = forInlinePreview ? "" : `<?xml version="1.0" encoding="UTF-8"?>\n`
+
+  return `${xmlHeader}<svg xmlns="http://www.w3.org/2000/svg" ${sizeAttrs} viewBox="0 0 ${w} ${h}" shape-rendering="geometricPrecision">
+  <defs>
+    <style>
+      .qr-svg-desc { font-family: ${SVG_FONT_STACK}; font-weight: 700; }
+      .qr-svg-table { font-family: ${SVG_FONT_STACK}; font-weight: 900; }
+    </style>
+  </defs>
   ${frameSvg}
   ${descSvg}
-  <rect x="${qrLeft}" y="${qrTop}" width="${qrBoxSize}" height="${qrBoxSize}" rx="18" fill="#ffffff" ${isLaser ? 'stroke="#000000" stroke-width="4"' : ""}/>
+  ${qrPlateSvg}
   <path d="${qrPath}" fill="#000000" shape-rendering="crispEdges"/>
+  ${dividerSvg}
   ${tableSvg}
 </svg>`
+}
+
+export function sanitizeQrFilenameSegment(raw: string): string {
+  return (
+    raw
+      .trim()
+      .toLowerCase()
+      .replace(/ğ/g, "g")
+      .replace(/ü/g, "u")
+      .replace(/ş/g, "s")
+      .replace(/ı/g, "i")
+      .replace(/ö/g, "o")
+      .replace(/ç/g, "c")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "masa"
+  )
 }
 
 export function downloadVectorSvgFile(filename: string, svgContent: string): void {
@@ -283,6 +363,35 @@ export function downloadVectorSvgFile(filename: string, svgContent: string): voi
   setTimeout(() => URL.revokeObjectURL(url), 1500)
 }
 
+export function downloadBulkVectorSvgZip(params: {
+  restaurantSlug: string
+  items: Array<{ tableName: string; section?: string; url: string }>
+  prefs: QrStudioPreferences
+}): number {
+  const { restaurantSlug, items, prefs } = params
+  if (items.length === 0) return 0
+
+  const usedNames = new Set<string>()
+  const entries: ZipTextEntry[] = items.map((item, idx) => {
+    const svg = buildStandaloneVectorCardSvg({
+      tableName: item.tableName,
+      url: item.url,
+      prefs,
+    })
+    const baseTable = sanitizeQrFilenameSegment(item.tableName)
+    let filename = `qr-${baseTable}-${prefs.cardSize}.svg`
+    if (usedNames.has(filename)) {
+      filename = `qr-${baseTable}-${idx + 1}-${prefs.cardSize}.svg`
+    }
+    usedNames.add(filename)
+    return { filename, content: svg }
+  })
+
+  const cleanSlug = sanitizeQrFilenameSegment(restaurantSlug || "corder")
+  downloadZipArchive(`${cleanSlug}-qr-svg-${prefs.cardSize}.zip`, entries)
+  return entries.length
+}
+
 export function buildPrintableQrDocumentHtml(params: {
   items: Array<{ tableName: string; url: string }>
   prefs: QrStudioPreferences
@@ -292,70 +401,40 @@ export function buildPrintableQrDocumentHtml(params: {
   const isLaser = prefs.printMedium === "laser" || prefs.designTemplate === "laser-stencil"
   const isSticker = prefs.printMedium === "sticker"
   const isPvc = prefs.printMedium === "pvc"
-  const isDark = !isLaser && prefs.designTemplate === "dark-card"
-  const cleanDesc = prefs.descriptionText.trim()
 
   const cardsHtml = items
     .map(({ tableName, url }) => {
-      const qrSvg = generateQrSvg(url, 320, 3, "#000000", "#ffffff")
-      const safeTable = escapeHtml(tableName)
-      const safeDesc = escapeHtml(cleanDesc)
+      const cardSvg = buildStandaloneVectorCardSvg({ tableName, url, prefs })
       return `<div class="card-wrap ${prefs.showCropMarks && !isSticker ? "with-crops" : ""}">
-        <div class="qr-card tpl-${prefs.designTemplate} ${isLaser ? "mode-laser" : ""} ${isDark ? "mode-dark" : ""}">
-          ${cleanDesc ? `<div class="qr-desc">${safeDesc}</div>` : `<div class="qr-desc-spacer"></div>`}
-          <div class="qr-box">${qrSvg}</div>
-          <div class="qr-table-wrap"><span class="qr-table">${safeTable}</span></div>
-        </div>
+        ${cardSvg}
       </div>`
     })
     .join("")
 
   const pageCss = isSticker
-    ? `@page { size: ${sizeSpec.widthMm}mm ${sizeSpec.heightMm}mm; margin: 0; }
+    ? `@page { size: ${sizeSpec.widthMm}mm auto; margin: 0; }
        body { margin: 0; padding: 0; }
-       .sheet-grid { display: flex; flex-direction: column; }
-       .card-wrap { page-break-after: always; break-after: page; display: flex; align-items: center; justify-content: center; width: ${sizeSpec.widthMm}mm; height: ${sizeSpec.heightMm}mm; }`
+       .sheet-grid { display: flex; flex-direction: column; align-items: center; }
+       .card-wrap { page-break-after: always; break-after: page; display: flex; align-items: center; justify-content: center; }`
     : `@page { size: A4 portrait; margin: 10mm; }
        body { margin: 0; padding: 8mm; }
-       .sheet-grid { display: grid; grid-template-columns: repeat(${sizeSpec.colsOnA4}, ${sizeSpec.widthMm}mm); gap: ${isPvc ? "8mm" : "6mm"}; justify-content: center; }`
+       .sheet-grid { display: grid; grid-template-columns: repeat(${sizeSpec.colsOnA4}, ${sizeSpec.widthMm}mm); gap: ${isPvc ? "8mm" : "6mm"}; justify-content: center; align-items: start; }`
 
   return `<!DOCTYPE html>
 <html lang="tr">
 <head>
 <meta charset="utf-8"/>
-<title>Masa QR Baskı Şablonu (${sizeSpec.widthMm}x${sizeSpec.heightMm}mm)</title>
+<title>Masa QR Baskı Şablonu (${sizeSpec.widthMm}mm)</title>
 <style>
   * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #ffffff; color: #000000; }
+  body { font-family: ${SVG_FONT_STACK}; background: #ffffff; color: #000000; }
   ${pageCss}
-  .card-wrap { position: relative; width: ${sizeSpec.widthMm}mm; height: ${sizeSpec.heightMm}mm; page-break-inside: avoid; break-inside: avoid; }
-  .card-wrap.with-crops::before, .card-wrap.with-crops::after {
-    content: ""; position: absolute; inset: -2mm; pointer-events: none;
+  .card-wrap { position: relative; width: ${sizeSpec.widthMm}mm; page-break-inside: avoid; break-inside: avoid; display: flex; justify-content: center; }
+  .card-wrap > svg { width: ${sizeSpec.widthMm}mm; height: auto; display: block; }
+  .card-wrap.with-crops::before {
+    content: ""; position: absolute; inset: -1.8mm; pointer-events: none;
     border: 0.25mm dashed ${isLaser ? "#000000" : "#999999"}; border-radius: 4.5mm;
   }
-  .qr-card {
-    width: 100%; height: 100%; border-radius: 4mm; padding: 4mm 3.5mm;
-    display: flex; flex-direction: column; align-items: center; justify-content: space-between;
-    text-align: center; background: #ffffff; color: #000000; border: 0.55mm solid #000000;
-    position: relative; overflow: hidden;
-  }
-  .qr-card.tpl-luxury { border: 0.7mm solid #000000; box-shadow: inset 0 0 0 1.4mm #ffffff, inset 0 0 0 1.75mm #000000; padding: 5.5mm 4.5mm; }
-  .qr-card.tpl-badge .qr-desc { background: #f2f2f7; border: 0.35mm solid #000000; border-radius: 2mm; padding: 1.4mm 2.5mm; width: 100%; }
-  .qr-card.tpl-badge .qr-table { background: #000000; color: #ffffff; padding: 1.2mm 5.5mm; border-radius: 999px; display: inline-block; }
-  .qr-card.mode-dark { background: #111111 !important; color: #ffffff !important; border-color: #111111 !important; }
-  .qr-card.mode-dark .qr-desc { color: #ffffff !important; }
-  .qr-card.mode-dark .qr-table { color: #ffffff !important; }
-  .qr-card.mode-laser { background: #ffffff !important; color: #000000 !important; border: 0.7mm solid #000000 !important; }
-  .qr-card.mode-laser .qr-desc { background: transparent !important; color: #000000 !important; border-color: #000000 !important; }
-  .qr-card.mode-laser.tpl-badge .qr-table { background: transparent !important; color: #000000 !important; border: 0.6mm solid #000000 !important; }
-  .qr-desc { font-size: ${sizeSpec.widthMm <= 50 ? "8.2pt" : "9.5pt"}; font-weight: 700; line-height: 1.25; color: #000000; max-width: 100%; word-break: break-word; }
-  .qr-desc-spacer { height: 2mm; }
-  .qr-box { width: ${sizeSpec.qrMm}mm; height: ${sizeSpec.qrMm}mm; background: #ffffff; padding: 1.2mm; border-radius: 2mm; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .qr-card.mode-laser .qr-box { border: 0.4mm solid #000000; }
-  .qr-box svg { width: 100%; height: 100%; display: block; shape-rendering: crispEdges; }
-  .qr-table-wrap { width: 100%; display: flex; align-items: center; justify-content: center; padding-top: 1mm; }
-  .qr-card.tpl-luxury .qr-table-wrap { border-top: 0.4mm solid #000000; padding-top: 1.8mm; width: 82%; }
-  .qr-table { font-size: ${sizeSpec.widthMm <= 50 ? "17pt" : "21pt"}; font-weight: 900; letter-spacing: 0.4px; line-height: 1.05; color: #000000; }
 </style>
 </head>
 <body>
@@ -364,4 +443,3 @@ export function buildPrintableQrDocumentHtml(params: {
 </body>
 </html>`
 }
-

@@ -1,15 +1,15 @@
 import { useMemo, useState } from "react"
 import {
-  Check, Copy, Download, ExternalLink, Printer, QrCode, Scissors, Sparkles, X,
+  Check, Copy, Download, ExternalLink, FolderArchive, Printer, QrCode, Scissors, Sparkles, X,
 } from "lucide-react"
 import { CustomSelect } from "@/components/ui/custom-inputs"
 import type { PanelTable } from "@/lib/panel-types"
-import { generateQrDataUri } from "@/lib/qr-svg"
 import {
   buildPrintableQrDocumentHtml, buildStandaloneVectorCardSvg, DEFAULT_QR_DESCRIPTION,
-  downloadVectorSvgFile, loadQrStudioPreferences, QR_CARD_SIZES, QR_DESCRIPTION_PRESETS,
-  QR_DESIGN_TEMPLATES, QR_PRINT_MEDIUMS, saveQrStudioPreferences,
-  type QrCardSizeId, type QrDesignTemplateId, type QrPrintMediumId, type QrStudioPreferences,
+  downloadBulkVectorSvgZip, downloadVectorSvgFile, loadQrStudioPreferences, QR_CARD_SIZES,
+  QR_DESCRIPTION_PRESETS, QR_DESIGN_TEMPLATES, QR_PRINT_MEDIUMS, sanitizeQrFilenameSegment,
+  saveQrStudioPreferences, type QrCardSizeId, type QrDesignTemplateId, type QrPrintMediumId,
+  type QrStudioPreferences,
 } from "@/lib/qr-print-studio"
 import { showPanelToast } from "../panel-toast"
 
@@ -53,14 +53,20 @@ export function TableQrCodesModal(props: {
     id: "preview", name: "B1", section: "Bahçe", status: "empty" as const, totalAmount: 0, orderCount: 0,
   }
   const previewUrl = buildTableUrl(previewTable) || generalMenuUrl
-  const previewQrUri = useMemo(
-    () => generateQrDataUri(previewUrl, 220, 3, "#000000", "#ffffff"),
-    [previewUrl],
+
+  // Live preview renders the exact same SVG string as the downloaded .SVG file
+  const previewSvgMarkup = useMemo(
+    () =>
+      buildStandaloneVectorCardSvg({
+        tableName: previewTable.name,
+        url: previewUrl,
+        prefs,
+        forInlinePreview: true,
+      }),
+    [previewTable.name, previewUrl, prefs],
   )
 
   const isLaser = prefs.printMedium === "laser" || prefs.designTemplate === "laser-stencil"
-  const isDark = !isLaser && prefs.designTemplate === "dark-card"
-  const cleanDesc = prefs.descriptionText.trim()
 
   const copyUrl = (url: string, label: string) => {
     void navigator.clipboard?.writeText(url)
@@ -81,18 +87,33 @@ export function TableQrCodesModal(props: {
     win.document.close()
   }
 
+  const getPrintableFilteredItems = () =>
+    filteredTables
+      .map((t) => ({ tableName: t.name, section: t.section, url: buildTableUrl(t) }))
+      .filter((item): item is { tableName: string; section: string; url: string } => Boolean(item.url))
+
   const handlePrintFiltered = () => {
-    const printable = filteredTables
-      .map((t) => ({ tableName: t.name, url: buildTableUrl(t) }))
-      .filter((item): item is { tableName: string; url: string } => Boolean(item.url))
-    printQrItems(printable)
+    printQrItems(getPrintableFilteredItems())
+  }
+
+  const handleDownloadBulkZip = () => {
+    const items = getPrintableFilteredItems()
+    if (items.length === 0) {
+      showPanelToast("İndirilecek imzalı QR kodlu masa bulunamadı", "error")
+      return
+    }
+    const count = downloadBulkVectorSvgZip({
+      restaurantSlug: slug,
+      items,
+      prefs,
+    })
+    showPanelToast(`${count} adet vektörel SVG dosyası ZIP olarak indirildi`, "success")
   }
 
   const handleDownloadSingleSvg = (t: PanelTable) => {
-    const url = buildTableUrl(t)
-    if (!url) return
+    const url = buildTableUrl(t) || generalMenuUrl
     const svg = buildStandaloneVectorCardSvg({ tableName: t.name, url, prefs })
-    const safeFile = t.name.toLowerCase().replace(/[^a-z0-9ğüşıöç]+/gi, "-")
+    const safeFile = sanitizeQrFilenameSegment(t.name)
     downloadVectorSvgFile(`qr-${safeFile}-${prefs.cardSize}.svg`, svg)
     showPanelToast(`${t.name} vektörel SVG dosyası indirildi`, "success")
   }
@@ -115,6 +136,19 @@ export function TableQrCodesModal(props: {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              type="button"
+              onClick={handleDownloadBulkZip}
+              className="h-[34px] px-3.5 rounded-xl bg-[#1d1d1f] text-white text-[12px] font-semibold hover:bg-[#3a3a3c] inline-flex items-center gap-1.5 whitespace-nowrap shadow-xs"
+              title="Seçili bölgedeki tüm masaların vektörel SVG dosyalarını tek ZIP paketinde indir"
+            >
+              <FolderArchive className="w-3.5 h-3.5" />
+              <span>
+                {sectionFilter === "ALL"
+                  ? `Toplu SVG İndir (.ZIP) (${filteredTables.length})`
+                  : `${sectionFilter} SVG (.ZIP) (${filteredTables.length})`}
+              </span>
+            </button>
             <button
               type="button"
               onClick={handlePrintFiltered}
@@ -264,67 +298,28 @@ export function TableQrCodesModal(props: {
             <div className="lg:col-span-5 flex flex-col items-center justify-between bg-white rounded-2xl border border-[#d1d1d6]/70 p-4">
               <div className="w-full flex items-center justify-between mb-2">
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#e63462]">
-                  <Sparkles className="w-3.5 h-3.5" /> Canlı Baskı Önizlemesi
+                  <Sparkles className="w-3.5 h-3.5" /> Canlı Baskı Önizlemesi (1:1 SVG)
                 </span>
                 <span className="text-[10px] font-mono text-[#86868b]">
                   {isLaser ? "100% Saf Vektör (#000)" : "300+ DPI Vektörel SVG"}
                 </span>
               </div>
 
-              <div className="my-2 flex items-center justify-center">
+              <div className="my-2 flex items-center justify-center w-full">
                 <div
-                  className={`w-[220px] min-h-[285px] rounded-2xl p-4 flex flex-col items-center justify-between text-center transition-all ${
-                    isDark
-                      ? "bg-[#111111] text-white border-2 border-[#111111] shadow-lg"
-                      : isLaser
-                        ? "bg-white text-black border-2 border-black"
-                        : prefs.designTemplate === "luxury"
-                          ? "bg-white text-black border-2 border-black ring-1 ring-inset ring-black ring-offset-4"
-                          : "bg-white text-black border-2 border-black shadow-md"
-                  }`}
-                >
-                  {cleanDesc ? (
-                    <div
-                      className={`w-full text-[12px] font-bold leading-snug break-words ${
-                        prefs.designTemplate === "badge" && !isDark
-                          ? "bg-[#f2f2f7] border border-black rounded-lg px-2.5 py-1.5 text-black"
-                          : isDark ? "text-white" : "text-black"
-                      }`}
-                    >
-                      {cleanDesc}
-                    </div>
-                  ) : (
-                    <div className="h-1" />
-                  )}
-
-                  <div className={`my-2 p-2 bg-white rounded-xl flex items-center justify-center ${isLaser ? "border border-black" : ""}`}>
-                    <img src={previewQrUri} alt={previewTable.name} className="w-[148px] h-[148px] block" />
-                  </div>
-
-                  <div className={`w-full pt-1 flex items-center justify-center ${prefs.designTemplate === "luxury" ? "border-t border-black pt-2 w-4/5" : ""}`}>
-                    <span
-                      className={`text-[24px] font-black tracking-wide leading-none ${
-                        prefs.designTemplate === "badge" && !isLaser && !isDark
-                          ? "bg-black text-white px-5 py-1.5 rounded-full text-[20px]"
-                          : prefs.designTemplate === "badge" && isLaser
-                            ? "border-2 border-black text-black px-5 py-1 rounded-full text-[20px]"
-                            : isDark ? "text-white" : "text-black"
-                      }`}
-                    >
-                      {previewTable.name}
-                    </span>
-                  </div>
-                </div>
+                  className="w-[220px] flex items-center justify-center drop-shadow-sm"
+                  dangerouslySetInnerHTML={{ __html: previewSvgMarkup }}
+                />
               </div>
 
               <div className="w-full flex items-center justify-between gap-2 pt-2 border-t border-[#f0f0f0]">
-                <span className="text-[11px] text-[#86868b]">Restoran adı ve bölge basılmaz</span>
+                <span className="text-[11px] text-[#86868b]">Önizleme ile indirilen SVG birebir aynıdır</span>
                 <button
                   type="button"
                   onClick={() => handleDownloadSingleSvg(previewTable)}
-                  className="h-[28px] px-2.5 rounded-lg bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[11px] font-semibold text-[#1d1d1f] inline-flex items-center gap-1"
+                  className="h-[28px] px-2.5 rounded-lg bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[11px] font-semibold text-[#1d1d1f] inline-flex items-center gap-1 whitespace-nowrap"
                 >
-                  <Download className="w-3 h-3" /> Örnek Vektör (.SVG) İndir
+                  <Download className="w-3 h-3" /> Örnek (.SVG) İndir
                 </button>
               </div>
             </div>
@@ -356,6 +351,13 @@ export function TableQrCodesModal(props: {
             </div>
 
             <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleDownloadBulkZip}
+                className="h-[30px] px-2.5 rounded-lg bg-[#f5f5f7] border border-[#d1d1d6]/60 text-[11px] font-semibold text-[#1d1d1f] hover:bg-[#e8e8ed] flex items-center gap-1"
+              >
+                <FolderArchive className="w-3 h-3" /> Toplu SVG (.ZIP)
+              </button>
               <button
                 type="button"
                 onClick={() => copyUrl(generalMenuUrl, "Genel QR Menü")}
