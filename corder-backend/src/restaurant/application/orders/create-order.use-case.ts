@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { OrderEntity } from '../../domain/order.entity';
 import { OrderItemEntity } from '../../domain/order-item.entity';
 import { TableEntity } from '../../domain/table.entity';
@@ -13,6 +13,28 @@ import { TableService } from '../table.service';
 import { OrderQueryService } from './order-query.service';
 import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
 import { normalizeStorageText } from '../../../common/text/text-normalizer';
+
+export function formatIstanbulOrderDatePrefix(date = new Date()): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Istanbul',
+      year: '2-digit',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+    const map: Record<string, string> = {};
+    for (const p of parts) map[p.type] = p.value;
+    if (map.year && map.month && map.day) {
+      return `${map.year}${map.month}${map.day}`;
+    }
+  } catch {
+    // Fallback below
+  }
+  const yy = String(date.getFullYear()).slice(-2);
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yy}${mm}${dd}`;
+}
 
 @Injectable()
 export class CreateOrderUseCase {
@@ -61,6 +83,41 @@ export class CreateOrderUseCase {
     return productById;
   }
 
+  private async allocateNextOrderNumber(
+    em: EntityManager,
+    restaurantId: string,
+    now = new Date(),
+  ): Promise<string> {
+    const datePrefix = formatIstanbulOrderDatePrefix(now);
+    const queryFn = (em as unknown as { query?: (sql: string, params?: unknown[]) => Promise<unknown[]> }).query;
+    if (typeof queryFn !== 'function') {
+      return `${datePrefix}-001`;
+    }
+    await queryFn.call(
+      em,
+      `SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`,
+      [restaurantId, datePrefix],
+    );
+    const rows = (await queryFn.call(
+      em,
+      `SELECT COALESCE(
+         MAX(
+           CASE
+             WHEN SUBSTRING("order_number" FROM '^' || $2 || '-([0-9]+)$') IS NOT NULL
+             THEN CAST(SUBSTRING("order_number" FROM '^' || $2 || '-([0-9]+)$') AS INTEGER)
+             ELSE 0
+           END
+         ),
+         0
+       ) + 1 AS next_seq
+       FROM "orders"
+       WHERE "restaurant_id" = $1 AND "order_number" LIKE ($2 || '-%')`,
+      [restaurantId, datePrefix],
+    )) as Array<{ next_seq?: number | string }>;
+    const nextSeq = Math.max(1, Number(rows?.[0]?.next_seq) || 1);
+    return `${datePrefix}-${String(nextSeq).padStart(3, '0')}`;
+  }
+
   async execute(
     restaurantId: string,
     dto: CreateOrderDto,
@@ -85,7 +142,7 @@ export class CreateOrderUseCase {
       ? await this.staffRepo.findOne({ where: { id: staffId, restaurantId } })
       : null;
 
-    const { savedId, tableName } = await this.orderRepo.manager.transaction(async (em) => {
+    const { savedId, savedOrderNumber, tableName } = await this.orderRepo.manager.transaction(async (em) => {
       const lockedTable = await em.findOne(TableEntity, {
         where: { id: dto.tableId, restaurantId },
         lock: { mode: 'pessimistic_write' },
@@ -93,11 +150,13 @@ export class CreateOrderUseCase {
       if (!lockedTable) throw new NotFoundException('Table not found');
       this.tableService.assertStaffMayUseTable(lockedTable, staffId);
 
+      const orderNumber = await this.allocateNextOrderNumber(em, restaurantId);
       const txOrderRepo = em.getRepository(OrderEntity);
       const txItemRepo = em.getRepository(OrderItemEntity);
       const rawName = waiter?.name?.trim() || actor?.displayName?.trim() || '';
       const order = txOrderRepo.create({
         restaurantId,
+        orderNumber,
         tableId: dto.tableId,
         userId: waiter ? waiter.id : (actor?.actorId ?? null),
         userDisplayName: rawName ? normalizeStorageText(rawName) : null,
@@ -125,12 +184,17 @@ export class CreateOrderUseCase {
         lockedTable.status = 'occupied';
         await em.save(TableEntity, lockedTable);
       }
-      return { savedId: saved.id, tableName: lockedTable.name ?? null };
+      return {
+        savedId: saved.id,
+        savedOrderNumber: saved.orderNumber ?? orderNumber,
+        tableName: lockedTable.name ?? null,
+      };
     });
 
     const serialized = await this.orderQuery.serializeOrderEntityById(savedId, restaurantId);
     const payload: Record<string, unknown> = {
       ...serialized,
+      orderNumber: (serialized.orderNumber as string | null) ?? savedOrderNumber,
       restaurantId,
       tableName,
       waiterName: (serialized.userName as string | null) ?? null,

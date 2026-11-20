@@ -22,8 +22,7 @@ async function loadState(rerenderAll = false) {
     if (!state.initializedForms) {
       state.initializedForms = true
       $("inputUsername").value = state.settings.username || ""
-      $("inputFooterLine").value = state.settings.printFooterLine || ""
-      $("inputTicketStamp").value = state.settings.printTicketStamp || ""
+      $("inputFooterLine").value = formatTitleCase(state.settings.printFooterLine || "")
       $("inputUsbDrainMs").value = state.settings.printUsbDrainMs ?? 400
       $("inputAutoStartOnBoot").checked = state.settings.autoStartOnBoot !== false
     }
@@ -115,8 +114,8 @@ function bindAuthEvents() {
         }),
       })
       $("inputPassword").value = ""
-      $("inputFooterLine").value = res.settings?.printFooterLine || ""
-      showToast(`Hoş geldiniz: ${res.settings?.restaurantName || "Corder Print Agent"}`)
+      $("inputFooterLine").value = formatTitleCase(res.settings?.printFooterLine || "")
+      showToast(`Hoş geldiniz: ${formatTitleCase(res.settings?.restaurantName) || "Corder Print Agent"}`)
       await loadState(true)
     } catch (err) {
       errBox.textContent = err.message
@@ -325,12 +324,13 @@ function bindRoutingAndQueueEvents() {
       await apiCall("/api/routes", {
         method: "POST",
         body: JSON.stringify({
-          printFooterLine: $("inputFooterLine").value.trim(),
-          printTicketStamp: $("inputTicketStamp").value.trim(),
+          printFooterLine: formatTitleCase($("inputFooterLine").value.trim()),
+          printTicketStamp: "",
           printUsbDrainMs: Number($("inputUsbDrainMs").value) || 0,
           autoStartOnBoot: $("inputAutoStartOnBoot").checked,
         }),
       })
+      $("inputFooterLine").value = formatTitleCase($("inputFooterLine").value.trim())
       showToast("Ayarlar kaydedildi")
       await loadState(true)
     } catch (err) {

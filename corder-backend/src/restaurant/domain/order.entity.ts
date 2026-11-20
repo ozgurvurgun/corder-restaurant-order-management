@@ -24,6 +24,10 @@ export class OrderEntity {
   @Column({ name: 'restaurant_id' })
   restaurantId: string;
 
+  /** Human-readable, daily-sequential unique order number per restaurant (e.g. "261120-001"). */
+  @Column({ name: 'order_number', type: 'varchar', length: 32, nullable: true })
+  orderNumber: string | null;
+
   @ManyToOne(() => RestaurantEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'restaurant_id' })
   restaurant: RestaurantEntity;

@@ -25,6 +25,7 @@ export interface ReceiptLineItem {
 interface ResolvedReceiptData {
   tableId?: string;
   orderId?: string;
+  orderNumber?: string;
   completedOrderId?: string;
   tableName: string;
   waiterName: string;
@@ -37,6 +38,24 @@ interface ResolvedReceiptData {
   paymentMethod?: string;
   isReprint: boolean;
   earliestOrderCreatedAt?: Date;
+}
+
+export function formatCheckOrderNumbers(
+  rawOrderNumbers: Array<string | null | undefined>,
+): string | undefined {
+  const unique = [...new Set(rawOrderNumbers.map((n) => (typeof n === 'string' ? n.trim() : '')).filter(Boolean))];
+  if (unique.length === 0) return undefined;
+  if (unique.length === 1) return unique[0];
+  const first = unique[0];
+  const dashIdx = first.indexOf('-');
+  const prefix = dashIdx > 0 ? first.slice(0, dashIdx + 1) : '';
+  if (prefix && unique.every((n) => n.startsWith(prefix))) {
+    const suffixes = unique.map((n) => n.slice(prefix.length));
+    return unique.length <= 3
+      ? `${first}, ${suffixes.slice(1).join(', ')}`
+      : `${first}..${suffixes[suffixes.length - 1]} (${unique.length})`;
+  }
+  return unique.length <= 2 ? unique.join(', ') : `${first} (+${unique.length - 1})`;
 }
 
 @Injectable()
@@ -94,36 +113,19 @@ export class PrintReceiptUseCase {
     rawSubtotalMinor: number,
     discount: TableDiscountState | null | undefined,
   ): { discountMinor: number; discountLabel?: string; netMinor: number } {
-    if (!discount || rawSubtotalMinor <= 0) {
-      return { discountMinor: 0, netMinor: rawSubtotalMinor };
-    }
+    if (!discount || rawSubtotalMinor <= 0) return { discountMinor: 0, netMinor: rawSubtotalMinor };
     const reasonSuffix = discount.reason?.trim() ? ` (${discount.reason.trim()})` : '';
-    if (
-      discount.type === 'complimentary' ||
-      (discount.type === 'percent' && Number(discount.value) >= 100)
-    ) {
-      return {
-        discountMinor: rawSubtotalMinor,
-        discountLabel: `İkram %100${reasonSuffix}`,
-        netMinor: 0,
-      };
+    if (discount.type === 'complimentary' || (discount.type === 'percent' && Number(discount.value) >= 100)) {
+      return { discountMinor: rawSubtotalMinor, discountLabel: `İkram %100${reasonSuffix}`, netMinor: 0 };
     }
     if (discount.type === 'percent' && Number(discount.value) > 0) {
       const pct = Math.min(100, Math.max(0, Number(discount.value)));
       const discountMinor = Math.min(rawSubtotalMinor, Math.round((rawSubtotalMinor * pct) / 100));
-      return {
-        discountMinor,
-        discountLabel: `%${pct} İndirim${reasonSuffix}`,
-        netMinor: Math.max(0, rawSubtotalMinor - discountMinor),
-      };
+      return { discountMinor, discountLabel: `%${pct} İndirim${reasonSuffix}`, netMinor: Math.max(0, rawSubtotalMinor - discountMinor) };
     }
     if (discount.type === 'amount' && Number(discount.value) > 0) {
       const discountMinor = Math.min(rawSubtotalMinor, toMinorUnits(Number(discount.value)));
-      return {
-        discountMinor,
-        discountLabel: `İndirim${reasonSuffix}`,
-        netMinor: Math.max(0, rawSubtotalMinor - discountMinor),
-      };
+      return { discountMinor, discountLabel: `İndirim${reasonSuffix}`, netMinor: Math.max(0, rawSubtotalMinor - discountMinor) };
     }
     return { discountMinor: 0, netMinor: rawSubtotalMinor };
   }
@@ -170,8 +172,14 @@ export class PrintReceiptUseCase {
     const tipMinor = Math.max(0, toMinorUnits(Number(completedOrder.paymentTip ?? 0)));
     const netMinor = Math.max(0, toMinorUnits(Number(completedOrder.netAmount ?? fromMinorUnits(totalMinor - discountMinor))));
 
+    const snapshotOrderNumbers = rawSnapshots.map((snap) =>
+      typeof snap?.orderNumber === 'string' ? snap.orderNumber : undefined,
+    );
+    const resolvedOrderNumber = formatCheckOrderNumbers(snapshotOrderNumbers);
+
     return {
       completedOrderId: completedOrder.id,
+      ...(resolvedOrderNumber ? { orderNumber: resolvedOrderNumber } : {}),
       tableName: (completedOrder.tableName || '').trim() || '-',
       waiterName: (completedOrder.waiter || '').trim() || '-',
       items,
@@ -225,6 +233,7 @@ export class PrintReceiptUseCase {
       (order.userDisplayName && order.userDisplayName.trim()) || waiter?.name?.trim() || '-';
     return {
       orderId: order.id,
+      ...(order.orderNumber ? { orderNumber: order.orderNumber } : {}),
       tableId: order.tableId,
       tableName,
       waiterName,
@@ -294,13 +303,17 @@ export class PrintReceiptUseCase {
       waiter?.name?.trim() ||
       '-';
 
-    const earliestOrderCreatedAt = orders.reduce(
-      (min, o) => (o.createdAt < min ? o.createdAt : min),
-      orders[0].createdAt,
+    const chronologicalOrders = [...orders].sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+    );
+    const earliestOrderCreatedAt = chronologicalOrders[0].createdAt;
+    const resolvedOrderNumber = formatCheckOrderNumbers(
+      chronologicalOrders.map((o) => o.orderNumber),
     );
 
     return {
       tableId,
+      ...(resolvedOrderNumber ? { orderNumber: resolvedOrderNumber } : {}),
       tableName,
       waiterName,
       items,
@@ -444,45 +457,30 @@ export class PrintReceiptUseCase {
 
     const includeLineNotes = receiptMode === 'split' || Boolean(dto.orderId);
     const receiptPayload: PrintJobSocketPayload = {
-      type: 'order.print_job',
-      jobId,
-      restaurantId,
-      printType: 'receipt',
-      createdAt,
-      receiptMode,
-      includeLineNotes,
-      isReprint,
-      openCashDrawer,
+      type: 'order.print_job', jobId, restaurantId, printType: 'receipt', createdAt,
+      receiptMode, includeLineNotes, isReprint, openCashDrawer,
       order: {
         ...(resolved.tableId ? { tableId: resolved.tableId } : {}),
         ...(resolved.orderId ? { orderId: resolved.orderId } : {}),
+        ...(resolved.orderNumber ? { orderNumber: resolved.orderNumber } : {}),
         ...(resolved.completedOrderId ? { completedOrderId: resolved.completedOrderId } : {}),
-        tableName: resolved.tableName,
-        waiterName: resolved.waiterName,
+        tableName: resolved.tableName, waiterName: resolved.waiterName,
         ...(paymentMethod ? { paymentMethod } : {}),
         subtotal: resolved.subtotal,
         ...(resolved.discountAmount && resolved.discountAmount > 0
-          ? {
-              discountAmount: resolved.discountAmount,
-              ...(resolved.discountLabel ? { discountLabel: resolved.discountLabel } : {}),
-            }
+          ? { discountAmount: resolved.discountAmount, ...(resolved.discountLabel ? { discountLabel: resolved.discountLabel } : {}) }
           : {}),
         ...(resolved.tipAmount && resolved.tipAmount > 0 ? { tipAmount: resolved.tipAmount } : {}),
-        items: resolved.items,
-        total: resolved.total,
+        items: resolved.items, total: resolved.total,
       },
     };
     await this.printJobRepo.save(
       this.printJobRepo.create({
-        id: jobId,
-        restaurantId,
-        printType: 'receipt',
-        payload: receiptPayload as unknown as Record<string, unknown>,
-        printedAt: null,
+        id: jobId, restaurantId, printType: 'receipt',
+        payload: receiptPayload as unknown as Record<string, unknown>, printedAt: null,
       }),
     );
     this.ordersGateway.emitPrintJob(restaurantId, receiptPayload);
-
     return { ok: true, jobId };
   }
 }

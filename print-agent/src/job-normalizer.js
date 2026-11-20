@@ -47,6 +47,13 @@ function normalizePrintJob(payload, restaurantId) {
 
   return {
     jobId: String(payload.jobId),
+    orderId: payload.order.orderId ? String(payload.order.orderId) : undefined,
+    orderNumber:
+      typeof payload.order.orderNumber === "string" && payload.order.orderNumber.trim()
+        ? payload.order.orderNumber.trim()
+        : typeof payload.orderNumber === "string" && payload.orderNumber.trim()
+          ? payload.orderNumber.trim()
+          : undefined,
     restaurantId: payload.restaurantId,
     printType: payload.printType,
     receiptMode: payload.receiptMode === "consolidated" ? "consolidated" : "split",
@@ -93,6 +100,11 @@ function normalizeOrderCreated(payload, restaurantId) {
 
   return {
     jobId: String(payload.id),
+    orderId: String(payload.id),
+    orderNumber:
+      typeof payload.orderNumber === "string" && payload.orderNumber.trim()
+        ? payload.orderNumber.trim()
+        : undefined,
     restaurantId: payload.restaurantId,
     printType: "kitchen",
     isReprint: Boolean(payload.isReprint),

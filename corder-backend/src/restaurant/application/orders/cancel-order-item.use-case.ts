@@ -188,6 +188,8 @@ export class CancelOrderItemUseCase {
       createdAt,
       includeLineNotes: true,
       order: {
+        orderId: order.id,
+        ...(order.orderNumber ? { orderNumber: order.orderNumber } : {}),
         tableName: (table.name ?? '').trim() || '-',
         waiterName,
         cancelledBy: item.cancelledBy ?? '-',

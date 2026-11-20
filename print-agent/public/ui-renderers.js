@@ -103,12 +103,12 @@ function renderAuthGateAndHeader() {
 
   const pill = $("connectionPill")
   const text = $("connectionText")
-  const rName = state.settings.restaurantName || state.status.restaurantName || ""
+  const rName = formatTitleCase(state.settings.restaurantName || state.status.restaurantName || "")
   const uname = state.settings.username || ""
   $("headerQueueCount").textContent = String(state.queue.length || 0)
   $("headerBranchInfo").textContent = rName || "Bağlı İşletme"
   if ($("sidebarRestaurantTitle")) {
-    $("sidebarRestaurantTitle").textContent = rName ? formatTitleCase(rName) : "Corder Print Agent"
+    $("sidebarRestaurantTitle").textContent = rName || "Corder Print Agent"
   }
   if ($("sidebarUsernameSub")) {
     $("sidebarUsernameSub").textContent = uname || "Print Agent"
@@ -134,7 +134,7 @@ function renderAuthGateAndHeader() {
 }
 
 function printerLabel(p) {
-  return String(p?.name || p?.systemPrinterName || p?.host || "Yazıcı").trim()
+  return formatTitleCase(p?.name) || String(p?.systemPrinterName || p?.host || "Yazıcı").trim()
 }
 
 let activeModalResolver = null
@@ -425,9 +425,9 @@ function renderQueueAndLogs() {
         .slice(0, 20)
         .map(
           (item) => `<div class="queue-row">
-        <div><strong>Masa: ${escapeHtml(item.tableName || "-")}</strong> &bull; ${escapeHtml(item.printType || "kitchen")}
+        <div><strong>Masa: ${escapeHtml(formatTitleCase(item.tableName) || "-")}</strong> &bull; ${escapeHtml(item.printType || "kitchen")}
         <div class="printer-sub">Deneme: ${item.retryCount || 0} | Hata: ${escapeHtml(item.lastError || "-")}</div></div>
-        <span class="tag">${escapeHtml(item.targetPrinter?.name || item.targetPrinterName || "Varsayılan")}</span>
+        <span class="tag">${escapeHtml(formatTitleCase(item.targetPrinter?.name || item.targetPrinterName) || "Varsayılan")}</span>
       </div>`,
         )
         .join("")
@@ -438,8 +438,8 @@ function renderQueueAndLogs() {
         .slice(0, 12)
         .map(
           (item) => `<div class="queue-row">
-        <div><strong>Masa: ${escapeHtml(item.tableName)}</strong> (${escapeHtml(item.printType)})
-        <div class="printer-sub">${new Date(item.printedAt).toLocaleTimeString("tr-TR")} &bull; Yazıcı: ${escapeHtml(item.printerName)}</div></div>
+        <div><strong>Masa: ${escapeHtml(formatTitleCase(item.tableName) || "-")}</strong> (${escapeHtml(item.printType)})
+        <div class="printer-sub">${new Date(item.printedAt).toLocaleTimeString("tr-TR")} &bull; Yazıcı: ${escapeHtml(formatTitleCase(item.printerName) || "-")}</div></div>
         <span class="tag">${Number(item.total || 0).toFixed(2)} TL</span>
       </div>`,
         )

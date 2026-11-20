@@ -43,7 +43,7 @@ function appendKitchenItemsBlock(chunks, push, items, width, showLineNotes) {
     )
     chunks.push(BOLD_OFF)
     if (showLineNotes && item.note) {
-      const nb = noteBlock(item.note, width, 8)
+      const nb = noteBlock(formatTitleCase(item.note), width, 8)
       if (nb) push(nb)
     }
   }
@@ -77,21 +77,26 @@ function resolveDepartmentTicketHeading(printerName, suffix) {
   return `${prefix} ${suffix}`
 }
 
+function resolveTicketOrderNumber(payload) {
+  const explicit = String(payload?.orderNumber || "").trim()
+  if (explicit) return explicit
+  return orderNumberFromId(payload?.orderId || payload?.jobId, payload?.createdAt)
+}
+
 function buildKitchenTicket(payload, options = {}) {
   const width = clampWidth(options.charsPerLine)
-  const footerLine = String(options.footerLine || "").trim()
+  const footerLine = formatTitleCase(options.footerLine)
   const feedBeforeCut = Math.min(255, Math.max(0, Number(options.feedLinesBeforeCut) ?? 6))
   const asciiOnly = Boolean(options.asciiFallback)
   const chunks = []
   const push = (s) => chunks.push(encodeCp857(s, asciiOnly))
-  const stamp = String(options.ticketStamp || "").trim()
   const heading = resolveDepartmentTicketHeading(payload.targetPrinter?.name, "SİPARİŞ FİŞİ")
 
-  appendTicketBanner(chunks, push, width, payload.isReprint, stamp, heading)
+  appendTicketBanner(chunks, push, width, payload.isReprint, "", heading)
   push(kvLine("Tarih/Saat", formatTicketDate(payload.createdAt), width))
-  push(kvLine("Sipariş No", orderNumberFromId(payload.jobId), width))
+  push(kvLine("Sipariş No", resolveTicketOrderNumber(payload), width))
   chunks.push(BOLD_ON)
-  push(kvLine("Masa", payload.tableName || "-", width))
+  push(kvLine("Masa", formatTitleCase(payload.tableName) || "-", width))
   chunks.push(BOLD_OFF)
   push(kvLine("Garson", formatTitleCase(payload.waiterName) || "-", width))
 
@@ -104,7 +109,7 @@ function buildKitchenTicket(payload, options = {}) {
 
 function buildShiftReportTicket(payload, options = {}) {
   const width = clampWidth(options.charsPerLine)
-  const footerLine = String(options.footerLine || "").trim()
+  const footerLine = formatTitleCase(options.footerLine)
   const feedBeforeCut = Math.min(255, Math.max(0, Number(options.feedLinesBeforeCut) ?? 6))
   const asciiOnly = Boolean(options.asciiFallback)
   const chunks = []
@@ -112,12 +117,12 @@ function buildShiftReportTicket(payload, options = {}) {
   const r = payload.shiftReport || {}
   const isZ = String(r.reportType || "").toUpperCase() === "Z"
   const heading = isZ ? "Z RAPORU (KAPANIŞ RAPORU)" : "X RAPORU (ANLIK ÖZET)"
-  const stamp = String(r.restaurantName || options.ticketStamp || "").trim()
+  const stamp = formatTitleCase(r.restaurantName)
 
   appendTicketBanner(chunks, push, width, payload.isReprint, stamp, heading)
   push(hrLine("-", width))
   push(kvLine("Rapor Tarihi", formatTicketDate(payload.createdAt), width))
-  push(kvLine("Vardiya No", orderNumberFromId(r.shiftId || payload.jobId), width))
+  push(kvLine("Vardiya No", orderNumberFromId(r.shiftId || payload.jobId, r.openedAt || payload.createdAt), width))
   push(kvLine("Vardiya Açan", formatTitleCase(r.openedBy) || "-", width))
   if (r.closedBy) {
     push(kvLine("Vardiya Kapatan", formatTitleCase(r.closedBy), width))
@@ -180,17 +185,16 @@ function buildReceipt(payload, options = {}) {
     return buildShiftReportTicket(payload, options)
   }
   const width = clampWidth(options.charsPerLine)
-  const footerLine = String(options.footerLine || "").trim()
+  const footerLine = formatTitleCase(options.footerLine)
   const feedBeforeCut = Math.min(255, Math.max(0, Number(options.feedLinesBeforeCut) ?? 6))
   const asciiOnly = Boolean(options.asciiFallback)
   const chunks = []
   const push = (s) => chunks.push(encodeCp857(s, asciiOnly))
-  const stamp = String(options.ticketStamp || "").trim()
 
-  appendTicketBanner(chunks, push, width, payload.isReprint, stamp, "ADİSYON / HESAP FİŞİ")
+  appendTicketBanner(chunks, push, width, payload.isReprint, "", "ADİSYON / HESAP FİŞİ")
   push(kvLine("Tarih/Saat", formatTicketDate(payload.createdAt), width))
-  push(kvLine("Fiş No", orderNumberFromId(payload.jobId), width))
-  push(kvLine("Masa", payload.tableName || "-", width))
+  push(kvLine("Sipariş No", resolveTicketOrderNumber(payload), width))
+  push(kvLine("Masa", formatTitleCase(payload.tableName) || "-", width))
   push(kvLine("Garson", formatTitleCase(payload.waiterName) || "-", width))
   if (payload.paymentMethod) {
     push(kvLine("Ödeme Tipi", formatPaymentMethodLabel(payload.paymentMethod), width))
@@ -213,7 +217,7 @@ function buildReceipt(payload, options = {}) {
     computedSubtotalMinorUnits += toMinorUnits(unit) * qty
     push(receiptItemRows(qty, unit, formatTitleCase(item.productName || item.name) || "Ürün", width))
     if (showLineNotes && item.note) {
-      const nb = noteBlock(item.note, width, noteIndent)
+      const nb = noteBlock(formatTitleCase(item.note), width, noteIndent)
       if (nb) push(nb)
     }
   }
@@ -237,7 +241,7 @@ function buildReceipt(payload, options = {}) {
   ) {
     push(justifyLabelAmount("Ara Toplam:", subtotalVal, width))
     if (toMinorUnits(discountVal) > 0) {
-      push(justifyLabelAmount(`${payload.discountLabel || "İndirim"}:`, discountVal, width, "-"))
+      push(justifyLabelAmount(`${formatTitleCase(payload.discountLabel) || "İndirim"}:`, discountVal, width, "-"))
     }
     if (toMinorUnits(tipVal) > 0) {
       push(justifyLabelAmount("Bahşiş:", tipVal, width, "+"))
@@ -266,21 +270,21 @@ function buildReceipt(payload, options = {}) {
 
 function buildKitchenCancelTicket(payload, options = {}) {
   const width = clampWidth(options.charsPerLine)
-  const footerLine = String(options.footerLine || "").trim()
+  const footerLine = formatTitleCase(options.footerLine)
   const feedBeforeCut = Math.min(255, Math.max(0, Number(options.feedLinesBeforeCut) ?? 6))
   const asciiOnly = Boolean(options.asciiFallback)
   const chunks = []
   const push = (s) => chunks.push(encodeCp857(s, asciiOnly))
-  const stamp = String(options.ticketStamp || "").trim()
   const heading = resolveDepartmentTicketHeading(payload.targetPrinter?.name, "İPTAL FİŞİ")
 
-  appendTicketBanner(chunks, push, width, false, stamp, heading)
+  appendTicketBanner(chunks, push, width, false, "", heading)
   push(kvLine("Tarih/Saat", formatTicketDate(payload.createdAt), width))
+  push(kvLine("Sipariş No", resolveTicketOrderNumber(payload), width))
   chunks.push(BOLD_ON)
-  push(kvLine("Masa", payload.tableName || "-", width))
+  push(kvLine("Masa", formatTitleCase(payload.tableName) || "-", width))
   chunks.push(BOLD_OFF)
   push(kvLine("İptal Eden", formatTitleCase(payload.cancelledBy || payload.waiterName) || "-", width))
-  push(kvWrappedLines("İptal Nedeni", payload.cancelReason || "-", width))
+  push(kvWrappedLines("İptal Nedeni", formatTitleCase(payload.cancelReason) || "-", width))
 
   appendKitchenItemsBlock(chunks, push, payload.items, width, options.includeLineNotes !== false)
   if (footerLine) {
@@ -300,14 +304,14 @@ function buildTestTicket(printerInfo = {}, options = {}) {
   const targetDesc =
     printerInfo.mode === "network"
       ? `TCP ${printerInfo.host || "127.0.0.1"}:${printerInfo.port || 9100}`
-      : `USB/OS: ${printerInfo.systemPrinterName || printerInfo.name || "VARSAYILAN"}`
+      : `USB/OS: ${printerInfo.systemPrinterName || formatTitleCase(printerInfo.name) || "VARSAYILAN"}`
   const modeLabel = asciiOnly ? "ASCII (TR guvenli)" : "CP857"
 
   const chunks = [BOLD_ON, encodeCp857(centerLine("CORDER YAZICI TESTI", width), asciiOnly), BOLD_OFF]
   const push = (s) => chunks.push(encodeCp857(s, asciiOnly))
   push(hrLine("-", width))
   push(kvLine("Tarih/Saat", formatTicketDate(), width))
-  push(kvLine("Yazici", printerInfo.name || "Test Yazicisi", width))
+  push(kvLine("Yazici", formatTitleCase(printerInfo.name) || "Test Yazicisi", width))
   push(kvLine("Baglanti", targetDesc, width))
   push(kvLine("Kagit", `${paperWidth}mm (${width} kolon)`, width))
   push(kvLine("Kodlama", modeLabel, width))

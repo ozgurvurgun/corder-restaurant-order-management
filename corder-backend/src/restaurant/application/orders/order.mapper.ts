@@ -20,6 +20,7 @@ export function serializeOrder(
     null;
   return {
     id: order.id,
+    orderNumber: order.orderNumber ?? null,
     restaurantId: order.restaurantId,
     tableId: order.tableId,
     userId: order.userId,
@@ -63,6 +64,7 @@ export function buildClosedOrderSnapshot(
 
   return {
     id: order.id,
+    ...(order.orderNumber ? { orderNumber: order.orderNumber } : {}),
     tableId: order.tableId,
     userId: order.userId ?? fallbackUserId,
     ...(resolvedUserName ? { userName: resolvedUserName } : {}),
