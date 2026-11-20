@@ -152,12 +152,12 @@ export default function SettingsView() {
                     <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
                   </div>
                   <div>
-                    <label className="text-[11px] text-[#86868b] font-medium mb-1 block">Telefon (Menü &amp; Fiş)</label>
+                    <label className="text-[11px] text-[#86868b] font-medium mb-1 block">Telefon (QR Menü)</label>
                     <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Örn: 0232 000 00 00" className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="text-[11px] text-[#86868b] font-medium mb-1 block">Açık Adres / Konum (Menü &amp; Fiş)</label>
-                    <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Müşterilerin QR menüde ve adisyon fişinde göreceği adres" className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
+                    <label className="text-[11px] text-[#86868b] font-medium mb-1 block">Açık Adres / Konum (QR Menü)</label>
+                    <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Müşterilerin QR menüde göreceği açık adres" className="w-full h-[36px] px-3 text-[13px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
                   </div>
                   <div>
                     <label className="text-[11px] text-[#86868b] font-medium mb-1 block">Vergi No</label>
