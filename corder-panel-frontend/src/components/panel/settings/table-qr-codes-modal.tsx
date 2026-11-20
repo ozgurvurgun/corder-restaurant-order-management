@@ -271,55 +271,57 @@ export function TableQrCodesModal(props: {
                 </div>
               </div>
 
-              <div className="bg-white rounded-xl border border-[#d1d1d6]/70 p-3">
-                <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <label className="text-[11px] font-semibold text-[#1d1d1f] uppercase tracking-wide flex items-center gap-1.5">
-                    <Scissors className="w-3.5 h-3.5 text-[#e63462]" />
-                    <span>5. Kesim Kılavuz Çizgisi - QR Uzaklık Oranı (%)</span>
-                  </label>
-                  <div className="flex items-center gap-1">
-                    {[6, 10, 15, 22].map((presetPct) => (
-                      <button
-                        key={presetPct}
-                        type="button"
-                        onClick={() => updatePrefs({ cutMarginRatio: presetPct })}
-                        className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border transition-colors ${
-                          prefs.cutMarginRatio === presetPct
-                            ? "bg-[#1d1d1f] text-white border-[#1d1d1f]"
-                            : "bg-[#f5f5f7] text-[#636366] border-[#d1d1d6]/60 hover:bg-[#e8e8ed]"
-                        }`}
-                      >
-                        %{presetPct}
-                      </button>
-                    ))}
+              {prefs.showCropMarks && (
+                <div className="bg-white rounded-xl border border-[#d1d1d6]/70 p-3">
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <label className="text-[11px] font-semibold text-[#1d1d1f] uppercase tracking-wide flex items-center gap-1.5">
+                      <Scissors className="w-3.5 h-3.5 text-[#e63462]" />
+                      <span>Kesim Kılavuz Çizgisi - Dış Çerçeve Uzaklık Oranı (%)</span>
+                    </label>
+                    <div className="flex items-center gap-1">
+                      {[2, 5, 10, 15, 22].map((presetPct) => (
+                        <button
+                          key={presetPct}
+                          type="button"
+                          onClick={() => updatePrefs({ cutMarginRatio: presetPct })}
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border transition-colors ${
+                            prefs.cutMarginRatio === presetPct
+                              ? "bg-[#1d1d1f] text-white border-[#1d1d1f]"
+                              : "bg-[#f5f5f7] text-[#636366] border-[#d1d1d6]/60 hover:bg-[#e8e8ed]"
+                          }`}
+                        >
+                          %{presetPct}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min={3}
-                    max={35}
-                    step={1}
-                    value={prefs.cutMarginRatio}
-                    onChange={(e) => updatePrefs({ cutMarginRatio: clampCutMarginRatio(e.target.value) })}
-                    className="flex-1 accent-[#e63462] h-1.5 bg-[#e5e5ea] rounded-lg cursor-pointer"
-                  />
-                  <div className="relative w-[78px] flex-shrink-0">
+                  <div className="flex items-center gap-3">
                     <input
-                      type="number"
-                      min={3}
-                      max={38}
+                      type="range"
+                      min={1}
+                      max={30}
                       step={1}
                       value={prefs.cutMarginRatio}
                       onChange={(e) => updatePrefs({ cutMarginRatio: clampCutMarginRatio(e.target.value) })}
-                      className="w-full h-[32px] pl-2.5 pr-6 text-[12px] font-bold bg-[#f9f9fb] rounded-lg border border-[#d1d1d6] text-[#1d1d1f] focus:outline-none focus:border-[#e63462] text-right"
+                      className="flex-1 accent-[#e63462] h-1.5 bg-[#e5e5ea] rounded-lg cursor-pointer"
                     />
-                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-[#86868b] pointer-events-none">
-                      %
-                    </span>
+                    <div className="relative w-[78px] flex-shrink-0">
+                      <input
+                        type="number"
+                        min={1}
+                        max={30}
+                        step={1}
+                        value={prefs.cutMarginRatio}
+                        onChange={(e) => updatePrefs({ cutMarginRatio: clampCutMarginRatio(e.target.value) })}
+                        className="w-full h-[32px] pl-2.5 pr-6 text-[12px] font-bold bg-[#f9f9fb] rounded-lg border border-[#d1d1d6] text-[#1d1d1f] focus:outline-none focus:border-[#e63462] text-right"
+                      />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-[#86868b] pointer-events-none">
+                        %
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
 
             <div className="lg:col-span-5 flex flex-col items-center justify-between bg-white rounded-2xl border border-[#d1d1d6]/70 p-4">
@@ -334,7 +336,7 @@ export function TableQrCodesModal(props: {
 
               <div className="my-2 flex items-center justify-center w-full">
                 <div
-                  className="w-[220px] flex items-center justify-center drop-shadow-sm"
+                  className="w-full max-w-[290px] flex items-center justify-center drop-shadow-sm"
                   dangerouslySetInnerHTML={{ __html: previewSvgMarkup }}
                 />
               </div>
