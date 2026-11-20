@@ -154,7 +154,7 @@ function writeCachedMenu(cacheKey: string, data: MenuResponse) {
   }
 }
 
-export function resolveAssetUrl(url: string | null | undefined): string | undefined {
+export function resolveImageUrl(url: string | null | undefined): string | undefined {
   if (!url) return undefined
   const trimmed = url.trim()
   if (!trimmed) return undefined
@@ -171,8 +171,6 @@ export function resolveAssetUrl(url: string | null | undefined): string | undefi
   const path = trimmed.startsWith("/") ? trimmed : `/${trimmed}`
   return base ? `${base.replace(/\/$/, "")}${path}` : path
 }
-
-export const resolveImageUrl = resolveAssetUrl
 
 export function isCampaignCurrentlyValid(campaign: MenuCampaign): boolean {
   if (!campaign || campaign.isActive === false) return false

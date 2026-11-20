@@ -47,7 +47,7 @@ export function formatTitleCase(
   )
 }
 
-export function resolveAssetUrl(url: string | null | undefined): string | undefined {
+export function resolveImageUrl(url: string | null | undefined): string | undefined {
   if (!url) return undefined
   const trimmed = url.trim()
   if (!trimmed) return undefined
@@ -64,8 +64,6 @@ export function resolveAssetUrl(url: string | null | undefined): string | undefi
   const path = trimmed.startsWith("/") ? trimmed : `/${trimmed}`
   return base ? `${base.replace(/\/$/, "")}${path}` : path
 }
-
-export const resolveImageUrl = resolveAssetUrl
 
 export function translateApiError(raw: unknown, fallback = "İşlem gerçekleştirilemedi"): string {
   const msg = raw instanceof Error ? raw.message : typeof raw === "string" ? raw : ""
