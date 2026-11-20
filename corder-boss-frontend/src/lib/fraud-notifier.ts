@@ -86,11 +86,22 @@ export async function syncBossWebPushSubscription(
     const publicKey = keyData?.publicKey?.trim()
     if (!publicKey) return
 
+    const expectedKey = urlBase64ToUint8Array(publicKey)
     let sub = await reg.pushManager.getSubscription()
+    if (sub && sub.options?.applicationServerKey) {
+      const currentKey = new Uint8Array(sub.options.applicationServerKey)
+      const sameKey =
+        currentKey.length === expectedKey.length &&
+        currentKey.every((byte, idx) => byte === expectedKey[idx])
+      if (!sameKey) {
+        await sub.unsubscribe().catch(() => {})
+        sub = null
+      }
+    }
     if (!sub) {
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey) as unknown as BufferSource,
+        applicationServerKey: expectedKey as unknown as BufferSource,
       })
     }
 

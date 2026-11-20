@@ -10,6 +10,18 @@ import { mapUnhandledErrorToHttp } from '../src/common/database/http-exception.f
 import { resolveTrustProxySetting } from '../src/main';
 import { HealthController } from '../src/health/health.controller';
 import dataSource from '../src/data-source';
+import * as crypto from 'node:crypto';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import {
+  isAllowedWebPushEndpoint,
+  WebPushService,
+} from '../src/restaurant/application/web-push.service';
+import {
+  SubscribeWebPushDto,
+  UnsubscribeWebPushDto,
+} from '../src/restaurant/api/dto/web-push.dto';
+import { buildCompletedOrderEditLogEntry } from '../src/restaurant/domain/services/completed-order-edit-log.policy';
 
 describe('Database runtime flags (resolveDatabaseRuntimeFlags)', () => {
   it('never enables synchronize in production even if DB_SYNCHRONIZE=true', () => {
@@ -153,10 +165,10 @@ describe('HealthController', () => {
 });
 
 describe('TypeORM DataSource metadata integrity', () => {
-  it('loads all 33 entities and 15 migrations cleanly', async () => {
+  it('loads all 35 entities and 16 migrations cleanly', async () => {
     await (dataSource as unknown as { buildMetadatas(): Promise<void> }).buildMetadatas();
-    assert.equal(dataSource.entityMetadatas.length, 33);
-    assert.equal(dataSource.migrations.length, 15);
+    assert.equal(dataSource.entityMetadatas.length, 35);
+    assert.equal(dataSource.migrations.length, 16);
     const migrationNames = dataSource.migrations
       .map((m) => m.name ?? '')
       .sort((a, b) => Number(a.match(/\d+$/)?.[0] ?? 0) - Number(b.match(/\d+$/)?.[0] ?? 0));
@@ -176,10 +188,11 @@ describe('TypeORM DataSource metadata integrity', () => {
       'AddOrderNumberToOrders1760000012000',
       'AddProductCaloriesAndAllergens1760000013000',
       'AddCompletedOrderEditHistory1760000014000',
+      'CreateWebPushTables1760000015000',
     ]);
   });
 
-  it('executes all 15 migrations up() and down() cleanly against a recording QueryRunner', async () => {
+  it('executes all 16 migrations up() and down() cleanly against a recording QueryRunner', async () => {
     const executedQueries: string[] = [];
     const mockRunner = {
       query: async (sql: string) => {
@@ -200,6 +213,114 @@ describe('TypeORM DataSource metadata integrity', () => {
     for (const migration of [...sorted].reverse()) {
       await migration.down(mockRunner);
     }
-    assert.ok(executedQueries.length >= 90);
+    assert.ok(executedQueries.length >= 95);
+  });
+});
+
+describe('WebPushService, DTO validation & CompletedOrderEditLogPolicy', () => {
+  it('enforces SSRF allowlist on Web Push endpoints and validates SubscribeWebPushDto & UnsubscribeWebPushDto', async () => {
+    assert.equal(isAllowedWebPushEndpoint('https://fcm.googleapis.com/fcm/send/abc'), true);
+    assert.equal(isAllowedWebPushEndpoint('https://web.push.apple.com/Qxyz'), true);
+    assert.equal(isAllowedWebPushEndpoint('https://updates.push.services.mozilla.com/wpush/v2/abc'), true);
+    assert.equal(isAllowedWebPushEndpoint('http://fcm.googleapis.com/fcm/send/abc'), false);
+    assert.equal(isAllowedWebPushEndpoint('https://localhost:4000/restaurant/push'), false);
+    assert.equal(isAllowedWebPushEndpoint('https://127.0.0.1/hook'), false);
+    assert.equal(isAllowedWebPushEndpoint('https://169.254.169.254/latest/meta-data'), false);
+    assert.equal(isAllowedWebPushEndpoint('https://evil.example.com/push'), false);
+
+    const validDto = plainToInstance(SubscribeWebPushDto, {
+      appType: 'terminal',
+      subscription: {
+        endpoint: 'https://fcm.googleapis.com/fcm/send/token-1',
+        keys: { p256dh: 'BOrk...key', auth: 'authSecret123456' },
+      },
+    });
+    const validErrors = await validate(validDto);
+    assert.equal(validErrors.length, 0);
+
+    const invalidDto = plainToInstance(SubscribeWebPushDto, {
+      appType: 'invalid_app',
+    });
+    const invalidErrors = await validate(invalidDto);
+    assert.ok(invalidErrors.length > 0);
+
+    const unsubDto = plainToInstance(UnsubscribeWebPushDto, {
+      endpoint: 'https://fcm.googleapis.com/fcm/send/token-1',
+    });
+    assert.equal((await validate(unsubDto)).length, 0);
+  });
+
+  it('generates valid P-256 VAPID keys, encrypts RFC 8291 aes128gcm payloads, and computes post-close edit diffs', async () => {
+    const svc = new WebPushService();
+    const pubKey = await svc.getVapidPublicKey();
+    const pubBuf = Buffer.from(pubKey, 'base64url');
+    assert.equal(pubBuf.length, 65);
+    assert.equal(pubBuf[0], 0x04);
+
+    const uaEcdh = crypto.createECDH('prime256v1');
+    uaEcdh.generateKeys();
+    const p256dh = uaEcdh.getPublicKey().toString('base64url');
+    const auth = crypto.randomBytes(16).toString('base64url');
+
+    const savedOk = await svc.saveSubscription(
+      'rest-1',
+      'terminal',
+      { endpoint: 'https://fcm.googleapis.com/fcm/send/test-1', keys: { p256dh, auth } },
+      null,
+    );
+    assert.equal(savedOk, true);
+
+    const blockedSsrf = await svc.saveSubscription(
+      'rest-1',
+      'terminal',
+      { endpoint: 'https://127.0.0.1/internal', keys: { p256dh, auth } },
+      null,
+    );
+    assert.equal(blockedSsrf, false);
+
+    const encrypted = svc.encryptPayload(p256dh, auth, '{"title":"Test"}');
+    assert.ok(encrypted.length > 86);
+    assert.equal(encrypted[20], 65);
+
+    const editLog = buildCompletedOrderEditLogEntry({
+      editedBy: 'şehmus y.',
+      editedByUserId: 'staff-1',
+      previousOrdersSnapshot: [
+        {
+          id: 'ord-1',
+          orderNumber: '261120-001',
+          items: [{ id: 'it-1', productName: 'lahmacun', price: 200, quantity: 1, status: 'served' }],
+        },
+      ],
+      nextOrdersSnapshot: [
+        {
+          id: 'ord-1',
+          orderNumber: '261120-001',
+          items: [
+            {
+              id: 'it-1',
+              productName: 'lahmacun',
+              price: 200,
+              quantity: 1,
+              status: 'cancelled',
+              cancelReason: 'Müşteri vazgeçti',
+            },
+          ],
+        },
+      ],
+      previousTotalAmount: 200,
+      nextTotalAmount: 0,
+      previousDiscountAmount: 0,
+      nextDiscountAmount: 0,
+      previousNetAmount: 200,
+      nextNetAmount: 0,
+      previousMethod: 'cash',
+      nextMethod: 'cash',
+      previousSplit: null,
+      nextSplit: null,
+    });
+    assert.equal(editLog.changes.some((c) => c.type === 'item_cancelled'), true);
+    assert.equal(editLog.changes.some((c) => c.type === 'payment_method_changed'), false);
+    assert.equal(editLog.changes.some((c) => c.type === 'net_amount_changed'), true);
   });
 });

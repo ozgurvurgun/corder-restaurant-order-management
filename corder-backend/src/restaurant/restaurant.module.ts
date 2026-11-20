@@ -35,6 +35,8 @@ import { AuditLogEntity } from './domain/audit-log.entity';
 import { PrintJobEntity } from './domain/print-job.entity';
 import { FraudAlertEntity } from './domain/fraud-alert.entity';
 import { WaiterCallEntity } from './domain/waiter-call.entity';
+import { WebPushVapidKeyEntity } from './domain/web-push-vapid-key.entity';
+import { WebPushSubscriptionEntity } from './domain/web-push-subscription.entity';
 import { RestaurantAuthService } from './application/restaurant-auth.service';
 import { RestaurantSessionValidatorService } from './application/restaurant-session-validator.service';
 import { RolesService } from './application/roles.service';
@@ -144,6 +146,8 @@ import { ActorNameSyncService } from '../common/text/actor-name-sync.service';
       PrintJobEntity,
       FraudAlertEntity,
       WaiterCallEntity,
+      WebPushVapidKeyEntity,
+      WebPushSubscriptionEntity,
     ]),
     forwardRef(() => MenuModule),
     PassportModule.register({ defaultStrategy: 'restaurant-jwt' }),

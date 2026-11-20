@@ -293,10 +293,12 @@ export class CompletedOrdersService {
       row.paymentTip = fromMinorUnits(settlement.tipMinorUnits);
       row.paymentSplit = settlement.normalizedSplits ?? null;
       row.paymentDiscount = settlement.discountSnapshot ?? null;
-      row.editHistory = [
-        ...(Array.isArray(row.editHistory) ? row.editHistory : []),
-        editEntry,
-      ];
+      if (editEntry.changes.length > 0) {
+        row.editHistory = [
+          ...(Array.isArray(row.editHistory) ? row.editHistory : []),
+          editEntry,
+        ];
+      }
 
       const savedRow = await em.save(CompletedOrderEntity, row);
 

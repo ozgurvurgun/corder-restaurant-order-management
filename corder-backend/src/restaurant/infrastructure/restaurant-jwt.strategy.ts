@@ -38,7 +38,8 @@ export class RestaurantJwtStrategy extends PassportStrategy(Strategy, 'restauran
       isBossMultiBranchRoute:
         reqPath.includes('/restaurant/auth/me') ||
         reqPath.includes('/restaurant/auth/switch-branch') ||
-        reqPath.includes('/restaurant/boss'),
+        reqPath.includes('/restaurant/boss') ||
+        reqPath.includes('/restaurant/push'),
       isBillingInspectionRoute:
         req.method === 'GET' &&
         (reqPath.includes('/restaurant/settings/billing') ||

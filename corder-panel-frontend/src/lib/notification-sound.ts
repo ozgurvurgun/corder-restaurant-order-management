@@ -1,4 +1,4 @@
-import { getBase, getToken } from "./api"
+import { getBase, getRestaurant, getToken } from "./api"
 
 export interface NotificationPrefs {
   waiterCallEnabled: boolean
@@ -114,19 +114,35 @@ export async function syncPanelWebPushSubscription(
     if (!reg || !("pushManager" in reg)) return
 
     const base = getBase()
+    const activeRestId = getRestaurant()?.id
+    const authHeaders: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+      ...(activeRestId ? { "x-restaurant-id": activeRestId } : {}),
+    }
     const keyRes = await fetch(`${base}/restaurant/push/vapid-public-key`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders,
     })
     if (!keyRes.ok) return
     const keyData = (await keyRes.json()) as { publicKey?: string }
     const publicKey = keyData?.publicKey?.trim()
     if (!publicKey) return
 
+    const expectedKey = urlBase64ToUint8Array(publicKey)
     let sub = await reg.pushManager.getSubscription()
+    if (sub && sub.options?.applicationServerKey) {
+      const currentKey = new Uint8Array(sub.options.applicationServerKey)
+      const sameKey =
+        currentKey.length === expectedKey.length &&
+        currentKey.every((byte, idx) => byte === expectedKey[idx])
+      if (!sameKey) {
+        await sub.unsubscribe().catch(() => {})
+        sub = null
+      }
+    }
     if (!sub) {
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey) as unknown as BufferSource,
+        applicationServerKey: expectedKey as unknown as BufferSource,
       })
     }
 
@@ -137,7 +153,7 @@ export async function syncPanelWebPushSubscription(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+        ...authHeaders,
       },
       body: JSON.stringify({
         appType: "merchant",

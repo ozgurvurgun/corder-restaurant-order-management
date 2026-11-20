@@ -1,9 +1,11 @@
 import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import * as crypto from 'node:crypto';
+import * as net from 'node:net';
 import { DataSource } from 'typeorm';
 import { normalizeStorageText } from '../../common/text/text-normalizer';
+import type { WebPushAppType } from '../domain/web-push-subscription.entity';
 
-export type WebPushAppType = 'terminal' | 'merchant' | 'boss';
+export type { WebPushAppType };
 
 export interface WebPushSubscriptionInput {
   endpoint?: string;
@@ -25,9 +27,32 @@ export interface WebPushNotificationPayload {
 interface StoredSubscriptionRow {
   endpoint: string;
   restaurantId: string;
+  rootAdminId: string | null;
   appType: WebPushAppType;
   p256dh: string;
   auth: string;
+}
+
+const ALLOWED_PUSH_HOST_SUFFIXES = [
+  '.googleapis.com', '.google.com', '.mozilla.com', '.mozilla.org', '.apple.com',
+  '.windows.com', '.live.com', '.microsoft.com', '.opera.com', '.samsungosp.com',
+  '.dbankcloud.cn', '.hicloud.com',
+] as const;
+
+export function isAllowedWebPushEndpoint(rawEndpoint: string): boolean {
+  try {
+    const parsed = new URL(rawEndpoint);
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password) return false;
+    if (parsed.port && parsed.port !== '443') return false;
+    const host = parsed.hostname.toLowerCase().trim();
+    if (!host || net.isIP(host) !== 0) return false;
+    if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal') || host.endsWith('.localhost')) {
+      return false;
+    }
+    return ALLOWED_PUSH_HOST_SUFFIXES.some((s) => host === s.slice(1) || host.endsWith(s));
+  } catch {
+    return false;
+  }
 }
 
 @Injectable()
@@ -79,29 +104,6 @@ export class WebPushService implements OnModuleInit {
     }
 
     try {
-      await this.dataSource.query(`
-        CREATE TABLE IF NOT EXISTS web_push_vapid_keys (
-          id varchar(32) PRIMARY KEY,
-          public_key text NOT NULL,
-          private_jwk jsonb NOT NULL,
-          created_at timestamptz NOT NULL DEFAULT now()
-        )
-      `);
-      await this.dataSource.query(`
-        CREATE TABLE IF NOT EXISTS web_push_subscriptions (
-          endpoint text PRIMARY KEY,
-          restaurant_id uuid NOT NULL,
-          app_type varchar(32) NOT NULL,
-          p256dh text NOT NULL,
-          auth text NOT NULL,
-          updated_at timestamptz NOT NULL DEFAULT now()
-        )
-      `);
-      await this.dataSource.query(`
-        CREATE INDEX IF NOT EXISTS IDX_web_push_subscriptions_rest_app
-        ON web_push_subscriptions (restaurant_id, app_type)
-      `);
-
       const existing = (await this.dataSource.query(
         `SELECT public_key AS "publicKey", private_jwk AS "privateJwk"
          FROM web_push_vapid_keys WHERE id = 'default' LIMIT 1`,
@@ -167,21 +169,19 @@ export class WebPushService implements OnModuleInit {
     restaurantId: string,
     appType: WebPushAppType,
     sub: WebPushSubscriptionInput,
+    rootAdminId: string | null = null,
   ): Promise<boolean> {
     await this.ensureInitialized();
     const endpoint = typeof sub?.endpoint === 'string' ? sub.endpoint.trim() : '';
     const p256dh = typeof sub?.keys?.p256dh === 'string' ? sub.keys.p256dh.trim() : '';
     const auth = typeof sub?.keys?.auth === 'string' ? sub.keys.auth.trim() : '';
     if (!endpoint || !p256dh || !auth) return false;
+    if (!isAllowedWebPushEndpoint(endpoint)) return false;
 
     try {
-      const parsedUrl = new URL(endpoint);
-      if (parsedUrl.protocol !== 'https:' && parsedUrl.hostname !== 'localhost') {
-        return false;
-      }
       const pubBuf = this.decodeBase64Flexible(p256dh);
       const authBuf = this.decodeBase64Flexible(auth);
-      if (pubBuf.length !== 65 || authBuf.length < 12) {
+      if (pubBuf.length !== 65 || pubBuf[0] !== 0x04 || authBuf.length < 12) {
         return false;
       }
     } catch {
@@ -191,6 +191,7 @@ export class WebPushService implements OnModuleInit {
     const row: StoredSubscriptionRow = {
       endpoint,
       restaurantId,
+      rootAdminId,
       appType,
       p256dh,
       auth,
@@ -200,15 +201,19 @@ export class WebPushService implements OnModuleInit {
     if (this.dataSource && typeof this.dataSource.query === 'function') {
       try {
         await this.dataSource.query(
-          `INSERT INTO web_push_subscriptions (endpoint, restaurant_id, app_type, p256dh, auth, updated_at)
-           VALUES ($1, $2, $3, $4, $5, now())
+          `INSERT INTO web_push_subscriptions (endpoint, restaurant_id, root_admin_id, app_type, p256dh, auth, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, now())
            ON CONFLICT (endpoint) DO UPDATE
            SET restaurant_id = EXCLUDED.restaurant_id,
+               root_admin_id = EXCLUDED.root_admin_id,
                app_type = EXCLUDED.app_type,
                p256dh = EXCLUDED.p256dh,
                auth = EXCLUDED.auth,
                updated_at = now()`,
-          [endpoint, restaurantId, appType, p256dh, auth],
+          [endpoint, restaurantId, rootAdminId, appType, p256dh, auth],
+        );
+        await this.dataSource.query(
+          `DELETE FROM web_push_subscriptions WHERE updated_at < now() - interval '90 days'`,
         );
       } catch {
         // Ignore DB persistence error if in-memory succeeded
@@ -255,7 +260,7 @@ export class WebPushService implements OnModuleInit {
     return `${unsigned}.${sig}`;
   }
 
-  private encryptPayload(p256dh: string, auth: string, payloadText: string): Buffer {
+  encryptPayload(p256dh: string, auth: string, payloadText: string): Buffer {
     const uaPublic = this.decodeBase64Flexible(p256dh);
     const authSecret = this.decodeBase64Flexible(auth);
     const payloadBuf = Buffer.from(payloadText, 'utf8');
@@ -266,50 +271,16 @@ export class WebPushService implements OnModuleInit {
     const sharedSecret = asEcdh.computeSecret(uaPublic);
     const salt = crypto.randomBytes(16);
 
-    const keyInfo = Buffer.concat([
-      Buffer.from('WebPush: info\0', 'ascii'),
-      uaPublic,
-      asPublic,
-    ]);
-    const ikm = Buffer.from(
-      crypto.hkdfSync('sha256', sharedSecret, authSecret, keyInfo, 32),
-    );
-    const cek = Buffer.from(
-      crypto.hkdfSync(
-        'sha256',
-        ikm,
-        salt,
-        Buffer.from('Content-Encoding: aes128gcm\0', 'ascii'),
-        16,
-      ),
-    );
-    const nonce = Buffer.from(
-      crypto.hkdfSync(
-        'sha256',
-        ikm,
-        salt,
-        Buffer.from('Content-Encoding: nonce\0', 'ascii'),
-        12,
-      ),
-    );
-
+    const keyInfo = Buffer.concat([Buffer.from('WebPush: info\0', 'ascii'), uaPublic, asPublic]);
+    const ikm = Buffer.from(crypto.hkdfSync('sha256', sharedSecret, authSecret, keyInfo, 32));
+    const cek = Buffer.from(crypto.hkdfSync('sha256', ikm, salt, Buffer.from('Content-Encoding: aes128gcm\0', 'ascii'), 16));
+    const nonce = Buffer.from(crypto.hkdfSync('sha256', ikm, salt, Buffer.from('Content-Encoding: nonce\0', 'ascii'), 12));
     const padded = Buffer.concat([payloadBuf, Buffer.from([2])]);
     const cipher = crypto.createCipheriv('aes-128-gcm', cek, nonce);
-    const encrypted = Buffer.concat([
-      cipher.update(padded),
-      cipher.final(),
-      cipher.getAuthTag(),
-    ]);
-
+    const encrypted = Buffer.concat([cipher.update(padded), cipher.final(), cipher.getAuthTag()]);
     const rsBuf = Buffer.alloc(4);
     rsBuf.writeUInt32BE(4096, 0);
-    return Buffer.concat([
-      salt,
-      rsBuf,
-      Buffer.from([asPublic.length]),
-      asPublic,
-      encrypted,
-    ]);
+    return Buffer.concat([salt, rsBuf, Buffer.from([asPublic.length]), asPublic, encrypted]);
   }
 
   async sendToRestaurantApps(
@@ -322,19 +293,39 @@ export class WebPushService implements OnModuleInit {
     await this.ensureInitialized();
     if (!this.vapidPublicKey || !this.vapidPrivateKey) return;
 
+    const includeBossMultiBranch = appTypes.includes('boss');
     let targets: StoredSubscriptionRow[] = [];
     if (this.dataSource && typeof this.dataSource.query === 'function') {
       try {
         targets = (await this.dataSource.query(
-          `SELECT endpoint,
-                  restaurant_id AS "restaurantId",
-                  app_type AS "appType",
-                  p256dh,
-                  auth
-           FROM web_push_subscriptions
-           WHERE restaurant_id = ANY($1::uuid[])
-             AND app_type = ANY($2::varchar[])`,
-          [restaurantIds, appTypes],
+          `SELECT DISTINCT
+                  s.endpoint,
+                  s.restaurant_id AS "restaurantId",
+                  s.root_admin_id AS "rootAdminId",
+                  s.app_type AS "appType",
+                  s.p256dh,
+                  s.auth
+           FROM web_push_subscriptions s
+           WHERE (
+             s.restaurant_id = ANY($1::uuid[])
+             AND s.app_type = ANY($2::varchar[])
+           )
+           OR (
+             $3::boolean = true
+             AND s.app_type = 'boss'
+             AND s.root_admin_id IS NOT NULL
+             AND (
+               s.root_admin_id IN (
+                 SELECT r.root_admin_id FROM restaurants r
+                 WHERE r.id = ANY($1::uuid[]) AND r.root_admin_id IS NOT NULL
+               )
+               OR s.root_admin_id IN (
+                 SELECT br.boss_id FROM boss_restaurants br
+                 WHERE br.restaurant_id = ANY($1::uuid[])
+               )
+             )
+           )`,
+          [restaurantIds, appTypes, includeBossMultiBranch],
         )) as StoredSubscriptionRow[];
       } catch {
         targets = [];
@@ -360,6 +351,7 @@ export class WebPushService implements OnModuleInit {
 
     await Promise.allSettled(
       targets.map(async (sub) => {
+        if (!isAllowedWebPushEndpoint(sub.endpoint)) return;
         try {
           const body = this.encryptPayload(sub.p256dh, sub.auth, payloadJson);
           const jwt = this.buildVapidJwt(sub.endpoint);
