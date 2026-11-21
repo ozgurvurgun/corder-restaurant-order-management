@@ -14,10 +14,23 @@ export class PlatformAuthController {
     private readonly rateLimiter: LoginRateLimiterService,
   ) {}
 
+  @Post('verify-credentials')
+  async verifyCredentials(@Req() req: Request, @Body() dto: PlatformLoginDto) {
+    const ip = extractClientIp(req);
+    const identifier = dto.email?.trim().toLowerCase() || 'platform-credentials';
+    this.rateLimiter.consumeLoginAttempt('platform', ip, identifier);
+    const result = await this.auth.verifyCredentials(
+      dto.email ?? '',
+      dto.password ?? '',
+    );
+    this.rateLimiter.resetLoginAttempts('platform', ip, identifier);
+    return result;
+  }
+
   @Post('login')
   async login(@Req() req: Request, @Body() dto: PlatformLoginDto) {
     const ip = extractClientIp(req);
-    const identifier = dto.email?.trim() || 'auth-code';
+    const identifier = dto.email?.trim().toLowerCase() || 'auth-code';
     this.rateLimiter.consumeLoginAttempt('platform', ip, identifier);
     const result = await this.auth.login(dto);
     this.rateLimiter.resetLoginAttempts('platform', ip, identifier);

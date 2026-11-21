@@ -69,9 +69,15 @@ export function localizePlatformError(rawMessage: string): string {
   if (!trimmed) return "İşlem sırasında beklenmeyen bir hata oluştu"
   const lower = trimmed.toLowerCase()
   if (
+    lower.includes("invalid email or password") ||
+    lower.includes("geçersiz yönetici kullanıcı adı veya parola")
+  ) {
+    return "Geçersiz yönetici kullanıcı adı veya parola"
+  }
+  if (
     lower.includes("invalid platform admin auth code") ||
     lower.includes("invalid auth code") ||
-    lower.includes("invalid email or password") ||
+    lower.includes("geçersiz platform admin auth kodu") ||
     lower.includes("unauthorized")
   ) {
     return "Geçersiz Platform Admin Auth Kodu"
@@ -195,11 +201,43 @@ export const platform = {
   getRestaurantDiagnostics,
   runRestaurantSupportAction,
   auth: {
-    async login(authCode: string) {
+    async verifyCredentials(email: string, password: string) {
+      const res = await fetch(`${BASE}/platform/auth/verify-credentials`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.text()
+        let msg = "Geçersiz yönetici kullanıcı adı veya parola"
+        try {
+          const j = JSON.parse(body)
+          if (j.message) msg = Array.isArray(j.message) ? j.message.join(", ") : j.message
+        } catch {}
+        throw new Error(localizePlatformError(msg))
+      }
+      return res.json() as Promise<{
+        verified: boolean
+        email: string
+        name: string
+      }>
+    },
+    async login(params: { email: string; password: string; authCode: string } | string) {
+      const payload =
+        typeof params === "string"
+          ? { authCode: params.trim() }
+          : {
+              email: params.email.trim(),
+              password: params.password,
+              authCode: params.authCode.trim(),
+            }
       const res = await fetch(`${BASE}/platform/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ authCode: authCode.trim() }),
+        body: JSON.stringify(payload),
       })
       if (!res.ok) {
         const body = await res.text()
@@ -232,27 +270,13 @@ export const platform = {
       return platformFetch<PlatformRestaurantDto>(`/platform/restaurants/${id}`)
     },
     async create(body: {
-      name: string
-      slug: string
-      address?: string
-      phone?: string
-      email?: string
-      status?: "active" | "inactive"
-      brandName?: string | null
-      branchType?: RestaurantBranchType
-      franchiseeCompanyName?: string | null
-      royaltyRate?: number
-      monthlyFee?: number
-      billingStartPeriod?: string
-      recordInitialPayment?: boolean
-      initialPaidMonths?: number
-      initialPaymentMethod?: SubscriptionPaymentMethod
-      isAccessSuspended?: boolean
-      billingNotes?: string | null
-      terminalEmail?: string
-      terminalPassword?: string
-      printAgentUsername?: string
-      printAgentPassword?: string
+      name: string; slug: string; address?: string; phone?: string; email?: string
+      status?: "active" | "inactive"; brandName?: string | null; branchType?: RestaurantBranchType
+      franchiseeCompanyName?: string | null; royaltyRate?: number; monthlyFee?: number
+      billingStartPeriod?: string; recordInitialPayment?: boolean; initialPaidMonths?: number
+      initialPaymentMethod?: SubscriptionPaymentMethod; isAccessSuspended?: boolean
+      billingNotes?: string | null; terminalEmail?: string; terminalPassword?: string
+      printAgentUsername?: string; printAgentPassword?: string
     }) {
       return platformFetch<PlatformRestaurantDto>("/platform/restaurants", {
         method: "POST",
@@ -262,31 +286,14 @@ export const platform = {
     async update(
       id: string,
       body: {
-        name?: string
-        slug?: string
-        address?: string
-        phone?: string
-        email?: string
-        taxId?: string
-        whatsapp?: string
-        instagram?: string
-        facebook?: string
-        website?: string
-        workingHours?: string
-        status?: "active" | "inactive"
-        brandName?: string | null
-        branchType?: RestaurantBranchType
-        franchiseeCompanyName?: string | null
-        royaltyRate?: number
-        monthlyFee?: number
-        billingStartPeriod?: string
-        isAccessSuspended?: boolean
-        billingNotes?: string | null
-        terminalEmail?: string | null
-        terminalPassword?: string
-        printAgentUsername?: string | null
-        printAgentPassword?: string
-      }
+        name?: string; slug?: string; address?: string; phone?: string; email?: string; taxId?: string
+        whatsapp?: string; instagram?: string; facebook?: string; website?: string; workingHours?: string
+        status?: "active" | "inactive"; brandName?: string | null; branchType?: RestaurantBranchType
+        franchiseeCompanyName?: string | null; royaltyRate?: number; monthlyFee?: number
+        billingStartPeriod?: string; isAccessSuspended?: boolean; billingNotes?: string | null
+        terminalEmail?: string | null; terminalPassword?: string
+        printAgentUsername?: string | null; printAgentPassword?: string
+      },
     ) {
       return platformFetch<PlatformRestaurantDto>(`/platform/restaurants/${id}`, {
         method: "PUT",

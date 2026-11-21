@@ -17,6 +17,13 @@ function timingSafeCodeMatches(candidate: string, expected?: string | null): boo
   return timingSafeEqual(bufA, bufB);
 }
 
+function normalizePlatformAdminEmail(rawEmail?: string | null): string {
+  const trimmed = (rawEmail ?? '').trim().toLowerCase();
+  if (!trimmed) return '';
+  if (trimmed.includes('@')) return trimmed;
+  return `${trimmed}@corder.app`;
+}
+
 export interface PlatformLoginInput {
   email?: string;
   password?: string;
@@ -42,16 +49,53 @@ export class PlatformAuthService {
     email: string,
     password: string,
   ): Promise<PlatformAdminEntity | null> {
-    const normalizedEmail = (email ?? '').trim().toLowerCase();
+    const normalizedEmail = normalizePlatformAdminEmail(email);
     if (!normalizedEmail || !password) return null;
     const admin = await this.repo.findOne({ where: { email: normalizedEmail } });
     if (!admin) return null;
     const ok = await bcrypt.compare(password, admin.passwordHash);
     if (ok) return admin;
-    if (timingSafeCodeMatches(password, process.env.PLATFORM_ADMIN_AUTH_CODE)) {
+    if (
+      timingSafeCodeMatches(password, process.env.PLATFORM_ADMIN_PASSWORD) ||
+      timingSafeCodeMatches(password, process.env.PLATFORM_ADMIN_AUTH_CODE)
+    ) {
       return admin;
     }
     return null;
+  }
+
+  async verifyCredentials(
+    email: string,
+    password: string,
+  ): Promise<{ verified: true; email: string; name: string }> {
+    const admin = await this.validateAdmin(email, password);
+    if (!admin) {
+      throw new UnauthorizedException(
+        'Geçersiz yönetici kullanıcı adı veya parola',
+      );
+    }
+    return {
+      verified: true,
+      email: admin.email,
+      name: admin.name,
+    };
+  }
+
+  private async isAuthCodeValidForAdmin(
+    admin: PlatformAdminEntity,
+    rawCode: string,
+  ): Promise<boolean> {
+    const code = (rawCode ?? '').trim();
+    if (!code) return false;
+    const envAuthCode = process.env.PLATFORM_ADMIN_AUTH_CODE?.trim();
+    const envPassword = process.env.PLATFORM_ADMIN_PASSWORD?.trim();
+    if (envAuthCode) {
+      return timingSafeCodeMatches(code, envAuthCode);
+    }
+    if (envPassword && timingSafeCodeMatches(code, envPassword)) {
+      return true;
+    }
+    return bcrypt.compare(code, admin.passwordHash);
   }
 
   private async validateByAuthCode(
@@ -100,7 +144,19 @@ export class PlatformAuthService {
     admin: { id: string; email: string; name: string };
   }> {
     let admin: PlatformAdminEntity | null = null;
-    if (dto.authCode?.trim()) {
+    if (dto.email?.trim() && dto.password && dto.authCode?.trim()) {
+      const candidate = await this.validateAdmin(dto.email, dto.password);
+      if (!candidate) {
+        throw new UnauthorizedException(
+          'Geçersiz yönetici kullanıcı adı veya parola',
+        );
+      }
+      const codeOk = await this.isAuthCodeValidForAdmin(candidate, dto.authCode);
+      if (!codeOk) {
+        throw new UnauthorizedException('Geçersiz Platform Admin Auth Kodu');
+      }
+      admin = candidate;
+    } else if (dto.authCode?.trim()) {
       admin = await this.validateByAuthCode(dto.authCode);
     } else if (dto.email?.trim() && dto.password) {
       admin = await this.validateAdmin(dto.email, dto.password);

@@ -39,7 +39,15 @@ type AuthContextType = {
   user: PlatformAdmin | null
   token: string | null
   isAuthenticated: boolean
-  login: (authCode: string) => Promise<{ success: boolean; error?: string }>
+  verifyCredentials: (
+    email: string,
+    password: string,
+  ) => Promise<{ success: boolean; email?: string; name?: string; error?: string }>
+  login: (params: {
+    email: string
+    password: string
+    authCode: string
+  }) => Promise<{ success: boolean; error?: string }>
   logout: () => void
 }
 
@@ -76,24 +84,46 @@ export function PlatformAuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const login = useCallback(async (authCode: string) => {
+  const verifyCredentials = useCallback(async (email: string, password: string) => {
     try {
-      const { accessToken, admin } = await platform.auth.login(authCode.trim())
-      const safeAdmin = {
-        id: admin?.id || "platform-admin",
-        email: admin?.email || "admin@corder.app",
-        name: admin?.name || "Platform Admin",
+      const res = await platform.auth.verifyCredentials(email.trim(), password)
+      return {
+        success: true,
+        email: res.email,
+        name: res.name,
       }
-      setPlatformAuth(accessToken, safeAdmin)
-      setUser({ ...safeAdmin, role: "super" })
-      return { success: true }
     } catch (e) {
       return {
         success: false,
-        error: e instanceof Error ? e.message : "Giriş başarısız",
+        error:
+          e instanceof Error
+            ? e.message
+            : "Geçersiz yönetici kullanıcı adı veya parola",
       }
     }
   }, [])
+
+  const login = useCallback(
+    async (params: { email: string; password: string; authCode: string }) => {
+      try {
+        const { accessToken, admin } = await platform.auth.login(params)
+        const safeAdmin = {
+          id: admin?.id || "platform-admin",
+          email: admin?.email || "admin@corder.app",
+          name: admin?.name || "Platform Admin",
+        }
+        setPlatformAuth(accessToken, safeAdmin)
+        setUser({ ...safeAdmin, role: "super" })
+        return { success: true }
+      } catch (e) {
+        return {
+          success: false,
+          error: e instanceof Error ? e.message : "Giriş başarısız",
+        }
+      }
+    },
+    [],
+  )
 
   const logout = useCallback(() => {
     setUser(null)
@@ -106,6 +136,7 @@ export function PlatformAuthProvider({ children }: { children: ReactNode }) {
         user,
         token: user ? getPlatformToken() : null,
         isAuthenticated: !!user,
+        verifyCredentials,
         login,
         logout,
       }}
