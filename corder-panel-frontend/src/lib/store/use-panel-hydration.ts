@@ -117,6 +117,8 @@ export function usePanelHydration(params: {
           locationLatitude: s.locationLatitude ?? null,
           locationLongitude: s.locationLongitude ?? null,
           locationRadiusMeters: Number(s.locationRadiusMeters || 150),
+          autoCloseShiftEnabled: s.autoCloseShiftEnabled !== false,
+          autoCloseShiftTime: s.autoCloseShiftTime || "04:00",
         }))
       })
       .catch(console.error)

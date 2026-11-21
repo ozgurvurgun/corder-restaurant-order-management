@@ -166,10 +166,10 @@ describe('HealthController', () => {
 });
 
 describe('TypeORM DataSource metadata integrity', () => {
-  it('loads all 35 entities and 20 migrations cleanly', async () => {
+  it('loads all 35 entities and 21 migrations cleanly', async () => {
     await (dataSource as unknown as { buildMetadatas(): Promise<void> }).buildMetadatas();
     assert.equal(dataSource.entityMetadatas.length, 35);
-    assert.equal(dataSource.migrations.length, 20);
+    assert.equal(dataSource.migrations.length, 21);
     const migrationNames = dataSource.migrations
       .map((m) => m.name ?? '')
       .sort((a, b) => Number(a.match(/\d+$/)?.[0] ?? 0) - Number(b.match(/\d+$/)?.[0] ?? 0));
@@ -194,10 +194,11 @@ describe('TypeORM DataSource metadata integrity', () => {
       'AddScale10kPerformanceIndexes1760000017000',
       'AddProductShowInMenuAndBackfillCashDescriptions1760000018000',
       'BackfillCashAndLedgerDescriptionsTitleCase1760000019000',
+      'AddAutoCloseShiftAndRolloverSchema1760000020000',
     ]);
   });
 
-  it('executes all 20 migrations up() and down() cleanly against a recording QueryRunner', async () => {
+  it('executes all 21 migrations up() and down() cleanly against a recording QueryRunner', async () => {
     const executedQueries: string[] = [];
     const mockRunner = {
       query: async (sql: string) => {
@@ -379,5 +380,64 @@ describe('WebPushService, DTO validation & CompletedOrderEditLogPolicy', () => {
     assert.equal(listed.length, 1);
     assert.equal(listed[0].description, 'SEFA');
     assert.equal(listed[0].shiftId, 'shift-closed-1');
+  });
+
+  it('computes Europe/Istanbul end-of-day shift auto-close cutoff with active checkout grace and open-table rollover', async () => {
+    const { ShiftAutoClosePolicy } = await import(
+      '../src/restaurant/domain/services/shift-auto-close.policy'
+    );
+
+    // Shift opened Nov 20 at 15:30 Istanbul (12:30 UTC). Cutoff is 04:00 Istanbul (01:00 UTC next day).
+    const openedAt = new Date('2026-11-20T12:30:00.000Z');
+    const cutoff = ShiftAutoClosePolicy.computeShiftAutoCloseCutoffDate(
+      openedAt,
+      '04:00',
+    );
+    assert.equal(cutoff.toISOString(), '2026-11-21T01:00:00.000Z');
+
+    // Before 04:00 Istanbul (00:59 UTC): not due
+    const beforeCheck = ShiftAutoClosePolicy.isShiftDueForAutoClose({
+      openedAt,
+      autoCloseEnabled: true,
+      autoCloseTime: '04:00',
+      now: new Date('2026-11-21T00:59:00.000Z'),
+    });
+    assert.equal(beforeCheck.due, false);
+
+    // At 04:01 Istanbul (01:01 UTC) when last transaction was 3 minutes ago (03:58 Istanbul): deferred by 15m grace
+    const activeGraceCheck = ShiftAutoClosePolicy.isShiftDueForAutoClose({
+      openedAt,
+      autoCloseEnabled: true,
+      autoCloseTime: '04:00',
+      now: new Date('2026-11-21T01:01:00.000Z'),
+      lastActivityAt: new Date('2026-11-21T00:58:00.000Z'),
+    });
+    assert.equal(activeGraceCheck.due, false);
+
+    // At 04:20 Istanbul (01:20 UTC) when last transaction was at 03:58 Istanbul (> 15m quiet): due!
+    const dueCheck = ShiftAutoClosePolicy.isShiftDueForAutoClose({
+      openedAt,
+      autoCloseEnabled: true,
+      autoCloseTime: '04:00',
+      now: new Date('2026-11-21T01:20:00.000Z'),
+      lastActivityAt: new Date('2026-11-21T00:58:00.000Z'),
+    });
+    assert.equal(dueCheck.due, true);
+
+    // Shift opened at 03:30 Istanbul (00:30 UTC), only 30 mins before 04:00 cutoff: next cutoff is next day 04:00!
+    const lateOpen = new Date('2026-11-21T00:30:00.000Z');
+    const nextDayCutoff = ShiftAutoClosePolicy.computeShiftAutoCloseCutoffDate(
+      lateOpen,
+      '04:00',
+    );
+    assert.equal(nextDayCutoff.toISOString(), '2026-11-22T01:00:00.000Z');
+
+    const note = ShiftAutoClosePolicy.buildAutoCloseShiftNotes({
+      cutoffTime: '04:00',
+      carriedOverTablesCount: 2,
+      carriedOverTablesAmount: 1450,
+      tableNames: ['B4', 'Teras 3'],
+    });
+    assert.ok(note.includes('Yeni vardiyaya devreden açık masa: 2 adet (B4, Teras 3)'));
   });
 });

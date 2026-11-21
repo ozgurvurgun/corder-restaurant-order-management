@@ -245,6 +245,15 @@ export interface LedgerEntry {
   createdAt: Date
 }
 
+export interface CarriedOverTableSnapshot {
+  tableId: string
+  tableName: string
+  section: string
+  openAmount: number
+  itemCount: number
+  openedAt: string
+}
+
 export interface CashShift {
   id: string
   openedBy: string
@@ -264,6 +273,10 @@ export interface CashShift {
   totalMultinet: number
   transactionCount: number
   notes?: string
+  isAutoClosed?: boolean
+  carriedOverTablesCount?: number
+  carriedOverTablesAmount?: number
+  carriedOverTablesSnapshot?: CarriedOverTableSnapshot[]
 }
 
 export type PanelCashShift = CashShift

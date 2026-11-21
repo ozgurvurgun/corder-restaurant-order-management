@@ -224,7 +224,7 @@ export function useSystemActions(params: {
         }
       }
       if (!token) return
-      const serverFields = ["name", "logoUrl", "address", "phone", "taxId", "whatsapp", "instagram", "facebook", "website", "workingHours", "menuTemplate", "terminalLocationRestrictionEnabled", "locationLatitude", "locationLongitude", "locationRadiusMeters"] as const
+      const serverFields = ["name", "logoUrl", "address", "phone", "taxId", "whatsapp", "instagram", "facebook", "website", "workingHours", "menuTemplate", "terminalLocationRestrictionEnabled", "locationLatitude", "locationLongitude", "locationRadiusMeters", "autoCloseShiftEnabled", "autoCloseShiftTime"] as const
       if (!serverFields.some((k) => s[k] !== undefined || k in s)) return
       api.restaurant
         .updateSettings(token, {
@@ -243,6 +243,8 @@ export function useSystemActions(params: {
           ...("locationLatitude" in s ? { locationLatitude: s.locationLatitude ?? null } : {}),
           ...("locationLongitude" in s ? { locationLongitude: s.locationLongitude ?? null } : {}),
           ...(s.locationRadiusMeters !== undefined ? { locationRadiusMeters: s.locationRadiusMeters } : {}),
+          ...(s.autoCloseShiftEnabled !== undefined ? { autoCloseShiftEnabled: s.autoCloseShiftEnabled } : {}),
+          ...(s.autoCloseShiftTime !== undefined ? { autoCloseShiftTime: s.autoCloseShiftTime } : {}),
         })
         .then(() => {
           logActivity({ action: "settings_updated", category: "settings", details: "Restoran ayarları güncellendi", metadata: { fields: Object.keys(s) } })

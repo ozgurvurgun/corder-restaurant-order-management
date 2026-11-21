@@ -202,6 +202,8 @@ export interface RestaurantSettings {
   locationLatitude?: number | null
   locationLongitude?: number | null
   locationRadiusMeters?: number
+  autoCloseShiftEnabled?: boolean
+  autoCloseShiftTime?: string
   fontSize?: "small" | "medium" | "large"
   tableCardSize?: "compact" | "normal" | "large"
   showProductImages?: boolean

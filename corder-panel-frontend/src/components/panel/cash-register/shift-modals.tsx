@@ -4,14 +4,10 @@ import type { CashShift } from "@/lib/panel-types"
 import { formatCurrency, fromMinorUnits, toMinorUnits } from "@/lib/format"
 
 export function OpenShiftModal(props: {
-  openBalance: string
-  setOpenBalance: (v: string) => void
-  shiftError: string
-  shiftLoading: boolean
-  onClose: () => void
-  onSubmit: () => void
+  openBalance: string; setOpenBalance: (v: string) => void; shiftError: string; shiftLoading: boolean
+  previousClosingBalance?: number | null; openTablesCount?: number; onClose: () => void; onSubmit: () => void
 }) {
-  const { openBalance, setOpenBalance, shiftError, shiftLoading, onClose, onSubmit } = props
+  const { openBalance, setOpenBalance, shiftError, shiftLoading, previousClosingBalance, openTablesCount = 0, onClose, onSubmit } = props
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -33,24 +29,51 @@ export function OpenShiftModal(props: {
             <X className="w-3.5 h-3.5 text-[#86868b]" />
           </button>
         </div>
-        <div className="px-6 py-5">
-          {shiftError && <p className="text-[13px] text-red-500 mb-3">{shiftError}</p>}
-          <label className="text-[12px] font-medium text-[#86868b] mb-1.5 block">Açılış Bakiyesi</label>
-          <input
-            type="number"
-            min={0}
-            step="0.01"
-            value={openBalance}
-            onChange={(e) => {
-              const v = e.target.value
-              if (v !== "" && Number(v) < 0) return
-              setOpenBalance(v)
-            }}
-            placeholder="0.00"
-            autoFocus
-            disabled={shiftLoading}
-            className="w-full h-[40px] px-3 text-[15px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
-          />
+        <div className="px-6 py-5 space-y-3">
+          {shiftError && <p className="text-[13px] text-red-500">{shiftError}</p>}
+          {openTablesCount > 0 && (
+            <div className="rounded-xl bg-blue-50 border border-blue-200 p-3 text-[12px] text-blue-800">
+              <p className="font-semibold mb-0.5">
+                Yeni Vardiyaya Devreden Açık Masa: {openTablesCount} adet
+              </p>
+              <p className="text-[11px] text-blue-700">
+                Önceki vardiyadan açık kalan masalar yeni açacağınız bu vardiyaya devredilmiştir. Hesapları kapatıldığında bu vardiyaya işlenecektir.
+              </p>
+            </div>
+          )}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[12px] font-medium text-[#86868b] block">
+                Açılış Bakiyesi
+              </label>
+              {previousClosingBalance != null && previousClosingBalance > 0 && (
+                <button
+                  type="button"
+                  disabled={shiftLoading}
+                  onClick={() => setOpenBalance(String(previousClosingBalance))}
+                  className="text-[11px] font-semibold text-[#e63462] hover:underline"
+                >
+                  Önceki Kasadan Devral ({"\u20BA"}
+                  {formatCurrency(previousClosingBalance)})
+                </button>
+              )}
+            </div>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={openBalance}
+              onChange={(e) => {
+                const v = e.target.value
+                if (v !== "" && Number(v) < 0) return
+                setOpenBalance(v)
+              }}
+              placeholder="0.00"
+              autoFocus
+              disabled={shiftLoading}
+              className="w-full h-[40px] px-3 text-[15px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
+            />
+          </div>
         </div>
         <div className="px-6 py-4 border-t border-[#f0f0f0] flex gap-3">
           <button type="button" onClick={onClose} disabled={shiftLoading} className="flex-1 h-[38px] rounded-xl border border-[#d1d1d6]/60 text-[13px] font-medium text-[#86868b] disabled:opacity-50">
@@ -66,36 +89,13 @@ export function OpenShiftModal(props: {
 }
 
 export function CloseShiftModal(props: {
-  currentShift: CashShift | null
-  closedShift?: CashShift | null
-  printingReport?: boolean
-  onPrintZReport?: (shiftId: string) => void
-  closeBalance: string
-  setCloseBalance: (v: string) => void
-  closeNotes: string
-  setCloseNotes: (v: string) => void
-  shiftError: string
-  shiftLoading: boolean
-  canViewExpected?: boolean
-  openTablesCount?: number
-  onClose: () => void
-  onSubmit: () => void
+  currentShift: CashShift | null; closedShift?: CashShift | null; printingReport?: boolean; onPrintZReport?: (shiftId: string) => void
+  closeBalance: string; setCloseBalance: (v: string) => void; closeNotes: string; setCloseNotes: (v: string) => void
+  shiftError: string; shiftLoading: boolean; canViewExpected?: boolean; openTablesCount?: number; onClose: () => void; onSubmit: () => void
 }) {
   const {
-    currentShift,
-    closedShift = null,
-    printingReport = false,
-    onPrintZReport,
-    closeBalance,
-    setCloseBalance,
-    closeNotes,
-    setCloseNotes,
-    shiftError,
-    shiftLoading,
-    canViewExpected = true,
-    openTablesCount = 0,
-    onClose,
-    onSubmit,
+    currentShift, closedShift = null, printingReport = false, onPrintZReport, closeBalance, setCloseBalance,
+    closeNotes, setCloseNotes, shiftError, shiftLoading, canViewExpected = true, openTablesCount = 0, onClose, onSubmit,
   } = props
 
   useEffect(() => {
@@ -119,22 +119,15 @@ export function CloseShiftModal(props: {
           <div className="flex items-center justify-between px-6 py-4 border-b border-[#f0f0f0]">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-[#34c759]" />
-              <h3 className="text-[15px] font-semibold text-[#1d1d1f]">
-                Kasa Vardiyası Kapatıldı - Z Raporu Basılsın mı?
-              </h3>
+              <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Kasa Vardiyası Kapatıldı - Z Raporu Basılsın mı?</h3>
             </div>
-            <button
-              type="button"
-              disabled={printingReport}
-              onClick={onClose}
-              className="w-7 h-7 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed] disabled:opacity-50"
-            >
+            <button type="button" disabled={printingReport} onClick={onClose} className="w-7 h-7 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed] disabled:opacity-50">
               <X className="w-3.5 h-3.5 text-[#86868b]" />
             </button>
           </div>
           <div className="px-6 py-5 space-y-3 text-[13px]">
             <p className="text-[#86868b] text-[12px]">
-              Vardiya başarıyla kapatıldı. Z Raporunu şimdi kasa termal yazıcısından basabilir veya daha sonra X / Z Raporu geçmişinden alabilirsiniz.
+              Vardiya başarıyla kapatıldı. Z Raporunu şimdi kasa termal yazıcısından basabilir veya daha sonra Geçmiş Kasalar (X / Z) arşivinden alabilirsiniz.
             </p>
             <div className="bg-[#f5f5f7] rounded-xl p-3.5 space-y-2">
               <div className="flex justify-between">
@@ -152,31 +145,17 @@ export function CloseShiftModal(props: {
               <div className="flex justify-between pt-1.5 border-t border-[#d1d1d6]/50">
                 <span className="text-[#86868b]">Kasa Farkı</span>
                 <span className={`font-bold ${diffMinor === 0 ? "text-green-600" : diffMinor > 0 ? "text-blue-600" : "text-red-600"}`}>
-                  {diffMinor === 0
-                    ? "Tam (\u20BA0,00)"
-                    : diffMinor > 0
-                      ? `+\u20BA${formatCurrency(fromMinorUnits(diffMinor))} (Fazla)`
-                      : `-\u20BA${formatCurrency(fromMinorUnits(Math.abs(diffMinor)))} (Açık)`}
+                  {diffMinor === 0 ? "Tam (\u20BA0,00)" : diffMinor > 0 ? `+\u20BA${formatCurrency(fromMinorUnits(diffMinor))} (Fazla)` : `-\u20BA${formatCurrency(fromMinorUnits(Math.abs(diffMinor)))} (Açık)`}
                 </span>
               </div>
             </div>
           </div>
           <div className="px-6 py-4 border-t border-[#f0f0f0] flex flex-col gap-2">
-            <button
-              type="button"
-              disabled={printingReport}
-              onClick={() => onPrintZReport?.(closedShift.id)}
-              className="w-full h-[40px] rounded-xl bg-[#1d1d1f] text-white text-[13px] font-semibold hover:bg-[#3a3a3c] disabled:opacity-50 flex items-center justify-center gap-2"
-            >
+            <button type="button" disabled={printingReport} onClick={() => onPrintZReport?.(closedShift.id)} className="w-full h-[40px] rounded-xl bg-[#1d1d1f] text-white text-[13px] font-semibold hover:bg-[#3a3a3c] disabled:opacity-50 flex items-center justify-center gap-2">
               {printingReport ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
               Kasa Yazıcısından Z Raporu Bas
             </button>
-            <button
-              type="button"
-              disabled={printingReport}
-              onClick={onClose}
-              className="w-full h-[36px] rounded-xl border border-[#d1d1d6]/60 text-[12px] font-medium text-[#86868b] hover:bg-[#f5f5f7] disabled:opacity-50"
-            >
+            <button type="button" disabled={printingReport} onClick={onClose} className="w-full h-[36px] rounded-xl border border-[#d1d1d6]/60 text-[12px] font-medium text-[#86868b] hover:bg-[#f5f5f7] disabled:opacity-50">
               Şimdi Değil (Geçmişten Alınabilir)
             </button>
           </div>
@@ -210,11 +189,15 @@ export function CloseShiftModal(props: {
         </div>
         <div className="px-6 py-5 flex flex-col gap-3">
           {openTablesCount > 0 && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
-              <div className="text-[12px] text-red-700">
-                <p className="font-semibold mb-0.5">Dikkat: Şu anda açık olan {openTablesCount} masa var!</p>
-                <p>Açık masaların adisyonları bu vardiya kapanışına dahil edilmez.</p>
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+              <div className="text-[12px] text-blue-800">
+                <p className="font-semibold mb-0.5">
+                  Yeni Vardiyaya Devredecek Açık Masa: {openTablesCount} adet
+                </p>
+                <p>
+                  Açık masalar zorla kapatılmaz; aktif adisyonlarıyla birlikte yeni açılacak vardiyaya otomatik devredilir ve Z raporuna devir kaydı düşülür.
+                </p>
               </div>
             </div>
           )}

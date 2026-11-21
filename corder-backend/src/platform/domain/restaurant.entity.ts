@@ -164,6 +164,21 @@ export class RestaurantEntity {
   @Column({ name: 'location_radius_meters', type: 'integer', default: 150 })
   locationRadiusMeters: number;
 
+  @Column({
+    name: 'auto_close_shift_enabled',
+    type: 'boolean',
+    default: true,
+  })
+  autoCloseShiftEnabled: boolean;
+
+  @Column({
+    name: 'auto_close_shift_time',
+    type: 'varchar',
+    length: 5,
+    default: '04:00',
+  })
+  autoCloseShiftTime: string;
+
   @Column({ name: 'notifications_cleared_at', type: 'timestamptz', nullable: true })
   notificationsClearedAt?: Date | null;
 

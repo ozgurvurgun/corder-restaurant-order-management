@@ -9,6 +9,9 @@ import {
 import { RestaurantEntity } from '../../platform/domain/restaurant.entity';
 import { numericColumnTransformer } from '../../common/database/numeric-column.transformer';
 import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
+import { CarriedOverTableSnapshotItem } from './services/shift-auto-close.policy';
+
+export type { CarriedOverTableSnapshotItem };
 
 export interface CheckSettlementShiftUpdate {
   netMinorUnits: number;
@@ -155,6 +158,29 @@ export class CashShiftEntity {
   @Column({ name: 'transaction_count', type: 'integer', default: 0 })
   transactionCount: number;
 
+  @Column({ name: 'is_auto_closed', type: 'boolean', default: false })
+  isAutoClosed: boolean;
+
+  @Column({ name: 'carried_over_tables_count', type: 'integer', default: 0 })
+  carriedOverTablesCount: number;
+
+  @Column({
+    name: 'carried_over_tables_amount',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericColumnTransformer,
+  })
+  carriedOverTablesAmount: number;
+
+  @Column({
+    name: 'carried_over_tables_snapshot',
+    type: 'jsonb',
+    nullable: true,
+  })
+  carriedOverTablesSnapshot: CarriedOverTableSnapshotItem[] | null;
+
   recordCheckSettlement(update: CheckSettlementShiftUpdate): void {
     if (update.cashMinorUnits > 0) {
       this.cashIn = fromMinorUnits(toMinorUnits(this.cashIn) + update.cashMinorUnits);
@@ -234,11 +260,35 @@ export class CashShiftEntity {
     }
   }
 
-  closeShift(closedBy: string, closingBalanceMinorUnits: number, notes?: string | null): void {
-    this.closedAt = new Date();
+  closeShift(
+    closedBy: string,
+    closingBalanceMinorUnits: number,
+    notes?: string | null,
+    options?: {
+      isAutoClosed?: boolean;
+      closedAt?: Date;
+      carriedOverTablesCount?: number;
+      carriedOverTablesAmountMinorUnits?: number;
+      carriedOverTablesSnapshot?: CarriedOverTableSnapshotItem[] | null;
+    },
+  ): void {
+    this.closedAt = options?.closedAt ?? new Date();
     this.closedBy = closedBy;
     this.closingBalance = fromMinorUnits(closingBalanceMinorUnits);
     this.notes = notes ?? null;
+    this.isAutoClosed = Boolean(options?.isAutoClosed);
+    this.carriedOverTablesCount = Math.max(
+      0,
+      Math.floor(options?.carriedOverTablesCount ?? 0),
+    );
+    this.carriedOverTablesAmount = fromMinorUnits(
+      Math.max(0, options?.carriedOverTablesAmountMinorUnits ?? 0),
+    );
+    this.carriedOverTablesSnapshot =
+      options?.carriedOverTablesSnapshot &&
+      options.carriedOverTablesSnapshot.length > 0
+        ? options.carriedOverTablesSnapshot
+        : null;
     this.status = 'closed';
   }
 }

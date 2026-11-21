@@ -6,6 +6,7 @@ import ImageUpload from "./image-upload"
 import { BulkCreateTablesModal, NotificationSoundSettingsCard, TableQrCodesModal } from "./settings/table-qr-and-bulk-modal"
 import { MenuTemplatePickerCard } from "./settings/menu-template-picker"
 import { TerminalGeofenceCard } from "./settings/terminal-geofence-card"
+import { AutoCloseShiftCard } from "./settings/auto-close-shift-card"
 import { Plus, Pencil, Trash2, MapPin, Store, X, Globe, Instagram, MessageCircle, Monitor, Type, LayoutGrid, Image, ToggleLeft, ToggleRight, Zap, Layers, QrCode } from "lucide-react"
 
 type SettingsTab = "general" | "sections-tables" | "appearance" | "social"
@@ -174,6 +175,7 @@ export default function SettingsView() {
                   </button>
                 </div>
               </div>
+              <AutoCloseShiftCard />
               <TerminalGeofenceCard />
               <NotificationSoundSettingsCard />
             </>

@@ -107,10 +107,21 @@ export function ShiftFullDetailPanel(props: {
           {settings.address && <p className="text-[11px] text-[#86868b] mt-1">{settings.address}</p>}
           {settings.taxId && <p className="text-[11px] text-[#86868b]">VKN: {settings.taxId}</p>}
           <div className="mt-3 h-px bg-[#d1d1d6]/40" />
-          <div className="mt-3 inline-flex items-center gap-2">
+          <div className="mt-3 inline-flex flex-wrap items-center justify-center gap-2">
             <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${isOpenShift ? "bg-green-50 text-green-700" : "bg-[#f5f5f7] text-[#1d1d1f]"}`}>
               {isOpenShift ? "Açık Vardiya" : "Kapanmış Kasa"}
             </span>
+            {selectedShift.isAutoClosed && (
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                Otomatik Gün Sonu Kapanışı
+              </span>
+            )}
+            {(selectedShift.carriedOverTablesCount ?? 0) > 0 && (
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                Yeni Vardiyaya Devreden: {selectedShift.carriedOverTablesCount} Açık Masa ({"\u20BA"}
+                {formatCurrency(selectedShift.carriedOverTablesAmount || 0)})
+              </span>
+            )}
             <p className="text-[14px] font-bold text-[#1d1d1f]">{reportTitle}</p>
           </div>
           <p className="text-[11px] text-[#86868b] mt-1">
@@ -208,6 +219,49 @@ export function ShiftFullDetailPanel(props: {
             )}
           </div>
         </div>
+
+        {(selectedShift.carriedOverTablesCount ?? 0) > 0 && (
+          <div className="mt-5 pt-4 border-t border-[#f0f0f0]">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+              <div>
+                <h4 className="text-[12.5px] font-semibold text-blue-800">
+                  Sonraki Vardiyaya Devreden Açık Masalar ({selectedShift.carriedOverTablesCount} Masa)
+                </h4>
+                <p className="text-[11px] text-[#86868b]">
+                  Bu kasa kapatıldığında açık olan ve kapatılmadan sonraki vardiyaya devredilen masalar
+                </p>
+              </div>
+              <span className="text-[13px] font-bold text-blue-700">
+                Toplam Açık Adisyon: {"\u20BA"}
+                {formatCurrency(selectedShift.carriedOverTablesAmount || 0)}
+              </span>
+            </div>
+            {selectedShift.carriedOverTablesSnapshot &&
+              selectedShift.carriedOverTablesSnapshot.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                  {selectedShift.carriedOverTablesSnapshot.map((t) => (
+                    <div
+                      key={t.tableId}
+                      className="flex items-center justify-between rounded-lg border border-blue-200/70 bg-blue-50/40 px-3 py-2 text-[12px]"
+                    >
+                      <div>
+                        <span className="font-semibold text-[#1d1d1f]">
+                          {t.tableName}
+                        </span>
+                        <span className="ml-1.5 text-[10px] text-[#86868b]">
+                          ({t.section} · {t.itemCount} ürün)
+                        </span>
+                      </div>
+                      <span className="font-bold text-blue-700">
+                        {"\u20BA"}
+                        {formatCurrency(t.openAmount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+          </div>
+        )}
       </div>
 
       {/* Section 2: Shift Gelir / Gider & Cash Transactions */}

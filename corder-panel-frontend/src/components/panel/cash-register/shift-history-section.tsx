@@ -171,7 +171,19 @@ export function ZReportSection(props: {
                         <div className="text-[11px] text-[#86868b]">Kapanış: {s.closedAt ? formatIstanbulDateTime(s.closedAt) : "-"}</div>
                       </td>
                       <td className="px-4 py-2.5 text-[12px] text-[#1d1d1f]">
-                        <div>{s.openedBy}</div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span>{s.openedBy}</span>
+                          {s.isAutoClosed && (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 text-[10px] font-semibold">
+                              Otomatik Gün Sonu
+                            </span>
+                          )}
+                          {(s.carriedOverTablesCount ?? 0) > 0 && (
+                            <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-semibold">
+                              Devir: {s.carriedOverTablesCount} Masa
+                            </span>
+                          )}
+                        </div>
                         {s.closedBy && <div className="text-[11px] text-[#86868b]">Kapatan: {s.closedBy}</div>}
                       </td>
                       <td className="px-4 py-2.5 text-[11px] text-right">

@@ -15,6 +15,7 @@ import {
 } from '../../platform/domain/subscription-billing.policy';
 import { OrdersGateway } from '../api/orders.gateway';
 import { normalizeStorageText } from '../../common/text/text-normalizer';
+import { ShiftAutoClosePolicy } from '../domain/services/shift-auto-close.policy';
 
 export interface RestaurantSettingsDto {
   name: string;
@@ -33,6 +34,8 @@ export interface RestaurantSettingsDto {
   locationLatitude?: number | null;
   locationLongitude?: number | null;
   locationRadiusMeters?: number;
+  autoCloseShiftEnabled?: boolean;
+  autoCloseShiftTime?: string;
 }
 
 export interface MerchantBillingInfoDto {
@@ -116,6 +119,10 @@ export class RestaurantSettingsService {
       locationLatitude: r.locationLatitude != null ? Number(r.locationLatitude) : null,
       locationLongitude: r.locationLongitude != null ? Number(r.locationLongitude) : null,
       locationRadiusMeters: Number(r.locationRadiusMeters || 150),
+      autoCloseShiftEnabled: r.autoCloseShiftEnabled !== false,
+      autoCloseShiftTime: ShiftAutoClosePolicy.normalizeAutoCloseTime(
+        r.autoCloseShiftTime,
+      ),
     };
   }
 
@@ -260,6 +267,14 @@ export class RestaurantSettingsService {
         Math.min(10000, Math.round(Number(dto.locationRadiusMeters) || 150)),
       );
       geofenceChanged = true;
+    }
+    if (dto.autoCloseShiftEnabled !== undefined) {
+      r.autoCloseShiftEnabled = Boolean(dto.autoCloseShiftEnabled);
+    }
+    if (dto.autoCloseShiftTime !== undefined) {
+      r.autoCloseShiftTime = ShiftAutoClosePolicy.normalizeAutoCloseTime(
+        dto.autoCloseShiftTime,
+      );
     }
     if (r.terminalLocationRestrictionEnabled) {
       const lat = r.locationLatitude != null ? Number(r.locationLatitude) : NaN;

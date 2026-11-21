@@ -440,7 +440,16 @@ export default function CashRegisterView() {
       </div>
 
       {showOpenShift && (
-        <OpenShiftModal openBalance={openBalance} setOpenBalance={setOpenBalance} shiftError={shiftError} shiftLoading={shiftLoading} onClose={() => setShowOpenShift(false)} onSubmit={() => void handleOpenShift()} />
+        <OpenShiftModal
+          openBalance={openBalance}
+          setOpenBalance={setOpenBalance}
+          shiftError={shiftError}
+          shiftLoading={shiftLoading}
+          previousClosingBalance={closedShifts[0]?.closingBalance ?? null}
+          openTablesCount={openTablesCount}
+          onClose={() => setShowOpenShift(false)}
+          onSubmit={() => void handleOpenShift()}
+        />
       )}
       {showCloseShift && (
         <CloseShiftModal

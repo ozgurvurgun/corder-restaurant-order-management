@@ -66,6 +66,18 @@ export function mapShiftDtoToPanel(dto: ShiftDto): CashShift {
     totalMultinet: dto.totalMultinet ?? 0,
     transactionCount: dto.transactionCount ?? 0,
     notes: dto.notes ?? undefined,
+    isAutoClosed: Boolean(dto.isAutoClosed),
+    carriedOverTablesCount: Number(dto.carriedOverTablesCount ?? 0),
+    carriedOverTablesAmount: Number(dto.carriedOverTablesAmount ?? 0),
+    carriedOverTablesSnapshot: Array.isArray(dto.carriedOverTablesSnapshot)
+      ? dto.carriedOverTablesSnapshot.map((t) => ({
+          ...t,
+          tableName: formatTitleCase(t.tableName, "tr"),
+          section: formatTitleCase(t.section, "tr"),
+          openAmount: Number(t.openAmount || 0),
+          itemCount: Number(t.itemCount || 0),
+        }))
+      : [],
   }
 }
 

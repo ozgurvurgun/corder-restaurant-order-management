@@ -40,6 +40,17 @@ export interface ShiftDto {
   totalMealCard: number
   totalMultinet: number
   transactionCount: number
+  isAutoClosed?: boolean
+  carriedOverTablesCount?: number
+  carriedOverTablesAmount?: number
+  carriedOverTablesSnapshot?: Array<{
+    tableId: string
+    tableName: string
+    section: string
+    openAmount: number
+    itemCount: number
+    openedAt: string
+  }>
 }
 
 export type ApiCashShift = ShiftDto
@@ -343,6 +354,8 @@ export interface RestaurantSettingsDto {
   locationLatitude?: number | null
   locationLongitude?: number | null
   locationRadiusMeters?: number
+  autoCloseShiftEnabled?: boolean
+  autoCloseShiftTime?: string
 }
 
 export interface FraudAlertDto {

@@ -164,6 +164,12 @@ export function serializeCashShift(shift: CashShiftEntity) {
     totalMealCard: Number(shift.totalMealCard ?? 0),
     totalMultinet: Number(shift.totalMultinet ?? 0),
     transactionCount: shift.transactionCount ?? 0,
+    isAutoClosed: Boolean(shift.isAutoClosed),
+    carriedOverTablesCount: Number(shift.carriedOverTablesCount ?? 0),
+    carriedOverTablesAmount: Number(shift.carriedOverTablesAmount ?? 0),
+    carriedOverTablesSnapshot: Array.isArray(shift.carriedOverTablesSnapshot)
+      ? shift.carriedOverTablesSnapshot
+      : [],
   };
 }
 

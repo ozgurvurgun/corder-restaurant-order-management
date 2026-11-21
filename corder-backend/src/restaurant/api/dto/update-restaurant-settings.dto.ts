@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Max,
   Min,
   MinLength,
@@ -13,6 +14,7 @@ import {
   RESTAURANT_MENU_TEMPLATES,
   RestaurantMenuTemplate,
 } from '../../../platform/domain/restaurant.entity';
+import { AUTO_CLOSE_TIME_REGEX } from '../../domain/services/shift-auto-close.policy';
 
 export class UpdateRestaurantSettingsDto {
   @IsOptional()
@@ -92,4 +94,15 @@ export class UpdateRestaurantSettingsDto {
   @Min(20)
   @Max(10000)
   locationRadiusMeters?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  autoCloseShiftEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @Matches(AUTO_CLOSE_TIME_REGEX, {
+    message: 'autoCloseShiftTime must be in HH:mm format (00:00 - 23:59)',
+  })
+  autoCloseShiftTime?: string;
 }

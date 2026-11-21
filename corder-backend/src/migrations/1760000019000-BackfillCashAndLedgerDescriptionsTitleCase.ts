@@ -60,3 +60,4 @@ export class BackfillCashAndLedgerDescriptionsTitleCase1760000019000
     await queryRunner.query(`SELECT 1`);
   }
 }
+
