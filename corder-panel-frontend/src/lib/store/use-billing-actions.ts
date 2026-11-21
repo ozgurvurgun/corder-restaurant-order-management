@@ -56,7 +56,13 @@ export function useBillingActions(params: {
 
   const refreshCurrentShiftAndTx = useCallback(async () => {
     if (!token) return
-    const freshShift = await api.shifts.getCurrent(token).catch(() => null)
+    const knownShiftId = currentShift?.id
+    const [freshShift, initialTxRes] = await Promise.all([
+      api.shifts.getCurrent(token).catch(() => null),
+      knownShiftId
+        ? api.cashTransactions.list(token, knownShiftId).catch(() => null)
+        : Promise.resolve(null),
+    ])
     if (freshShift) {
       const mappedShift = mapShiftDtoToPanel(freshShift)
       setCashShifts((prev) =>
@@ -64,9 +70,10 @@ export function useBillingActions(params: {
           ? prev.map((s) => (s.id === mappedShift.id ? mappedShift : s))
           : [mappedShift, ...prev],
       )
-      const cashTxRes = await api.cashTransactions
-        .list(token, freshShift.id)
-        .catch(() => null)
+      const cashTxRes =
+        freshShift.id === knownShiftId
+          ? initialTxRes
+          : await api.cashTransactions.list(token, freshShift.id).catch(() => null)
       if (cashTxRes) {
         const mappedTxs = cashTxRes.map(mapCashTransactionDtoToPanel)
         const freshIds = new Set(mappedTxs.map((t) => t.id))
@@ -76,7 +83,7 @@ export function useBillingActions(params: {
         ])
       }
     }
-  }, [token, setCashShifts, setCashTransactions])
+  }, [token, currentShift?.id, setCashShifts, setCashTransactions])
 
   const applyCloseCheckResult = useCallback(
     (res: CloseCheckResponseDto): ClosedTable => {
@@ -397,7 +404,6 @@ export function useBillingActions(params: {
         const updated = await api.completedOrders.update(token, completedId, body)
         const mapped = mapCompletedOrderDtoToClosedTable(updated)
         setClosedTables((prev) => prev.map((c) => (c.id === completedId ? mapped : c)))
-        await refreshCurrentShiftAndTx()
         return mapped
       } catch (err) {
         showPanelToast(
@@ -407,7 +413,7 @@ export function useBillingActions(params: {
         return null
       }
     },
-    [token, setClosedTables, refreshCurrentShiftAndTx],
+    [token, setClosedTables],
   )
 
   return {
