@@ -2,6 +2,48 @@ import { getBase } from "./api/http-client"
 
 export const ISTANBUL_TZ = "Europe/Istanbul"
 
+const TR_CURRENCY_FORMATTER = new Intl.NumberFormat("tr-TR", {
+  style: "decimal",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+
+const TR_TIME_FORMATTER = new Intl.DateTimeFormat("tr-TR", {
+  timeZone: ISTANBUL_TZ,
+  hour: "2-digit",
+  minute: "2-digit",
+})
+
+const TR_TIME_SECONDS_FORMATTER = new Intl.DateTimeFormat("tr-TR", {
+  timeZone: ISTANBUL_TZ,
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+})
+
+const TR_DATE_FORMATTER = new Intl.DateTimeFormat("tr-TR", {
+  timeZone: ISTANBUL_TZ,
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+})
+
+const EN_CA_YMD_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: ISTANBUL_TZ,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+})
+
+const EN_GB_HOUR_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  timeZone: ISTANBUL_TZ,
+  hour: "2-digit",
+  hour12: false,
+})
+
+const TITLE_CASE_CACHE = new Map<string, string>()
+const MAX_TITLE_CASE_CACHE = 2500
+
 export function toMinorUnits(amount: number | null | undefined): number {
   const n = Number(amount)
   if (!Number.isFinite(n)) return 0
@@ -36,11 +78,7 @@ export function computeDiscountMinorUnits(
 
 export function formatCurrency(amount: number | null | undefined): string {
   const safe = Number.isFinite(Number(amount)) ? Number(amount) : 0
-  return new Intl.NumberFormat("tr-TR", {
-    style: "decimal",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(safe)
+  return TR_CURRENCY_FORMATTER.format(safe)
 }
 
 const TURKIC_CHAR_RE = /[çğıöşüÇĞİÖŞÜ]/u
@@ -69,14 +107,26 @@ export function formatTitleCase(
   input: string | null | undefined,
   locale?: string,
 ): string {
+  if (!input) return ""
+  if (!locale) {
+    const cached = TITLE_CASE_CACHE.get(input)
+    if (cached !== undefined) return cached
+  }
   const lower = normalizeStorageText(input, locale)
   if (!lower) return ""
   const resolvedLocale = resolveCasingLocale(lower, locale)
-  return lower.replace(
+  const formatted = lower.replace(
     /([^\p{L}']|^)(\p{L})/gu,
     (_match, prefix: string, letter: string) =>
       `${prefix}${resolvedLocale ? letter.toLocaleUpperCase(resolvedLocale) : letter.toUpperCase()}`,
   )
+  if (!locale) {
+    if (TITLE_CASE_CACHE.size >= MAX_TITLE_CASE_CACHE) {
+      TITLE_CASE_CACHE.clear()
+    }
+    TITLE_CASE_CACHE.set(input, formatted)
+  }
+  return formatted
 }
 
 export function resolveAssetUrl(url: string | undefined | null): string {
@@ -101,11 +151,7 @@ export function resolveAssetUrl(url: string | undefined | null): string {
 export function formatIstanbulTime(d: Date | string | number): string {
   const date = d instanceof Date ? d : new Date(d)
   if (Number.isNaN(date.getTime())) return ""
-  return date.toLocaleTimeString("tr-TR", {
-    timeZone: ISTANBUL_TZ,
-    hour: "2-digit",
-    minute: "2-digit",
-  })
+  return TR_TIME_FORMATTER.format(date)
 }
 
 export function formatIstanbulDate(
@@ -114,6 +160,7 @@ export function formatIstanbulDate(
 ): string {
   const date = d instanceof Date ? d : new Date(d)
   if (Number.isNaN(date.getTime())) return ""
+  if (!opts) return TR_DATE_FORMATTER.format(date)
   return date.toLocaleDateString("tr-TR", {
     timeZone: ISTANBUL_TZ,
     day: "2-digit",
@@ -135,13 +182,8 @@ export function formatIstanbulDateTimeWithSeconds(
 ): string {
   const date = d instanceof Date ? d : new Date(d)
   if (Number.isNaN(date.getTime())) return ""
-  const datePart = formatIstanbulDate(date)
-  const timePart = date.toLocaleTimeString("tr-TR", {
-    timeZone: ISTANBUL_TZ,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  })
+  const datePart = TR_DATE_FORMATTER.format(date)
+  const timePart = TR_TIME_SECONDS_FORMATTER.format(date)
   if (!datePart) return ""
   return `${datePart} ${timePart}`
 }
@@ -149,12 +191,7 @@ export function formatIstanbulDateTimeWithSeconds(
 export function getIstanbulYmd(d: Date | string | number = new Date()): string {
   const date = d instanceof Date ? d : new Date(d)
   const validDate = Number.isNaN(date.getTime()) ? new Date() : date
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: ISTANBUL_TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(validDate)
+  const parts = EN_CA_YMD_FORMATTER.formatToParts(validDate)
   const y = parts.find((p) => p.type === "year")?.value ?? "1970"
   const m = parts.find((p) => p.type === "month")?.value ?? "01"
   const day = parts.find((p) => p.type === "day")?.value ?? "01"
@@ -164,11 +201,7 @@ export function getIstanbulYmd(d: Date | string | number = new Date()): string {
 export function getIstanbulHour(d: Date | string | number): number {
   const date = d instanceof Date ? d : new Date(d)
   if (Number.isNaN(date.getTime())) return 0
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: ISTANBUL_TZ,
-    hour: "2-digit",
-    hour12: false,
-  }).formatToParts(date)
+  const parts = EN_GB_HOUR_FORMATTER.formatToParts(date)
   const h = Number(parts.find((p) => p.type === "hour")?.value ?? 0)
   return Number.isFinite(h) ? h % 24 : 0
 }

@@ -51,6 +51,7 @@ export async function allocateNextOrderNumber(
     `SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`,
     [restaurantId, datePrefix],
   );
+  const recentCutoffIso = new Date(now.getTime() - 48 * 3600_000).toISOString();
   const rows = (await queryFn.call(
     em,
     `SELECT COALESCE(MAX(seq), 0) + 1 AS next_seq
@@ -70,10 +71,11 @@ export async function allocateNextOrderNumber(
        END AS seq
        FROM "completed_orders" co, jsonb_array_elements(co."orders_snapshot") elem
        WHERE co."restaurant_id" = $1
+         AND co."closed_at" >= $3::timestamptz
          AND jsonb_typeof(co."orders_snapshot") = 'array'
          AND (elem->>'orderNumber') LIKE ($2 || '-%')
      ) combined`,
-    [restaurantId, datePrefix],
+    [restaurantId, datePrefix, recentCutoffIso],
   )) as Array<{ next_seq?: number | string }>;
   const nextSeq = Math.max(1, Number(rows?.[0]?.next_seq) || 1);
   return `${datePrefix}-${String(nextSeq).padStart(3, '0')}`;
@@ -228,7 +230,6 @@ export class CreateOrderUseCase {
       }
     }
     this.ordersGateway.emitOrderCreated(restaurantId, payload);
-    this.ordersGateway.emitOrdersUpdated(restaurantId);
     return serialized;
   }
 }

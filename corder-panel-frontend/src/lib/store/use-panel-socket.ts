@@ -27,6 +27,7 @@ export function usePanelSocket(params: {
   token: string | null
   restaurantId?: string | null
   refreshPosRef: MutableRefObject<() => Promise<void>>
+  refreshActivePosRef?: MutableRefObject<() => Promise<void>>
   setOrders: (v: PanelOrder[] | ((prev: PanelOrder[]) => PanelOrder[])) => void
   setTables: (v: PanelTable[] | ((prev: PanelTable[]) => PanelTable[])) => void
   setNotifications?: (
@@ -37,6 +38,7 @@ export function usePanelSocket(params: {
     token,
     restaurantId,
     refreshPosRef,
+    refreshActivePosRef,
     setOrders,
     setTables,
     setNotifications,
@@ -102,10 +104,10 @@ export function usePanelSocket(params: {
           }
         }),
       )
-      void refreshPosRef.current?.()
+      void (refreshActivePosRef?.current ?? refreshPosRef.current)?.()
     }
 
-    const handleOrdersMoved = () => void refreshPosRef.current?.()
+    const handleOrdersMoved = () => void (refreshActivePosRef?.current ?? refreshPosRef.current)?.()
     const handleOrdersUpdated = () => void refreshPosRef.current?.()
     const handlePrintersUpdated = () => {
       if (typeof window !== "undefined") {

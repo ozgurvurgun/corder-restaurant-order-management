@@ -65,14 +65,18 @@ export function usePanelHydration(params: {
 
   useEffect(() => {
     if (!token) return
-    setTables((prev) =>
-      prev.map((t) => ({
-        ...t,
-        waiter:
+    setTables((prev) => {
+      let changed = false
+      const next = prev.map((t) => {
+        const nextWaiter =
           resolveStaffNameForTable(t.id, orders, users) ||
-          (t.orderCount > 0 ? t.lockedByStaffName : undefined),
-      })),
-    )
+          (t.orderCount > 0 ? t.lockedByStaffName : undefined)
+        if (t.waiter === nextWaiter) return t
+        changed = true
+        return { ...t, waiter: nextWaiter }
+      })
+      return changed ? next : prev
+    })
   }, [token, orders, users, setTables])
 
   useEffect(() => {

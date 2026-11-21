@@ -45,6 +45,7 @@ export function buildCorsOptions(): {
     callback: (err: Error | null, origin?: string | boolean) => void,
   ) => void;
   credentials: boolean;
+  maxAge: number;
 } {
   return {
     origin: (requestOrigin, callback) => {
@@ -61,5 +62,6 @@ export function buildCorsOptions(): {
       callback(null, false);
     },
     credentials: true,
+    maxAge: 86400,
   };
 }

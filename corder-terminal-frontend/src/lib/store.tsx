@@ -227,14 +227,30 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     [tables, selectedTableId]
   )
 
+  const inFlightTablesRef = useRef(false)
+  const pendingTablesRef = useRef(false)
+  const inFlightLiveRef = useRef(false)
+  const pendingLiveRef = useRef(false)
+
   const pullTables = useCallback(async () => {
     const token = getToken()
     const staffSession = getStaffSession()
     if (!token || !staffSession?.staffToken) return
+    if (inFlightTablesRef.current) {
+      pendingTablesRef.current = true
+      return
+    }
+    inFlightTablesRef.current = true
     try {
       setRawTables(await api.tables.list(token))
     } catch {
       /* ignore polling errors */
+    } finally {
+      inFlightTablesRef.current = false
+      if (pendingTablesRef.current) {
+        pendingTablesRef.current = false
+        void pullTables()
+      }
     }
   }, [])
 
@@ -242,6 +258,11 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     const token = getToken()
     const staffSession = getStaffSession()
     if (!token || !staffSession?.staffToken) return
+    if (inFlightLiveRef.current) {
+      pendingLiveRef.current = true
+      return
+    }
+    inFlightLiveRef.current = true
     try {
       const [tablesRes, ordersRes] = await Promise.all([
         api.tables.list(token),
@@ -251,6 +272,12 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       setRawOrders(ordersRes)
     } catch {
       /* ignore background sync errors */
+    } finally {
+      inFlightLiveRef.current = false
+      if (pendingLiveRef.current) {
+        pendingLiveRef.current = false
+        void refreshLiveState()
+      }
     }
   }, [])
 

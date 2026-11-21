@@ -57,210 +57,12 @@ import {
   mapSupplierDtoToPanel,
 } from "../mappers/catalog-inventory.mapper"
 import {
-  getDismissedNotifIds,
-  getNotifsClearedAt,
-  getReadNotifIds,
-  saveDismissedNotifIds,
-  saveNotifsClearedAt,
-} from "./panel-local-storage"
+  buildDerivedNotifications,
+  buildHydratedCancelledItems,
+  mergeDerivedAndRealtimeNotifications,
+  syncServerNotificationState,
+} from "./panel-notification-sync.helper"
 import { usePanelSocket } from "./use-panel-socket"
-import { formatTitleCase } from "../format"
-
-function buildHydratedCancelledItems(
-  orders: PanelOrder[],
-  tables: PanelTable[],
-  closed: ClosedTable[],
-): CancelledItem[] {
-  const hydratedCancelled: CancelledItem[] = []
-  const seenCancelIds = new Set<string>()
-  for (const o of orders) {
-    const tName = tables.find((t) => t.id === o.tableId)?.name || o.tableId
-    for (const it of o.items) {
-      if (it.status === "cancelled" && !seenCancelIds.has(it.id)) {
-        seenCancelIds.add(it.id)
-        hydratedCancelled.push({
-          id: `ci-${it.id}`,
-          orderItem: it,
-          tableName: tName,
-          orderId: o.id,
-          reason: it.cancelReason || "İptal",
-          cancelledBy: it.cancelledBy || o.userName || "Sistem",
-          cancelledAt: it.cancelledAt || o.updatedAt,
-        })
-      }
-    }
-  }
-  for (const ct of closed) {
-    for (const o of ct.orders) {
-      for (const it of o.items) {
-        if (it.status === "cancelled" && !seenCancelIds.has(it.id)) {
-          seenCancelIds.add(it.id)
-          hydratedCancelled.push({
-            id: `ci-${it.id}`,
-            orderItem: it,
-            tableName: ct.tableName,
-            orderId: o.id,
-            reason: it.cancelReason || "İptal",
-            cancelledBy: it.cancelledBy || ct.closedBy || "Sistem",
-            cancelledAt: it.cancelledAt || ct.closedAt,
-          })
-        }
-      }
-    }
-  }
-  return hydratedCancelled.sort(
-    (a, b) => new Date(b.cancelledAt).getTime() - new Date(a.cancelledAt).getTime(),
-  )
-}
-
-function syncServerNotificationState(
-  state?: {
-    clearedAt: string | null
-    dismissedIds: string[]
-    waiterCalls?: Array<{
-      id: string
-      tableId: string
-      tableName: string
-      sectionName?: string
-      requestType?: string
-      note?: string
-      createdAt: string
-    }>
-  } | null,
-  restaurantId?: string | null,
-): void {
-  if (!state) return
-  if (Array.isArray(state.dismissedIds) && state.dismissedIds.length > 0) {
-    const merged = getDismissedNotifIds(restaurantId)
-    state.dismissedIds.forEach((id) => merged.add(id))
-    saveDismissedNotifIds(merged, restaurantId)
-  }
-  if (state.clearedAt) {
-    const localCleared = getNotifsClearedAt(restaurantId)
-    if (
-      !localCleared ||
-      new Date(state.clearedAt).getTime() > new Date(localCleared).getTime()
-    ) {
-      saveNotifsClearedAt(state.clearedAt, restaurantId)
-    }
-  }
-  const latestUpdate = (state as { latestSystemUpdate?: { id?: string } | null })
-    .latestSystemUpdate
-  if (latestUpdate?.id && typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent("corder:system-update", { detail: latestUpdate }))
-  }
-}
-
-function buildDerivedNotifications(
-  mats: StockMaterial[],
-  cancelledList: CancelledItem[],
-  serverWaiterCalls?: Array<{
-    id: string
-    tableId: string
-    tableName: string
-    sectionName?: string
-    requestType?: string
-    note?: string
-    createdAt: string
-  }>,
-  serverPlatformNotifications?: Array<{
-    id: string
-    title: string
-    message: string
-    level: string
-    targetApps: string[]
-    sentAt: string
-    createdAt: string
-  }>,
-  restaurantId?: string | null,
-): PanelNotification[] {
-  const readIds = getReadNotifIds(restaurantId)
-  const dismissedIds = getDismissedNotifIds(restaurantId)
-  const clearedAtIso = getNotifsClearedAt(restaurantId)
-  const clearedAtMs = clearedAtIso ? new Date(clearedAtIso).getTime() : 0
-
-  const isVisible = (id: string, createdAt: Date) => {
-    if (dismissedIds.has(id)) return false
-    const t = new Date(createdAt).getTime()
-    if (clearedAtMs > 0 && Number.isFinite(t) && t <= clearedAtMs) return false
-    return true
-  }
-
-  const platformNotifs: PanelNotification[] = (serverPlatformNotifications ?? [])
-    .filter((pn) => !Array.isArray(pn.targetApps) || pn.targetApps.includes("merchant"))
-    .map((pn) => {
-      const notifId = `platform:${pn.id}`
-      return {
-        id: notifId,
-        type: "system" as const,
-        title: `📢 ${pn.title}`,
-        message: pn.message,
-        read: readIds.has(notifId) || readIds.has(pn.id),
-        createdAt: new Date(pn.sentAt || pn.createdAt),
-      }
-    })
-
-  const waiterNotifs: PanelNotification[] = (serverWaiterCalls ?? []).map((wc) => {
-    const isBill = wc.requestType === "bill"
-    const tName = formatTitleCase(wc.tableName) || "Masa"
-    const section = wc.sectionName ? formatTitleCase(wc.sectionName) : "Salon"
-    return {
-      id: wc.id,
-      type: "waiter-call" as const,
-      title: `🔔 ${tName} (${section}) - ${isBill ? "Hesap İstiyor!" : "Garson Çağırıyor!"}`,
-      message: wc.note ? `Not: ${wc.note}` : `${tName} masasından ${isBill ? "hesap talebi" : "garson çağrısı"} geldi.`,
-      read: readIds.has(wc.id),
-      createdAt: new Date(wc.createdAt),
-    }
-  })
-
-  const lowStockNotifs: PanelNotification[] = mats
-    .filter((m) => m.currentStock <= m.minStock)
-    .map((m) => ({
-      id: `notif-stock-${m.id}`,
-      type: "stock-low" as const,
-      title: "Kritik Stok Uyarısı",
-      message: `${m.name} kritik seviyede (${m.currentStock} ${m.unit} / Min: ${m.minStock} ${m.unit})`,
-      read: readIds.has(`notif-stock-${m.id}`),
-      createdAt: m.lastUpdated,
-    }))
-  const cancelNotifs: PanelNotification[] = cancelledList.slice(0, 20).map((ci) => ({
-    id: `notif-cancel-${ci.id}`,
-    type: "kitchen-alert" as const,
-    title: "Sipariş İptali",
-    message: `${ci.tableName} - ${ci.orderItem.productName} iptal edildi (${ci.reason})`,
-    read: readIds.has(`notif-cancel-${ci.id}`),
-    createdAt: ci.cancelledAt,
-  }))
-  return [...platformNotifs, ...waiterNotifs, ...lowStockNotifs, ...cancelNotifs]
-    .filter((n) => isVisible(n.id, n.createdAt))
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-}
-
-function mergeDerivedAndRealtimeNotifications(
-  prev: PanelNotification[],
-  derived: PanelNotification[],
-  restaurantId?: string | null,
-): PanelNotification[] {
-  const dismissedIds = getDismissedNotifIds(restaurantId)
-  const clearedAtIso = getNotifsClearedAt(restaurantId)
-  const clearedAtMs = clearedAtIso ? new Date(clearedAtIso).getTime() : 0
-  const map = new Map<string, PanelNotification>()
-  for (const n of derived) {
-    map.set(n.id, n)
-  }
-  for (const p of prev) {
-    if (dismissedIds.has(p.id)) continue
-    const t = new Date(p.createdAt).getTime()
-    if (clearedAtMs > 0 && Number.isFinite(t) && t <= clearedAtMs) continue
-    if (!map.has(p.id) && (p.type === "waiter-call" || p.type === "fraud-alert" || p.type === "system")) {
-      map.set(p.id, p)
-    }
-  }
-  return Array.from(map.values()).sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  )
-}
 
 export function usePanelApiSync(
   token: string | null,
@@ -287,15 +89,67 @@ export function usePanelApiSync(
 ) {
   const loadRef = useRef<() => Promise<void>>(null!)
   const refreshPosRef = useRef<() => Promise<void>>(null!)
+  const refreshActivePosRef = useRef<() => Promise<void>>(null!)
   const usersCacheRef = useRef<PanelUser[]>([])
   const materialsCacheRef = useRef<StockMaterial[]>([])
+  const closedCacheByIdRef = useRef<Map<string, { sig: string; mapped: ClosedTable }>>(new Map())
   const inFlightFullRef = useRef(false)
   const inFlightPosRef = useRef(false)
   const pendingPosRef = useRef(false)
+  const inFlightActiveRef = useRef(false)
+  const pendingActiveRef = useRef(false)
 
   useEffect(() => {
     if (!token) return
     let cancelled = false
+
+    const mapCompletedOrdersCached = (list: Parameters<typeof mapCompletedOrderDtoToClosedTable>[0][]) => {
+      const nextMap = new Map<string, { sig: string; mapped: ClosedTable }>()
+      const out = list.map((dto) => {
+        const editCount = Array.isArray(dto.editHistory) ? dto.editHistory.length : 0
+        const sig = `${dto.closedAt}|${dto.netAmount}|${dto.totalAmount}|${dto.paymentMethod}|${editCount}`
+        const hit = closedCacheByIdRef.current.get(dto.id)
+        if (hit && hit.sig === sig) {
+          nextMap.set(dto.id, hit)
+          return hit.mapped
+        }
+        const mapped = mapCompletedOrderDtoToClosedTable(dto)
+        nextMap.set(dto.id, { sig, mapped })
+        return mapped
+      })
+      closedCacheByIdRef.current = nextMap
+      return out
+    }
+
+    const refreshActivePos = async () => {
+      if (inFlightActiveRef.current) {
+        pendingActiveRef.current = true
+        return
+      }
+      inFlightActiveRef.current = true
+      try {
+        const [apiTables, ordersRes] = await Promise.all([
+          api.tables.list(token).catch(() => null),
+          api.orders.list(token).catch(() => null),
+        ])
+        if (cancelled) return
+        const nextOrders = ordersRes ? mapApiOrdersToPanel(ordersRes) : null
+        if (nextOrders) setOrders(nextOrders)
+        if (apiTables && nextOrders) {
+          const mappedTables = mapApiTablesToPanel(apiTables, nextOrders, usersCacheRef.current)
+          setTables((prev) => mergeTablesPreserveClientFields(prev, mappedTables))
+          setSections(deriveSectionsFromTables(apiTables, restaurantId))
+        }
+      } catch (e) {
+        console.error("Panel active POS refresh error:", e)
+      } finally {
+        inFlightActiveRef.current = false
+        if (pendingActiveRef.current && !cancelled) {
+          pendingActiveRef.current = false
+          void refreshActivePos()
+        }
+      }
+    }
 
     const refreshPos = async () => {
       if (inFlightPosRef.current) {
@@ -324,7 +178,7 @@ export function usePanelApiSync(
           setSections(deriveSectionsFromTables(apiTables, restaurantId))
 
           if (completedOrdersRes) {
-            const closed = completedOrdersRes.map(mapCompletedOrderDtoToClosedTable)
+            const closed = mapCompletedOrdersCached(completedOrdersRes)
             setClosedTables(closed)
             const hydratedCancelled = buildHydratedCancelledItems(nextOrders, mappedTables, closed)
             setCancelledItems?.(hydratedCancelled)
@@ -404,7 +258,7 @@ export function usePanelApiSync(
         const shifts = currentShiftRes
           ? [mapShiftDtoToPanel(currentShiftRes), ...shiftsListRes.filter((s) => s.id !== currentShiftRes.id).map(mapShiftDtoToPanel)]
           : shiftsListRes.map(mapShiftDtoToPanel)
-        const closed = completedOrdersRes.map(mapCompletedOrderDtoToClosedTable)
+        const closed = mapCompletedOrdersCached(completedOrdersRes)
 
         setOrders(orders)
         setCategories(mapApiCategoriesToPanel(categoriesRes))
@@ -451,6 +305,7 @@ export function usePanelApiSync(
 
     loadRef.current = load
     refreshPosRef.current = refreshPos
+    refreshActivePosRef.current = refreshActivePos
     void load()
     return () => {
       cancelled = true
@@ -466,7 +321,7 @@ export function usePanelApiSync(
   useEffect(() => {
     if (!token) return
     const onVis = () => {
-      if (document.visibilityState === "visible") void refreshPosRef.current?.()
+      if (document.visibilityState === "visible") void refreshActivePosRef.current?.()
     }
     const onOnline = () => void loadRef.current?.()
     document.addEventListener("visibilitychange", onVis)
@@ -481,6 +336,7 @@ export function usePanelApiSync(
     token,
     restaurantId,
     refreshPosRef,
+    refreshActivePosRef,
     setOrders,
     setTables,
     setNotifications,

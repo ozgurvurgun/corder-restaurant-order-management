@@ -12,13 +12,18 @@ export function fromMinorUnits(minorUnits: number): number {
   return Number((Math.round(minorUnits) / 100).toFixed(2))
 }
 
+const TR_CURRENCY_FORMATTER = new Intl.NumberFormat("tr-TR", {
+  style: "decimal",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+
+const TITLE_CASE_CACHE = new Map<string, string>()
+const MAX_TITLE_CASE_CACHE = 2000
+
 export function formatCurrency(amount: number): string {
   const safe = Number.isFinite(amount) ? fromMinorUnits(toMinorUnits(amount)) : 0
-  return new Intl.NumberFormat("tr-TR", {
-    style: "decimal",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(safe)
+  return TR_CURRENCY_FORMATTER.format(safe)
 }
 
 const TURKIC_CHAR_RE = /[çğıöşüÇĞİÖŞÜ]/u
@@ -34,17 +39,28 @@ export function formatTitleCase(
   locale?: string,
 ): string {
   if (!input) return ""
+  if (!locale) {
+    const cached = TITLE_CASE_CACHE.get(input)
+    if (cached !== undefined) return cached
+  }
   const raw = String(input).trim().replace(/\s+/g, " ")
   if (!raw) return ""
   const resolvedLocale = resolveCasingLocale(raw, locale)
   const lower = (
     resolvedLocale ? raw.toLocaleLowerCase(resolvedLocale) : raw.toLowerCase()
   ).replace(/\u0307/g, "")
-  return lower.replace(
+  const formatted = lower.replace(
     /([^\p{L}']|^)(\p{L})/gu,
     (_match, prefix: string, letter: string) =>
       `${prefix}${resolvedLocale ? letter.toLocaleUpperCase(resolvedLocale) : letter.toUpperCase()}`,
   )
+  if (!locale) {
+    if (TITLE_CASE_CACHE.size >= MAX_TITLE_CASE_CACHE) {
+      TITLE_CASE_CACHE.clear()
+    }
+    TITLE_CASE_CACHE.set(input, formatted)
+  }
+  return formatted
 }
 
 export function resolveImageUrl(url: string | null | undefined): string | undefined {

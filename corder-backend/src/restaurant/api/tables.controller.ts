@@ -136,7 +136,6 @@ export class TablesController {
       );
     }
     await this.ordersGateway.emitTableSessionPresence(restaurantId);
-    this.ordersGateway.emitOrdersUpdated(restaurantId);
     return { ok: true };
   }
 
@@ -152,7 +151,6 @@ export class TablesController {
     const canForce = staff.permissions.includes('table.force_unlock');
     await this.service.releaseSessionLock(restaurantId, id, staff.staffId, canForce);
     await this.ordersGateway.emitTableSessionPresence(restaurantId);
-    this.ordersGateway.emitOrdersUpdated(restaurantId);
     return { ok: true };
   }
 
@@ -314,7 +312,7 @@ export class TablesController {
     }
     const updated = await this.service.update(id, restaurantId, dto, user);
     await this.ordersGateway.emitTableSessionPresence(restaurantId);
-    this.ordersGateway.emitOrdersUpdated(restaurantId);
+    this.ordersGateway.emitOrdersMoved(restaurantId, { fromTableId: id, toTableId: id });
     return updated;
   }
 
@@ -327,7 +325,7 @@ export class TablesController {
   ) {
     await this.service.remove(id, restaurantId);
     await this.ordersGateway.emitTableSessionPresence(restaurantId);
-    this.ordersGateway.emitOrdersUpdated(restaurantId);
+    this.ordersGateway.emitOrdersMoved(restaurantId, { fromTableId: id, toTableId: id });
     return { ok: true };
   }
 }

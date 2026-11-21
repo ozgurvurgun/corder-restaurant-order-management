@@ -80,6 +80,7 @@ export class TableService {
       this.repo.find({ where: { restaurantId } }),
       this.repo.manager.find(OrderEntity, {
         where: { restaurantId, status: 'active' },
+        select: { id: true, tableId: true, items: { id: true, status: true } },
         relations: ['items'],
       }),
     ]);
