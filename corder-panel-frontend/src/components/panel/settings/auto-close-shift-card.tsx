@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { usePanelStore } from "@/lib/panel-store"
+import { CustomTimePicker } from "@/components/ui/custom-time-picker"
 import { Clock, ShieldCheck } from "lucide-react"
 
 const CUTOFF_PRESETS = [
@@ -106,11 +107,9 @@ export function AutoCloseShiftCard() {
                   {p.label}
                 </button>
               ))}
-              <input
-                type="time"
+              <CustomTimePicker
                 value={cutoffTime}
-                onChange={(e) => handleSelectTime(e.target.value)}
-                className="h-[28px] rounded-lg border border-[#d1d1d6] bg-[#f5f5f7] px-2.5 text-[11.5px] font-semibold text-[#1d1d1f] outline-none focus:border-[#e63462] focus:bg-white"
+                onValueChange={handleSelectTime}
               />
             </div>
           </div>
