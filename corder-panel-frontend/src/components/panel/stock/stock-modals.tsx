@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { X } from "lucide-react"
 import type { StockMaterial, Supplier } from "@/lib/panel-types"
 import { CustomSelect } from "@/components/ui/custom-inputs"
@@ -40,6 +41,14 @@ export function AddMaterialForm(props: {
     onClose,
     onSubmit,
   } = props
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); onClose() }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [onClose])
 
   return (
     <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4">
@@ -178,6 +187,14 @@ export function AddMovementForm(props: {
     onSubmit,
   } = props
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); onClose() }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [onClose])
+
   return (
     <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4">
       <div className="flex items-center justify-between mb-3">
@@ -291,6 +308,14 @@ export function AddSupplierForm(props: {
     onClose,
     onSubmit,
   } = props
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); onClose() }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [onClose])
 
   return (
     <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4">

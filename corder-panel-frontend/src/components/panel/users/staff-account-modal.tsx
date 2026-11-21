@@ -106,18 +106,16 @@ export function StaffAccountModal({
     )
   }, [editingUser])
 
-  const roleOptions = useMemo(
-    () =>
-      roles.length === 0
-        ? DEFAULT_ROLE_OPTIONS
-        : roles.map((r) => ({ value: r.key, label: getRoleDisplayName(r.key, r.name) })),
-    [roles]
-  )
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); onClose() } }
+    window.addEventListener("keydown", onKeyDown); return () => window.removeEventListener("keydown", onKeyDown)
+  }, [onClose])
 
-  const currentFormRoleDef = useMemo(
-    () => roles.find((r) => r.key === formRole) ?? null,
-    [roles, formRole]
+  const roleOptions = useMemo(
+    () => (roles.length === 0 ? DEFAULT_ROLE_OPTIONS : roles.map((r) => ({ value: r.key, label: getRoleDisplayName(r.key, r.name) }))),
+    [roles],
   )
+  const currentFormRoleDef = useMemo(() => roles.find((r) => r.key === formRole) ?? null, [roles, formRole])
 
   const categoriesList = useMemo(() => (catalog ? Object.keys(catalog.categories) : []), [catalog])
 

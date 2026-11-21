@@ -323,3 +323,4 @@ export function resolveAltViewShortcut(e: KeyboardEvent): PanelViewId | null {
   const digit = codeMatch ? codeMatch[1] : e.key
   return ALT_DIGIT_TO_VIEW[digit] ?? null
 }
+

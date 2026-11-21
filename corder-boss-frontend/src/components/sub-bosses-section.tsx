@@ -19,6 +19,15 @@ export function SubBossesSection() {
 
   const [subBosses, setSubBosses] = useState<SubBossItemDto[]>([])
   const [showSubBossModal, setShowSubBossModal] = useState(false)
+
+  useEffect(() => {
+    if (!showSubBossModal) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !sbSubmitting) setShowSubBossModal(false)
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  })
   const [sbName, setSbName] = useState("")
   const [sbEmail, setSbEmail] = useState("")
   const [sbPhone, setSbPhone] = useState("")

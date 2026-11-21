@@ -61,6 +61,15 @@ export function WaiterCallWidget(props: {
   }, [openTrigger])
 
   useEffect(() => {
+    if (!open) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !submitting) setOpen(false)
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [open, submitting])
+
+  useEffect(() => {
     if (cooldownLeft <= 0) return
     const timer = window.setInterval(() => {
       setCooldownLeft((prev) => (prev <= 1 ? 0 : prev - 1))

@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { Loader2, X } from "lucide-react"
 import type { LedgerCustomer, LedgerEntry } from "@/lib/panel-types"
 import {
@@ -37,6 +38,17 @@ export function AddLedgerCustomerModal(props: {
     onClose,
     onSave,
   } = props
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !lcSaving) {
+        e.preventDefault()
+        onClose()
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [lcSaving, onClose])
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 backdrop-blur-sm p-3">
@@ -136,6 +148,17 @@ export function LedgerCustomerDetailModal(props: {
     onClose,
     onCollect,
   } = props
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !ledgerPayBusy) {
+        e.preventDefault()
+        onClose()
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [ledgerPayBusy, onClose])
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 backdrop-blur-sm p-3">

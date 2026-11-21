@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   Check, Copy, Download, ExternalLink, FolderArchive, Printer, QrCode, Scissors, X,
 } from "lucide-react"
@@ -25,6 +25,17 @@ export function TableQrCodesModal(props: {
 
   const [prefs, setPrefs] = useState<QrStudioPreferences>(() => loadQrStudioPreferences(slug))
   const [sectionFilter, setSectionFilter] = useState<string>("ALL")
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault()
+        onClose()
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [onClose])
 
   const updatePrefs = (patch: Partial<QrStudioPreferences>) => {
     setPrefs((prev) => {
@@ -96,8 +107,14 @@ export function TableQrCodesModal(props: {
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/45 backdrop-blur-sm p-3">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[960px] max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/45 backdrop-blur-sm p-3"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-[960px] max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3.5 border-b border-[#f0f0f0]">
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <div className="w-8 h-8 rounded-xl bg-[#e63462]/10 text-[#e63462] flex items-center justify-center flex-shrink-0">

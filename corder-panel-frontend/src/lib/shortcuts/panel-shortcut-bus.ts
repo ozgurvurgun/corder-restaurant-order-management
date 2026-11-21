@@ -158,3 +158,4 @@ export function usePaymentModalShortcuts(params: {
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [disabled, allowedMethods, onSelectMethod, onFillExactCash, onConfirm])
 }
+

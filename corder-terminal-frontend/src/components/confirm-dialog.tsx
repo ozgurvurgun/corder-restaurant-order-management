@@ -1,3 +1,5 @@
+import { useEffect } from "react"
+
 interface ConfirmDialogProps {
   open: boolean
   title: string
@@ -21,6 +23,15 @@ export function ConfirmDialog({
   loading = false,
   destructive = false,
 }: ConfirmDialogProps) {
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !loading) onCancel()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [open, loading, onCancel])
+
   if (!open) return null
 
   return (

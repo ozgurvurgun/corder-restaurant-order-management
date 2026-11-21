@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import {
   Bell,
   Layers,
@@ -38,6 +38,17 @@ export function BulkCreateTablesModal(props: {
   const [count, setCount] = useState("20")
   const [capacity, setCapacity] = useState("4")
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !busy) {
+        e.preventDefault()
+        onClose()
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [busy, onClose])
 
   const parsedStart = Math.max(1, parseInt(startNumber, 10) || 1)
   const parsedCount = Math.min(100, Math.max(1, parseInt(count, 10) || 1))

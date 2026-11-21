@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { X, ChevronLeft, ChevronRight } from "lucide-react"
 import { resolveImageUrl, type MenuCampaign } from "@/lib/api"
 
@@ -11,6 +11,15 @@ export function CampaignsModal(props: {
 }) {
   const { campaigns, activeIndex, formatCurrency, onChangeIndex, onClose } = props
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [onClose])
+
   const currentCampaign = campaigns[activeIndex] ?? campaigns[0]
   if (!currentCampaign) return null
   const currentImgUrl = resolveImageUrl(currentCampaign.imageUrl)

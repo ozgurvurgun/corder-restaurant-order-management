@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { MapPin, Phone, Search, X, Instagram, MessageCircle, Globe } from "lucide-react"
 import { type MenuProduct, type MenuResponse } from "@/lib/api"
 import type { MenuWidgetTheme } from "./waiter-call-modal"
@@ -205,6 +205,14 @@ export function MenuSearchOverlay(props: {
   const isDark = theme === "dark"
   const metaVariant = isDark ? "noir" : theme === "editorial" ? "editorial" : "classic"
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [onClose])
+
   return (
     <div
       role="dialog"
@@ -344,6 +352,14 @@ export function ProductDetailModal(props: {
   const hasCalories = typeof product.calories === "number" && product.calories > 0
   const allergens =
     Array.isArray(product.allergens) && product.allergens.length > 0 ? product.allergens : null
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [onClose])
 
   return (
     <div
