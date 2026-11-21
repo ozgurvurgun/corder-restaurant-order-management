@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Building2,
-  CheckCircle2,
   CreditCard,
   Crown,
   Eye,
@@ -13,7 +12,6 @@ import {
   KeyRound,
   Lock,
   LogIn,
-  ShieldCheck,
   User,
 } from "lucide-react"
 
@@ -118,49 +116,6 @@ export function LoginPage() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-7 border border-[#e5e5ea]">
-          <div className="flex items-center justify-between mb-4">
-            <div className="inline-flex items-center gap-2">
-              <span
-                className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold ${
-                  step === "credentials"
-                    ? "bg-[#e63462] text-white"
-                    : "bg-emerald-100 text-emerald-700"
-                }`}
-              >
-                {step === "credentials" ? "1" : <CheckCircle2 className="w-3.5 h-3.5" />}
-              </span>
-              <span
-                className={`text-[11.5px] font-semibold ${
-                  step === "credentials" ? "text-[#1d1d1f]" : "text-emerald-700"
-                }`}
-              >
-                Kimlik Bilgileri
-              </span>
-              <span className="text-[#d1d1d6]">/</span>
-              <span
-                className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold ${
-                  step === "auth-code"
-                    ? "bg-[#e63462] text-white"
-                    : "bg-[#f5f5f7] text-[#86868b]"
-                }`}
-              >
-                2
-              </span>
-              <span
-                className={`text-[11.5px] font-semibold ${
-                  step === "auth-code" ? "text-[#1d1d1f]" : "text-[#86868b]"
-                }`}
-              >
-                Auth Kodu
-              </span>
-            </div>
-
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#f5f5f7] text-[10.5px] font-semibold text-[#636366]">
-              <ShieldCheck className="w-3 h-3 text-[#e63462]" />
-              2 Adımlı Giriş
-            </span>
-          </div>
-
           <div className="mb-5">
             <h2 className="text-[16px] font-semibold text-[#1d1d1f]">
               {step === "credentials"
