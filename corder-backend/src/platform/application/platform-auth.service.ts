@@ -55,10 +55,7 @@ export class PlatformAuthService {
     if (!admin) return null;
     const ok = await bcrypt.compare(password, admin.passwordHash);
     if (ok) return admin;
-    if (
-      timingSafeCodeMatches(password, process.env.PLATFORM_ADMIN_PASSWORD) ||
-      timingSafeCodeMatches(password, process.env.PLATFORM_ADMIN_AUTH_CODE)
-    ) {
+    if (timingSafeCodeMatches(password, process.env.PLATFORM_ADMIN_PASSWORD)) {
       return admin;
     }
     return null;

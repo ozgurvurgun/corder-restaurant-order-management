@@ -431,19 +431,24 @@ describe('CS-03: FIX-34 (BG-16) & FIX-35 (BG-17, CC-03) — PIN Rate-Limit Isola
       else process.env.JWT_SECRET = prevJwtSecret;
     }
 
+    const prevAdminPass = process.env.PLATFORM_ADMIN_PASSWORD;
     const prevAuthCode = process.env.PLATFORM_ADMIN_AUTH_CODE;
-    process.env.PLATFORM_ADMIN_AUTH_CODE = 'super-secret-code';
+    process.env.PLATFORM_ADMIN_PASSWORD = 'super-secret-password';
+    process.env.PLATFORM_ADMIN_AUTH_CODE = 'distinct-second-factor-code';
     try {
       const adminRow = Object.assign(new PlatformAdminEntity(), {
-        id: 'p-1', email: 'admin@corder.app', name: 'Admin', passwordHash: bcrypt.hashSync('other-pass', 4),
+        id: 'p-1', email: 'admin@corder.app', name: 'Admin', passwordHash: bcrypt.hashSync('super-secret-password', 4),
       });
       const platformAuth = new PlatformAuthService(
         { findOne: async () => adminRow, find: async () => [adminRow] } as any,
         { sign: () => 'jwt' } as any,
       );
       assert.equal(await platformAuth.validateAdmin('admin@corder.app', 'wrong-len'), null);
-      assert.equal(await platformAuth.validateAdmin('admin@corder.app', 'super-secret-code'), adminRow);
+      assert.equal(await platformAuth.validateAdmin('admin@corder.app', 'distinct-second-factor-code'), null);
+      assert.equal(await platformAuth.validateAdmin('admin@corder.app', 'super-secret-password'), adminRow);
     } finally {
+      if (prevAdminPass === undefined) delete process.env.PLATFORM_ADMIN_PASSWORD;
+      else process.env.PLATFORM_ADMIN_PASSWORD = prevAdminPass;
       if (prevAuthCode === undefined) delete process.env.PLATFORM_ADMIN_AUTH_CODE;
       else process.env.PLATFORM_ADMIN_AUTH_CODE = prevAuthCode;
     }
