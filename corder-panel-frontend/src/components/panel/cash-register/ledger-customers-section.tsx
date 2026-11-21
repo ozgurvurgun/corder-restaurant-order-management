@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react"
 import { BookUser, Loader2, Plus, TrendingUp, Users, Wallet } from "lucide-react"
 import { api } from "@/lib/api"
 import type { LedgerCustomer, LedgerEntry } from "@/lib/panel-types"
-import { formatCurrency, fromMinorUnits, toMinorUnits } from "@/lib/format"
+import { formatCurrency, formatTitleCase, fromMinorUnits, toMinorUnits } from "@/lib/format"
 import { PaginationBar } from "@/components/ui/pagination-bar"
 import { AddLedgerCustomerModal, LedgerCustomerDetailModal, type CollectionMethod } from "./ledger-customer-modals"
 
@@ -78,11 +78,11 @@ export function LedgerCustomersSection(props: {
             id: e.id,
             entryType: e.entryType,
             amount: Number(e.amount),
-            description: e.description,
+            description: formatTitleCase(e.description, "tr"),
             tableId: e.tableId ?? undefined,
-            tableName: e.tableName ?? undefined,
+            tableName: e.tableName ? formatTitleCase(e.tableName, "tr") : undefined,
             completedOrderId: e.completedOrderId ?? undefined,
-            receivedBy: e.receivedBy ?? undefined,
+            receivedBy: e.receivedBy ? formatTitleCase(e.receivedBy, "tr") : undefined,
             receivedByUserId: e.receivedByUserId ?? undefined,
             createdAt: new Date(e.createdAt),
           })),

@@ -7,7 +7,10 @@ import { CashShiftService } from './cash-shift.service';
 import { FraudDetectionService } from './fraud-detection.service';
 import { CreateCashTransactionDto } from '../api/dto/create-cash-transaction.dto';
 import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
-import { normalizeStorageText } from '../../common/text/text-normalizer';
+import {
+  formatTitleCase,
+  normalizeStorageText,
+} from '../../common/text/text-normalizer';
 import { serializeCashTransaction } from './orders/order.mapper';
 
 export { serializeCashTransaction };
@@ -31,7 +34,7 @@ export class CashTransactionsService {
     if (amountMinorUnits <= 0) {
       throw new BadRequestException('Amount must be positive.');
     }
-    const description = dto.description.trim();
+    const description = formatTitleCase(dto.description, 'tr');
     if (!description) {
       throw new BadRequestException('Description is required.');
     }

@@ -26,7 +26,10 @@ import {
   fromMinorUnits,
   toMinorUnits,
 } from '../../common/money/minor-units';
-import { normalizeStorageText } from '../../common/text/text-normalizer';
+import {
+  formatTitleCase,
+  normalizeStorageText,
+} from '../../common/text/text-normalizer';
 import { serializeCompletedOrder } from './orders/order.mapper';
 
 export { serializeCompletedOrder };
@@ -358,6 +361,7 @@ export class CompletedOrdersService {
         order: { createdAt: 'DESC' },
       });
 
+      const displayTable = formatTitleCase(row.tableName, 'tr') || row.tableName;
       if (existingSaleTx) {
         if (settlement.cashMinorUnits <= 0) {
           await em.remove(CashTransactionEntity, existingSaleTx);
@@ -365,8 +369,8 @@ export class CompletedOrdersService {
           existingSaleTx.amount = fromMinorUnits(settlement.cashMinorUnits);
           existingSaleTx.description =
             row.paymentMethod === 'split'
-              ? `${row.tableName} - Hesap Kapanışı (Parçalı Nakit)`
-              : `${row.tableName} - Hesap Kapanışı`;
+              ? `${displayTable} - Hesap Kapanışı (Parçalı Nakit)`
+              : `${displayTable} - Hesap Kapanışı`;
           existingSaleTx.createdBy = createdBy;
           await em.save(CashTransactionEntity, existingSaleTx);
         }
@@ -376,7 +380,7 @@ export class CompletedOrdersService {
           shiftId: targetShift.id,
           type: 'sale',
           amount: fromMinorUnits(cashDeltaMinor),
-          description: `${row.tableName} - Hesap Düzenleme Farkı`,
+          description: `${displayTable} - Hesap Düzenleme Farkı`,
           reference: row.id,
           createdBy,
         });

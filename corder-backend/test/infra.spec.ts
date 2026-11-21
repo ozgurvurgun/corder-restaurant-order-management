@@ -166,10 +166,10 @@ describe('HealthController', () => {
 });
 
 describe('TypeORM DataSource metadata integrity', () => {
-  it('loads all 35 entities and 19 migrations cleanly', async () => {
+  it('loads all 35 entities and 20 migrations cleanly', async () => {
     await (dataSource as unknown as { buildMetadatas(): Promise<void> }).buildMetadatas();
     assert.equal(dataSource.entityMetadatas.length, 35);
-    assert.equal(dataSource.migrations.length, 19);
+    assert.equal(dataSource.migrations.length, 20);
     const migrationNames = dataSource.migrations
       .map((m) => m.name ?? '')
       .sort((a, b) => Number(a.match(/\d+$/)?.[0] ?? 0) - Number(b.match(/\d+$/)?.[0] ?? 0));
@@ -193,10 +193,11 @@ describe('TypeORM DataSource metadata integrity', () => {
       'AddHotPathPerformanceIndexes1760000016000',
       'AddScale10kPerformanceIndexes1760000017000',
       'AddProductShowInMenuAndBackfillCashDescriptions1760000018000',
+      'BackfillCashAndLedgerDescriptionsTitleCase1760000019000',
     ]);
   });
 
-  it('executes all 19 migrations up() and down() cleanly against a recording QueryRunner', async () => {
+  it('executes all 20 migrations up() and down() cleanly against a recording QueryRunner', async () => {
     const executedQueries: string[] = [];
     const mockRunner = {
       query: async (sql: string) => {

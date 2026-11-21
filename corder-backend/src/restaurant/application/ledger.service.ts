@@ -6,7 +6,10 @@ import { LedgerEntryEntity } from '../domain/ledger-entry.entity';
 import { CashShiftEntity } from '../domain/cash-shift.entity';
 import { CashTransactionEntity } from '../domain/cash-transaction.entity';
 import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
-import { normalizeStorageText } from '../../common/text/text-normalizer';
+import {
+  formatTitleCase,
+  normalizeStorageText,
+} from '../../common/text/text-normalizer';
 import { CreateLedgerCustomerDto } from '../api/dto/create-ledger-customer.dto';
 
 export { CreateLedgerCustomerDto };
@@ -271,7 +274,7 @@ export class LedgerService {
           shiftId: shift.id,
           type: 'cash-in',
           amount: normalizedAmount,
-          description: `Cari Tahsilat: ${customer.name}`,
+          description: `Cari Tahsilat: ${formatTitleCase(customer.name, 'tr') || customer.name}`,
           reference: customer.id,
           createdBy: actorName,
         });
@@ -416,11 +419,12 @@ export class LedgerService {
         await em.remove(LedgerEntryEntity, existingEntries.slice(1));
       }
     } else {
+      const displayTable = formatTitleCase(params.tableName || 'Masa', 'tr') || 'Masa';
       await this.recordDebtInTransaction(em, {
         restaurantId: params.restaurantId,
         customerId: nextCustomer.id,
         amount: normalizedAmount,
-        description: `${params.tableName || 'Masa'} Hesap Kapanışı`,
+        description: `${displayTable} Hesap Kapanışı`,
         tableId: params.tableId ?? null,
         tableName: params.tableName ?? null,
         completedOrderId: params.completedOrderId,

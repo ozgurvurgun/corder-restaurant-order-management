@@ -1,8 +1,9 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { ArrowDownCircle, ArrowUpCircle, ChevronDown, ChevronRight, Receipt } from "lucide-react"
 import type { CashShift, CashTransaction, ClosedTable, RestaurantSettings } from "@/lib/panel-types"
 import type { ShiftTotalsSummary } from "./shift-history-section"
 import { formatCurrency, formatIstanbulDateTime, formatIstanbulTime, fromMinorUnits, toMinorUnits } from "@/lib/format"
+import { PaginationBar } from "@/components/ui/pagination-bar"
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: "Nakit",
@@ -12,6 +13,9 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   split: "Parçalı Ödeme",
   ledger: "Cari",
 }
+
+const TX_PAGE_SIZE = 10
+const TABLES_PAGE_SIZE = 10
 
 export function ShiftFullDetailPanel(props: {
   settings: RestaurantSettings
@@ -23,7 +27,18 @@ export function ShiftFullDetailPanel(props: {
 }) {
   const { settings, selectedShift, shiftTotals, shiftTransactions, shiftClosedTables, loadingDetails = false } = props
   const [txFilter, setTxFilter] = useState<"all" | "manual" | "sale">("all")
+  const [txPage, setTxPage] = useState(1)
+  const [tablesPage, setTablesPage] = useState(1)
   const [expandedTableId, setExpandedTableId] = useState<string | null>(null)
+
+  useEffect(() => {
+    setTxPage(1)
+  }, [selectedShift.id, txFilter])
+
+  useEffect(() => {
+    setTablesPage(1)
+    setExpandedTableId(null)
+  }, [selectedShift.id])
 
   const isOpenShift = selectedShift.status === "open"
   const reportTitle = isOpenShift ? "X RAPORU (AÇIK KASA ANLIK ÖZETİ)" : "Z RAPORU (KAPANMIŞ KASA DETAY RAPORU)"
@@ -68,6 +83,16 @@ export function ShiftFullDetailPanel(props: {
       return true
     })
   }, [shiftTransactions, txFilter])
+
+  const paginatedShiftTxs = useMemo(
+    () => filteredShiftTxs.slice((txPage - 1) * TX_PAGE_SIZE, txPage * TX_PAGE_SIZE),
+    [filteredShiftTxs, txPage],
+  )
+
+  const paginatedClosedTables = useMemo(
+    () => shiftClosedTables.slice((tablesPage - 1) * TABLES_PAGE_SIZE, tablesPage * TABLES_PAGE_SIZE),
+    [shiftClosedTables, tablesPage],
+  )
 
   const totalDiscount = useMemo(
     () => fromMinorUnits(shiftClosedTables.reduce((sum, ct) => sum + toMinorUnits(ct.discountAmount || 0), 0)),
@@ -218,7 +243,7 @@ export function ShiftFullDetailPanel(props: {
           </div>
         </div>
 
-        <div className="max-h-[320px] overflow-auto">
+        <div className="overflow-x-auto">
           {loadingDetails && shiftTransactions.length === 0 ? (
             <p className="px-4 py-6 text-center text-[12px] text-[#86868b]">Vardiya hareketleri yükleniyor...</p>
           ) : filteredShiftTxs.length === 0 ? (
@@ -235,7 +260,7 @@ export function ShiftFullDetailPanel(props: {
                 </tr>
               </thead>
               <tbody>
-                {filteredShiftTxs.map((tx, idx) => (
+                {paginatedShiftTxs.map((tx, idx) => (
                   <tr key={tx.id} className={`border-b border-[#f0f0f0] ${idx % 2 === 1 ? "bg-[#fafafa]" : ""}`}>
                     <td className="px-4 py-2 text-[12px] text-[#86868b]">{formatIstanbulTime(tx.createdAt)}</td>
                     <td className="px-4 py-2">
@@ -268,6 +293,17 @@ export function ShiftFullDetailPanel(props: {
             </table>
           )}
         </div>
+        {filteredShiftTxs.length > TX_PAGE_SIZE && (
+          <div className="px-4 pb-3">
+            <PaginationBar
+              currentPage={txPage}
+              totalItems={filteredShiftTxs.length}
+              pageSize={TX_PAGE_SIZE}
+              onPageChange={setTxPage}
+              itemLabel="işlem"
+            />
+          </div>
+        )}
       </div>
 
       {/* Section 3: Closed Tables / Checks in this Shift */}
@@ -281,11 +317,11 @@ export function ShiftFullDetailPanel(props: {
           </div>
         </div>
 
-        <div className="max-h-[420px] overflow-auto divide-y divide-[#f0f0f0]">
+        <div className="divide-y divide-[#f0f0f0]">
           {shiftClosedTables.length === 0 ? (
             <p className="px-4 py-6 text-center text-[12px] text-[#86868b]">Bu vardiya zaman aralığında kapanmış masa adisyonu bulunmuyor.</p>
           ) : (
-            shiftClosedTables.map((ct) => {
+            paginatedClosedTables.map((ct) => {
               const isExpanded = expandedTableId === ct.id
               const items = ct.orders.flatMap((o) => o.items)
               return (
@@ -340,6 +376,17 @@ export function ShiftFullDetailPanel(props: {
             })
           )}
         </div>
+        {shiftClosedTables.length > TABLES_PAGE_SIZE && (
+          <div className="px-4 pb-3 border-t border-[#f0f0f0]">
+            <PaginationBar
+              currentPage={tablesPage}
+              totalItems={shiftClosedTables.length}
+              pageSize={TABLES_PAGE_SIZE}
+              onPageChange={setTablesPage}
+              itemLabel="kapanan masa"
+            />
+          </div>
+        )}
       </div>
     </div>
   )

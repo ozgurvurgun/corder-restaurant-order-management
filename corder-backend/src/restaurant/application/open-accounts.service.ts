@@ -9,7 +9,10 @@ import { CashTransactionEntity } from '../domain/cash-transaction.entity';
 import { BilledOrderLineForStock } from '../domain/services/recipe-stock.policy';
 import { StockMovementsService } from './stock-movements.service';
 import { fromMinorUnits, toMinorUnits } from '../../common/money/minor-units';
-import { normalizeStorageText } from '../../common/text/text-normalizer';
+import {
+  formatTitleCase,
+  normalizeStorageText,
+} from '../../common/text/text-normalizer';
 import {
   CreateOpenAccountDto,
   CreateOpenAccountItemDto,
@@ -131,13 +134,13 @@ export class OpenAccountsService {
       if (amountMinorUnits <= 0) {
         throw new BadRequestException('Total amount must be greater than zero');
       }
-      description = (dto.description ?? '').trim() || 'Check';
+      description = formatTitleCase(dto.description, 'tr') || 'Adisyon';
     } else {
       if (dto.amount == null || toMinorUnits(dto.amount) <= 0) {
         throw new BadRequestException('Either amount or item list is required');
       }
       amountMinorUnits = toMinorUnits(dto.amount);
-      description = (dto.description ?? '').trim();
+      description = formatTitleCase(dto.description, 'tr');
       if (!description) {
         throw new BadRequestException('Description is required when no items are provided');
       }
@@ -254,7 +257,7 @@ export class OpenAccountsService {
           shiftId: shift.id,
           type: 'cash-in',
           amount: normalizedAmount,
-          description: `Açık Hesap Tahsilatı: ${acc.customerName}`,
+          description: `Açık Hesap Tahsilatı: ${formatTitleCase(acc.customerName, 'tr') || acc.customerName}`,
           reference: acc.id,
           createdBy: actorName,
         });

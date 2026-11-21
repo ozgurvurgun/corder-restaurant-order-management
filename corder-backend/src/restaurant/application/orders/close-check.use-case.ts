@@ -21,7 +21,10 @@ import { LedgerService } from '../ledger.service';
 import { StockMovementsService } from '../stock-movements.service';
 import { SESSION_LOCK_STALE_MS, TableService } from '../table.service';
 import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
-import { normalizeStorageText } from '../../../common/text/text-normalizer';
+import {
+  formatTitleCase,
+  normalizeStorageText,
+} from '../../../common/text/text-normalizer';
 import { allocateNextOrderNumber } from './create-order.use-case';
 import {
   applyConsolidatedCompletedOrderUpdate,
@@ -126,9 +129,11 @@ export class CloseCheckUseCase {
       );
 
       if (ledgerCustomer && settlement.ledgerMinorUnits > 0) {
+        const displayTable =
+          formatTitleCase(billContext.tableName, 'tr') || billContext.tableName;
         await this.ledgerService.recordDebtInTransaction(em, {
           restaurantId, customerId: ledgerCustomer.id, amount: fromMinorUnits(settlement.ledgerMinorUnits),
-          description: `${billContext.tableName} Hesap Kapanışı`, tableId: billContext.table ? billContext.table.id : null,
+          description: `${displayTable} Hesap Kapanışı`, tableId: billContext.table ? billContext.table.id : null,
           tableName: billContext.tableName, completedOrderId: savedCompleted.id,
           snapshot: billContext.ordersSnapshot, recordedBy: actorName,
         });
@@ -460,18 +465,19 @@ export class CloseCheckUseCase {
     em: EntityManager, restaurantId: string, shiftId: string, tableName: string, completedOrderId: string, method: string, cashMinorUnits: number, actorName: string,
   ): Promise<CashTransactionEntity | null> {
     if (cashMinorUnits <= 0) return null;
+    const displayTable = formatTitleCase(tableName, 'tr') || tableName;
     const existingTx = await em.findOne(CashTransactionEntity, {
       where: { restaurantId, shiftId, type: 'sale', reference: completedOrderId },
     });
     if (existingTx) {
       existingTx.amount = fromMinorUnits(toMinorUnits(existingTx.amount) + cashMinorUnits);
-      existingTx.description = `${tableName} - Hesap Kapanışı (Parçalı Nakit)`;
+      existingTx.description = `${displayTable} - Hesap Kapanışı (Parçalı Nakit)`;
       existingTx.createdBy = actorName;
       return em.save(CashTransactionEntity, existingTx);
     }
     const tx = em.create(CashTransactionEntity, {
       restaurantId, shiftId, type: 'sale', amount: fromMinorUnits(cashMinorUnits),
-      description: method === 'split' ? `${tableName} - Hesap Kapanışı (Parçalı Nakit)` : `${tableName} - Hesap Kapanışı`,
+      description: method === 'split' ? `${displayTable} - Hesap Kapanışı (Parçalı Nakit)` : `${displayTable} - Hesap Kapanışı`,
       reference: completedOrderId, createdBy: actorName,
     });
     return em.save(CashTransactionEntity, tx);
