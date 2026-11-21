@@ -95,13 +95,22 @@ export class CompletedOrdersService {
     const totalAmount = fromMinorUnits(settlement.rawTotalMinorUnits);
     const discountAmount = fromMinorUnits(settlement.discountMinorUnits);
     const netAmount = fromMinorUnits(settlement.netMinorUnits);
+    const collapsedSingleMethod =
+      dto.payment.method === 'split' &&
+      settlement.normalizedSplits &&
+      settlement.normalizedSplits.length === 1
+        ? settlement.normalizedSplits[0].method
+        : dto.payment.method;
+    const effectiveSplits =
+      collapsedSingleMethod === 'split' ? (settlement.normalizedSplits ?? null) : null;
 
     row.ordersSnapshot = dto.orders as unknown[];
     row.paymentSnapshot = {
       ...dto.payment,
+      method: collapsedSingleMethod,
       amount: netAmount,
       tip: fromMinorUnits(settlement.tipMinorUnits),
-      ...(settlement.normalizedSplits ? { splitDetails: settlement.normalizedSplits } : {}),
+      ...(effectiveSplits ? { splitDetails: effectiveSplits } : { splitDetails: undefined }),
       ...(settlement.discountSnapshot ? { discount: settlement.discountSnapshot } : {}),
       ...(ledgerCustomer
         ? {
@@ -113,9 +122,9 @@ export class CompletedOrdersService {
     row.totalAmount = totalAmount;
     row.discountAmount = discountAmount;
     row.netAmount = netAmount;
-    row.paymentMethod = dto.payment.method;
+    row.paymentMethod = collapsedSingleMethod;
     row.paymentTip = fromMinorUnits(settlement.tipMinorUnits);
-    row.paymentSplit = settlement.normalizedSplits ?? null;
+    row.paymentSplit = effectiveSplits;
     row.paymentDiscount = settlement.discountSnapshot ?? null;
     if (editEntry.changes.length > 0) {
       row.editHistory = [
@@ -214,6 +223,15 @@ export class CompletedOrdersService {
         safeActorName,
       );
 
+      const effectiveNextMethod =
+        dto.payment.method === 'split' &&
+        settlement.normalizedSplits &&
+        settlement.normalizedSplits.length === 1
+          ? settlement.normalizedSplits[0].method
+          : dto.payment.method;
+      const effectiveNextSplit =
+        effectiveNextMethod === 'split' ? (settlement.normalizedSplits ?? null) : null;
+
       const editEntry = buildCompletedOrderEditLogEntry({
         editedBy: safeActorName,
         editedByUserId: actor?.id?.trim() || null,
@@ -226,9 +244,9 @@ export class CompletedOrdersService {
         previousNetAmount: prevNetAmount,
         nextNetAmount: fromMinorUnits(settlement.netMinorUnits),
         previousMethod: prevMethod,
-        nextMethod: dto.payment.method,
+        nextMethod: effectiveNextMethod,
         previousSplit: prevSplits,
-        nextSplit: settlement.normalizedSplits ?? null,
+        nextSplit: effectiveNextSplit,
         previousLedgerCustomerName: prevPaymentSnap.ledgerCustomerName ?? null,
         nextLedgerCustomerName:
           ledgerCustomer?.name ?? dto.payment.ledgerCustomerName ?? null,

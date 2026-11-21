@@ -98,12 +98,12 @@ export function TableQrCodesModal(props: {
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/45 backdrop-blur-sm p-3">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[960px] max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex flex-wrap items-center justify-between gap-2.5 px-4 sm:px-6 py-3.5 border-b border-[#f0f0f0]">
-          <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3.5 border-b border-[#f0f0f0]">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <div className="w-8 h-8 rounded-xl bg-[#e63462]/10 text-[#e63462] flex items-center justify-center flex-shrink-0">
               <QrCode className="w-4 h-4" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <h3 className="text-[14px] sm:text-[15px] font-semibold text-[#1d1d1f] truncate">
                 Masa QR Tasarım &amp; Profesyonel Baskı Stüdyosu
               </h3>
@@ -112,11 +112,11 @@ export function TableQrCodesModal(props: {
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <button
               type="button"
               onClick={handleDownloadBulkZip}
-              className="h-[34px] px-3.5 rounded-xl bg-[#1d1d1f] text-white text-[12px] font-semibold hover:bg-[#3a3a3c] inline-flex items-center gap-1.5 whitespace-nowrap shadow-xs"
+              className="hidden sm:inline-flex h-[34px] px-3.5 rounded-xl bg-[#1d1d1f] text-white text-[12px] font-semibold hover:bg-[#3a3a3c] items-center gap-1.5 whitespace-nowrap shadow-xs"
               title="Seçili bölgedeki tüm masaların vektörel SVG dosyalarını tek ZIP paketinde indir"
             >
               <FolderArchive className="w-3.5 h-3.5" />
@@ -129,7 +129,7 @@ export function TableQrCodesModal(props: {
             <button
               type="button"
               onClick={handlePrintFiltered}
-              className="h-[34px] px-4 rounded-xl bg-[#e63462] text-white text-[12px] font-semibold hover:bg-[#d42d56] inline-flex items-center gap-1.5 whitespace-nowrap shadow-xs"
+              className="hidden sm:inline-flex h-[34px] px-4 rounded-xl bg-[#e63462] text-white text-[12px] font-semibold hover:bg-[#d42d56] items-center gap-1.5 whitespace-nowrap shadow-xs"
             >
               <Printer className="w-3.5 h-3.5" />
               <span>
@@ -141,7 +141,8 @@ export function TableQrCodesModal(props: {
             <button
               type="button"
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed]"
+              aria-label="Kapat"
+              className="w-8 h-8 rounded-full bg-[#f5f5f7] flex items-center justify-center hover:bg-[#e8e8ed] flex-shrink-0"
             >
               <X className="w-4 h-4 text-[#86868b]" />
             </button>

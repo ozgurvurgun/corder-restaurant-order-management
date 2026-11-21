@@ -244,7 +244,7 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
     savingRef.current = true; setSaving(true)
     try {
       const selectedLedgerCust = ledgerCustomers.find((c) => c.id === ledgerCustomerId,)
-      const splitDetails =
+      const rawSplitDetails =
         method === "split"
           ? SPLIT_METHODS.map((m) => {
               const val = parseFloat(String(splitInputs[m.key] || "").replace(",", "."),)
@@ -255,15 +255,21 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
             }).filter((sd) => sd.amount > 0)
           : undefined
 
+      const effectiveMethod: PanelPaymentMethod =
+        method === "split" && rawSplitDetails && rawSplitDetails.length === 1
+          ? rawSplitDetails[0].method
+          : method
+      const splitDetails = effectiveMethod === "split" ? rawSplitDetails : undefined
+
       const paymentSnap = paymentToSnapshot({
         ...closedTable.payment,
-        method,
+        method: effectiveMethod,
         amount: previewNet,
         splitDetails,
         ledgerCustomerId:
-          method === "ledger" || splitHasLedger ? ledgerCustomerId : undefined,
+          effectiveMethod === "ledger" || splitHasLedger ? ledgerCustomerId : undefined,
         ledgerCustomerName:
-          method === "ledger" || splitHasLedger
+          effectiveMethod === "ledger" || splitHasLedger
             ? selectedLedgerCust?.name || closedTable.payment.ledgerCustomerName
             : undefined,
       })

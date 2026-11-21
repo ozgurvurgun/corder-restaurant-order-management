@@ -79,11 +79,27 @@ export function CompletedOrdersList(props: {
       return cust ? `${base} - ${cust}` : base
     }
     if (p.method === "split" && p.splitDetails && p.splitDetails.length > 0) {
+      if (p.splitDetails.length === 1) {
+        const only = p.splitDetails[0]
+        if (only.method === "ledger") {
+          const cust = getLedgerCustomerLabel(p)
+          const ledgerBase = getPaymentMethodLabel("ledger")
+          return cust ? `${ledgerBase} - ${cust}` : ledgerBase
+        }
+        return getPaymentMethodLabel(only.method)
+      }
+      const distinctMethods = new Set(p.splitDetails.map((sd) => sd.method))
+      const prefix =
+        distinctMethods.size === 1
+          ? locale === "tr"
+            ? "Parçalı Ödeme"
+            : "Partial Payment"
+          : base
       const parts = p.splitDetails.map(
         (sd) =>
           `${getPaymentMethodLabel(sd.method)}: \u20BA${formatCurrency(sd.amount)}`,
       )
-      return `${base} (${parts.join(" + ")})`
+      return `${prefix} (${parts.join(" + ")})`
     }
     return base
   }
@@ -377,10 +393,10 @@ export function CompletedOrdersList(props: {
                       <span className="font-medium flex-shrink-0"> -{"₺"} {formatCurrency(closedTable.discountAmount)} </span>
                     </div>
                   )}
-                  {closedTable.payment.tip && closedTable.payment.tip > 0 && (
+                  {(closedTable.payment.tip ?? 0) > 0 && (
                     <div className="flex justify-between text-[12px] mb-1.5 text-green-600">
                       <span>{locale === "tr" ? "Bahşiş" : "Tip"}</span>
-                      <span> +{"₺"} {formatCurrency(closedTable.payment.tip)} </span>
+                      <span> +{"₺"} {formatCurrency(closedTable.payment.tip ?? 0)} </span>
                     </div>
                   )}
                   <div className="flex justify-between text-[14px] font-bold mt-2 pt-2 border-t border-[#e8e8ed]">
