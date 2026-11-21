@@ -79,27 +79,15 @@ export function CompletedOrdersList(props: {
       return cust ? `${base} - ${cust}` : base
     }
     if (p.method === "split" && p.splitDetails && p.splitDetails.length > 0) {
-      if (p.splitDetails.length === 1) {
-        const only = p.splitDetails[0]
-        if (only.method === "ledger") {
+      const parts = p.splitDetails.map((sd) => {
+        if (sd.method === "ledger") {
           const cust = getLedgerCustomerLabel(p)
-          const ledgerBase = getPaymentMethodLabel("ledger")
-          return cust ? `${ledgerBase} - ${cust}` : ledgerBase
+          const ledgerLabel = getPaymentMethodLabel("ledger")
+          return `${cust ? `${ledgerLabel} (${cust})` : ledgerLabel}: \u20BA${formatCurrency(sd.amount)}`
         }
-        return getPaymentMethodLabel(only.method)
-      }
-      const distinctMethods = new Set(p.splitDetails.map((sd) => sd.method))
-      const prefix =
-        distinctMethods.size === 1
-          ? locale === "tr"
-            ? "Parçalı Ödeme"
-            : "Partial Payment"
-          : base
-      const parts = p.splitDetails.map(
-        (sd) =>
-          `${getPaymentMethodLabel(sd.method)}: \u20BA${formatCurrency(sd.amount)}`,
-      )
-      return `${prefix} (${parts.join(" + ")})`
+        return `${getPaymentMethodLabel(sd.method)}: \u20BA${formatCurrency(sd.amount)}`
+      })
+      return `${base} (${parts.join(" + ")})`
     }
     return base
   }

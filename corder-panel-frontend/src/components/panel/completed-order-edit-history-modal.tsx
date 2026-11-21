@@ -37,20 +37,6 @@ function getMethodLabel(method?: string | null): string {
   return METHOD_LABELS[method] || method
 }
 
-function getEffectiveMethodLabel(
-  method?: string | null,
-  splits?: CompletedOrderEditSplitPart[] | null,
-): string {
-  if (method === "split" && Array.isArray(splits) && splits.length > 0) {
-    if (splits.length === 1) {
-      return getMethodLabel(splits[0].method)
-    }
-    const distinct = new Set(splits.map((s) => s.method))
-    if (distinct.size === 1) return "Parçalı Ödeme"
-  }
-  return getMethodLabel(method)
-}
-
 function formatSplitParts(parts?: CompletedOrderEditSplitPart[] | null): string {
   if (!Array.isArray(parts) || parts.length === 0) return "-"
   return parts
@@ -372,23 +358,22 @@ export function CompletedOrderEditHistoryModal(props: {
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <DoorClosed className="w-3.5 h-3.5 text-[#86868b]" />
                           <span>Ödeme:</span>
-                          {getEffectiveMethodLabel(entry.previousMethod, entry.previousSplit) !==
-                          getEffectiveMethodLabel(entry.nextMethod, entry.nextSplit) ? (
+                          {entry.previousMethod !== entry.nextMethod ? (
                             <>
                               <strong className="text-[#1d1d1f]">
-                                {getEffectiveMethodLabel(entry.previousMethod, entry.previousSplit)}
+                                {getMethodLabel(entry.previousMethod)}
                               </strong>
                               <ArrowRight className="w-3 h-3 text-[#86868b]" />
                               <strong className="text-[#1d1d1f]">
-                                {getEffectiveMethodLabel(entry.nextMethod, entry.nextSplit)}
+                                {getMethodLabel(entry.nextMethod)}
                               </strong>
                             </>
                           ) : (
                             <strong className="text-[#1d1d1f]">
-                              {getEffectiveMethodLabel(entry.nextMethod, entry.nextSplit)}
+                              {getMethodLabel(entry.nextMethod)}
                             </strong>
                           )}
-                          {entry.nextSplit && entry.nextSplit.length > 1 && (
+                          {entry.nextSplit && entry.nextSplit.length > 0 && (
                             <span className="text-[#86868b]">
                               ({formatSplitParts(entry.nextSplit)})
                             </span>

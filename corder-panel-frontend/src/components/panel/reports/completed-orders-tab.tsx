@@ -50,13 +50,27 @@ export function HistoryTab(props: {
   )
 
   const formatPaymentLabel = (ct: ClosedTable) => {
+    const custName =
+      ct.payment.ledgerCustomerName?.trim() ||
+      ledgerCustomers
+        .find((c) => c.id === ct.payment.ledgerCustomerId)
+        ?.name?.trim()
     if (ct.payment.method === "ledger") {
-      const n =
-        ct.payment.ledgerCustomerName?.trim() ||
-        ledgerCustomers
-          .find((c) => c.id === ct.payment.ledgerCustomerId)
-          ?.name?.trim()
-      return n ? `Cari (${n})` : "Cari"
+      return custName ? `Cari (${custName})` : "Cari"
+    }
+    if (
+      ct.payment.method === "split" &&
+      ct.payment.splitDetails &&
+      ct.payment.splitDetails.length > 0
+    ) {
+      const parts = ct.payment.splitDetails.map((sd) => {
+        const lbl =
+          sd.method === "ledger" && custName
+            ? `Cari (${custName})`
+            : PAYMENT_METHOD_LABELS[sd.method] || sd.method
+        return `${lbl}: \u20BA${formatCurrency(sd.amount)}`
+      })
+      return `Çoklu Ödeme (${parts.join(" + ")})`
     }
     return PAYMENT_METHOD_LABELS[ct.payment.method] || ct.payment.method
   }

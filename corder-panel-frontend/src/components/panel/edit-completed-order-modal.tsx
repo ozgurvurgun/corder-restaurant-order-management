@@ -4,7 +4,7 @@ import { itemCountsTowardBill } from "@/lib/panel-types"
 import type { CompletedOrderSnapshotDto, CompletedPaymentSnapshotDto } from "@/lib/api"
 import { usePanelStore } from "@/lib/panel-store"
 import { usePanelToast } from "./panel-toast"
-import { Loader2, X } from "lucide-react"
+import { Loader2, Plus, Trash2, X } from "lucide-react"
 import { computeDiscountMinorUnits, formatCurrency, fromMinorUnits, toMinorUnits } from "@/lib/format"
 import { CustomSelect } from "@/components/ui/custom-inputs"
 
@@ -104,26 +104,16 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
   )
   const [method, setMethod] = useState<PanelPaymentMethod>(closedTable.payment.method,)
   const [ledgerCustomerId, setLedgerCustomerId] = useState<string>(closedTable.payment.ledgerCustomerId || ledgerCustomers[0]?.id || "",)
-  const [splitInputs, setSplitInputs] = useState<Record<string, string>>(() => {
-    const map: Record<string, string> = {
-      cash: "",
-      "credit-card": "",
-      "meal-card": "",
-      multinet: "",
-      ledger: "",
+  const [splitRows, setSplitRows] = useState<Array<{ method: PanelPaymentMethod; amount: string }>>(() => {
+    if (closedTable.payment.splitDetails && closedTable.payment.splitDetails.length > 0) {
+      return closedTable.payment.splitDetails
+        .filter((sd) => sd.amount > 0)
+        .map((sd) => ({ method: sd.method as PanelPaymentMethod, amount: String(fromMinorUnits(toMinorUnits(sd.amount))) }))
     }
-    if (closedTable.payment.splitDetails) {
-      const minorByMethod: Record<string, number> = {}
-      for (const sd of closedTable.payment.splitDetails) {
-        if (sd.amount > 0) {
-          minorByMethod[sd.method] = (minorByMethod[sd.method] || 0) + toMinorUnits(sd.amount)
-        }
-      }
-      for (const [m, minor] of Object.entries(minorByMethod)) {
-        if (minor > 0) map[m] = String(fromMinorUnits(minor))
-      }
-    }
-    return map
+    return [
+      { method: "cash", amount: String(fromMinorUnits(toMinorUnits(closedTable.netAmount))) },
+      { method: "credit-card", amount: "" },
+    ]
   })
 
   const [cancellingTarget, setCancellingTarget] = useState<{
@@ -168,17 +158,20 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
 
   const splitSumMinorUnits = useMemo(() => {
     if (method !== "split") return 0
-    return SPLIT_METHODS.reduce((acc, m) => {
-      const val = parseFloat(String(splitInputs[m.key] || "").replace(",", "."))
+    return splitRows.reduce((acc, row) => {
+      const val = parseFloat(String(row.amount || "").replace(",", "."))
       return acc + (Number.isFinite(val) && val > 0 ? toMinorUnits(val) : 0)
     }, 0)
-  }, [method, splitInputs])
+  }, [method, splitRows])
 
   const splitHasLedger = useMemo(() => {
     if (method !== "split") return false
-    const val = parseFloat(String(splitInputs.ledger || "").replace(",", "."))
-    return Number.isFinite(val) && val > 0
-  }, [method, splitInputs.ledger])
+    return splitRows.some((row) => {
+      if (row.method !== "ledger") return false
+      const val = parseFloat(String(row.amount || "").replace(",", "."))
+      return Number.isFinite(val) && val > 0
+    })
+  }, [method, splitRows])
 
   const splitDiffMinorUnits = previewNetMinorUnits - splitSumMinorUnits
   const isSplitValid = method !== "split" || splitDiffMinorUnits === 0
@@ -244,32 +237,28 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
     savingRef.current = true; setSaving(true)
     try {
       const selectedLedgerCust = ledgerCustomers.find((c) => c.id === ledgerCustomerId,)
-      const rawSplitDetails =
+      const splitDetails =
         method === "split"
-          ? SPLIT_METHODS.map((m) => {
-              const val = parseFloat(String(splitInputs[m.key] || "").replace(",", "."),)
-              return {
-                method: m.key,
-                amount: Number.isFinite(val) && val > 0 ? fromMinorUnits(toMinorUnits(val)) : 0,
-              }
-            }).filter((sd) => sd.amount > 0)
+          ? splitRows
+              .map((row) => {
+                const val = parseFloat(String(row.amount || "").replace(",", "."))
+                return {
+                  method: row.method,
+                  amount: Number.isFinite(val) && val > 0 ? fromMinorUnits(toMinorUnits(val)) : 0,
+                }
+              })
+              .filter((sd) => sd.amount > 0)
           : undefined
-
-      const effectiveMethod: PanelPaymentMethod =
-        method === "split" && rawSplitDetails && rawSplitDetails.length === 1
-          ? rawSplitDetails[0].method
-          : method
-      const splitDetails = effectiveMethod === "split" ? rawSplitDetails : undefined
 
       const paymentSnap = paymentToSnapshot({
         ...closedTable.payment,
-        method: effectiveMethod,
+        method,
         amount: previewNet,
         splitDetails,
         ledgerCustomerId:
-          effectiveMethod === "ledger" || splitHasLedger ? ledgerCustomerId : undefined,
+          method === "ledger" || splitHasLedger ? ledgerCustomerId : undefined,
         ledgerCustomerName:
-          effectiveMethod === "ledger" || splitHasLedger
+          method === "ledger" || splitHasLedger
             ? selectedLedgerCust?.name || closedTable.payment.ledgerCustomerName
             : undefined,
       })
@@ -385,35 +374,56 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-semibold text-[#1d1d1f]">Çoklu Ödeme Dağılımı</span>
                 <span className={`text-[11px] font-semibold ${ splitDiffMinorUnits === 0 ? "text-green-600" : "text-red-600" }`}>
-                  {splitDiffMinorUnits === 0
-                    ? "Toplam Eşleşti"
-                    : splitDiffMinorUnits > 0
-                      ? `Kalan: \u20BA${formatCurrency(fromMinorUnits(splitDiffMinorUnits))}`
-                      : `Fazla: \u20BA${formatCurrency(fromMinorUnits(Math.abs(splitDiffMinorUnits)))}`}
+                  {splitDiffMinorUnits === 0 ? "Toplam Eşleşti" : splitDiffMinorUnits > 0 ? `Kalan: \u20BA${formatCurrency(fromMinorUnits(splitDiffMinorUnits))}` : `Fazla: \u20BA${formatCurrency(fromMinorUnits(Math.abs(splitDiffMinorUnits)))}`}
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                {SPLIT_METHODS.map((m) => (
-                  <label key={m.key} className="text-[11px] text-[#86868b]">
-                    {m.label}
+              <div className="space-y-1.5">
+                {splitRows.map((row, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5">
+                    <span className="text-[10.5px] font-semibold text-[#86868b] w-6">#{idx + 1}</span>
+                    <CustomSelect
+                      disabled={saving}
+                      value={row.method}
+                      onChange={(e) => setSplitRows((prev) => prev.map((r, ri) => (ri === idx ? { ...r, method: e.target.value as PanelPaymentMethod } : r)))}
+                      className="w-36 h-8 px-2.5 text-[12px] rounded-lg border border-[#d1d1d6] bg-white"
+                    >
+                      {SPLIT_METHODS.map((m) => (
+                        <option key={m.key} value={m.key}>{m.label}</option>
+                      ))}
+                    </CustomSelect>
                     <input
                       type="number"
                       min={0}
                       step="0.01"
                       disabled={saving}
-                      value={splitInputs[m.key] || ""}
-                      onChange={(e) =>
-                        setSplitInputs((prev) => ({
-                          ...prev,
-                          [m.key]: e.target.value,
-                        }))
-                      }
+                      value={row.amount}
+                      onChange={(e) => setSplitRows((prev) => prev.map((r, ri) => (ri === idx ? { ...r, amount: e.target.value } : r)))}
                       placeholder="0.00"
-                      className="mt-0.5 w-full h-8 px-2 text-[12px] bg-white rounded border border-[#d1d1d6]"
+                      className="flex-1 h-8 px-2.5 text-[12px] bg-white rounded-lg border border-[#d1d1d6]"
                     />
-                  </label>
+                    {splitRows.length > 1 && (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => setSplitRows((prev) => prev.filter((_, ri) => ri !== idx))}
+                        className="h-8 w-8 rounded-lg border border-[#e5e5ea] bg-white text-[#86868b] hover:text-red-600 flex items-center justify-center"
+                        title="Ödeme satırını kaldır"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setSplitRows((prev) => [...prev, { method: "cash", amount: splitDiffMinorUnits > 0 ? String(fromMinorUnits(splitDiffMinorUnits)) : "" }])}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#e63462] hover:underline pt-0.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{splitDiffMinorUnits > 0 ? `Kalan Tutarı Yeni Satır Olarak Ekle (\u20BA${formatCurrency(fromMinorUnits(splitDiffMinorUnits))})` : "Yeni Ödeme Satırı Ekle"}</span>
+              </button>
             </div>
           )}
 
@@ -422,11 +432,7 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
               <label className="block text-[11px] font-medium text-[#86868b] mb-1">Cari Müşteri *</label>
               <CustomSelect disabled={saving} value={ledgerCustomerId} onChange={(e) => setLedgerCustomerId(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#d1d1d6] bg-white">
                 <option value="">Cari Müşteri Seçin</option>
-                {ledgerCustomers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
+                {ledgerCustomers.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
               </CustomSelect>
             </div>
           )}
@@ -434,26 +440,17 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
           <div className="mt-4 p-3 rounded-lg bg-[#f5f5f7] text-[12px] space-y-1">
             <div className="flex justify-between">
               <span className="text-[#86868b]">Ara toplam (önizleme)</span>
-              <span>
-                {"₺"}
-                {formatCurrency(rawTotal)}
-              </span>
+              <span>{"₺"}{formatCurrency(rawTotal)}</span>
             </div>
             {previewDiscount > 0 && (
               <div className="flex justify-between text-amber-700">
                 <span>İndirim (mevcut)</span>
-                <span>
-                  -{"₺"}
-                  {formatCurrency(previewDiscount)}
-                </span>
+                <span>-{"₺"}{formatCurrency(previewDiscount)}</span>
               </div>
             )}
             <div className="flex justify-between font-semibold pt-1 border-t border-[#e0e0e0]">
               <span>Net (önizleme)</span>
-              <span>
-                {"₺"}
-                {formatCurrency(previewNet)}
-              </span>
+              <span>{"₺"}{formatCurrency(previewNet)}</span>
             </div>
           </div>
         </div>
@@ -465,14 +462,7 @@ export function EditCompletedOrderModal({ closedTable, onClose }: Props) {
             onClick={() => void handleSave()}
             className="flex-1 h-10 rounded-xl bg-[#1d1d1f] text-white text-[13px] font-medium disabled:opacity-50 flex items-center justify-center gap-1.5"
           >
-            {saving ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Kaydediliyor...
-              </>
-            ) : (
-              "Kaydet"
-            )}
+            {saving ? (<><Loader2 className="w-4 h-4 animate-spin" />Kaydediliyor...</>) : "Kaydet"}
           </button>
         </div>
       </div>
