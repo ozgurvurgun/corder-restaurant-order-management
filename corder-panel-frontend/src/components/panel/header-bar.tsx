@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react"
-import { Bell, Globe, ChefHat, AlertTriangle, Package, CreditCard, Menu } from "lucide-react"
+import { Bell, Globe, ChefHat, AlertTriangle, Package, CreditCard, Menu, Keyboard, Search } from "lucide-react"
 import { usePanelStore } from "@/lib/panel-store"
 import { usePanelI18n } from "@/lib/panel-i18n"
 import { ISTANBUL_TZ } from "@/lib/format"
@@ -8,9 +8,16 @@ import type { PanelViewId } from "@/lib/panel-types"
 interface HeaderBarProps {
   activeView?: PanelViewId
   onOpenMobileMenu?: () => void
+  onOpenShortcutsGuide?: () => void
+  onOpenCommandPalette?: () => void
 }
 
-export function HeaderBar({ activeView = "dashboard", onOpenMobileMenu }: HeaderBarProps) {
+export function HeaderBar({
+  activeView = "dashboard",
+  onOpenMobileMenu,
+  onOpenShortcutsGuide,
+  onOpenCommandPalette,
+}: HeaderBarProps) {
   const { notifications, markNotificationRead, clearAllNotifications, currentShift } = usePanelStore()
   const { locale, setLocale, t } = usePanelI18n()
   const [showNotifications, setShowNotifications] = useState(false)
@@ -145,8 +152,38 @@ export function HeaderBar({ activeView = "dashboard", onOpenMobileMenu }: Header
         )}
       </div>
 
-      {/* Right: Language Switcher & Notifications */}
-      <div className="flex items-center gap-2 flex-shrink-0">
+      {/* Right: Quick Command, Shortcuts, Language Switcher & Notifications */}
+      <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+        {onOpenCommandPalette && (
+          <button
+            type="button"
+            onClick={onOpenCommandPalette}
+            title="Hızlı Komut ve Masa Arama (Ctrl+K)"
+            className="hidden md:inline-flex items-center gap-2 h-8 px-2.5 rounded-lg bg-[#f5f5f7] hover:bg-[#e8e8ed] border border-[#d1d1d6]/60 text-[12px] text-[#636366] transition-colors"
+          >
+            <Search className="h-3.5 w-3.5 text-[#86868b]" />
+            <span className="font-medium">Masa / Ekran Ara</span>
+            <kbd className="px-1.5 py-0.5 rounded bg-white border border-[#d1d1d6] text-[10px] font-mono font-semibold text-[#1d1d1f]">
+              Ctrl+K
+            </kbd>
+          </button>
+        )}
+
+        {onOpenShortcutsGuide && (
+          <button
+            type="button"
+            onClick={onOpenShortcutsGuide}
+            title="Klavye Kısayolları Rehberi (?)"
+            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-[#f5f5f7] hover:bg-[#e8e8ed] border border-[#d1d1d6]/60 text-[12px] font-medium text-[#1d1d1f] transition-colors"
+          >
+            <Keyboard className="h-3.5 w-3.5 text-[#e63462]" />
+            <span className="hidden sm:inline">Kısayollar</span>
+            <kbd className="px-1.5 py-0.5 rounded bg-white border border-[#d1d1d6] text-[10px] font-mono font-semibold text-[#1d1d1f]">
+              ?
+            </kbd>
+          </button>
+        )}
+
         <button
           onClick={() => setLocale(locale === "tr" ? "en" : "tr")}
           className="flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-[#f5f5f7] rounded-lg transition-colors"

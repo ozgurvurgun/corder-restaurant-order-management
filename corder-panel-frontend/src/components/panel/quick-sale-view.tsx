@@ -1,7 +1,8 @@
-import { useState, useMemo, useRef } from "react"
+import { useState, useMemo, useRef, useEffect } from "react"
 import { usePanelStore } from "@/lib/panel-store"
 import { usePanelAuth } from "@/lib/panel-auth"
 import { formatCurrency, fromMinorUnits, resolveAssetUrl, toMinorUnits } from "@/lib/format"
+import { isEditableElement } from "@/lib/shortcuts/shortcut-catalog.policy"
 import { usePanelToast } from "./panel-toast"
 import { Search, X, ShoppingBag, Banknote, CreditCard, UtensilsCrossed, Smartphone, Minus, Plus, Trash2, Printer, Loader2 } from "lucide-react"
 import type { PanelCategory, PanelPaymentMethod, PanelProduct } from "@/lib/panel-types"
@@ -130,6 +131,7 @@ export default function QuickSaleView() {
   const [showSuccess, setShowSuccess] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const submittingRef = useRef(false)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [lastSaleForPrint, setLastSaleForPrint] = useState<{
     items: {
@@ -263,6 +265,22 @@ export default function QuickSaleView() {
       total: lastSaleForPrint.total,
     })
   }
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || isSubmitting) return
+      if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey && !isEditableElement(e.target)) {
+        e.preventDefault(); searchInputRef.current?.focus(); searchInputRef.current?.select(); return
+      }
+      if (e.key === "F1") { e.preventDefault(); setPaymentMethod("cash"); return }
+      if (e.key === "F2") { e.preventDefault(); setPaymentMethod("credit-card"); return }
+      if (e.key === "F3") { e.preventDefault(); setPaymentMethod("meal-card"); return }
+      if (e.key === "F4") { e.preventDefault(); setPaymentMethod("multinet"); return }
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && cartItems.length > 0 && currentShift && canQuickSale) {
+        e.preventDefault(); void completeSale()
+      }
+    }
+    window.addEventListener("keydown", onKeyDown); return () => window.removeEventListener("keydown", onKeyDown)
+  })
   return (
     <div className="h-full flex flex-col lg:flex-row bg-[#f5f5f7] overflow-hidden">
       <div className="lg:hidden flex-shrink-0 bg-white border-b border-[#d1d1d6]/60 px-3.5 py-2 flex gap-2">
@@ -290,12 +308,14 @@ export default function QuickSaleView() {
         <div className="relative mb-3 sm:mb-4">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#86868b]" />
           <input
+            ref={searchInputRef}
             type="text"
-            placeholder="Ürün ara..."
+            placeholder="Ürün ara... (/)"
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value); if (e.target.value) setSelectedCategoryId(null)
             }}
+            onKeyDown={(e) => { if (e.key === "Escape") { setSearchQuery(""); e.currentTarget.blur() } }}
             className="w-full h-[44px] sm:h-[48px] pl-12 pr-4 text-[14px] bg-white rounded-2xl border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 shadow-sm"
           />
           {searchQuery && (

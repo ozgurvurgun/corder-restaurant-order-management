@@ -15,12 +15,14 @@ import {
   Building2,
   ShieldCheck,
   CreditCard,
+  Keyboard,
   X,
 } from "lucide-react"
 import { usePanelStore } from "@/lib/panel-store"
 import { usePanelI18n } from "@/lib/panel-i18n"
 import { usePanelAuth } from "@/lib/panel-auth"
 import type { PanelViewId } from "@/lib/panel-types"
+import { VIEW_SHORTCUT_BADGES } from "@/lib/shortcuts/shortcut-catalog.policy"
 import { CustomSelect } from "@/components/ui/custom-inputs"
 
 export type PanelScreen = PanelViewId
@@ -30,6 +32,7 @@ interface SidebarProps {
   onNavigate: (screen: PanelViewId) => void
   mobileOpen?: boolean
   onCloseMobile?: () => void
+  onOpenShortcutsGuide?: () => void
 }
 
 export default function PanelSidebar({
@@ -37,6 +40,7 @@ export default function PanelSidebar({
   onNavigate,
   mobileOpen = false,
   onCloseMobile,
+  onOpenShortcutsGuide,
 }: SidebarProps) {
   const { currentUser, settings, notifications } = usePanelStore()
   const { locale, t } = usePanelI18n()
@@ -265,7 +269,18 @@ export default function PanelSidebar({
                           isActive ? "text-[#e63462]" : "text-[#86868b]"
                         }`}
                       />
-                      <span className="flex-1">{item.label}</span>
+                      <span className="flex-1 truncate">{item.label}</span>
+                      {VIEW_SHORTCUT_BADGES[item.id] && (
+                        <kbd
+                          className={`hidden lg:inline-flex px-1.5 py-0.5 rounded text-[9.5px] font-mono font-semibold border ${
+                            isActive
+                              ? "bg-[#e63462]/15 border-[#e63462]/30 text-[#e63462]"
+                              : "bg-white/70 border-[#d1d1d6]/70 text-[#86868b]"
+                          }`}
+                        >
+                          {VIEW_SHORTCUT_BADGES[item.id]}
+                        </kbd>
+                      )}
                       {item.id === "technical" && unreadCount > 0 && (
                         <span className="w-5 h-5 rounded-full bg-[#e63462] text-white text-[10px] font-bold flex items-center justify-center">
                           {unreadCount}
@@ -282,6 +297,21 @@ export default function PanelSidebar({
 
       {/* User info, Role & Discount Limit Badge & Logout */}
       <div className="px-4 py-3 border-t border-[#d1d1d6]/40 dark:border-[#38383a] space-y-2">
+        {onOpenShortcutsGuide && (
+          <button
+            type="button"
+            onClick={onOpenShortcutsGuide}
+            className="w-full flex items-center justify-between rounded-lg bg-white/80 hover:bg-white px-2.5 py-1.5 border border-[#d1d1d6]/60 text-[11px] font-semibold text-[#1d1d1f] transition-colors"
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <Keyboard className="w-3.5 h-3.5 text-[#e63462]" />
+              <span>Klavye Kısayolları</span>
+            </span>
+            <kbd className="px-1.5 py-0.5 rounded bg-[#f5f5f7] border border-[#d1d1d6] text-[10px] font-mono text-[#636366]">
+              ? / Ctrl+K
+            </kbd>
+          </button>
+        )}
         <div className="flex items-center justify-between rounded-lg bg-white/70 px-2.5 py-1.5 border border-[#d1d1d6]/50">
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#e63462]">
             <ShieldCheck className="w-3 h-3" />

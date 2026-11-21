@@ -1,6 +1,8 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useRef, useEffect } from "react"
 import { usePanelStore } from "@/lib/panel-store"
 import { formatCurrency, formatIstanbulTime } from "@/lib/format"
+import { isEditableElement } from "@/lib/shortcuts/shortcut-catalog.policy"
+import { useSelectTableCommandListener } from "@/lib/shortcuts/panel-shortcut-bus"
 import TableDetailPanel from "./table-detail-panel"
 import { Search, Lock } from "lucide-react"
 
@@ -9,6 +11,24 @@ export default function TablesView() {
   const [activeSection, setActiveSection] = useState("Tumu")
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null)
   const [search, setSearch] = useState("")
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+
+  useSelectTableCommandListener((tableId) => {
+    setSelectedTableId(tableId)
+  })
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return
+      if (e.key === "/" && !isEditableElement(e.target)) {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+        searchInputRef.current?.select()
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [])
 
   const cardSize = settings.tableCardSize || "normal"
   const gridClass =
@@ -57,10 +77,17 @@ export default function TablesView() {
             <div className="relative flex-1 sm:flex-initial">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#86868b]" />
               <input
+                ref={searchInputRef}
                 type="text"
-                placeholder="Masa ara..."
+                placeholder="Masa ara... (/)"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    setSearch("")
+                    e.currentTarget.blur()
+                  }
+                }}
                 className="h-[30px] w-full sm:w-[180px] pl-8 pr-3 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 focus:ring-1 focus:ring-[#e63462]/20"
               />
             </div>

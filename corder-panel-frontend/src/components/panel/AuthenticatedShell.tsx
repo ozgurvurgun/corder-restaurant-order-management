@@ -1,12 +1,18 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { PanelProvider } from "@/lib/panel-store"
 import { I18nProvider } from "@/lib/panel-i18n"
 import { usePanelAuth } from "@/lib/panel-auth"
 import type { PanelViewId } from "@/lib/panel-types"
+import {
+  isEditableElement,
+  resolveAltViewShortcut,
+} from "@/lib/shortcuts/shortcut-catalog.policy"
 import { PanelToastProvider } from "@/components/panel/panel-toast"
 import { PanelFontSizeProvider } from "@/components/panel/panel-font-size-provider"
 import PanelSidebar from "@/components/panel/sidebar"
 import { HeaderBar } from "@/components/panel/header-bar"
+import { ShortcutsGuideModal } from "@/components/panel/shortcuts/shortcuts-guide-modal"
+import { CommandPaletteModal } from "@/components/panel/shortcuts/command-palette-modal"
 import DashboardView from "@/components/panel/dashboard-view"
 import TablesView from "@/components/panel/tables-view"
 import QuickSaleView from "@/components/panel/quick-sale-view"
@@ -116,22 +122,67 @@ function renderScreen(
 export function AuthenticatedShell() {
   const [activeView, setActiveView] = useState<PanelViewId>("dashboard")
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [shortcutsGuideOpen, setShortcutsGuideOpen] = useState(false)
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const { token, currentBusiness, isBoss, hasPermission } = usePanelAuth()
+
+  const checkViewAllowed = useCallback(
+    (view: PanelViewId) => isViewPermitted(view, isBoss, hasPermission),
+    [isBoss, hasPermission],
+  )
 
   useEffect(() => {
     prefetchBillingInfo(token, currentBusiness?.id)
   }, [token, currentBusiness?.id])
 
   useEffect(() => {
-    if (!isViewPermitted(activeView, isBoss, hasPermission)) {
+    if (!checkViewAllowed(activeView)) {
       setActiveView("dashboard")
     }
-  }, [activeView, isBoss, hasPermission])
+  }, [activeView, checkViewAllowed])
 
-  const handleNavigate = (view: PanelViewId) => {
-    setActiveView(view)
-    setMobileMenuOpen(false)
-  }
+  const handleNavigate = useCallback(
+    (view: PanelViewId) => {
+      if (!checkViewAllowed(view)) return
+      setActiveView(view)
+      setMobileMenuOpen(false)
+    },
+    [checkViewAllowed],
+  )
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault()
+        setShortcutsGuideOpen(false)
+        setCommandPaletteOpen((prev) => !prev)
+        return
+      }
+      const altTargetView = resolveAltViewShortcut(e)
+      if (altTargetView) {
+        if (checkViewAllowed(altTargetView)) {
+          e.preventDefault()
+          setCommandPaletteOpen(false)
+          setShortcutsGuideOpen(false)
+          handleNavigate(altTargetView)
+        }
+        return
+      }
+      if (
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        e.key === "?" &&
+        !isEditableElement(e.target)
+      ) {
+        e.preventDefault()
+        setCommandPaletteOpen(false)
+        setShortcutsGuideOpen((prev) => !prev)
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [checkViewAllowed, handleNavigate])
 
   return (
     <PanelProvider>
@@ -144,16 +195,31 @@ export function AuthenticatedShell() {
                 onNavigate={handleNavigate}
                 mobileOpen={mobileMenuOpen}
                 onCloseMobile={() => setMobileMenuOpen(false)}
+                onOpenShortcutsGuide={() => setShortcutsGuideOpen(true)}
               />
               <div className="flex-1 flex flex-col overflow-hidden min-w-0">
                 <HeaderBar
                   activeView={activeView}
                   onOpenMobileMenu={() => setMobileMenuOpen(true)}
+                  onOpenShortcutsGuide={() => setShortcutsGuideOpen(true)}
+                  onOpenCommandPalette={() => setCommandPaletteOpen(true)}
                 />
                 <main className="flex-1 overflow-hidden min-w-0">
                   {renderScreen(activeView, handleNavigate)}
                 </main>
               </div>
+              <CommandPaletteModal
+                open={commandPaletteOpen}
+                onClose={() => setCommandPaletteOpen(false)}
+                onNavigate={handleNavigate}
+                isViewAllowed={checkViewAllowed}
+                onOpenShortcutsGuide={() => setShortcutsGuideOpen(true)}
+              />
+              <ShortcutsGuideModal
+                open={shortcutsGuideOpen}
+                onClose={() => setShortcutsGuideOpen(false)}
+                onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+              />
               <SystemUpdateModal />
             </div>
           </PanelFontSizeProvider>

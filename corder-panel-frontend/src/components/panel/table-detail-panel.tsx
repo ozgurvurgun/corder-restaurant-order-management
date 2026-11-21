@@ -4,6 +4,7 @@ import { itemCountsTowardBill } from "@/lib/panel-types"
 import { formatCurrency, formatIstanbulTime, fromMinorUnits, toMinorUnits } from "@/lib/format"
 import { usePanelToast } from "./panel-toast"
 import { usePanelAuth } from "@/lib/panel-auth"
+import { useTableDetailShortcuts } from "@/lib/shortcuts/panel-shortcut-bus"
 import PaymentModal, { type PaymentSplitTarget } from "./payment-modal"
 import OrderCancelModal from "./order-cancel-modal"
 import SplitBillModal from "./split-bill-modal"
@@ -26,11 +27,7 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
   const canCreateOrder = hasPermission("order.create")
   const canCloseCheck = hasPermission("billing.close_check")
   const canSplitBill = hasPermission("billing.split_bill")
-  const canDiscount = hasPermission(
-    "discount.apply_percent",
-    "discount.apply_amount",
-    "discount.complimentary",
-  )
+  const canDiscount = hasPermission("discount.apply_percent", "discount.apply_amount", "discount.complimentary")
   const canRemoveDiscount = hasPermission("discount.remove")
   const canPrintReceipt = hasPermission("order.print_receipt")
   const canMoveTable = hasPermission("table.move")
@@ -44,18 +41,8 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
   const [showDiscount, setShowDiscount] = useState(false)
   const [showMoveTable, setShowMoveTable] = useState(false)
   const [showAddOrder, setShowAddOrder] = useState(false)
-  const [moveItem, setMoveItem] = useState<{
-    orderId: string
-    itemId: string
-    itemName: string
-    maxQuantity: number
-  } | null>(null)
-  const [cancelItem, setCancelItem] = useState<{
-    orderId: string
-    itemId: string
-    itemName: string
-    maxQuantity: number
-  } | null>(null)
+  const [moveItem, setMoveItem] = useState<{ orderId: string; itemId: string; itemName: string; maxQuantity: number } | null>(null)
+  const [cancelItem, setCancelItem] = useState<{ orderId: string; itemId: string; itemName: string; maxQuantity: number } | null>(null)
   const [assignLedger, setAssignLedger] = useState<AssignLedgerTarget | null>(null)
   const [revertLedgerItemId, setRevertLedgerItemId] = useState<string | null>(null); useEffect(() => {
     if (!assignLedger || !token) return
@@ -66,15 +53,27 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
   const rawTotal = useMemo(() => getTableTotal(tableId), [getTableTotal, tableId])
   const discount = table?.discount
   const discountAmount = discount?.amount || 0
-  const total = fromMinorUnits(Math.max(0, toMinorUnits(rawTotal) - toMinorUnits(discountAmount))); if (!table) return null
+  const total = fromMinorUnits(Math.max(0, toMinorUnits(rawTotal) - toMinorUnits(discountAmount)))
   const safeTab = Math.min(activeTab, Math.max(tableOrders.length - 1, 0))
   const activeOrder = tableOrders[safeTab]
   const activeOrderHasPrintableLines = Boolean(activeOrder && activeOrder.items.some((i) => itemCountsTowardBill(i)),)
-  const hasPaidPersonShares = table.splitInfo?.type === "person" &&
+  const hasPaidPersonShares = table?.splitInfo?.type === "person" &&
     (table.splitInfo.paidShares?.length ?? 0) > 0
   const handlePrint = () => {
+    if (!table || !canPrintReceipt || tableOrders.length === 0) return
     void reprintReceipt(tableId); showToast(`${table.name} masası - konsolide fiş yazıcıya gönderildi`, "success")
   }
+  const hasChildModal = Boolean(showAddOrder || paymentTarget || showSplitBill || showDiscount || showMoveTable || moveItem || cancelItem || assignLedger)
+  useTableDetailShortcuts({
+    disabled: !table || hasChildModal,
+    onAddOrder: () => { if (canCreateOrder && table?.status !== "checkout") setShowAddOrder(true) },
+    onCheckout: () => { if (canCloseCheck && tableOrders.length > 0) setPaymentTarget({ mode: "full" }) },
+    onSplitBill: () => { if (canSplitBill && tableOrders.length > 0 && !hasPaidPersonShares) setShowSplitBill(true) },
+    onDiscount: () => { if (canDiscount && tableOrders.length > 0 && !hasPaidPersonShares) setShowDiscount(true) },
+    onPrintTable: handlePrint,
+    onMoveTable: () => { if (canMoveTable && tableOrders.length > 0) setShowMoveTable(true) },
+    onClosePanel: onClose,
+  }); if (!table) return null
   const handlePrintActiveOrder = () => {
     if (!activeOrder || !activeOrder.items.some((i) => itemCountsTowardBill(i))) return
     void reprintReceipt({ orderId: activeOrder.id }); showToast("Seçili adisyon fişi (notlarla) yazıcıya gönderildi", "success")
@@ -365,42 +364,39 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
             disabled={!canCreateOrder || table.status === "checkout"}
             className="flex items-center justify-center gap-2 w-full h-[40px] bg-[#e63462] hover:bg-[#d12d57] disabled:opacity-45 disabled:pointer-events-none text-white rounded-xl text-[14px] font-semibold transition-colors"
           >
-            <Plus className="w-4 h-4" /> Sipariş Gir
+            <Plus className="w-4 h-4" /> <span>Sipariş Gir</span>
+            <kbd className="hidden sm:inline-flex px-1.5 py-0.5 rounded bg-white/20 text-[10px] font-mono">N</kbd>
           </button>
           <button
             onClick={() => setPaymentTarget({ mode: "full" })}
             disabled={!canCloseCheck || tableOrders.length === 0}
             className="flex items-center justify-center gap-2 w-full h-[40px] bg-[#34c759] hover:bg-[#2db84e] disabled:opacity-45 disabled:pointer-events-none text-white rounded-xl text-[14px] font-semibold transition-colors"
           >
-            <CreditCard className="w-4 h-4" /> Hesap Kes
+            <CreditCard className="w-4 h-4" /> <span>Hesap Kes</span>
+            <kbd className="hidden sm:inline-flex px-1.5 py-0.5 rounded bg-white/20 text-[10px] font-mono">H</kbd>
           </button>
           <div className="flex gap-2">
             <button
               onClick={() => setShowSplitBill(true)}
               disabled={!canSplitBill || tableOrders.length === 0 || hasPaidPersonShares}
-              title={
-                hasPaidPersonShares
-                  ? "Kişi payı tahsilatı başladıktan sonra bölüşüm değiştirilemez"
-                  : undefined
-              }
+              title={hasPaidPersonShares ? "Kişi payı tahsilatı başladıktan sonra bölüşüm değiştirilemez" : "Kısayol: B"}
               className={`flex-1 flex items-center justify-center gap-1.5 h-[36px] rounded-xl text-[13px] font-medium transition-colors disabled:opacity-45 disabled:pointer-events-none ${
-                table.splitInfo
-                  ? "bg-[#007aff]/10 text-[#007aff] border border-[#007aff]/30"
-                  : "bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f]"
+                table.splitInfo ? "bg-[#007aff]/10 text-[#007aff] border border-[#007aff]/30" : "bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f]"
               }`}
             >
-              <Users className="w-3.5 h-3.5" /> Hesap Böl
+              <Users className="w-3.5 h-3.5" /> <span>Hesap Böl</span>
+              <kbd className="hidden sm:inline-flex px-1 py-0.5 rounded bg-black/[0.06] text-[9.5px] font-mono">B</kbd>
             </button>
             <button
               onClick={() => setShowDiscount(true)}
               disabled={!canDiscount || tableOrders.length === 0 || hasPaidPersonShares}
+              title="Kısayol: I"
               className={`flex-1 flex items-center justify-center gap-1.5 h-[36px] rounded-xl text-[13px] font-medium transition-colors disabled:opacity-45 disabled:pointer-events-none ${
-                discount
-                  ? "bg-[#e63462]/10 text-[#e63462] border border-[#e63462]/30"
-                  : "bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f]"
+                discount ? "bg-[#e63462]/10 text-[#e63462] border border-[#e63462]/30" : "bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f]"
               }`}
             >
-              <Percent className="w-3.5 h-3.5" /> İndirim
+              <Percent className="w-3.5 h-3.5" /> <span>İndirim</span>
+              <kbd className="hidden sm:inline-flex px-1 py-0.5 rounded bg-black/[0.06] text-[9.5px] font-mono">I</kbd>
             </button>
           </div>
           <div className="flex flex-col gap-2">
@@ -409,9 +405,11 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
                 type="button"
                 onClick={handlePrint}
                 disabled={!canPrintReceipt || tableOrders.length === 0}
+                title="Kısayol: P"
                 className="flex-1 flex items-center justify-center gap-1.5 h-[36px] bg-[#f5f5f7] hover:bg-[#e8e8ed] disabled:opacity-45 disabled:pointer-events-none rounded-xl text-[12px] font-medium text-[#1d1d1f] transition-colors"
               >
-                <Printer className="w-3.5 h-3.5" /> Masa fişi
+                <Printer className="w-3.5 h-3.5" /> <span>Masa fişi</span>
+                <kbd className="hidden sm:inline-flex px-1 py-0.5 rounded bg-black/[0.06] text-[9.5px] font-mono">P</kbd>
               </button>
               <button
                 type="button"
@@ -426,9 +424,11 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
               type="button"
               onClick={() => setShowMoveTable(true)}
               disabled={!canMoveTable || tableOrders.length === 0}
+              title="Kısayol: T"
               className="w-full flex items-center justify-center gap-1.5 h-[36px] bg-[#f5f5f7] hover:bg-[#e8e8ed] disabled:opacity-45 disabled:pointer-events-none rounded-xl text-[13px] font-medium text-[#1d1d1f] transition-colors"
             >
-              <ArrowRightLeft className="w-3.5 h-3.5" /> Taşı
+              <ArrowRightLeft className="w-3.5 h-3.5" /> <span>Taşı</span>
+              <kbd className="hidden sm:inline-flex px-1 py-0.5 rounded bg-black/[0.06] text-[9.5px] font-mono">T</kbd>
             </button>
           </div>
         </div>

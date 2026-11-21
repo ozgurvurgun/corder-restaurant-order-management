@@ -6,6 +6,7 @@ import type { CloseCheckSplitMethod, PanelDiscountType, PanelPaymentMethod } fro
 import { X, Banknote, CreditCard, UtensilsCrossed, SplitSquareVertical, Wallet, BookUser, Loader2, ShieldAlert } from "lucide-react"
 import { usePanelAuth } from "@/lib/panel-auth"
 import { api } from "@/lib/api"
+import { PAYMENT_METHOD_SHORTCUT_KEYS, usePaymentModalShortcuts } from "@/lib/shortcuts/panel-shortcut-bus"
 import { computeDiscountMinorUnits, formatCurrency, fromMinorUnits, toMinorUnits } from "@/lib/format"
 function sanitizePositiveDecimalInput(raw: string): string {
   if (raw === "") return ""
@@ -242,6 +243,13 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill,
     if (m.id === "split" && (isPersonShare || !canSplitBill)) return false; if (m.id === "ledger" && !canAssignLedger) return false
     return true
   })
+  usePaymentModalShortcuts({
+    disabled: isSubmitting,
+    allowedMethods: availableMethods.map((m) => m.id),
+    onSelectMethod: (nextMethod) => setMethod(nextMethod),
+    onFillExactCash: () => setReceivedAmount(String(fromMinorUnits(netMinorUnits + tipMinorUnits))),
+    onConfirm: () => { if (canConfirm()) void handleConfirm() },
+  })
   const headerTitle = isPersonShare
     ? `Kişi Payı Ödeme (${splitTarget.shareIndex + 1}/${splitTarget.personCount}. Kişi)`
     : isItemsSplit
@@ -282,10 +290,11 @@ export default function PaymentModal({ tableId, total, onClose, onOpenSplitBill,
                     type="button"
                     disabled={isSubmitting}
                     onClick={() => setMethod(m.id)}
-                    className={`flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border text-[12px] font-medium transition-colors disabled:opacity-50 ${
+                    className={`relative flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border text-[12px] font-medium transition-colors disabled:opacity-50 ${
                       method === m.id ? "border-[#e63462] bg-[#e63462]/5 text-[#e63462]" : "border-[#d1d1d6]/60 text-[#1d1d1f] hover:bg-[#f5f5f7]"
                     }`}
                   >
+                    <kbd className="absolute top-1.5 right-1.5 px-1 py-0.5 rounded bg-black/[0.06] text-[9px] font-mono text-[#636366]">{PAYMENT_METHOD_SHORTCUT_KEYS[m.id]}</kbd>
                     <Icon className="w-5 h-5" />
                     {m.label}
                   </button>
