@@ -82,7 +82,7 @@ export function usePanelHydration(params: {
       const next = prev.map((t) => {
         const tableOrders = activeOrdersByTable.get(t.id) ?? []
         const nextWaiter =
-          resolveStaffNameForTable(t.id, orders, users, tableOrders, staffNameById) ||
+          resolveStaffNameForTable(tableOrders, staffNameById) ||
           (t.orderCount > 0 ? t.lockedByStaffName : undefined)
         if (t.waiter === nextWaiter) return t
         changed = true

@@ -57,7 +57,7 @@ describe('CS-04: FIX-08 (FE-01, CC-02) — Print-Agent ↔ Backend infinite sync
     assert.equal(emitted.some((e) => e.event === 'printers:updated'), false);
   });
 
-  it('only emits printers:updated in PrintersService.syncFromAgent when printer rows were actually inserted, updated, or deleted', async () => {
+  it('only emits printers:updated in PrintersService.syncFromPrintAgent when printer rows were actually inserted, updated, or deleted', async () => {
     const printerId = '11111111-1111-4111-8111-111111111111';
     let dbPrinters: PrinterConfigEntity[] = [
       Object.assign(new PrinterConfigEntity(), {
@@ -90,7 +90,7 @@ describe('CS-04: FIX-08 (FE-01, CC-02) — Print-Agent ↔ Backend infinite sync
 
     const printersService = new PrintersService(mockRepo, mockGateway);
 
-    await printersService.syncFromAgent('rest-1', {
+    await printersService.syncFromPrintAgent('rest-1', {
       printers: [{
         id: printerId, name: 'Mutfak Yazıcı', mode: 'system',
         systemPrinterName: 'EPSON_TM_T20II', paperWidth: 80,
@@ -99,7 +99,7 @@ describe('CS-04: FIX-08 (FE-01, CC-02) — Print-Agent ↔ Backend infinite sync
     });
     assert.equal(emittedCount, 0);
 
-    await printersService.syncFromAgent('rest-1', {
+    await printersService.syncFromPrintAgent('rest-1', {
       printers: [{
         id: printerId, name: 'Ana Mutfak Yazıcı', mode: 'system',
         systemPrinterName: 'EPSON_TM_T20II', paperWidth: 80,
@@ -108,20 +108,21 @@ describe('CS-04: FIX-08 (FE-01, CC-02) — Print-Agent ↔ Backend infinite sync
     });
     assert.equal(emittedCount, 1);
 
-    await printersService.syncFromAgent('rest-1', { printers: [] });
+    await printersService.syncFromPrintAgent('rest-1', { printers: [] });
     assert.equal(emittedCount, 2);
     assert.equal(dbPrinters.length, 0);
   });
 });
 
 describe('CS-04: FIX-36 (FE-02, FE-03, CC-05 #4) — USB systemPrinterName, UUID generation & kitchen-split routing', () => {
-  it('returns systemPrinterName for USB printers in PrintAgentController.getContext() and preserves it in print-agent settings-store', async () => {
+  it('returns systemPrinterName for USB printers in PrintAgentController.getAgentContext() and preserves it in print-agent settings-store', async () => {
     const usbId = '33333333-3333-4333-8333-333333333333';
     const netId = '44444444-4444-4444-8444-444444444444';
     const controller = new PrintAgentController(
       {} as any, {} as any, {} as any,
       { findByRestaurant: async () => [] } as any,
       {
+        recordAgentHttpHeartbeat: async () => false,
         list: async () => [
           {
             id: usbId, name: 'Kasa Termal', type: 'receipt', connection: 'usb',
@@ -137,7 +138,7 @@ describe('CS-04: FIX-36 (FE-02, FE-03, CC-05 #4) — USB systemPrinterName, UUID
       {} as any,
     );
 
-    const ctx = await controller.getContext('rest-1');
+    const ctx = await controller.getAgentContext({ printAgentRestaurantId: 'rest-1', headers: {} });
     assert.equal(ctx.printers.find((p) => p.id === usbId)?.systemPrinterName, 'EPSON_TM_T20II_USB');
     assert.equal(ctx.printers.find((p) => p.id === netId)?.systemPrinterName, null);
 

@@ -101,13 +101,10 @@ export function applyTableDiscountMinor(
 
 export function mapOrderDtoToTerminalOrder(
   dto: OrderDto,
-  rawTables: RawTableDto[] | ReadonlyMap<string, RawTableDto>,
+  rawTablesById: ReadonlyMap<string, RawTableDto>,
   productsById?: Map<string, TerminalProduct>
 ): TerminalOrder {
-  const matchedTable =
-    rawTables instanceof Map
-      ? rawTables.get(dto.tableId)
-      : (rawTables as RawTableDto[]).find((table) => table.id === dto.tableId)
+  const matchedTable = rawTablesById.get(dto.tableId)
   const tableName = formatTitleCase(matchedTable?.name ?? dto.tableId)
   const tableNumber = extractTableNumber(tableName, 0)
 

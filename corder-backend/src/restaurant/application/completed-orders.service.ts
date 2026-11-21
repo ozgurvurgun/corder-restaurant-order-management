@@ -123,21 +123,11 @@ export class CompletedOrdersService {
     return { totalAmount, discountAmount, netAmount };
   }
 
-  async updateFromPanel(
-    restaurantId: string,
-    id: string,
-    dto: UpdateCompletedOrderDto,
-    actorName = 'Manager',
-    actor?: { id?: string } & SettlementActorPolicy,
-  ): Promise<CompletedOrderEntity> {
-    return this.update(restaurantId, id, dto, actorName, actor);
-  }
-
   async update(
     restaurantId: string,
     id: string,
     dto: UpdateCompletedOrderDto,
-    actorName: string,
+    actorName = 'Manager',
     actor?: { id?: string } & SettlementActorPolicy,
   ): Promise<CompletedOrderEntity> {
     const saved = await this.dataSource.transaction(async (em) => {

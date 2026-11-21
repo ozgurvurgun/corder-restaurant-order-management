@@ -61,7 +61,7 @@ export class LedgerController {
     @RestaurantUser() user: { id: string; name: string },
     @Body() body: AddLedgerPaymentDto,
   ) {
-    return this.ledger.addPayment(
+    return this.ledger.recordPayment(
       restaurantId,
       id,
       body.amount,

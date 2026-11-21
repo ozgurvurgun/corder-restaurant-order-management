@@ -28,6 +28,8 @@ const DEDUP_TTL_MS = 45_000
 let swRegistrationPromise: Promise<ServiceWorkerRegistration | null> | null = null
 let pushSetupInstalled = false
 let pushSubscribeInFlight = false
+let cachedVapidPublicKey: string | null = null
+let lastSyncedPushSignature: string | null = null
 
 function pruneRecentShownTags(): void {
   const now = Date.now()
@@ -130,12 +132,14 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 export async function syncTerminalWebPushSubscription(
-  explicitToken?: string | null
+  explicitToken?: string | null,
+  force = false
 ): Promise<void> {
   if (typeof window === "undefined" || pushSubscribeInFlight) return
   if (getTerminalPushPermissionStatus() !== "granted") return
   const token = explicitToken ?? getToken()
   if (!token) return
+  if (!force && lastSyncedPushSignature === token) return
 
   pushSubscribeInFlight = true
   try {
@@ -143,13 +147,17 @@ export async function syncTerminalWebPushSubscription(
     if (!reg || !("pushManager" in reg)) return
 
     const base = getBase()
-    const keyRes = await fetch(`${base}/restaurant/push/vapid-public-key`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (!keyRes.ok) return
-    const keyData = (await keyRes.json()) as { publicKey?: string }
-    const publicKey = keyData?.publicKey?.trim()
-    if (!publicKey) return
+    let publicKey = cachedVapidPublicKey
+    if (!publicKey) {
+      const keyRes = await fetch(`${base}/restaurant/push/vapid-public-key`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!keyRes.ok) return
+      const keyData = (await keyRes.json()) as { publicKey?: string }
+      publicKey = keyData?.publicKey?.trim() || null
+      if (!publicKey) return
+      cachedVapidPublicKey = publicKey
+    }
 
     const expectedKey = urlBase64ToUint8Array(publicKey)
     let sub = await reg.pushManager.getSubscription()
@@ -173,7 +181,7 @@ export async function syncTerminalWebPushSubscription(
     const subJson = sub.toJSON()
     if (!subJson?.endpoint || !subJson?.keys?.p256dh || !subJson?.keys?.auth) return
 
-    await fetch(`${base}/restaurant/push/subscribe`, {
+    const subRes = await fetch(`${base}/restaurant/push/subscribe`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -190,6 +198,9 @@ export async function syncTerminalWebPushSubscription(
         },
       }),
     })
+    if (subRes.ok) {
+      lastSyncedPushSignature = token
+    }
   } catch {
     // Ignore push subscription errors
   } finally {
@@ -205,7 +216,7 @@ export async function requestTerminalPushPermission(): Promise<
     const result = await Notification.requestPermission()
     if (result === "granted") {
       saveTerminalNotificationPrefs({ enabled: true, browserPushEnabled: true })
-      void syncTerminalWebPushSubscription()
+      void syncTerminalWebPushSubscription(undefined, true)
     }
     emitPermissionChanged(result)
     return result
@@ -238,6 +249,8 @@ export function installTerminalPushAutoSetup(): void {
   let gesturePromptAttempted = false
   const handleFirstGesture = () => {
     if (gesturePromptAttempted) return
+    gesturePromptAttempted = true
+    window.removeEventListener("click", handleFirstGesture)
     const perm = getTerminalPushPermissionStatus()
     if (perm !== "default") {
       if (perm === "granted") void syncTerminalWebPushSubscription()
@@ -245,11 +258,10 @@ export function installTerminalPushAutoSetup(): void {
     }
     const prefs = getTerminalNotificationPrefs()
     if (!prefs.enabled) return
-    gesturePromptAttempted = true
     void requestTerminalPushPermission()
   }
 
-  window.addEventListener("click", handleFirstGesture, { passive: true })
+  window.addEventListener("click", handleFirstGesture, { passive: true, once: true })
 }
 
 export function triggerTerminalPushNotification(

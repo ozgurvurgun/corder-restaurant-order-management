@@ -69,7 +69,7 @@ export class CompletedOrdersController {
     },
     @Body() dto: UpdateCompletedOrderDto,
   ) {
-    const updated = await this.service.updateFromPanel(
+    const updated = await this.service.update(
       restaurantId,
       id,
       dto,

@@ -294,13 +294,6 @@ export class LedgerService {
     return customer;
   }
 
-  async addPayment(
-    restaurantId: string, customerId: string, amount: number,
-    receivedBy: string, receivedByUserId?: string | null, paymentMethod = 'cash',
-  ) {
-    return this.recordPayment(restaurantId, customerId, amount, receivedBy, receivedByUserId, paymentMethod);
-  }
-
   async assertCustomer(
     restaurantId: string, customerId: string, em?: EntityManager, lock = false,
   ): Promise<LedgerCustomerEntity> {

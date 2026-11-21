@@ -2,8 +2,6 @@ const { io } = require("socket.io-client")
 const {
   ackKitchenPrinted,
   ackPrintJobPrinted,
-  fetchPendingKitchenOrders,
-  fetchPendingPrintJobs,
   fetchPendingSync,
   refreshAgentSession,
 } = require("./http-sync")
@@ -222,10 +220,8 @@ function startAgent({ config: initialConfig, store, printer, onContextInvalidate
     store.clearQueue()
 
     if (config.backendWsUrl && (config.agentToken || config.refreshToken) && config.restaurantId) {
-      const [pendingKitchen, pendingJobs] = await Promise.all([
-        fetchPendingKitchenOrders(config).catch(() => []),
-        fetchPendingPrintJobs(config).catch(() => []),
-      ])
+      const { kitchenOrders: pendingKitchen, printJobs: pendingJobs } =
+        await fetchPendingSync(config).catch(() => ({ kitchenOrders: [], printJobs: [] }))
       for (const payload of pendingKitchen) {
         const base = normalizeOrderCreated(payload, config.restaurantId)
         if (base) settleJobsAsSkipped(expandKitchenPrintJobs(base, config))

@@ -145,42 +145,6 @@ async function ackPrintJobPrinted(config, jobId) {
   return patchWithRetry(config, url, "PrintJob", { jobId })
 }
 
-async function fetchPendingKitchenOrders(config) {
-  const base = httpBaseUrl(config)
-  if (!base || (!config.agentToken && !config.refreshToken)) return []
-  const url = `${base}/restaurant/print-agent/pending-kitchen-orders`
-  try {
-    const res = await authorizedFetch(config, url)
-    if (!res.ok) {
-      if (res.status !== 401) warn("pending-kitchen HTTP failed", { status: res.status })
-      return []
-    }
-    const data = await res.json()
-    return Array.isArray(data) ? data : []
-  } catch (e) {
-    warn("pending-kitchen HTTP error", { error: e instanceof Error ? e.message : String(e) })
-    return []
-  }
-}
-
-async function fetchPendingPrintJobs(config) {
-  const base = httpBaseUrl(config)
-  if (!base || (!config.agentToken && !config.refreshToken)) return []
-  const url = `${base}/restaurant/print-agent/pending-print-jobs`
-  try {
-    const res = await authorizedFetch(config, url)
-    if (!res.ok) {
-      if (res.status !== 401) warn("pending-print-jobs HTTP failed", { status: res.status })
-      return []
-    }
-    const data = await res.json()
-    return Array.isArray(data) ? data : []
-  } catch (e) {
-    warn("pending-print-jobs HTTP error", { error: e instanceof Error ? e.message : String(e) })
-    return []
-  }
-}
-
 async function fetchPendingSync(config) {
   const base = httpBaseUrl(config)
   if (!base || (!config.agentToken && !config.refreshToken)) {
@@ -189,13 +153,6 @@ async function fetchPendingSync(config) {
   const url = `${base}/restaurant/print-agent/pending-sync`
   try {
     const res = await authorizedFetch(config, url)
-    if (res.status === 404) {
-      const [kitchenOrders, printJobs] = await Promise.all([
-        fetchPendingKitchenOrders(config),
-        fetchPendingPrintJobs(config),
-      ])
-      return { kitchenOrders, printJobs }
-    }
     if (!res.ok) {
       if (res.status !== 401) warn("pending-sync HTTP failed", { status: res.status })
       return { kitchenOrders: [], printJobs: [] }
@@ -317,8 +274,6 @@ module.exports = {
   httpBaseUrl,
   ackKitchenPrinted,
   ackPrintJobPrinted,
-  fetchPendingKitchenOrders,
-  fetchPendingPrintJobs,
   fetchPendingSync,
   loginPrintAgent,
   logoutPrintAgent,

@@ -307,11 +307,4 @@ export class PrintersService {
     }
     return savedList;
   }
-
-  async syncFromAgent(
-    restaurantId: string,
-    body: Parameters<PrintersService['syncFromPrintAgent']>[1],
-  ): Promise<PrinterConfigEntity[]> {
-    return this.syncFromPrintAgent(restaurantId, body);
-  }
 }

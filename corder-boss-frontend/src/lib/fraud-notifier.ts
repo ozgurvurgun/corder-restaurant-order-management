@@ -15,6 +15,8 @@ const DEDUP_TTL_MS = 45_000
 let swRegistrationPromise: Promise<ServiceWorkerRegistration | null> | null = null
 let pushSetupInstalled = false
 let pushSubscribeInFlight = false
+let cachedVapidPublicKey: string | null = null
+let lastSyncedPushSignature: string | null = null
 
 function pruneRecentShownTags(): void {
   const now = Date.now()
@@ -65,12 +67,14 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 export async function syncBossWebPushSubscription(
-  explicitToken?: string | null
+  explicitToken?: string | null,
+  force = false
 ): Promise<void> {
   if (typeof window === "undefined" || pushSubscribeInFlight) return
   if (!("Notification" in window) || Notification.permission !== "granted") return
   const token = explicitToken ?? getBossToken()
   if (!token) return
+  if (!force && lastSyncedPushSignature === token) return
 
   pushSubscribeInFlight = true
   try {
@@ -78,13 +82,17 @@ export async function syncBossWebPushSubscription(
     if (!reg || !("pushManager" in reg)) return
 
     const base = getApiBase()
-    const keyRes = await fetch(`${base}/restaurant/push/vapid-public-key`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (!keyRes.ok) return
-    const keyData = (await keyRes.json()) as { publicKey?: string }
-    const publicKey = keyData?.publicKey?.trim()
-    if (!publicKey) return
+    let publicKey = cachedVapidPublicKey
+    if (!publicKey) {
+      const keyRes = await fetch(`${base}/restaurant/push/vapid-public-key`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!keyRes.ok) return
+      const keyData = (await keyRes.json()) as { publicKey?: string }
+      publicKey = keyData?.publicKey?.trim() || null
+      if (!publicKey) return
+      cachedVapidPublicKey = publicKey
+    }
 
     const expectedKey = urlBase64ToUint8Array(publicKey)
     let sub = await reg.pushManager.getSubscription()
@@ -108,7 +116,7 @@ export async function syncBossWebPushSubscription(
     const subJson = sub.toJSON()
     if (!subJson?.endpoint || !subJson?.keys?.p256dh || !subJson?.keys?.auth) return
 
-    await fetch(`${base}/restaurant/push/subscribe`, {
+    const subRes = await fetch(`${base}/restaurant/push/subscribe`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -125,6 +133,9 @@ export async function syncBossWebPushSubscription(
         },
       }),
     })
+    if (subRes.ok) {
+      lastSyncedPushSignature = token
+    }
   } catch {
     // Ignore push subscription errors
   } finally {
@@ -154,17 +165,18 @@ export function installBossPushAutoSetup(): void {
   let gesturePromptAttempted = false
   const handleFirstGesture = () => {
     if (gesturePromptAttempted) return
+    gesturePromptAttempted = true
+    window.removeEventListener("click", handleFirstGesture)
     if (!("Notification" in window)) return
     if (Notification.permission !== "default") {
       if (Notification.permission === "granted") void syncBossWebPushSubscription()
       return
     }
     if (!getFraudPushSoundEnabled()) return
-    gesturePromptAttempted = true
     void requestBrowserNotificationPermission()
   }
 
-  window.addEventListener("click", handleFirstGesture, { passive: true })
+  window.addEventListener("click", handleFirstGesture, { passive: true, once: true })
 }
 
 export function getBossReadNotifIds(): Set<string> {

@@ -73,26 +73,18 @@ export function mergeTablesPreserveClientFields(
 
 /** Waiter name from staff (userId) on active orders. */
 export function resolveStaffNameForTable(
-  tableId: string,
-  orders: PanelOrder[],
-  staffUsers: PanelUser[],
-  pregroupedActiveOrders?: PanelOrder[],
-  staffNameById?: ReadonlyMap<string, string>,
+  tableOrders: PanelOrder[],
+  staffNameById: ReadonlyMap<string, string>,
 ): string | undefined {
-  const active =
-    pregroupedActiveOrders ??
-    orders.filter((o) => o.tableId === tableId && o.status === "active")
-  if (active.length === 0) return undefined
+  if (tableOrders.length === 0) return undefined
   const sorted =
-    active.length > 1
-      ? [...active].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-      : active
+    tableOrders.length > 1
+      ? [...tableOrders].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      : tableOrders
   for (const o of sorted) {
     const uid = o.userId?.trim()
     if (uid) {
-      const name = staffNameById
-        ? staffNameById.get(uid)
-        : staffUsers.find((u) => u.id === uid)?.name?.trim()
+      const name = staffNameById.get(uid)
       if (name) return name
     }
     const fromApi = o.userName?.trim()
@@ -146,7 +138,7 @@ export function mapApiTablesToPanel(
 
     const orderCount = tableOrders.length
     const waiter =
-      resolveStaffNameForTable(t.id, orders, staffUsers, tableOrders, staffNameById) ||
+      resolveStaffNameForTable(tableOrders, staffNameById) ||
       (orderCount > 0 && t.sessionStaffName?.trim()
         ? formatTitleCase(t.sessionStaffName)
         : undefined)

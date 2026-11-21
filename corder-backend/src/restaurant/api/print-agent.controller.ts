@@ -69,14 +69,6 @@ export class PrintAgentController {
     return this.buildContext(req.printAgentRestaurantId);
   }
 
-  async getContext(reqOrRestaurantId: PrintAgentRequest | string) {
-    const restaurantId =
-      typeof reqOrRestaurantId === 'string'
-        ? reqOrRestaurantId
-        : reqOrRestaurantId.printAgentRestaurantId;
-    return this.buildContext(restaurantId);
-  }
-
   @Post('logout')
   @UseGuards(PrintAgentGuard)
   async logout(@Req() req: PrintAgentRequest) {
