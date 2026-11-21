@@ -61,10 +61,23 @@ export class CashTransactionsController {
   async list(
     @RestaurantId() restaurantId: string,
     @Query('shiftId', new ParseUUIDPipe({ optional: true })) shiftId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('type') type?: string,
+    @Query('limit') limit?: string,
   ) {
     if (shiftId) {
       return this.service.listForShift(restaurantId, shiftId);
     }
-    return this.service.listForCurrentShift(restaurantId);
+    const parsedLimit = limit ? parseInt(limit, 10) : 500;
+    const safeLimit = Number.isFinite(parsedLimit)
+      ? Math.min(1000, Math.max(1, parsedLimit))
+      : 500;
+    return this.service.listForRestaurant(restaurantId, {
+      from: from ? new Date(from) : undefined,
+      to: to ? new Date(to) : undefined,
+      type: type?.trim() || undefined,
+      limit: safeLimit,
+    });
   }
 }

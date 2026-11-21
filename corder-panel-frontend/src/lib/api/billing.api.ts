@@ -140,11 +140,22 @@ export const cashTransactionsApi = {
         body: JSON.stringify(body),
       },
     ),
-  list: (token: string, shiftId?: string) => {
-    const qs = shiftId ? `?shiftId=${encodeURIComponent(shiftId)}` : ""
-    return request<CashTransactionDto[]>(`/restaurant/cash-transactions${qs}`, {
-      token,
-    })
+  list: (
+    token: string,
+    shiftId?: string,
+    params?: { from?: string; to?: string; type?: string; limit?: number },
+  ) => {
+    const search = new URLSearchParams()
+    if (shiftId) search.set("shiftId", shiftId)
+    if (params?.from) search.set("from", params.from)
+    if (params?.to) search.set("to", params.to)
+    if (params?.type) search.set("type", params.type)
+    if (params?.limit != null) search.set("limit", String(params.limit))
+    const qs = search.toString()
+    return request<CashTransactionDto[]>(
+      `/restaurant/cash-transactions${qs ? `?${qs}` : ""}`,
+      { token },
+    )
   },
 }
 

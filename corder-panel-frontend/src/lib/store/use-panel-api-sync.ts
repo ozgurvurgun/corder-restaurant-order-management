@@ -158,7 +158,7 @@ export function usePanelApiSync(
       }
       inFlightPosRef.current = true
       try {
-        const [apiTables, ordersRes, currentShiftRes, completedOrdersRes, openAccountsRes, ledgerCustomersRes] =
+        const [apiTables, ordersRes, currentShiftRes, completedOrdersRes, openAccountsRes, ledgerCustomersRes, cashTxRes] =
           await Promise.all([
             api.tables.list(token).catch(() => null),
             api.orders.list(token).catch(() => null),
@@ -166,6 +166,7 @@ export function usePanelApiSync(
             api.completedOrders.list(token, { limit: 500 }).catch(() => null),
             api.openAccounts.list(token).catch(() => null),
             api.ledgerCustomers.list(token).catch(() => null),
+            setCashTransactions ? api.cashTransactions.list(token, undefined, { limit: 500 }).catch(() => null) : Promise.resolve(null),
           ])
         if (cancelled) return
 
@@ -200,10 +201,9 @@ export function usePanelApiSync(
               ? prev.map((s) => (s.id === mappedShift.id ? mappedShift : s))
               : [mappedShift, ...prev],
           )
-          if (setCashTransactions) {
-            const cashTxRes = await api.cashTransactions.list(token, currentShiftRes.id).catch(() => null)
-            if (!cancelled && cashTxRes) setCashTransactions(cashTxRes.map(mapCashTransactionDtoToPanel))
-          }
+        }
+        if (setCashTransactions && cashTxRes) {
+          setCashTransactions(cashTxRes.map(mapCashTransactionDtoToPanel))
         }
 
         if (openAccountsRes) setOpenAccounts?.(openAccountsRes.map(mapOpenAccountDtoToPanel))
@@ -288,13 +288,11 @@ export function usePanelApiSync(
         )
         setNotifications?.((prev) => mergeDerivedAndRealtimeNotifications(prev, derived, restaurantId))
 
-        if (setCashTransactions && currentShiftRes?.id) {
-          const cashTxRes = await api.cashTransactions.list(token, currentShiftRes.id).catch(() => null)
+        if (setCashTransactions) {
+          const cashTxRes = await api.cashTransactions.list(token, undefined, { limit: 500 }).catch(() => null)
           if (!cancelled && cashTxRes) {
             setCashTransactions((cashTxRes as CashTransactionDto[]).map(mapCashTransactionDtoToPanel))
           }
-        } else if (setCashTransactions && !currentShiftRes) {
-          setCashTransactions([])
         }
       } catch (e) {
         console.error("Panel API load error:", e)

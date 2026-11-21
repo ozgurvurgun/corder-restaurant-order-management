@@ -59,20 +59,13 @@ export default function ProductManagement() {
   const [productCalories, setProductCalories] = useState("")
   const [productAllergens, setProductAllergens] = useState<string[]>([])
   const [productImage, setProductImage] = useState("")
+  const [productShowInMenu, setProductShowInMenu] = useState(true)
   const [catName, setCatName] = useState("")
-  const orderedCategories = useMemo(
-    () => orderedCategoryList(categories),
-    [categories],
-  )
-  const depthById = useMemo(
-    () => new Map(categories.map((c) => [c.id, categoryDepth(categories, c.id)])),
-    [categories],
-  )
+  const orderedCategories = useMemo(() => orderedCategoryList(categories), [categories])
+  const depthById = useMemo(() => new Map(categories.map((c) => [c.id, categoryDepth(categories, c.id)])), [categories])
   const productCountByCategoryId = useMemo(() => {
     const counts = new Map<string, number>()
-    for (const p of products) {
-      counts.set(p.categoryId, (counts.get(p.categoryId) ?? 0) + 1)
-    }
+    for (const p of products) counts.set(p.categoryId, (counts.get(p.categoryId) ?? 0) + 1)
     return counts
   }, [products])
 
@@ -80,9 +73,7 @@ export default function ProductManagement() {
     if (!orderedCategories.length) return
     const first = orderedCategories[0]
     if (!first) return
-    setSelectedCat((cur) =>
-      cur && orderedCategories.some((c) => c.id === cur) ? cur : first.id,
-    )
+    setSelectedCat((cur) => (cur && orderedCategories.some((c) => c.id === cur) ? cur : first.id))
   }, [orderedCategories])
 
   const [editName, setEditName] = useState("")
@@ -93,6 +84,7 @@ export default function ProductManagement() {
   const [editCalories, setEditCalories] = useState("")
   const [editAllergens, setEditAllergens] = useState<string[]>([])
   const [editImage, setEditImage] = useState("")
+  const [editShowInMenu, setEditShowInMenu] = useState(true)
 
   const catProducts = useMemo(() => {
     const q = search.trim().toLocaleLowerCase("tr-TR")
@@ -124,22 +116,21 @@ export default function ProductManagement() {
       price: priceVal,
       categoryId: selectedCat,
       inStock: true,
+      showInMenu: productShowInMenu,
       description: productDesc.trim() || undefined,
       calories: calVal != null && Number.isFinite(calVal) && calVal > 0 ? calVal : null,
       allergens: productAllergens.length > 0 ? productAllergens : undefined,
       image: productImage || undefined,
-    }); setProductName(""); setProductPrice(""); setProductDesc(""); setProductCalories(""); setProductAllergens([]); setProductImage(""); setShowAddProduct(false)
+    }); setProductName(""); setProductPrice(""); setProductDesc(""); setProductCalories(""); setProductAllergens([]); setProductImage(""); setProductShowInMenu(true); setShowAddProduct(false)
   }
 
   const handleAddCategory = () => {
     if (!catName.trim()) return
-    addCategory(catName.trim(), {
-      parentId: newCategoryParentId.trim() || null,
-    }); setCatName(""); setNewCategoryParentId(""); setShowAddCategory(false)
+    addCategory(catName.trim(), { parentId: newCategoryParentId.trim() || null }); setCatName(""); setNewCategoryParentId(""); setShowAddCategory(false)
   }
 
   const openEditModal = (product: PanelProduct) => {
-    setEditingProduct(product); setEditName(product.name); setEditCategoryId(product.categoryId); setEditPrice(product.price.toString()); setEditCostPrice(product.costPrice != null ? product.costPrice.toString() : "",); setEditDesc(product.description || ""); setEditCalories(product.calories != null && product.calories > 0 ? String(product.calories) : ""); setEditAllergens(product.allergens ?? []); setEditImage(product.image || "")
+    setEditingProduct(product); setEditName(product.name); setEditCategoryId(product.categoryId); setEditPrice(product.price.toString()); setEditCostPrice(product.costPrice != null ? product.costPrice.toString() : ""); setEditDesc(product.description || ""); setEditCalories(product.calories != null && product.calories > 0 ? String(product.calories) : ""); setEditAllergens(product.allergens ?? []); setEditImage(product.image || ""); setEditShowInMenu(product.showInMenu !== false)
   }
 
   const handleUpdateProduct = () => {
@@ -156,21 +147,18 @@ export default function ProductManagement() {
       updateProduct(editingProduct.id, { price: priceVal }); setEditingProduct(null)
       return
     }
-    const parsedCost =
-      editCostPrice.trim() !== "" ? parseFloat(editCostPrice) : undefined
-    const parsedCalories =
-      editCalories.trim() !== "" ? Math.round(Number(editCalories)) : null
+    const parsedCost = editCostPrice.trim() !== "" ? parseFloat(editCostPrice) : undefined
+    const parsedCalories = editCalories.trim() !== "" ? Math.round(Number(editCalories)) : null
     updateProduct(editingProduct.id, {
       name: editName.trim(),
       categoryId: editCategoryId || editingProduct.categoryId,
       ...(canChangePrice ? { price: priceVal } : {}),
-      ...(parsedCost != null && Number.isFinite(parsedCost) && parsedCost >= 0
-        ? { costPrice: parsedCost }
-        : {}),
+      ...(parsedCost != null && Number.isFinite(parsedCost) && parsedCost >= 0 ? { costPrice: parsedCost } : {}),
       description: editDesc.trim(),
       calories: parsedCalories != null && Number.isFinite(parsedCalories) && parsedCalories > 0 ? parsedCalories : null,
       allergens: editAllergens,
       image: editImage,
+      showInMenu: editShowInMenu,
     }); setEditingProduct(null)
   }
 
@@ -198,33 +186,25 @@ export default function ProductManagement() {
                 if (canManageCategories) e.preventDefault()
               }}
               onDrop={(e) => {
-                e.preventDefault(); if (
-                  !canManageCategories ||
-                  !dragCategoryId ||
-                  dragCategoryId === cat.id
-                )
-                  return
+                e.preventDefault()
+                if (!canManageCategories || !dragCategoryId || dragCategoryId === cat.id) return
                 const fromCat = categories.find((c) => c.id === dragCategoryId)
-                const toCat = categories.find((c) => c.id === cat.id); if (!fromCat || !toCat) return
+                const toCat = categories.find((c) => c.id === cat.id)
+                if (!fromCat || !toCat) return
                 const p1 = fromCat.parentId ?? null
-                const p2 = toCat.parentId ?? null; if (p1 !== p2) {
-                  setDragCategoryId(null)
-                  return
-                }
+                const p2 = toCat.parentId ?? null
+                if (p1 !== p2) { setDragCategoryId(null); return }
                 const siblings = categories
                   .filter((c) => (c.parentId ?? null) === p2)
-                  .sort(
-                    (a, b) =>
-                      a.order - b.order || a.name.localeCompare(b.name, "tr"),
-                  )
-                const fromIndex = siblings.findIndex((c) => c.id === dragCategoryId,)
-                const toIndex = siblings.findIndex((c) => c.id === cat.id); if (fromIndex === -1 || toIndex === -1) return
+                  .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, "tr"))
+                const fromIndex = siblings.findIndex((c) => c.id === dragCategoryId)
+                const toIndex = siblings.findIndex((c) => c.id === cat.id)
+                if (fromIndex === -1 || toIndex === -1) return
                 const next = [...siblings]
                 const [moved] = next.splice(fromIndex, 1)
-                next.splice(toIndex, 0, moved); reorderCategories(
-                  next.map((c) => c.id),
-                  p2,
-                ); setDragCategoryId(null)
+                next.splice(toIndex, 0, moved)
+                reorderCategories(next.map((c) => c.id), p2)
+                setDragCategoryId(null)
               }}
             >
               {editingCat === cat.id ? (
@@ -234,34 +214,23 @@ export default function ProductManagement() {
                     defaultValue={cat.name}
                     autoFocus
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        commitCategoryRename(cat.id, e.currentTarget.value)
-                      } else if (e.key === "Escape") {
-                        catRenameCommittedRef.current = true; setEditingCat(null)
-                      }
+                      if (e.key === "Enter") commitCategoryRename(cat.id, e.currentTarget.value)
+                      else if (e.key === "Escape") { catRenameCommittedRef.current = true; setEditingCat(null) }
                     }}
-                    onBlur={(e) =>
-                      commitCategoryRename(cat.id, e.target.value)
-                    }
+                    onBlur={(e) => commitCategoryRename(cat.id, e.target.value)}
                     className="flex-1 h-[28px] px-2 text-[13px] bg-[#f5f5f7] rounded border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50"
                   />
                 </div>
               ) : (
                 <div
-                  style={{
-                    paddingLeft: `${12 + (depthById.get(cat.id) ?? 0) * 12}px`,
-                  }}
+                  style={{ paddingLeft: `${12 + (depthById.get(cat.id) ?? 0) * 12}px` }}
                   className={`w-full pr-4 text-[13px] flex items-center justify-between gap-1 transition-colors ${selectedCat === cat.id ? "bg-[#e63462]/10 text-[#e63462] font-medium" : "text-[#1d1d1f] hover:bg-black/[0.03]"}`}
                 >
                   <button type="button" onClick={() => setSelectedCat(cat.id)} className="truncate flex-1 flex items-center gap-2 py-2 text-left">
                     <span className="truncate">{cat.name}</span>
                     <span className="flex items-center gap-0.5 shrink-0">
-                      {cat.showInTerminal && (
-                        <Monitor className="w-2.5 h-2.5 text-blue-500" />
-                      )}
-                      {cat.showInMenu && (
-                        <Menu className="w-2.5 h-2.5 text-green-500" />
-                      )}
+                      {cat.showInTerminal && <Monitor className="w-2.5 h-2.5 text-blue-500" />}
+                      {cat.showInMenu && <Menu className="w-2.5 h-2.5 text-green-500" />}
                     </span>
                   </button>
                   <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0">
@@ -340,6 +309,8 @@ export default function ProductManagement() {
               setProductAllergens={setProductAllergens}
               productImage={productImage}
               setProductImage={setProductImage}
+              productShowInMenu={productShowInMenu}
+              setProductShowInMenu={setProductShowInMenu}
               onUpload={token ? handleUpload : undefined}
               onClose={() => setShowAddProduct(false)}
               onSubmit={handleAddProduct}
@@ -347,11 +318,12 @@ export default function ProductManagement() {
           )}
 
           <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-x-auto">
-            <table className="w-full min-w-[460px]">
+            <table className="w-full min-w-[540px]">
               <thead>
                 <tr className="border-b border-[#f0f0f0] bg-[#f9f9f9]">
                   <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Ürün</th>
                   <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Fiyat</th>
+                  <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">QR Menü</th>
                   <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">Stok</th>
                   <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide w-[100px]">İşlem</th>
                 </tr>
@@ -414,6 +386,22 @@ export default function ProductManagement() {
                     </td>
                     <td className="px-4 py-3 text-right text-[13px] font-semibold text-[#e63462]"> {"₺"} {formatCurrency(product.price)} </td>
                     <td className="px-4 py-3 text-center">
+                      <button
+                        type="button"
+                        disabled={!canToggleStock && !canManageProducts}
+                        onClick={() => updateProduct(product.id, { showInMenu: !(product.showInMenu !== false) })}
+                        title={product.showInMenu !== false ? "QR Menüde Gösteriliyor (Gizlemek için tıklayın)" : "QR Menüde Gizli (Göstermek için tıklayın)"}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 ${
+                          product.showInMenu !== false
+                            ? "bg-green-50 text-green-700 hover:bg-green-100"
+                            : "bg-[#f5f5f7] text-[#86868b] hover:bg-[#e8e8ed]"
+                        }`}
+                      >
+                        <Menu className="w-3 h-3" />
+                        {product.showInMenu !== false ? "Göster" : "Gizli"}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 text-center">
                       <button disabled={!canToggleStock} onClick={() => updateProduct(product.id, { inStock: !product.inStock, }) } className="inline-flex items-center disabled:opacity-50">
                         {product.inStock ? (
                           <ToggleRight className="w-6 h-6 text-[#34c759]" />
@@ -440,7 +428,7 @@ export default function ProductManagement() {
                 ))}
                 {catProducts.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-4 py-10 text-center text-[13px] text-[#86868b]"><Package className="w-8 h-8 text-[#d1d1d6] mx-auto mb-2" />{" "} Bu kategoride ürün yok </td>
+                    <td colSpan={5} className="px-4 py-10 text-center text-[13px] text-[#86868b]"><Package className="w-8 h-8 text-[#d1d1d6] mx-auto mb-2" />{" "} Bu kategoride ürün yok </td>
                   </tr>
                 )}
               </tbody>
@@ -468,6 +456,8 @@ export default function ProductManagement() {
           setEditAllergens={setEditAllergens}
           editImage={editImage}
           setEditImage={setEditImage}
+          editShowInMenu={editShowInMenu}
+          setEditShowInMenu={setEditShowInMenu}
           canEditDetails={canManageProducts}
           canChangePrice={canChangePrice}
           onUpload={token ? handleUpload : undefined}

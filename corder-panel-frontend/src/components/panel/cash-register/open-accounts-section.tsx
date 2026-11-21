@@ -3,9 +3,10 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   Banknote,
+  ChevronRight,
   CreditCard,
   DollarSign,
-  Plus,
+  History,
   Receipt,
   UtensilsCrossed,
   Wallet,
@@ -19,7 +20,8 @@ import {
   fromMinorUnits,
   toMinorUnits,
 } from "@/lib/format"
-import { PaginationBar } from "@/components/ui/pagination-bar"
+
+export { CashTransactionsSection } from "./cash-transactions-section"
 
 export function ShiftOverviewSection(props: {
   currentShift: CashShift | null
@@ -33,6 +35,8 @@ export function ShiftOverviewSection(props: {
   canViewHistory?: boolean
   onOpenShiftModal: () => void
   onOpenAddTransaction: (type: "expense" | "cash-in" | "cash-out") => void
+  onOpenTransactionsTab?: () => void
+  onInspectClosedShift?: (shiftId: string) => void
 }) {
   const {
     currentShift,
@@ -46,57 +50,134 @@ export function ShiftOverviewSection(props: {
     canViewHistory = true,
     onOpenShiftModal,
     onOpenAddTransaction,
+    onOpenTransactionsTab,
+    onInspectClosedShift,
   } = props
 
-  if (!currentShift) {
+  const [recentFilter, setRecentFilter] = useState<"all" | "manual">("all")
+
+  const manualTransactions = useMemo(
+    () => shiftTransactions.filter((tx) => tx.type !== "sale"),
+    [shiftTransactions],
+  )
+
+  const displayedRecentTransactions = useMemo(
+    () =>
+      (recentFilter === "manual" ? manualTransactions : shiftTransactions).slice(
+        0,
+        12,
+      ),
+    [recentFilter, manualTransactions, shiftTransactions],
+  )
+
+  const renderClosedShiftsPreview = () => {
+    if (!canViewHistory || closedShifts.length === 0) return null
     return (
-      <div className="text-center py-20">
-        <Wallet className="w-12 h-12 text-[#d1d1d6] mx-auto mb-3" />
-        <p className="text-[14px] text-[#86868b] mb-4">
-          Kasa kapalı. İşlem yapabilmek için kasayı açın.
-        </p>
-        {canOpenShift && (
-          <button
-            onClick={onOpenShiftModal}
-            className="h-[40px] px-6 bg-[#34c759] text-white rounded-xl text-[14px] font-semibold hover:bg-[#2db84e] transition-colors"
-          >
-            Kasa Aç
-          </button>
-        )}
-        {canViewHistory && closedShifts.length > 0 && (
-          <div className="mt-8 max-w-2xl mx-auto">
-            <h3 className="text-[13px] font-semibold text-[#1d1d1f] mb-3">
-              Önceki Vardiyalar
+      <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
+        <div className="px-4 py-3 bg-[#f9f9f9] border-b border-[#f0f0f0] flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <History className="w-4 h-4 text-[#e63462]" />
+            <h3 className="text-[13px] font-semibold text-[#1d1d1f]">
+              Son Kapanmış Kasalar (Vardiya Geçmişi)
             </h3>
-            <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
-              {closedShifts.slice(0, 5).map((s, idx) => (
-                <div
-                  key={s.id}
-                  className={`flex items-center justify-between px-4 py-3 ${idx > 0 ? "border-t border-[#f0f0f0]" : ""}`}
-                >
-                  <div className="text-left">
-                    <p className="text-[12px] font-medium text-[#1d1d1f]">
-                      {s.openedBy} - {s.closedBy}
-                    </p>
-                    <p className="text-[10px] text-[#86868b]">
-                      {formatIstanbulDateTime(s.openedAt)} -{" "}
-                      {s.closedAt ? formatIstanbulTime(s.closedAt) : "-"}
-                    </p>
-                  </div>
+          </div>
+          {onInspectClosedShift && closedShifts[0] && (
+            <button
+              type="button"
+              onClick={() => onInspectClosedShift(closedShifts[0].id)}
+              className="text-[11px] font-semibold text-[#e63462] hover:underline flex items-center gap-0.5"
+            >
+              Tüm Geçmiş Kasaları Gör ({closedShifts.length})
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+        <div>
+          {closedShifts.slice(0, 5).map((s, idx) => {
+            const expMinor =
+              toMinorUnits(s.openingBalance || 0) +
+              toMinorUnits(s.cashIn || 0) -
+              toMinorUnits(s.cashOut || 0)
+            const diffMinor =
+              s.closingBalance != null
+                ? toMinorUnits(s.closingBalance) - expMinor
+                : 0
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => onInspectClosedShift?.(s.id)}
+                className={`w-full flex items-center justify-between px-4 py-3 hover:bg-[#f5f5f7] transition-colors text-left ${
+                  idx > 0 ? "border-t border-[#f0f0f0]" : ""
+                }`}
+              >
+                <div>
+                  <p className="text-[12px] font-semibold text-[#1d1d1f]">
+                    {s.openedBy}
+                    {s.closedBy ? ` → Kapatan: ${s.closedBy}` : ""}
+                  </p>
+                  <p className="text-[11px] text-[#86868b]">
+                    {formatIstanbulDateTime(s.openedAt)} -{" "}
+                    {s.closedAt ? formatIstanbulDateTime(s.closedAt) : "-"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
                   <div className="text-right">
                     <p className="text-[13px] font-bold text-[#e63462]">
-                      {"\u20BA"}
+                      Ciro: {"\u20BA"}
                       {formatCurrency(s.totalRevenue)}
                     </p>
                     <p className="text-[10px] text-[#86868b]">
-                      {s.transactionCount} işlem
+                      Sayılan:{" "}
+                      {s.closingBalance != null
+                        ? `\u20BA${formatCurrency(s.closingBalance)}`
+                        : "-"}{" "}
+                      · Fark:{" "}
+                      <span
+                        className={
+                          diffMinor === 0
+                            ? "text-green-600 font-semibold"
+                            : diffMinor > 0
+                              ? "text-blue-600 font-semibold"
+                              : "text-red-600 font-semibold"
+                        }
+                      >
+                        {diffMinor === 0
+                          ? "Tam"
+                          : diffMinor > 0
+                            ? `+\u20BA${formatCurrency(fromMinorUnits(diffMinor))}`
+                            : `-\u20BA${formatCurrency(fromMinorUnits(Math.abs(diffMinor)))}`}
+                      </span>
                     </p>
                   </div>
+                  <ChevronRight className="w-4 h-4 text-[#86868b]" />
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  if (!currentShift) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-white rounded-xl border border-[#d1d1d6]/60 text-center py-14 px-4">
+          <Wallet className="w-12 h-12 text-[#d1d1d6] mx-auto mb-3" />
+          <p className="text-[14px] text-[#86868b] mb-4">
+            Kasa şu anda kapalı. Satış ve gelir/gider işlemi yapabilmek için kasayı açın.
+          </p>
+          {canOpenShift && (
+            <button
+              onClick={onOpenShiftModal}
+              className="h-[40px] px-6 bg-[#34c759] text-white rounded-xl text-[14px] font-semibold hover:bg-[#2db84e] transition-colors"
+            >
+              Kasa Aç
+            </button>
+          )}
+        </div>
+        {renderClosedShiftsPreview()}
       </div>
     )
   }
@@ -252,16 +333,56 @@ export function ShiftOverviewSection(props: {
       )}
 
       <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
-        <h3 className="text-[13px] font-semibold text-[#1d1d1f] px-4 pt-4 pb-2">
-          Son İşlemler
-        </h3>
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3.5 pb-2.5 border-b border-[#f0f0f0]">
+          <div className="flex items-center gap-2">
+            <h3 className="text-[13px] font-semibold text-[#1d1d1f]">
+              Son İşlemler
+            </h3>
+            <div className="flex items-center gap-1 bg-[#f5f5f7] p-0.5 rounded-lg">
+              <button
+                type="button"
+                onClick={() => setRecentFilter("all")}
+                className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors ${
+                  recentFilter === "all"
+                    ? "bg-white text-[#1d1d1f] shadow-sm"
+                    : "text-[#86868b]"
+                }`}
+              >
+                Tümü ({shiftTransactions.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setRecentFilter("manual")}
+                className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors ${
+                  recentFilter === "manual"
+                    ? "bg-white text-[#e63462] shadow-sm"
+                    : "text-[#86868b]"
+                }`}
+              >
+                Sadece Gelir & Gider ({manualTransactions.length})
+              </button>
+            </div>
+          </div>
+          {onOpenTransactionsTab && (
+            <button
+              type="button"
+              onClick={onOpenTransactionsTab}
+              className="text-[11px] font-semibold text-[#e63462] hover:underline flex items-center gap-0.5"
+            >
+              Tüm Gelir & Giderleri Gör
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
         <div className="max-h-[300px] overflow-auto">
-          {shiftTransactions.length === 0 ? (
+          {displayedRecentTransactions.length === 0 ? (
             <p className="px-4 py-6 text-center text-[12px] text-[#86868b]">
-              Bu vardiyada henüz işlem bulunmuyor.
+              {recentFilter === "manual"
+                ? "Bu vardiyada henüz kaydedilmiş manuel gelir veya gider bulunmuyor."
+                : "Bu vardiyada henüz işlem bulunmuyor."}
             </p>
           ) : (
-            shiftTransactions.slice(0, 10).map((tx, idx) => (
+            displayedRecentTransactions.map((tx, idx) => (
               <div
                 key={tx.id}
                 className={`flex items-center justify-between px-4 py-2.5 ${idx > 0 ? "border-t border-[#f0f0f0]" : ""}`}
@@ -293,7 +414,9 @@ export function ShiftOverviewSection(props: {
                               : "bg-amber-50 text-amber-700"
                           }`}
                         >
-                          {tx.reference === "credit-card" ? "Kredi Kartı" : "Nakit"}
+                          {tx.reference === "credit-card"
+                            ? "Kredi Kartı"
+                            : "Nakit"}
                         </span>
                       )}
                     </div>
@@ -314,126 +437,8 @@ export function ShiftOverviewSection(props: {
           )}
         </div>
       </div>
+
+      {renderClosedShiftsPreview()}
     </>
-  )
-}
-
-export function CashTransactionsSection(props: {
-  cashTransactions: CashTransaction[]
-  currentShift: CashShift | null
-  canAddTransaction?: boolean
-  onOpenAddTransaction: () => void
-}) {
-  const {
-    cashTransactions,
-    currentShift,
-    canAddTransaction = true,
-    onOpenAddTransaction,
-  } = props
-  const [page, setPage] = useState(1)
-  const pageSize = 12
-  const sorted = useMemo(
-    () =>
-      [...cashTransactions].sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      ),
-    [cashTransactions],
-  )
-  const paginated = useMemo(
-    () => sorted.slice((page - 1) * pageSize, page * pageSize),
-    [sorted, page],
-  )
-
-  return (
-    <div className="bg-white rounded-xl border border-[#d1d1d6]/60 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#f0f0f0]">
-        <h3 className="text-[13px] font-semibold text-[#1d1d1f]">
-          Tüm İşlemler
-        </h3>
-        {currentShift && canAddTransaction && (
-          <button
-            onClick={onOpenAddTransaction}
-            className="h-[28px] px-3 flex items-center gap-1.5 bg-[#e63462]/10 text-[#e63462] rounded-lg text-[11px] font-medium hover:bg-[#e63462]/20"
-          >
-            <Plus className="w-3 h-3" /> İşlem Ekle
-          </button>
-        )}
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[520px]">
-        <thead>
-          <tr className="bg-[#f9f9f9] border-b border-[#f0f0f0]">
-            <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
-              Saat
-            </th>
-            <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
-              Tür
-            </th>
-            <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
-              Açıklama
-            </th>
-            <th className="text-left px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
-              İşleyen
-            </th>
-            <th className="text-right px-4 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wide">
-              Tutar
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {paginated.map((tx, idx) => (
-            <tr
-              key={tx.id}
-              className={`border-b border-[#f0f0f0] ${idx % 2 === 1 ? "bg-[#fafafa]" : ""}`}
-            >
-              <td className="px-4 py-2 text-[12px] text-[#86868b]">
-                {formatIstanbulTime(tx.createdAt)}
-              </td>
-              <td className="px-4 py-2">
-                <span
-                  className={`text-[10px] font-medium px-2 py-0.5 rounded ${tx.type === "sale" ? "bg-green-50 text-green-600" : tx.type === "expense" ? "bg-red-50 text-red-500" : tx.type === "cash-in" ? "bg-blue-50 text-blue-600" : tx.type === "refund" ? "bg-amber-50 text-amber-600" : "bg-gray-50 text-gray-500"}`}
-                >
-                  {tx.type === "sale"
-                    ? "Satış"
-                    : tx.type === "expense"
-                      ? tx.reference === "credit-card"
-                        ? "Gider · Kart"
-                        : "Gider · Nakit"
-                      : tx.type === "cash-in"
-                        ? "Giriş"
-                        : tx.type === "cash-out"
-                          ? "Çıkış"
-                          : "İade"}
-                </span>
-              </td>
-              <td className="px-4 py-2 text-[12px] text-[#1d1d1f]">
-                {tx.description}
-              </td>
-              <td className="px-4 py-2 text-[12px] text-[#86868b]">
-                {tx.createdBy}
-              </td>
-              <td
-                className={`px-4 py-2 text-[12px] text-right font-semibold ${tx.type === "sale" || tx.type === "cash-in" ? "text-green-600" : "text-red-500"}`}
-              >
-                {tx.type === "sale" || tx.type === "cash-in" ? "+" : "-"}
-                {"\u20BA"}
-                {formatCurrency(tx.amount)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      </div>
-      <div className="px-4 pb-3">
-        <PaginationBar
-          currentPage={page}
-          totalItems={sorted.length}
-          pageSize={pageSize}
-          onPageChange={setPage}
-          itemLabel="işlem"
-        />
-      </div>
-    </div>
   )
 }

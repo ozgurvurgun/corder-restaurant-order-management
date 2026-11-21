@@ -55,6 +55,9 @@ export class ProductEntity {
   @Column({ name: 'in_stock', default: true })
   inStock: boolean;
 
+  @Column({ name: 'show_in_menu', default: true })
+  showInMenu: boolean;
+
   @Column({ default: 0 })
   order: number;
 

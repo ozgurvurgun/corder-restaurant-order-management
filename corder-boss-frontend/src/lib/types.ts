@@ -371,6 +371,7 @@ export interface CatalogProductDto {
   price: number
   imageUrl?: string | null
   inStock: boolean
+  showInMenu?: boolean
 }
 
 export interface CatalogCategoryDto {

@@ -97,6 +97,7 @@ export interface ProductDto {
   costPrice?: number | null
   imageUrl: string | null
   inStock: boolean
+  showInMenu?: boolean
   order: number
   createdAt: string
   calories?: number | null
@@ -113,6 +114,7 @@ export interface CreateProductBody {
   costPrice?: number | null
   imageUrl?: string
   inStock?: boolean
+  showInMenu?: boolean
   order?: number
   calories?: number | null
   allergens?: string[] | null
@@ -127,6 +129,7 @@ export interface UpdateProductBody {
   costPrice?: number | null
   imageUrl?: string
   inStock?: boolean
+  showInMenu?: boolean
   order?: number
   calories?: number | null
   allergens?: string[] | null

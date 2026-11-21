@@ -72,6 +72,7 @@ export function mapApiProductsToPanel(
       costPrice: p.costPrice != null ? Number(p.costPrice) : undefined,
       categoryId: p.categoryId,
       inStock: p.inStock,
+      showInMenu: p.showInMenu !== false,
       order: p.order,
       description: p.description ?? undefined,
       image: p.imageUrl ?? undefined,

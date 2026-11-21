@@ -101,9 +101,11 @@ export function buildMenuCategoryTree(
   visibleIds: Set<string>,
   roots: CategoryEntity[],
   products: ProductEntity[],
+  forTerminal = false,
 ): MenuCategoryTreeDto[] {
   const productsByCatId = new Map<string, MenuProductRow[]>();
   for (const p of products) {
+    if (!forTerminal && p.showInMenu === false) continue;
     const list = productsByCatId.get(p.categoryId) ?? [];
     const calories =
       p.calories != null && Number.isFinite(Number(p.calories)) && Number(p.calories) > 0

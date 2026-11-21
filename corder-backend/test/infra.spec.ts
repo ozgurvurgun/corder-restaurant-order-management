@@ -166,10 +166,10 @@ describe('HealthController', () => {
 });
 
 describe('TypeORM DataSource metadata integrity', () => {
-  it('loads all 35 entities and 18 migrations cleanly', async () => {
+  it('loads all 35 entities and 19 migrations cleanly', async () => {
     await (dataSource as unknown as { buildMetadatas(): Promise<void> }).buildMetadatas();
     assert.equal(dataSource.entityMetadatas.length, 35);
-    assert.equal(dataSource.migrations.length, 18);
+    assert.equal(dataSource.migrations.length, 19);
     const migrationNames = dataSource.migrations
       .map((m) => m.name ?? '')
       .sort((a, b) => Number(a.match(/\d+$/)?.[0] ?? 0) - Number(b.match(/\d+$/)?.[0] ?? 0));
@@ -192,10 +192,11 @@ describe('TypeORM DataSource metadata integrity', () => {
       'CreateWebPushTables1760000015000',
       'AddHotPathPerformanceIndexes1760000016000',
       'AddScale10kPerformanceIndexes1760000017000',
+      'AddProductShowInMenuAndBackfillCashDescriptions1760000018000',
     ]);
   });
 
-  it('executes all 18 migrations up() and down() cleanly against a recording QueryRunner', async () => {
+  it('executes all 19 migrations up() and down() cleanly against a recording QueryRunner', async () => {
     const executedQueries: string[] = [];
     const mockRunner = {
       query: async (sql: string) => {
@@ -325,5 +326,57 @@ describe('WebPushService, DTO validation & CompletedOrderEditLogPolicy', () => {
     assert.equal(editLog.changes.some((c) => c.type === 'item_cancelled'), true);
     assert.equal(editLog.changes.some((c) => c.type === 'payment_method_changed'), false);
     assert.equal(editLog.changes.some((c) => c.type === 'net_amount_changed'), true);
+  });
+
+  it('filters product showInMenu=false on public QR menu while keeping it visible on waiter terminal and supports historical cashTransactions queries', async () => {
+    const { buildMenuCategoryTree } = await import('../src/menu/domain/menu-tree.policy');
+    const { CashTransactionsService } = await import('../src/restaurant/application/cash-transactions.service');
+
+    const cat = {
+      id: 'cat-1',
+      restaurantId: 'rest-1',
+      name: 'İçecekler',
+      slug: 'icecekler',
+      order: 1,
+      showInMenu: true,
+      showInTerminal: true,
+    } as any;
+    const products = [
+      { id: 'p-visible', categoryId: 'cat-1', name: 'Ayran', price: 45, inStock: true, showInMenu: true, order: 1 },
+      { id: 'p-hidden', categoryId: 'cat-1', name: 'Personel Çayı', price: 10, inStock: true, showInMenu: false, order: 2 },
+    ] as any;
+
+    const qrTree = buildMenuCategoryTree([cat], new Set(['cat-1']), [cat], products, false);
+    assert.equal(qrTree[0].products.length, 1);
+    assert.equal(qrTree[0].products[0].id, 'p-visible');
+
+    const terminalTree = buildMenuCategoryTree([cat], new Set(['cat-1']), [cat], products, true);
+    assert.equal(terminalTree[0].products.length, 2);
+
+    const mockTxRows = [
+      {
+        id: 'tx-1',
+        restaurantId: 'rest-1',
+        shiftId: 'shift-closed-1',
+        type: 'expense',
+        amount: 1400,
+        description: 'SEFA',
+        reference: 'cash',
+        createdBy: 'Şehmus Y.',
+        createdAt: new Date('2026-11-20T12:00:00Z'),
+      },
+    ];
+    const txService = new CashTransactionsService(
+      {
+        find: async () => mockTxRows,
+      } as any,
+      {
+        getCurrent: async () => null,
+      } as any,
+    );
+    const listed = await txService.listForRestaurant('rest-1', { limit: 100 });
+    assert.equal(listed.length, 1);
+    assert.equal(listed[0].description, 'SEFA');
+    assert.equal(listed[0].shiftId, 'shift-closed-1');
   });
 });

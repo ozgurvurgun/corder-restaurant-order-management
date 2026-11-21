@@ -86,6 +86,22 @@ export function OperationsCatalogTab() {
     }
   }
 
+  const handleToggleShowInMenu = async (prod: CatalogProductDto) => {
+    if (!effectiveBranchId) return
+    const nextShow = !(prod.showInMenu !== false)
+    try {
+      await bossApi.operations.updateProduct(effectiveBranchId, prod.id, {
+        showInMenu: nextShow,
+      })
+      await refreshBranchDetails(effectiveBranchId)
+      showToast(
+        `${prod.name} QR menüde ${nextShow ? "gösterime açıldı" : "gizlendi"}`
+      )
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Güncellenemedi", "error")
+    }
+  }
+
   const handleSavePrice = async (prod: CatalogProductDto) => {
     if (!effectiveBranchId) return
     const nextPrice = Number(priceDraft)
@@ -362,17 +378,30 @@ export function OperationsCatalogTab() {
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => void handleToggleStock(p)}
-                    className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold transition-colors ${
-                      p.inStock
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-600"
-                    }`}
-                  >
-                    {p.inStock ? "Stokta Açık" : "Tükendi"}
-                  </button>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => void handleToggleShowInMenu(p)}
+                      className={`rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+                        p.showInMenu !== false
+                          ? "bg-blue-50 text-blue-700"
+                          : "bg-zinc-100 text-zinc-500"
+                      }`}
+                    >
+                      {p.showInMenu !== false ? "QR Menü: Açık" : "QR Menü: Gizli"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleToggleStock(p)}
+                      className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                        p.inStock
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-600"
+                      }`}
+                    >
+                      {p.inStock ? "Stokta Açık" : "Tükendi"}
+                    </button>
+                  </div>
                 </div>
               )
             })}

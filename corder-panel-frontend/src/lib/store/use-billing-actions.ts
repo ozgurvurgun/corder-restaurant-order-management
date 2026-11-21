@@ -68,7 +68,12 @@ export function useBillingActions(params: {
         .list(token, freshShift.id)
         .catch(() => null)
       if (cashTxRes) {
-        setCashTransactions(cashTxRes.map(mapCashTransactionDtoToPanel))
+        const mappedTxs = cashTxRes.map(mapCashTransactionDtoToPanel)
+        const freshIds = new Set(mappedTxs.map((t) => t.id))
+        setCashTransactions((prev) => [
+          ...mappedTxs,
+          ...prev.filter((t) => t.shiftId !== freshShift.id && !freshIds.has(t.id)),
+        ])
       }
     }
   }, [token, setCashShifts, setCashTransactions])
@@ -119,7 +124,6 @@ export function useBillingActions(params: {
           mappedShift,
           ...prev.filter((s) => s.id !== mappedShift.id),
         ])
-        setCashTransactions([])
         logActivity({
           action: "shift_opened",
           category: "cash-register",

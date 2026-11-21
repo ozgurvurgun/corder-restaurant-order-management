@@ -76,8 +76,56 @@ export class CashTransactionsService {
     return rows.map(serializeCashTransaction);
   }
 
-  async listForCurrentShift(restaurantId: string) {
-    const shift = await this.shifts.requireCurrent(restaurantId);
-    return this.listForShift(restaurantId, shift.id);
+  async listForRestaurant(
+    restaurantId: string,
+    filters?: {
+      shiftId?: string;
+      from?: Date;
+      to?: Date;
+      type?: string;
+      limit?: number;
+    },
+  ) {
+    const safeLimit =
+      filters?.limit != null &&
+      Number.isFinite(filters.limit) &&
+      filters.limit > 0
+        ? Math.min(1000, Math.floor(filters.limit))
+        : 500;
+
+    if (typeof this.repo.createQueryBuilder === 'function') {
+      const qb = this.repo
+        .createQueryBuilder('t')
+        .where('t.restaurant_id = :restaurantId', { restaurantId })
+        .orderBy('t.created_at', 'DESC');
+
+      if (filters?.shiftId) {
+        qb.andWhere('t.shift_id = :shiftId', { shiftId: filters.shiftId });
+      }
+      if (filters?.from && !Number.isNaN(filters.from.getTime())) {
+        qb.andWhere('t.created_at >= :from', {
+          from: filters.from.toISOString(),
+        });
+      }
+      if (filters?.to && !Number.isNaN(filters.to.getTime())) {
+        qb.andWhere('t.created_at <= :to', { to: filters.to.toISOString() });
+      }
+      if (filters?.type) {
+        qb.andWhere('t.type = :type', { type: filters.type });
+      }
+      qb.take(safeLimit);
+      const rows = await qb.getMany();
+      return rows.map(serializeCashTransaction);
+    }
+
+    const rows = await this.repo.find({
+      where: {
+        restaurantId,
+        ...(filters?.shiftId ? { shiftId: filters.shiftId } : {}),
+      },
+      order: { createdAt: 'DESC' },
+      take: safeLimit,
+    });
+    return rows.map(serializeCashTransaction);
   }
 }

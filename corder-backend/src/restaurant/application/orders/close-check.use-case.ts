@@ -128,7 +128,7 @@ export class CloseCheckUseCase {
       if (ledgerCustomer && settlement.ledgerMinorUnits > 0) {
         await this.ledgerService.recordDebtInTransaction(em, {
           restaurantId, customerId: ledgerCustomer.id, amount: fromMinorUnits(settlement.ledgerMinorUnits),
-          description: `${billContext.tableName} table check`, tableId: billContext.table ? billContext.table.id : null,
+          description: `${billContext.tableName} Hesap Kapanışı`, tableId: billContext.table ? billContext.table.id : null,
           tableName: billContext.tableName, completedOrderId: savedCompleted.id,
           snapshot: billContext.ordersSnapshot, recordedBy: actorName,
         });
@@ -465,13 +465,13 @@ export class CloseCheckUseCase {
     });
     if (existingTx) {
       existingTx.amount = fromMinorUnits(toMinorUnits(existingTx.amount) + cashMinorUnits);
-      existingTx.description = `${tableName} - Check (split cash)`;
+      existingTx.description = `${tableName} - Hesap Kapanışı (Parçalı Nakit)`;
       existingTx.createdBy = actorName;
       return em.save(CashTransactionEntity, existingTx);
     }
     const tx = em.create(CashTransactionEntity, {
       restaurantId, shiftId, type: 'sale', amount: fromMinorUnits(cashMinorUnits),
-      description: method === 'split' ? `${tableName} - Check (split cash)` : `${tableName} - Check`,
+      description: method === 'split' ? `${tableName} - Hesap Kapanışı (Parçalı Nakit)` : `${tableName} - Hesap Kapanışı`,
       reference: completedOrderId, createdBy: actorName,
     });
     return em.save(CashTransactionEntity, tx);

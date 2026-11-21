@@ -452,7 +452,7 @@ export const bossApi = {
     async updateProduct(
       branchId: string,
       productId: string,
-      body: { price?: number; inStock?: boolean; name?: string }
+      body: { price?: number; inStock?: boolean; showInMenu?: boolean; name?: string }
     ) {
       return bossFetch<CatalogProductDto>(
         `/restaurant/products/${encodeURIComponent(productId)}`,

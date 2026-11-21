@@ -8,52 +8,31 @@ import { CustomSelect } from "@/components/ui/custom-inputs"
 import { formatTitleCase } from "@/lib/format"
 
 export const STANDARD_ALLERGEN_OPTIONS: readonly string[] = [
-  "Gluten",
-  "Süt Ürünleri",
-  "Yumurta",
-  "Sert Kabuklu Yemişler",
-  "Yer Fıstığı",
-  "Soya",
-  "Susam",
-  "Balık",
-  "Kabuklu Deniz Ürünleri",
-  "Hardal",
-  "Kereviz",
-  "Sülfit",
+  "Gluten", "Süt Ürünleri", "Yumurta", "Sert Kabuklu Yemişler", "Yer Fıstığı", "Soya",
+  "Susam", "Balık", "Kabuklu Deniz Ürünleri", "Hardal", "Kereviz", "Sülfit",
 ]
 
 function ProductNutritionAllergensFields(props: {
-  calories: string
-  setCalories: (v: string) => void
-  allergens: string[]
-  setAllergens: (v: string[]) => void
-  compact?: boolean
+  calories: string; setCalories: (v: string) => void; allergens: string[]; setAllergens: (v: string[]) => void; compact?: boolean
 }) {
   const { calories, setCalories, allergens, setAllergens, compact = false } = props
   const [customAllergen, setCustomAllergen] = useState("")
-
   const hasAllergen = (candidate: string) => {
     const key = candidate.trim().toLocaleLowerCase("tr-TR")
     return allergens.some((a) => a.trim().toLocaleLowerCase("tr-TR") === key)
   }
-
   const toggleAllergen = (label: string) => {
     const formatted = formatTitleCase(label)
     if (!formatted) return
     const key = formatted.toLocaleLowerCase("tr-TR")
     if (allergens.some((a) => a.trim().toLocaleLowerCase("tr-TR") === key)) {
       setAllergens(allergens.filter((a) => a.trim().toLocaleLowerCase("tr-TR") !== key))
-    } else {
-      setAllergens([...allergens, formatted])
-    }
+    } else setAllergens([...allergens, formatted])
   }
-
   const addCustomAllergen = () => {
     const formatted = formatTitleCase(customAllergen)
     if (!formatted) return
-    if (!hasAllergen(formatted)) {
-      setAllergens([...allergens, formatted])
-    }
+    if (!hasAllergen(formatted)) setAllergens([...allergens, formatted])
     setCustomAllergen("")
   }
 
@@ -172,6 +151,8 @@ export function AddProductInlineForm(props: {
   setProductAllergens: (v: string[]) => void
   productImage: string
   setProductImage: (v: string) => void
+  productShowInMenu?: boolean
+  setProductShowInMenu?: (v: boolean) => void
   onUpload?: (file: File) => Promise<string>
   onClose: () => void
   onSubmit: () => void
@@ -180,6 +161,7 @@ export function AddProductInlineForm(props: {
     productName, setProductName, productPrice, setProductPrice,
     productDesc, setProductDesc, productCalories, setProductCalories,
     productAllergens, setProductAllergens, productImage, setProductImage,
+    productShowInMenu = true, setProductShowInMenu,
     onUpload, onClose, onSubmit,
   } = props
 
@@ -235,21 +217,36 @@ export function AddProductInlineForm(props: {
           onUpload={onUpload}
         />
       </div>
-      <div className="flex justify-end gap-2 mt-3">
-        <button
-          type="button"
-          onClick={onClose}
-          className="h-[34px] px-4 text-[12px] font-medium text-[#86868b] rounded-lg border border-[#d1d1d6]/60 hover:bg-[#f5f5f7]"
-        >
-          İptal
-        </button>
-        <button
-          type="button"
-          onClick={onSubmit}
-          className="h-[34px] px-4 text-[12px] font-medium text-white bg-[#e63462] rounded-lg hover:bg-[#d42d56]"
-        >
-          Kaydet
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
+        {setProductShowInMenu ? (
+          <label className="inline-flex items-center gap-2 cursor-pointer select-none text-[12px] font-medium text-[#1d1d1f]">
+            <input
+              type="checkbox"
+              checked={productShowInMenu}
+              onChange={(e) => setProductShowInMenu(e.target.checked)}
+              className="w-4 h-4 rounded accent-[#e63462]"
+            />
+            QR Menüde Göster
+          </label>
+        ) : (
+          <span />
+        )}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-[34px] px-4 text-[12px] font-medium text-[#86868b] rounded-lg border border-[#d1d1d6]/60 hover:bg-[#f5f5f7]"
+          >
+            İptal
+          </button>
+          <button
+            type="button"
+            onClick={onSubmit}
+            className="h-[34px] px-4 text-[12px] font-medium text-white bg-[#e63462] rounded-lg hover:bg-[#d42d56]"
+          >
+            Kaydet
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -273,6 +270,8 @@ export function EditProductModal(props: {
   setEditAllergens: (v: string[]) => void
   editImage: string
   setEditImage: (v: string) => void
+  editShowInMenu?: boolean
+  setEditShowInMenu?: (v: boolean) => void
   canEditDetails?: boolean
   canChangePrice?: boolean
   onUpload?: (file: File) => Promise<string>
@@ -284,6 +283,7 @@ export function EditProductModal(props: {
     editPrice, setEditPrice, editCostPrice, setEditCostPrice,
     editDesc, setEditDesc, editCalories, setEditCalories,
     editAllergens, setEditAllergens, editImage, setEditImage,
+    editShowInMenu = true, setEditShowInMenu,
     canEditDetails = true, canChangePrice = true, onUpload, onClose, onSave,
   } = props
 
@@ -383,6 +383,20 @@ export function EditProductModal(props: {
                 allergens={editAllergens}
                 setAllergens={setEditAllergens}
               />
+              {setEditShowInMenu && (
+                <label className="flex items-center justify-between rounded-xl border border-[#d1d1d6]/60 bg-[#f5f5f7] px-3.5 py-2.5 cursor-pointer select-none">
+                  <div>
+                    <p className="text-[12px] font-semibold text-[#1d1d1f]">QR Menüde Göster</p>
+                    <p className="text-[11px] text-[#86868b]">Kapatıldığında ürün terminal ve kasada kalır, müşteri QR menüsünde gizlenir</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={editShowInMenu}
+                    onChange={(e) => setEditShowInMenu(e.target.checked)}
+                    className="w-4 h-4 rounded accent-[#e63462]"
+                  />
+                </label>
+              )}
               <div>
                 <label className="block text-[11px] font-medium text-[#86868b] mb-1.5">Fotoğraf</label>
                 <ImageUpload value={editImage} onChange={setEditImage} onUpload={onUpload} />

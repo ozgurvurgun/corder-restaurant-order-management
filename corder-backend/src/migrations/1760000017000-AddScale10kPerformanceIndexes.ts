@@ -69,3 +69,4 @@ export class AddScale10kPerformanceIndexes1760000017000
     );
   }
 }
+

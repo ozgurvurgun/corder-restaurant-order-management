@@ -46,6 +46,10 @@ export class CreateProductDto {
   inStock?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  showInMenu?: boolean;
+
+  @IsOptional()
   @IsNumber()
   order?: number;
 

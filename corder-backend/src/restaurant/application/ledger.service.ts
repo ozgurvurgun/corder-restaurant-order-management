@@ -254,8 +254,8 @@ export class LedgerService {
         amount: normalizedAmount,
         description:
           paymentMethod && paymentMethod !== 'cash'
-            ? `Payment received (${paymentMethod})`
-            : 'Payment received',
+            ? `Cari Tahsilat (${paymentMethod})`
+            : 'Cari Tahsilat',
         tableId: null,
         tableName: null,
         completedOrderId: null,
@@ -271,7 +271,7 @@ export class LedgerService {
           shiftId: shift.id,
           type: 'cash-in',
           amount: normalizedAmount,
-          description: `Ledger payment: ${customer.name}`,
+          description: `Cari Tahsilat: ${customer.name}`,
           reference: customer.id,
           createdBy: actorName,
         });
@@ -420,7 +420,7 @@ export class LedgerService {
         restaurantId: params.restaurantId,
         customerId: nextCustomer.id,
         amount: normalizedAmount,
-        description: `${params.tableName || 'Table'} table check`,
+        description: `${params.tableName || 'Masa'} Hesap Kapanışı`,
         tableId: params.tableId ?? null,
         tableName: params.tableName ?? null,
         completedOrderId: params.completedOrderId,

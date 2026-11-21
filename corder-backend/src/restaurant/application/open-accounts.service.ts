@@ -254,7 +254,7 @@ export class OpenAccountsService {
           shiftId: shift.id,
           type: 'cash-in',
           amount: normalizedAmount,
-          description: `Open account payment: ${acc.customerName}`,
+          description: `Açık Hesap Tahsilatı: ${acc.customerName}`,
           reference: acc.id,
           createdBy: actorName,
         });

@@ -77,6 +77,7 @@ export interface PanelProduct {
   categoryId: string
   image?: string
   inStock: boolean
+  showInMenu?: boolean
   order?: number
   description?: string
   costPrice?: number

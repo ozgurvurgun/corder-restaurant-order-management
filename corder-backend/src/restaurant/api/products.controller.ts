@@ -103,12 +103,12 @@ export class ProductsController {
       }
 
       if (
-        dto.inStock !== undefined &&
+        (dto.inStock !== undefined || dto.showInMenu !== undefined) &&
         !canManage &&
         !perms.includes('catalog.toggle_stock')
       ) {
         throw new ForbiddenException(
-          'You do not have permission to toggle product stock availability (catalog.toggle_stock)',
+          'You do not have permission to toggle product stock or menu visibility (catalog.toggle_stock)',
         );
       }
 

@@ -152,6 +152,7 @@ export class ProductService {
       dto.costPrice != null ? Number(Number(dto.costPrice).toFixed(2)) : null;
     entity.imageUrl = dto.imageUrl?.trim() || null;
     entity.inStock = dto.inStock ?? true;
+    entity.showInMenu = dto.showInMenu ?? true;
     entity.order = dto.order ?? (await this.nextOrderInCategory(dto.categoryId));
     entity.ingredients = await this.normalizeIngredients(
       restaurantId,
@@ -195,6 +196,7 @@ export class ProductService {
       entity.imageUrl = dto.imageUrl?.trim() || null;
     }
     if (dto.inStock !== undefined) entity.inStock = dto.inStock;
+    if (dto.showInMenu !== undefined) entity.showInMenu = dto.showInMenu;
     if (dto.order !== undefined) entity.order = dto.order;
     if (dto.ingredients !== undefined) {
       entity.ingredients = await this.normalizeIngredients(

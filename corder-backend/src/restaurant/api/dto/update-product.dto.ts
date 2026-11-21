@@ -51,6 +51,10 @@ export class UpdateProductDto {
   inStock?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  showInMenu?: boolean;
+
+  @IsOptional()
   @IsNumber()
   order?: number;
 

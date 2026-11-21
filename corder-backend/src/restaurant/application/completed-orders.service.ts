@@ -365,8 +365,8 @@ export class CompletedOrdersService {
           existingSaleTx.amount = fromMinorUnits(settlement.cashMinorUnits);
           existingSaleTx.description =
             row.paymentMethod === 'split'
-              ? `${row.tableName} - Check (split cash)`
-              : `${row.tableName} - Check`;
+              ? `${row.tableName} - Hesap Kapanışı (Parçalı Nakit)`
+              : `${row.tableName} - Hesap Kapanışı`;
           existingSaleTx.createdBy = createdBy;
           await em.save(CashTransactionEntity, existingSaleTx);
         }
@@ -376,7 +376,7 @@ export class CompletedOrdersService {
           shiftId: targetShift.id,
           type: 'sale',
           amount: fromMinorUnits(cashDeltaMinor),
-          description: `${row.tableName} - completed check adjustment`,
+          description: `${row.tableName} - Hesap Düzenleme Farkı`,
           reference: row.id,
           createdBy,
         });

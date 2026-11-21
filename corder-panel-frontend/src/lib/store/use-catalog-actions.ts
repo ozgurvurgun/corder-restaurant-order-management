@@ -36,6 +36,7 @@ export function useCatalogActions(params: {
           description: p.description?.trim() || undefined,
           imageUrl: p.image || undefined,
           inStock: p.inStock ?? true,
+          showInMenu: p.showInMenu ?? true,
           calories: p.calories != null && p.calories > 0 ? Math.round(p.calories) : null,
           allergens: p.allergens && p.allergens.length > 0 ? p.allergens : null,
           ingredients:
@@ -68,6 +69,7 @@ export function useCatalogActions(params: {
       if (data.costPrice !== undefined) body.costPrice = data.costPrice
       if (data.image !== undefined) body.imageUrl = data.image
       if (data.inStock !== undefined) body.inStock = data.inStock
+      if (data.showInMenu !== undefined) body.showInMenu = data.showInMenu
       if (data.calories !== undefined) {
         body.calories = data.calories != null && data.calories > 0 ? Math.round(data.calories) : null
       }

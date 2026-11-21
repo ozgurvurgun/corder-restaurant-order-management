@@ -264,12 +264,21 @@ export class MenuQueryService {
     );
     const products = productCategoryIds.length
       ? await this.productRepo.find({
-          where: { categoryId: In(productCategoryIds) },
+          where: {
+            categoryId: In(productCategoryIds),
+            ...(!forTerminal ? { showInMenu: true } : {}),
+          },
           order: { order: 'ASC', name: 'ASC' },
         })
       : [];
 
-    const categories = buildMenuCategoryTree(allCats, visibleIds, roots, products);
+    const categories = buildMenuCategoryTree(
+      allCats,
+      visibleIds,
+      roots,
+      products,
+      forTerminal,
+    );
     const now = new Date();
     const activeCampaigns = rawCampaigns.filter((c) =>
       this.isCampaignCurrentlyValid(c.validUntil, now),
