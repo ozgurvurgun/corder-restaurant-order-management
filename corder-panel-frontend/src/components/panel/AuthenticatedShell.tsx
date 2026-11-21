@@ -195,7 +195,6 @@ export function AuthenticatedShell() {
                 onNavigate={handleNavigate}
                 mobileOpen={mobileMenuOpen}
                 onCloseMobile={() => setMobileMenuOpen(false)}
-                onOpenShortcutsGuide={() => setShortcutsGuideOpen(true)}
               />
               <div className="flex-1 flex flex-col overflow-hidden min-w-0">
                 <HeaderBar
