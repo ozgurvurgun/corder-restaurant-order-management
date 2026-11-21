@@ -85,7 +85,10 @@ async function bootstrap() {
   });
 
   const port = Number(process.env.PORT ?? 4000);
-  await app.listen(port);
+  const server = await app.listen(port);
+  server.keepAliveTimeout = 65_000;
+  server.headersTimeout = 66_000;
+  server.requestTimeout = 60_000;
   logger.log(`Corder API listening on port ${port}`);
 }
 

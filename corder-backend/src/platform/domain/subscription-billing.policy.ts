@@ -113,16 +113,13 @@ export function normalizeAndSortPeriods(rawPeriods: string[]): string[] {
   return sorted;
 }
 
+/** Permanent UTC+3 offset for Europe/Istanbul. */
+const ISTANBUL_OFFSET_MS = 3 * 60 * 60 * 1000;
+
 export function dateToIstanbulPeriod(date: Date = new Date()): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/Istanbul',
-    year: 'numeric',
-    month: '2-digit',
-  }).formatToParts(date);
-  const y = parts.find((p) => p.type === 'year')?.value ?? String(date.getUTCFullYear());
-  const m =
-    parts.find((p) => p.type === 'month')?.value ??
-    String(date.getUTCMonth() + 1).padStart(2, '0');
+  const shifted = new Date(date.getTime() + ISTANBUL_OFFSET_MS);
+  const y = shifted.getUTCFullYear();
+  const m = String(shifted.getUTCMonth() + 1).padStart(2, '0');
   return `${y}-${m}`;
 }
 
@@ -130,17 +127,10 @@ export function getIstanbulCalendarNow(now: Date = new Date()): {
   currentPeriod: string;
   dayOfMonth: number;
 } {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/Istanbul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(now);
-  const y = parts.find((p) => p.type === 'year')?.value ?? String(now.getUTCFullYear());
-  const m =
-    parts.find((p) => p.type === 'month')?.value ??
-    String(now.getUTCMonth() + 1).padStart(2, '0');
-  const d = Number(parts.find((p) => p.type === 'day')?.value ?? now.getUTCDate());
+  const shifted = new Date(now.getTime() + ISTANBUL_OFFSET_MS);
+  const y = shifted.getUTCFullYear();
+  const m = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+  const d = shifted.getUTCDate();
   return {
     currentPeriod: `${y}-${m}`,
     dayOfMonth: Number.isFinite(d) && d >= 1 && d <= 31 ? d : now.getUTCDate(),

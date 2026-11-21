@@ -127,17 +127,31 @@ export function formatIstanbulTime(isoOrDate: string | Date): string {
   return trTimeFormatter.format(d)
 }
 
+let cachedTodayKey = ""
+let cachedTodayKeyAt = 0
+
+function getTodayDayKey(): string {
+  const nowMs = Date.now()
+  if (cachedTodayKey && nowMs - cachedTodayKeyAt < 1_000) {
+    return cachedTodayKey
+  }
+  cachedTodayKey = trDayKeyFormatter.format(new Date(nowMs))
+  cachedTodayKeyAt = nowMs
+  return cachedTodayKey
+}
+
 export function formatIstanbulDateTime(isoOrDate: string | Date): string {
   const d = typeof isoOrDate === "string" ? new Date(isoOrDate) : isoOrDate
   if (Number.isNaN(d.getTime())) return ""
-  const now = new Date()
-  if (trDayKeyFormatter.format(d) === trDayKeyFormatter.format(now)) {
+  if (trDayKeyFormatter.format(d) === getTodayDayKey()) {
     return `Bugün ${trTimeFormatter.format(d)}`
   }
   return trDateTimeFormatter.format(d)
 }
 
 const TURKIC_CHAR_RE = /[çğıöşüÇĞİÖŞÜ]/u
+const TITLE_CASE_CACHE_MAX = 2500
+const TITLE_CASE_CACHE = new Map<string, string>()
 
 function resolveCasingLocale(text: string, explicitLocale?: string): string | undefined {
   if (explicitLocale) return explicitLocale
@@ -150,17 +164,26 @@ export function formatTitleCase(
   locale?: string,
 ): string {
   if (!input) return ""
+  const cacheKey = locale ? `${locale}\u0000${input}` : String(input)
+  const cached = TITLE_CASE_CACHE.get(cacheKey)
+  if (cached !== undefined) return cached
+
   const raw = String(input).trim().replace(/\s+/g, " ")
   if (!raw) return ""
   const resolvedLocale = resolveCasingLocale(raw, locale)
   const lower = (
     resolvedLocale ? raw.toLocaleLowerCase(resolvedLocale) : raw.toLowerCase()
   ).replace(/\u0307/g, "")
-  return lower.replace(
+  const formatted = lower.replace(
     /([^\p{L}']|^)(\p{L})/gu,
     (_match, prefix: string, letter: string) =>
       `${prefix}${resolvedLocale ? letter.toLocaleUpperCase(resolvedLocale) : letter.toUpperCase()}`,
   )
+  if (TITLE_CASE_CACHE.size >= TITLE_CASE_CACHE_MAX) {
+    TITLE_CASE_CACHE.clear()
+  }
+  TITLE_CASE_CACHE.set(cacheKey, formatted)
+  return formatted
 }
 
 export function getWaiterDisplayName(order: LiveOrderDto): string | null {

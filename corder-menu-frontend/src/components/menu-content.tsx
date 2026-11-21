@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef, useDeferredValue } from "react"
 import {
   fetchMenu,
   formatMenuPrice,
@@ -151,10 +151,11 @@ export function MenuContent({
       })),
     [roots]
   )
-  const filteredProducts = useMemo(
-    () => searchProductsWithLevenshtein(allProducts, searchQuery),
-    [searchQuery, allProducts]
-  )
+  const deferredSearchQuery = useDeferredValue(searchQuery)
+  const filteredProducts = useMemo(() => {
+    if (!showSearch || !deferredSearchQuery.trim()) return []
+    return searchProductsWithLevenshtein(allProducts, deferredSearchQuery)
+  }, [deferredSearchQuery, allProducts, showSearch])
 
   const hasTreeContent = useMemo(() => roots.some(categoryHasProducts), [roots])
 

@@ -27,6 +27,8 @@ const UUID_RE =
 
 @Injectable()
 export class FraudDetectionService {
+  private readonly inFlightScans = new Map<string, Promise<number>>();
+
   constructor(
     @InjectRepository(FraudAlertEntity)
     private readonly alertRepo: Repository<FraudAlertEntity>,
@@ -97,6 +99,18 @@ export class FraudDetectionService {
   }
 
   async analyzeRestaurantAnomalies(restaurantId: string): Promise<number> {
+    const existingInFlight = this.inFlightScans.get(restaurantId);
+    if (existingInFlight) {
+      return existingInFlight;
+    }
+    const scanPromise = this.runAnomalyScan(restaurantId).finally(() => {
+      this.inFlightScans.delete(restaurantId);
+    });
+    this.inFlightScans.set(restaurantId, scanPromise);
+    return scanPromise;
+  }
+
+  private async runAnomalyScan(restaurantId: string): Promise<number> {
     const em = this.dataSource.manager;
     const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
 
@@ -113,10 +127,14 @@ export class FraudDetectionService {
       this.alertRepo.find({
         where: { restaurantId },
         select: ['id', 'evidence'],
+        order: { createdAt: 'DESC' },
+        take: 1000,
       }),
       em.find(TableEntity, { where: { restaurantId } }),
       em.find(OrderEntity, {
         where: { restaurantId, createdAt: MoreThanOrEqual(since) },
+        order: { createdAt: 'DESC' },
+        take: 500,
       }),
       em.find(CompletedOrderEntity, {
         where: { restaurantId, closedAt: MoreThanOrEqual(since) },

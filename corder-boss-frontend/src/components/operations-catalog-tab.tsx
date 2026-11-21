@@ -57,13 +57,19 @@ export function OperationsCatalogTab() {
 
   const criticalMaterials = overview?.criticalMaterials ?? []
 
-  const getTableActiveOrders = (tableId: string) =>
-    orders.filter((o) => o.tableId === tableId && o.status === "active")
+  const activeOrdersByTableId = useMemo(() => {
+    const map = new Map<string, typeof orders>()
+    for (const o of orders) {
+      if (o.status !== "active") continue
+      const bucket = map.get(o.tableId)
+      if (bucket) bucket.push(o)
+      else map.set(o.tableId, [o])
+    }
+    return map
+  }, [orders])
 
-  const getTableNetTotal = (table: LiveTableDto) => {
-    const tOrders = getTableActiveOrders(table.id)
-    return computeTableTotals(tOrders, table.discount).netTotal
-  }
+  const getTableActiveOrders = (tableId: string) =>
+    activeOrdersByTableId.get(tableId) ?? []
 
   const handleToggleStock = async (prod: CatalogProductDto) => {
     if (!effectiveBranchId) return
@@ -222,7 +228,7 @@ export function OperationsCatalogTab() {
                     />
                   </div>
                   <p className="mt-1 text-[15px] font-bold text-[#1d1d1f] tabular-nums">
-                    {occupied ? `₺${formatMoney(getTableNetTotal(t))}` : "Boş"}
+                    {occupied ? `₺${formatMoney(totals.netTotal)}` : "Boş"}
                   </p>
                   <p className="mt-0.5 truncate text-[10px] text-[#86868b]">
                     {waiter ? `Garson: ${waiter}` : t.section}

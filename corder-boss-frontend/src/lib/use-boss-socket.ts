@@ -11,6 +11,7 @@ import type { BossPlatformNotificationDto, LiveTableDto } from "./types"
 export function useBossSocket(params: {
   tokenVersion: number
   userId?: string
+  effectiveBranchId?: string
   socketRef: MutableRefObject<Socket | null>
   liveRefreshTimerRef: MutableRefObject<number | null>
   effectiveBranchIdRef: MutableRefObject<string>
@@ -25,6 +26,7 @@ export function useBossSocket(params: {
   const {
     tokenVersion,
     userId,
+    effectiveBranchId,
     socketRef,
     liveRefreshTimerRef,
     effectiveBranchIdRef,
@@ -40,13 +42,12 @@ export function useBossSocket(params: {
   useEffect(() => {
     const token = getBossToken()
     if (!token || !userId) return
+    const targetBranch = effectiveBranchId || effectiveBranchIdRef.current
     const socket = io(getApiBase() || undefined, {
       path: "/ws",
       auth: {
         token,
-        ...(effectiveBranchIdRef.current
-          ? { restaurantId: effectiveBranchIdRef.current }
-          : {}),
+        ...(targetBranch ? { restaurantId: targetBranch } : {}),
       },
       transports: ["websocket", "polling"],
     })
@@ -150,6 +151,7 @@ export function useBossSocket(params: {
   }, [
     tokenVersion,
     userId,
+    effectiveBranchId,
     socketRef,
     liveRefreshTimerRef,
     effectiveBranchIdRef,

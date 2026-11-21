@@ -100,12 +100,13 @@ export default function StockView() {
   }, [stockMaterials, search])
 
   const costAnalysis = useMemo(() => {
+    const matById = new Map(stockMaterials.map((m) => [m.id, m]))
     const recipeBomCost = (p: PanelProduct): number | null => {
       const ings = p.ingredients
       if (!ings?.length) return null
       let total = 0
       for (const ing of ings) {
-        const mat = stockMaterials.find((m) => m.id === ing.materialId)
+        const mat = matById.get(ing.materialId)
         if (!mat) return null
         total += ing.quantity * mat.costPerUnit
       }

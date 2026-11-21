@@ -354,7 +354,10 @@ function buildRuntimeConfig(settingsInput) {
     printerPort: Number(defaultKitchenPrinter?.port) || 9100,
     printFooterLine: settings.printFooterLine || "",
     printUsbDrainMs: Number(settings.printUsbDrainMs ?? baseConfig.printUsbDrainMs),
-    kitchenSyncIntervalMs: Number(settings.kitchenSyncIntervalMs || 2500),
+    kitchenSyncIntervalMs: Number(settings.kitchenSyncIntervalMs || 5000),
+    kitchenSyncConnectedIntervalMs: Number(
+      settings.kitchenSyncConnectedIntervalMs || baseConfig.kitchenSyncConnectedIntervalMs || 60000
+    ),
     queueDrainIntervalMs: Number(settings.queueDrainIntervalMs || 500),
     ticketCharsPerLine: defaultKitchenPrinter?.paperWidth === 58 ? 32 : 42,
     ticketFeedLinesBeforeCut: Number(defaultKitchenPrinter?.feedLinesBeforeCut ?? 3),

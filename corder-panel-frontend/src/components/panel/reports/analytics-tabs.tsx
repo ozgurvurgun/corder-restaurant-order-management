@@ -27,16 +27,15 @@ export function useReportAnalyticsData(
 ) {
   const allPeriodReports = useMemo(() => {
     const map = new Map<string, PeriodReport>()
-    const formatKey = (d: Date, mode: "weekly" | "monthly" | "yearly") => {
-      const ymd = getIstanbulYmd(d)
+    const formatKeyFromYmd = (ymd: string, mode: "weekly" | "monthly" | "yearly") => {
       const [yStr, mStr, dStr] = ymd.split("-")
       if (mode === "yearly") return yStr
       if (mode === "monthly") return `${yStr}-${mStr}`
-      const tmp = new Date(Date.UTC(Number(yStr), Number(mStr) - 1, Number(dStr)),)
+      const tmp = new Date(Date.UTC(Number(yStr), Number(mStr) - 1, Number(dStr)))
       const dayNum = tmp.getUTCDay() || 7
       tmp.setUTCDate(tmp.getUTCDate() + 4 - dayNum)
       const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1))
-      const week = Math.ceil(((tmp.getTime() - yearStart.getTime()) / 86400000 + 1) / 7,)
+      const week = Math.ceil(((tmp.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
       return `${tmp.getUTCFullYear()}-W${String(week).padStart(2, "0")}`
     }
 
@@ -65,21 +64,24 @@ export function useReportAnalyticsData(
     }
 
     closedTables.forEach((ct) => {
-      const d = new Date(ct.closedAt)
+      const ymd = getIstanbulYmd(new Date(ct.closedAt))
+      const netMinor = toMinorUnits(ct.netAmount || 0)
+      const discMinor = toMinorUnits(ct.discountAmount || 0)
+      const ordCount = ct.orders?.length || 0
       ;(["weekly", "monthly", "yearly"] as const).forEach((mode) => {
-        const bucket = ensureBucket(`${mode}:${formatKey(d, mode)}`)
-        bucket.totalRevenue = fromMinorUnits(toMinorUnits(bucket.totalRevenue) + toMinorUnits(ct.netAmount || 0),)
-        bucket.totalOrders += ct.orders?.length || 0
+        const bucket = ensureBucket(`${mode}:${formatKeyFromYmd(ymd, mode)}`)
+        bucket.totalRevenue = fromMinorUnits(toMinorUnits(bucket.totalRevenue) + netMinor)
+        bucket.totalOrders += ordCount
         bucket.totalTables += 1
-        bucket.discountAmount = fromMinorUnits(toMinorUnits(bucket.discountAmount) + toMinorUnits(ct.discountAmount || 0),)
+        bucket.discountAmount = fromMinorUnits(toMinorUnits(bucket.discountAmount) + discMinor)
       })
     })
 
     cancelledItems.forEach((ci) => {
-      const d = new Date(ci.cancelledAt)
+      const ymd = getIstanbulYmd(new Date(ci.cancelledAt))
       const amountMinorUnits = toMinorUnits(ci.orderItem.price) * ci.orderItem.quantity
       ;(["weekly", "monthly", "yearly"] as const).forEach((mode) => {
-        const b = ensureBucket(`${mode}:${formatKey(d, mode)}`)
+        const b = ensureBucket(`${mode}:${formatKeyFromYmd(ymd, mode)}`)
         b.cancelledAmount = fromMinorUnits(toMinorUnits(b.cancelledAmount) + amountMinorUnits)
       })
     })
@@ -168,9 +170,9 @@ export function useReportAnalyticsData(
     }))
     closedTables.forEach((ct) => {
       const d = new Date(ct.closedAt)
-      const hour = `${String(getIstanbulHour(d)).padStart(2, "0")}:00`
+      const hourIdx = getIstanbulHour(d)
       const dayKey = days[getIstanbulDayOfWeekIndex(d)]
-      const row = rows.find((r) => r.hour === hour)
+      const row = rows[hourIdx]
       if (row) row[dayKey] += ct.orders?.length || 0
     })
     rows.forEach((row) => {

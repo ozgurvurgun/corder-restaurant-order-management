@@ -9,7 +9,7 @@ import { normalizeStorageText } from '../../common/text/text-normalizer';
 
 export { CreatePrinterDto, UpdatePrinterDto };
 
-const AGENT_HEARTBEAT_TTL_MS = 15_000;
+const AGENT_HEARTBEAT_TTL_MS = 30_000;
 
 @Injectable()
 export class PrintersService {

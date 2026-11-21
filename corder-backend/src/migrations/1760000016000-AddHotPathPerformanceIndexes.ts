@@ -34,3 +34,4 @@ export class AddHotPathPerformanceIndexes1760000016000 implements MigrationInter
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_orders_unprinted_kitchen"`);
   }
 }
+

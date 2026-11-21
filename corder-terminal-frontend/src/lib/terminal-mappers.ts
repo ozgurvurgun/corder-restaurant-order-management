@@ -101,10 +101,13 @@ export function applyTableDiscountMinor(
 
 export function mapOrderDtoToTerminalOrder(
   dto: OrderDto,
-  rawTables: RawTableDto[],
+  rawTables: RawTableDto[] | ReadonlyMap<string, RawTableDto>,
   productsById?: Map<string, TerminalProduct>
 ): TerminalOrder {
-  const matchedTable = rawTables.find((table) => table.id === dto.tableId)
+  const matchedTable =
+    rawTables instanceof Map
+      ? rawTables.get(dto.tableId)
+      : (rawTables as RawTableDto[]).find((table) => table.id === dto.tableId)
   const tableName = formatTitleCase(matchedTable?.name ?? dto.tableId)
   const tableNumber = extractTableNumber(tableName, 0)
 
@@ -166,32 +169,40 @@ export function mapTablesWithOrders(
   rawTables: RawTableDto[],
   orders: TerminalOrder[]
 ): TerminalTable[] {
-  const activeOrders = orders.filter((order) => order.status === "active")
+  const activeOrdersByTableId = new Map<string, TerminalOrder[]>()
+  for (const order of orders) {
+    if (order.status !== "active") continue
+    const bucket = activeOrdersByTableId.get(order.tableId)
+    if (bucket) bucket.push(order)
+    else activeOrdersByTableId.set(order.tableId, [order])
+  }
 
   return rawTables.map((rawTable, index) => {
-    const tableOrders = activeOrders.filter(
-      (order) => order.tableId === rawTable.id
-    )
-    const subtotalMinor = tableOrders.reduce(
-      (sum, order) => sum + calculateOrderItemsMinorTotal(order.items),
-      0
-    )
+    const tableOrders = activeOrdersByTableId.get(rawTable.id) ?? []
+    let subtotalMinor = 0
+    let latestOrder: TerminalOrder | undefined
+    let latestUpdatedMs = -Infinity
+    let earliestOrder: TerminalOrder | undefined
+    let earliestCreatedMs = Infinity
+
+    for (const order of tableOrders) {
+      subtotalMinor += calculateOrderItemsMinorTotal(order.items)
+      const updatedMs = new Date(order.updatedAt).getTime()
+      if (updatedMs > latestUpdatedMs) {
+        latestUpdatedMs = updatedMs
+        latestOrder = order
+      }
+      const createdMs = new Date(order.createdAt).getTime()
+      if (createdMs < earliestCreatedMs) {
+        earliestCreatedMs = createdMs
+        earliestOrder = order
+      }
+    }
+
     const subtotalAmount = fromMinorUnits(subtotalMinor)
     const currentTotal = fromMinorUnits(
       applyTableDiscountMinor(subtotalMinor, rawTable.discount)
     )
-
-    const sortedByUpdated = [...tableOrders].sort(
-      (a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    )
-    const sortedByCreated = [...tableOrders].sort(
-      (a, b) =>
-        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-    )
-
-    const latestOrder = sortedByUpdated[0]
-    const earliestOrder = sortedByCreated[0]
     const activeWaiter = latestOrder?.waiterName?.trim() || undefined
 
     const sessionStaffId = rawTable.sessionStaffId?.trim()

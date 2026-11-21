@@ -145,12 +145,26 @@ export class LedgerService {
 
     const qb = this.entryRepo
       .createQueryBuilder('e')
+      .select([
+        'e.id',
+        'e.entryType',
+        'e.amount',
+        'e.description',
+        'e.tableId',
+        'e.tableName',
+        'e.completedOrderId',
+        'e.receivedBy',
+        'e.receivedByUserId',
+        'e.createdAt',
+      ])
       .where('e.restaurant_id = :restaurantId', { restaurantId })
       .andWhere('e.customer_id = :customerId', { customerId })
       .orderBy('e.created_at', 'DESC');
     if (range) {
       qb.andWhere('e.created_at >= :from', { from: range.from });
       qb.andWhere('e.created_at <= :to', { to: range.to });
+    } else {
+      qb.take(500);
     }
     const list = await qb.getMany();
     return list.map((e) => ({

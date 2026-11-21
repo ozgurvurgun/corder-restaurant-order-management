@@ -158,9 +158,14 @@ export class OrderQueryService {
       take: 100,
     });
 
+    if (!orders.length) return [];
+
+    const missingNameUserIds = orders
+      .filter((o) => !(o.userDisplayName && o.userDisplayName.trim()))
+      .map((o) => o.userId);
     const staffNameMap = await this.buildStaffNameMap(
       restaurantId,
-      orders.map((o) => o.userId),
+      missingNameUserIds,
     );
     const emptyOrderIdsToMark: string[] = [];
     const allRowItems: Array<{ productId?: string; categoryId?: string }> = [];

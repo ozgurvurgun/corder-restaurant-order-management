@@ -8,7 +8,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, Optional } from '@nestjs/common';
 import {
   buildPaymentSuspendedErrorMessage,
   RestaurantTokenPayload,
@@ -80,13 +80,28 @@ export interface PrintJobSocketPayload {
 @WebSocketGateway({
   cors: buildCorsOptions(),
   path: '/ws',
+  transports: ['websocket', 'polling'],
+  pingInterval: 25_000,
+  pingTimeout: 20_000,
+  connectTimeout: 20_000,
+  maxHttpBufferSize: 100_000,
+  perMessageDeflate: false,
 })
 @Injectable()
-export class OrdersGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
+export class OrdersGateway
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy
+{
   @WebSocketServer()
   server!: Server;
 
   private readonly expiryTimers = new Map<string, NodeJS.Timeout>();
+
+  onModuleDestroy(): void {
+    for (const timer of this.expiryTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.expiryTimers.clear();
+  }
 
   constructor(
     private readonly jwt: JwtService,

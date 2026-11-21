@@ -3,6 +3,8 @@ import type { BossDto, PlatformRestaurantDto } from "./api"
 import { fromMinorUnits, toMinorUnits } from "./money"
 
 const TURKIC_CHAR_RE = /[çğıöşüÇĞİÖŞÜ]/u
+const TITLE_CASE_CACHE_MAX = 5000
+const TITLE_CASE_CACHE = new Map<string, string>()
 
 function resolveCasingLocale(text: string, explicitLocale?: string): string | undefined {
   if (explicitLocale) return explicitLocale
@@ -15,17 +17,26 @@ export function formatTitleCase(
   locale?: string,
 ): string {
   if (!input) return ""
+  const cacheKey = locale ? `${locale}\u0000${input}` : String(input)
+  const cached = TITLE_CASE_CACHE.get(cacheKey)
+  if (cached !== undefined) return cached
+
   const raw = String(input).trim().replace(/\s+/g, " ")
   if (!raw) return ""
   const resolvedLocale = resolveCasingLocale(raw, locale)
   const lower = (
     resolvedLocale ? raw.toLocaleLowerCase(resolvedLocale) : raw.toLowerCase()
   ).replace(/\u0307/g, "")
-  return lower.replace(
+  const formatted = lower.replace(
     /([^\p{L}']|^)(\p{L})/gu,
     (_match, prefix: string, letter: string) =>
       `${prefix}${resolvedLocale ? letter.toLocaleUpperCase(resolvedLocale) : letter.toUpperCase()}`,
   )
+  if (TITLE_CASE_CACHE.size >= TITLE_CASE_CACHE_MAX) {
+    TITLE_CASE_CACHE.clear()
+  }
+  TITLE_CASE_CACHE.set(cacheKey, formatted)
+  return formatted
 }
 
 export interface BossMutationBody {

@@ -65,11 +65,24 @@ export function usePanelHydration(params: {
 
   useEffect(() => {
     if (!token) return
+    const activeOrdersByTable = new Map<string, PanelOrder[]>()
+    for (const o of orders) {
+      if (o.status !== "active") continue
+      const bucket = activeOrdersByTable.get(o.tableId)
+      if (bucket) bucket.push(o)
+      else activeOrdersByTable.set(o.tableId, [o])
+    }
+    const staffNameById = new Map<string, string>()
+    for (const u of users) {
+      const trimmed = u.name?.trim()
+      if (trimmed) staffNameById.set(u.id, trimmed)
+    }
     setTables((prev) => {
       let changed = false
       const next = prev.map((t) => {
+        const tableOrders = activeOrdersByTable.get(t.id) ?? []
         const nextWaiter =
-          resolveStaffNameForTable(t.id, orders, users) ||
+          resolveStaffNameForTable(t.id, orders, users, tableOrders, staffNameById) ||
           (t.orderCount > 0 ? t.lockedByStaffName : undefined)
         if (t.waiter === nextWaiter) return t
         changed = true

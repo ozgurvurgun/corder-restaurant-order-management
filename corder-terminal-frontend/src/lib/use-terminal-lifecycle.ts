@@ -165,16 +165,24 @@ export function useTerminalLifecycle(params: {
       }
     }
 
+    const sample = activeMember ?? users[0]
+    const geoEnabled = Boolean(
+      sample?.terminalLocationRestrictionEnabled &&
+        sample.locationLatitude != null &&
+        sample.locationLongitude != null
+    )
+
     const checkGeofence = async () => {
-      const sample = activeMember ?? users[0]
       if (
-        !sample?.terminalLocationRestrictionEnabled ||
+        !geoEnabled ||
+        !sample ||
         sample.locationLatitude == null ||
-        sample.locationLongitude == null
+        sample.locationLongitude == null ||
+        (typeof document !== "undefined" && document.visibilityState !== "visible")
       ) {
         return
       }
-      const coords = await acquireTerminalCoords(true)
+      const coords = await acquireTerminalCoords(false)
       if (coords.latitude == null || coords.longitude == null) {
         try {
           sessionStorage.setItem(
@@ -203,20 +211,22 @@ export function useTerminalLifecycle(params: {
       }
     }
 
-    void checkGeofence()
+    if (geoEnabled) void checkGeofence()
     const shiftTimerId = window.setInterval(checkSessionAndShift, 4_000)
-    const geoTimerId = window.setInterval(() => void checkGeofence(), 25_000)
+    const geoTimerId = geoEnabled
+      ? window.setInterval(() => void checkGeofence(), 25_000)
+      : null
     const onVisible = () => {
       if (document.visibilityState === "visible") {
         checkSessionAndShift()
-        void checkGeofence()
+        if (geoEnabled) void checkGeofence()
       }
     }
     document.addEventListener("visibilitychange", onVisible)
 
     return () => {
       window.clearInterval(shiftTimerId)
-      window.clearInterval(geoTimerId)
+      if (geoTimerId !== null) window.clearInterval(geoTimerId)
       document.removeEventListener("visibilitychange", onVisible)
     }
   }, [isLoggedIn, currentUser, users, usersLoaded, logout])

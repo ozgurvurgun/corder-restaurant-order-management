@@ -44,6 +44,7 @@ export class PurchaseOrdersService {
     return this.repo.find({
       where: { restaurantId },
       order: { createdAt: 'DESC' },
+      take: 250,
     });
   }
 

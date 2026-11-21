@@ -71,9 +71,11 @@ export class CompletedOrdersService {
     if (filters.tableName) {
       qb.andWhere('c.table_name = :tableName', { tableName: filters.tableName });
     }
-    if (filters.limit != null && Number.isFinite(filters.limit) && filters.limit > 0) {
-      qb.take(Math.min(1000, Math.floor(filters.limit)));
-    }
+    const safeLimit =
+      filters.limit != null && Number.isFinite(filters.limit) && filters.limit > 0
+        ? Math.min(1000, Math.floor(filters.limit))
+        : 500;
+    qb.take(safeLimit);
     if (filters.offset != null && Number.isFinite(filters.offset) && filters.offset >= 0) {
       qb.skip(Math.floor(filters.offset));
     }

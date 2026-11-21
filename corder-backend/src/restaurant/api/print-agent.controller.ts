@@ -85,6 +85,17 @@ export class PrintAgentController {
     return { ok: true };
   }
 
+  @Get('pending-sync')
+  @UseGuards(PrintAgentGuard)
+  async pendingSync(@Req() req: PrintAgentRequest) {
+    await this.touchHeartbeat(req.printAgentRestaurantId);
+    const [kitchenOrders, printJobs] = await Promise.all([
+      this.orders.findPendingKitchenPrints(req.printAgentRestaurantId),
+      this.orders.findPendingPrintJobs(req.printAgentRestaurantId),
+    ]);
+    return { kitchenOrders, printJobs };
+  }
+
   @Get('pending-kitchen-orders')
   @UseGuards(PrintAgentGuard)
   async pendingKitchen(@Req() req: PrintAgentRequest) {

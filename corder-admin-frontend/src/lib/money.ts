@@ -98,12 +98,44 @@ export function formatMoney(
   return tryFormatterWhole.format(major)
 }
 
+const ISTANBUL_DAY_FMT = new Intl.DateTimeFormat("en-US", {
+  timeZone: ISTANBUL_TIMEZONE,
+  day: "numeric",
+})
+const ISTANBUL_PERIOD_FMT = new Intl.DateTimeFormat("en-US", {
+  timeZone: ISTANBUL_TIMEZONE,
+  year: "numeric",
+  month: "2-digit",
+})
+const ISTANBUL_ISO_DATE_FMT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: ISTANBUL_TIMEZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+})
+const ISTANBUL_TR_DATE_FMT = new Intl.DateTimeFormat("tr-TR", {
+  timeZone: ISTANBUL_TIMEZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+})
+const ISTANBUL_TR_SHORT_DM_FMT = new Intl.DateTimeFormat("tr-TR", {
+  timeZone: ISTANBUL_TIMEZONE,
+  month: "2-digit",
+  day: "2-digit",
+})
+const ISTANBUL_TR_DATETIME_FMT = new Intl.DateTimeFormat("tr-TR", {
+  timeZone: ISTANBUL_TIMEZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+})
+
 export function getIstanbulDayOfMonth(date: Date = new Date()): number {
   try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: ISTANBUL_TIMEZONE,
-      day: "numeric",
-    }).formatToParts(date)
+    const parts = ISTANBUL_DAY_FMT.formatToParts(date)
     const dayPart = parts.find((p) => p.type === "day")?.value
     const parsed = Number(dayPart)
     if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 31) {
@@ -117,11 +149,7 @@ export function getIstanbulDayOfMonth(date: Date = new Date()): number {
 
 export function getIstanbulBillingPeriod(date: Date = new Date()): string {
   try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: ISTANBUL_TIMEZONE,
-      year: "numeric",
-      month: "2-digit",
-    }).formatToParts(date)
+    const parts = ISTANBUL_PERIOD_FMT.formatToParts(date)
     const year = parts.find((p) => p.type === "year")?.value
     const month = parts.find((p) => p.type === "month")?.value
     if (year && month) return `${year}-${month}`
@@ -135,12 +163,7 @@ export function getIstanbulBillingPeriod(date: Date = new Date()): string {
 
 export function getIstanbulTodayIsoDate(date: Date = new Date()): string {
   try {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: ISTANBUL_TIMEZONE,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).formatToParts(date)
+    const parts = ISTANBUL_ISO_DATE_FMT.formatToParts(date)
     const y = parts.find((p) => p.type === "year")?.value
     const m = parts.find((p) => p.type === "month")?.value
     const d = parts.find((p) => p.type === "day")?.value
@@ -303,12 +326,7 @@ export function formatIstanbulDate(
   const d = typeof input === "string" ? new Date(input) : input
   if (Number.isNaN(d.getTime())) return "-"
   try {
-    return new Intl.DateTimeFormat("tr-TR", {
-      timeZone: ISTANBUL_TIMEZONE,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(d)
+    return ISTANBUL_TR_DATE_FMT.format(d)
   } catch {
     return d.toLocaleDateString("tr-TR")
   }
@@ -321,11 +339,7 @@ export function formatIstanbulShortDayMonth(
   const d = typeof input === "string" ? new Date(input) : input
   if (Number.isNaN(d.getTime())) return ""
   try {
-    return new Intl.DateTimeFormat("tr-TR", {
-      timeZone: ISTANBUL_TIMEZONE,
-      month: "2-digit",
-      day: "2-digit",
-    }).format(d)
+    return ISTANBUL_TR_SHORT_DM_FMT.format(d)
   } catch {
     return ""
   }
@@ -338,14 +352,7 @@ export function formatIstanbulDateTime(
   const d = typeof input === "string" ? new Date(input) : input
   if (Number.isNaN(d.getTime())) return "-"
   try {
-    return new Intl.DateTimeFormat("tr-TR", {
-      timeZone: ISTANBUL_TIMEZONE,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(d)
+    return ISTANBUL_TR_DATETIME_FMT.format(d)
   } catch {
     return d.toLocaleString("tr-TR")
   }

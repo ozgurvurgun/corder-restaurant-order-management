@@ -6,7 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { RestaurantEntity } from '../domain/restaurant.entity';
 import { PlatformBillingConfigEntity } from '../domain/platform-billing-config.entity';
 import { RestaurantSubscriptionPaymentEntity } from '../domain/restaurant-subscription-payment.entity';
@@ -348,30 +348,53 @@ export class PlatformBillingService {
   async suspendAllUnpaidRestaurants() {
     const newlySuspended: Array<{ id: string; name: string }> = [];
     const { suspendedCount, deferredOpenShiftCount } = await this.runInTransaction(async (em) => {
-      const [all, allPayments, cfg] = await Promise.all([
+      const [candidates, cfg] = await Promise.all([
         em.find(RestaurantEntity, {
+          where: { status: 'active', isAccessSuspended: false },
           order: { id: 'ASC' },
           lock: { mode: 'pessimistic_write' },
         }),
-        em.find(RestaurantSubscriptionPaymentEntity),
         this.getBillingConfig(em),
       ]);
 
+      const billableCandidates = candidates.filter((r) => Number(r.monthlyFee || 0) > 0);
+      if (billableCandidates.length === 0) {
+        return { suspendedCount: 0, deferredOpenShiftCount: 0 };
+      }
+
+      const candidateIds = billableCandidates.map((r) => r.id);
       const paymentsByRest = new Map<string, RestaurantSubscriptionPaymentEntity[]>();
-      for (const p of allPayments) {
-        const arr = paymentsByRest.get(p.restaurantId) ?? [];
-        arr.push(p);
-        paymentsByRest.set(p.restaurantId, arr);
+      const openShiftRestIds = new Set<string>();
+      const CHUNK_SIZE = 1000;
+
+      for (let i = 0; i < candidateIds.length; i += CHUNK_SIZE) {
+        const chunkIds = candidateIds.slice(i, i + CHUNK_SIZE);
+        const [chunkPayments, chunkShifts] = await Promise.all([
+          em.find(RestaurantSubscriptionPaymentEntity, {
+            where: { restaurantId: In(chunkIds) },
+          }),
+          em.find(CashShiftEntity, {
+            where: { restaurantId: In(chunkIds), status: 'open' },
+            select: ['restaurantId'],
+          }),
+        ]);
+        for (const p of chunkPayments) {
+          const arr = paymentsByRest.get(p.restaurantId);
+          if (arr) arr.push(p);
+          else paymentsByRest.set(p.restaurantId, [p]);
+        }
+        for (const s of chunkShifts) {
+          openShiftRestIds.add(s.restaurantId);
+        }
       }
 
       let suspended = 0;
       let deferred = 0;
       const now = new Date();
+      const toSave: RestaurantEntity[] = [];
 
-      for (const r of all) {
+      for (const r of billableCandidates) {
         const fee = Number(r.monthlyFee || 0);
-        if (fee <= 0 || r.status !== 'active' || r.isAccessSuspended) continue;
-
         const summary = computeRestaurantBillingSummary({
           status: r.status,
           monthlyFee: fee,
@@ -384,12 +407,13 @@ export class PlatformBillingService {
         });
 
         if (summary.overduePeriods.length > 0) {
-          const hasOpenShift = await this.hasOpenCashShift(r.id, em);
+          const hasOpenShift =
+            openShiftRestIds.has(r.id) || (await this.hasOpenCashShift(r.id, em));
           if (hasOpenShift) {
             r.billingStatus = 'overdue';
             r.isAccessSuspended = false;
             r.suspensionReason = 'payment_overdue_grace_open_shift';
-            await em.save(RestaurantEntity, r);
+            toSave.push(r);
             deferred += 1;
             continue;
           }
@@ -397,10 +421,14 @@ export class PlatformBillingService {
           r.isAccessSuspended = true;
           r.suspensionReason = 'payment_overdue';
           r.suspendedAt = now;
-          await em.save(RestaurantEntity, r);
+          toSave.push(r);
           newlySuspended.push({ id: r.id, name: r.name });
           suspended += 1;
         }
+      }
+
+      for (const r of toSave) {
+        await em.save(RestaurantEntity, r);
       }
       return { suspendedCount: suspended, deferredOpenShiftCount: deferred };
     });

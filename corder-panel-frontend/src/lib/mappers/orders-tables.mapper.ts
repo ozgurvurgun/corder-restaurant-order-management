@@ -52,8 +52,10 @@ export function mergeTablesPreserveClientFields(
   prev: PanelTable[],
   next: PanelTable[],
 ): PanelTable[] {
+  if (prev.length === 0) return next
+  const prevById = new Map(prev.map((p) => [p.id, p]))
   return next.map((nt) => {
-    const old = prev.find((p) => p.id === nt.id)
+    const old = prevById.get(nt.id)
     if (!old) return nt
     return {
       ...nt,
@@ -74,16 +76,23 @@ export function resolveStaffNameForTable(
   tableId: string,
   orders: PanelOrder[],
   staffUsers: PanelUser[],
+  pregroupedActiveOrders?: PanelOrder[],
+  staffNameById?: ReadonlyMap<string, string>,
 ): string | undefined {
-  const active = orders.filter((o) => o.tableId === tableId && o.status === "active")
+  const active =
+    pregroupedActiveOrders ??
+    orders.filter((o) => o.tableId === tableId && o.status === "active")
   if (active.length === 0) return undefined
-  const sorted = [...active].sort(
-    (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
-  )
+  const sorted =
+    active.length > 1
+      ? [...active].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      : active
   for (const o of sorted) {
     const uid = o.userId?.trim()
     if (uid) {
-      const name = staffUsers.find((u) => u.id === uid)?.name?.trim()
+      const name = staffNameById
+        ? staffNameById.get(uid)
+        : staffUsers.find((u) => u.id === uid)?.name?.trim()
       if (name) return name
     }
     const fromApi = o.userName?.trim()
@@ -97,20 +106,47 @@ export function mapApiTablesToPanel(
   orders: PanelOrder[],
   staffUsers: PanelUser[],
 ): PanelTable[] {
-  const activeOrders = orders.filter((o) => o.status === "active")
+  const activeOrdersByTable = new Map<string, PanelOrder[]>()
+  for (const o of orders) {
+    if (o.status !== "active") continue
+    const bucket = activeOrdersByTable.get(o.tableId)
+    if (bucket) bucket.push(o)
+    else activeOrdersByTable.set(o.tableId, [o])
+  }
+
+  const staffNameById = new Map<string, string>()
+  for (const u of staffUsers) {
+    const trimmed = u.name?.trim()
+    if (trimmed) staffNameById.set(u.id, trimmed)
+  }
+
   return apiTables.map((t) => {
-    const tableOrders = activeOrders.filter((o) => o.tableId === t.id)
-    const billableItems = tableOrders.flatMap((o) => o.items.filter(itemCountsTowardBill))
-    const rawMinorUnits = billableItems.reduce(
-      (s, i) => s + toMinorUnits(i.price) * i.quantity,
-      0,
-    )
+    const tableOrders = activeOrdersByTable.get(t.id) ?? []
+    const billableItems: PanelOrder["items"] = []
+    let rawMinorUnits = 0
+    let lastOrder: PanelOrder | undefined
+    let lastOrderMs = -Infinity
+
+    for (const o of tableOrders) {
+      const updatedMs =
+        o.updatedAt instanceof Date
+          ? o.updatedAt.getTime()
+          : new Date(o.updatedAt).getTime()
+      if (updatedMs > lastOrderMs) {
+        lastOrderMs = updatedMs
+        lastOrder = o
+      }
+      for (const item of o.items) {
+        if (itemCountsTowardBill(item)) {
+          billableItems.push(item)
+          rawMinorUnits += toMinorUnits(item.price) * item.quantity
+        }
+      }
+    }
+
     const orderCount = tableOrders.length
-    const lastOrder = [...tableOrders].sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-    )[0]
     const waiter =
-      resolveStaffNameForTable(t.id, orders, staffUsers) ||
+      resolveStaffNameForTable(t.id, orders, staffUsers, tableOrders, staffNameById) ||
       (orderCount > 0 && t.sessionStaffName?.trim()
         ? formatTitleCase(t.sessionStaffName)
         : undefined)
@@ -145,10 +181,11 @@ export function mapApiTablesToPanel(
           paidShares: t.splitInfo.paidShares ?? [],
         }
       } else if (t.splitInfo.type === "items" && t.splitInfo.amounts) {
+        const billableById = new Map(billableItems.map((i) => [i.id, i]))
         const validAmounts: Record<string, number> = {}
         let selectedMinorUnits = 0
         for (const [itemId, qty] of Object.entries(t.splitInfo.amounts)) {
-          const item = billableItems.find((i) => i.id === itemId)
+          const item = billableById.get(itemId)
           if (item && qty > 0) {
             const validQty = Math.min(item.quantity, qty)
             validAmounts[itemId] = validQty

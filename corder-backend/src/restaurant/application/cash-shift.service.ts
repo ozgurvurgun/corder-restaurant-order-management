@@ -239,6 +239,14 @@ export class CashShiftService {
     const [completedOrders, cashTxs] = await Promise.all([
       em.find(CompletedOrderEntity, {
         where: { restaurantId, closedAt: Between(windowStart, windowEnd) },
+        select: [
+          'id',
+          'netAmount',
+          'discountAmount',
+          'paymentMethod',
+          'paymentSplit',
+          'closedAt',
+        ],
         order: { closedAt: 'ASC' },
       }),
       em.find(CashTransactionEntity, {

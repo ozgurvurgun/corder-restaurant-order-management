@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { usePanelStore } from "@/lib/panel-store"
 import { itemCountsTowardBill } from "@/lib/panel-types"
 import { formatCurrency, formatIstanbulTime, fromMinorUnits, toMinorUnits } from "@/lib/format"
@@ -61,9 +61,9 @@ export default function TableDetailPanel({ tableId, onClose }: Props) {
     if (!assignLedger || !token) return
     void ledgerRefresh()
   }, [assignLedger, token, ledgerRefresh])
-  const table = tables.find((t) => t.id === tableId)
-  const tableOrders = getTableOrders(tableId)
-  const rawTotal = getTableTotal(tableId)
+  const table = useMemo(() => tables.find((t) => t.id === tableId), [tables, tableId])
+  const tableOrders = useMemo(() => getTableOrders(tableId), [getTableOrders, tableId])
+  const rawTotal = useMemo(() => getTableTotal(tableId), [getTableTotal, tableId])
   const discount = table?.discount
   const discountAmount = discount?.amount || 0
   const total = fromMinorUnits(Math.max(0, toMinorUnits(rawTotal) - toMinorUnits(discountAmount))); if (!table) return null

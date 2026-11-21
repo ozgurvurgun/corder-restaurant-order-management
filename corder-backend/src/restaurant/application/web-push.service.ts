@@ -37,6 +37,7 @@ export class WebPushService implements OnModuleInit {
   private vapidPrivateKey: crypto.KeyObject | null = null;
   private initialized = false;
   private readonly memorySubs = new Map<string, StoredSubscriptionRow>();
+  private lastExpiredCleanupAtMs = 0;
 
   constructor(@Optional() private readonly dataSource?: DataSource) {}
 
@@ -127,6 +128,10 @@ export class WebPushService implements OnModuleInit {
       rootAdminId,
       appType,
     };
+    if (!this.memorySubs.has(validated.endpoint) && this.memorySubs.size >= 2000) {
+      const oldestKey = this.memorySubs.keys().next().value;
+      if (oldestKey) this.memorySubs.delete(oldestKey);
+    }
     this.memorySubs.set(validated.endpoint, row);
 
     if (this.dataSource && typeof this.dataSource.query === 'function') {
@@ -150,9 +155,16 @@ export class WebPushService implements OnModuleInit {
             validated.auth,
           ],
         );
-        await this.dataSource.query(
-          `DELETE FROM web_push_subscriptions WHERE updated_at < now() - interval '90 days'`,
-        );
+        const nowMs = Date.now();
+        if (
+          this.lastExpiredCleanupAtMs === 0 ||
+          nowMs - this.lastExpiredCleanupAtMs >= 3_600_000
+        ) {
+          this.lastExpiredCleanupAtMs = nowMs;
+          await this.dataSource.query(
+            `DELETE FROM web_push_subscriptions WHERE updated_at < now() - interval '90 days'`,
+          );
+        }
       } catch {
         // Ignore DB persistence error if in-memory succeeded
       }
@@ -274,9 +286,13 @@ export class WebPushService implements OnModuleInit {
       data: notification.data || {},
     });
 
-    await Promise.allSettled(
-      targets.map((sub) => this.deliverToSubscription(sub, payloadJson)),
-    );
+    const BATCH_SIZE = 50;
+    for (let i = 0; i < targets.length; i += BATCH_SIZE) {
+      const batch = targets.slice(i, i + BATCH_SIZE);
+      await Promise.allSettled(
+        batch.map((sub) => this.deliverToSubscription(sub, payloadJson)),
+      );
+    }
   }
 
   async sendWaiterCallPush(

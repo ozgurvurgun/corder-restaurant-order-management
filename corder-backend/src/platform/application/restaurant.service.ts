@@ -72,8 +72,8 @@ export class RestaurantService {
 
   private resolveAssignedBossesForRestaurant(
     r: RestaurantEntity,
-    links: BossRestaurantEntity[],
-    allBosses: RootAdminEntity[],
+    restLinks: BossRestaurantEntity[],
+    brandOwnersByBrand: Map<string, RootAdminEntity[]>,
     bossById: Map<string, RootAdminEntity>,
   ): AssignedBossDto[] {
     const assignedMap = new Map<string, AssignedBossDto>();
@@ -81,18 +81,11 @@ export class RestaurantService {
       if (assignedMap.has(b.id)) return;
       const bossTier = b.bossTier || 'franchise_owner';
       assignedMap.set(b.id, {
-        id: b.id,
-        name: b.name,
-        email: b.email,
-        bossTier,
-        title:
-          customTitle ||
-          (bossTier === 'brand_owner' ? 'Brand Owner (HQ)' : 'Franchise / Branch Owner'),
+        id: b.id, name: b.name, email: b.email, bossTier,
+        title: customTitle || (bossTier === 'brand_owner' ? 'Brand Owner (HQ)' : 'Franchise / Branch Owner'),
       });
     };
-
-    for (const link of links) {
-      if (link.restaurantId !== r.id) continue;
+    for (const link of restLinks) {
       const b = bossById.get(link.bossId);
       if (b) addBoss(b, link.title);
     }
@@ -101,11 +94,8 @@ export class RestaurantService {
       if (b) addBoss(b);
     }
     if (r.brandName) {
-      const normalizedBrand = r.brandName.trim().toLowerCase();
-      for (const b of allBosses) {
-        if (b.bossTier === 'brand_owner' && b.brandName?.trim().toLowerCase() === normalizedBrand) {
-          addBoss(b, 'Brand Owner (HQ)');
-        }
+      for (const b of brandOwnersByBrand.get(r.brandName.trim().toLowerCase()) ?? []) {
+        addBoss(b, 'Brand Owner (HQ)');
       }
     }
     return Array.from(assignedMap.values());
@@ -114,15 +104,19 @@ export class RestaurantService {
   async enrichRestaurantsWithBosses(restaurants: RestaurantEntity[]) {
     if (restaurants.length === 0) return [];
     const restIds = restaurants.map((r) => r.id);
-    const [links, allPayments, collectionEndDay] = await Promise.all([
-      this.bossRestaurantRepo.find({ where: { restaurantId: In(restIds) } }),
-      this.paymentRepo.find({
-        where: { restaurantId: In(restIds) },
-        order: { paidAt: 'DESC', createdAt: 'DESC' },
-      }),
-      this.getCollectionEndDay(),
-    ]);
-
+    const links: BossRestaurantEntity[] = [];
+    const allPayments: RestaurantSubscriptionPaymentEntity[] = [];
+    const collectionEndDayPromise = this.getCollectionEndDay();
+    for (let i = 0; i < restIds.length; i += 2000) {
+      const chunkIds = restIds.slice(i, i + 2000);
+      const [chunkLinks, chunkPayments] = await Promise.all([
+        this.bossRestaurantRepo.find({ where: { restaurantId: In(chunkIds) } }),
+        this.paymentRepo.find({ where: { restaurantId: In(chunkIds) }, order: { paidAt: 'DESC', createdAt: 'DESC' } }),
+      ]);
+      links.push(...chunkLinks);
+      allPayments.push(...chunkPayments);
+    }
+    const collectionEndDay = await collectionEndDayPromise;
     const candidateBossIds = Array.from(
       new Set<string>([
         ...links.map((l) => l.bossId),
@@ -132,48 +126,49 @@ export class RestaurantService {
     const hasAnyBrand = restaurants.some((r) => Boolean(r.brandName?.trim()));
     let allBosses: RootAdminEntity[] = [];
     if (hasAnyBrand && candidateBossIds.length > 0) {
-      allBosses = await this.rootAdminRepo.find({
-        where: [{ id: In(candidateBossIds) }, { bossTier: 'brand_owner' }],
-      });
+      allBosses = await this.rootAdminRepo.find({ where: [{ id: In(candidateBossIds) }, { bossTier: 'brand_owner' }] });
     } else if (hasAnyBrand) {
-      allBosses = await this.rootAdminRepo.find({
-        where: { bossTier: 'brand_owner' },
-      });
+      allBosses = await this.rootAdminRepo.find({ where: { bossTier: 'brand_owner' } });
     } else if (candidateBossIds.length > 0) {
-      allBosses = await this.rootAdminRepo.find({
-        where: { id: In(candidateBossIds) },
-      });
+      allBosses = await this.rootAdminRepo.find({ where: { id: In(candidateBossIds) } });
     }
     const bossById = new Map(allBosses.map((b) => [b.id, b]));
+    const linksByRestId = new Map<string, BossRestaurantEntity[]>();
+    for (const l of links) {
+      const arr = linksByRestId.get(l.restaurantId);
+      if (arr) arr.push(l);
+      else linksByRestId.set(l.restaurantId, [l]);
+    }
+    const brandOwnersByBrand = new Map<string, RootAdminEntity[]>();
+    for (const b of allBosses) {
+      if (b.bossTier === 'brand_owner' && b.brandName?.trim()) {
+        const key = b.brandName.trim().toLowerCase();
+        const arr = brandOwnersByBrand.get(key);
+        if (arr) arr.push(b);
+        else brandOwnersByBrand.set(key, [b]);
+      }
+    }
     const paymentsByRestId = new Map<string, RestaurantSubscriptionPaymentEntity[]>();
     for (const p of allPayments) {
-      const arr = paymentsByRestId.get(p.restaurantId) ?? [];
-      arr.push(p);
-      paymentsByRestId.set(p.restaurantId, arr);
+      const arr = paymentsByRestId.get(p.restaurantId);
+      if (arr) arr.push(p);
+      else paymentsByRestId.set(p.restaurantId, [p]);
     }
-
     const now = new Date();
-
     return restaurants.map((r) => {
       const restPayments = paymentsByRestId.get(r.id) ?? [];
       const summary = computeRestaurantBillingSummary({
-        status: r.status,
-        monthlyFee: r.monthlyFee,
-        billingStartPeriod: r.billingStartPeriod,
-        createdAt: r.createdAt,
-        isAccessSuspended: r.isAccessSuspended,
-        payments: restPayments,
-        collectionEndDay,
-        now,
+        status: r.status, monthlyFee: r.monthlyFee, billingStartPeriod: r.billingStartPeriod,
+        createdAt: r.createdAt, isAccessSuspended: r.isAccessSuspended,
+        payments: restPayments, collectionEndDay, now,
       });
-
       return {
         ...r,
         monthlyFee: Number(r.monthlyFee || 0),
         royaltyRate: Number(r.royaltyRate || 0),
         ...summary,
         paymentHistory: restPayments.map(toPaymentRecordDto),
-        bosses: this.resolveAssignedBossesForRestaurant(r, links, allBosses, bossById),
+        bosses: this.resolveAssignedBossesForRestaurant(r, linksByRestId.get(r.id) ?? [], brandOwnersByBrand, bossById),
       };
     });
   }

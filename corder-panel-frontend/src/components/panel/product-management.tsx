@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react"
+import { useState, useCallback, useEffect, useMemo, useRef } from "react"
 import { usePanelStore } from "@/lib/panel-store"
 import { usePanelAuth } from "@/lib/panel-auth"
 import { usePanelToast } from "./panel-toast"
@@ -59,13 +59,31 @@ export default function ProductManagement() {
   const [productCalories, setProductCalories] = useState("")
   const [productAllergens, setProductAllergens] = useState<string[]>([])
   const [productImage, setProductImage] = useState("")
-  const [catName, setCatName] = useState(""); useEffect(() => {
-    if (!categories.length) return
-    const ordered = orderedCategoryList(categories); if (!ordered[0]) return
+  const [catName, setCatName] = useState("")
+  const orderedCategories = useMemo(
+    () => orderedCategoryList(categories),
+    [categories],
+  )
+  const depthById = useMemo(
+    () => new Map(categories.map((c) => [c.id, categoryDepth(categories, c.id)])),
+    [categories],
+  )
+  const productCountByCategoryId = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const p of products) {
+      counts.set(p.categoryId, (counts.get(p.categoryId) ?? 0) + 1)
+    }
+    return counts
+  }, [products])
+
+  useEffect(() => {
+    if (!orderedCategories.length) return
+    const first = orderedCategories[0]
+    if (!first) return
     setSelectedCat((cur) =>
-      cur && ordered.some((c) => c.id === cur) ? cur : ordered[0].id,
+      cur && orderedCategories.some((c) => c.id === cur) ? cur : first.id,
     )
-  }, [categories])
+  }, [orderedCategories])
 
   const [editName, setEditName] = useState("")
   const [editCategoryId, setEditCategoryId] = useState("")
@@ -76,15 +94,14 @@ export default function ProductManagement() {
   const [editAllergens, setEditAllergens] = useState<string[]>([])
   const [editImage, setEditImage] = useState("")
 
-  const catProducts = products.filter((p) => {
-    const matchCat = p.categoryId === selectedCat
-    const matchSearch =
-      !search.trim() ||
-      p.name
-        .toLocaleLowerCase("tr-TR")
-        .includes(search.trim().toLocaleLowerCase("tr-TR"))
-    return matchCat && matchSearch
-  })
+  const catProducts = useMemo(() => {
+    const q = search.trim().toLocaleLowerCase("tr-TR")
+    return products.filter((p) => {
+      if (p.categoryId !== selectedCat) return false
+      if (!q) return true
+      return p.name.toLocaleLowerCase("tr-TR").includes(q)
+    })
+  }, [products, selectedCat, search])
 
   const commitCategoryRename = (catId: string, rawName: string) => {
     if (catRenameCommittedRef.current) return
@@ -169,7 +186,7 @@ export default function ProductManagement() {
           )}
         </div>
         <div className="flex-1 overflow-auto py-1">
-          {orderedCategoryList(categories).map((cat) => (
+          {orderedCategories.map((cat) => (
             <div
               key={cat.id}
               className="group"
@@ -232,7 +249,7 @@ export default function ProductManagement() {
               ) : (
                 <div
                   style={{
-                    paddingLeft: `${12 + categoryDepth(categories, cat.id) * 12}px`,
+                    paddingLeft: `${12 + (depthById.get(cat.id) ?? 0) * 12}px`,
                   }}
                   className={`w-full pr-4 text-[13px] flex items-center justify-between gap-1 transition-colors ${selectedCat === cat.id ? "bg-[#e63462]/10 text-[#e63462] font-medium" : "text-[#1d1d1f] hover:bg-black/[0.03]"}`}
                 >
@@ -248,7 +265,7 @@ export default function ProductManagement() {
                     </span>
                   </button>
                   <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0">
-                    <span className="text-[10px] text-[#86868b]"> {products.filter((p) => p.categoryId === cat.id).length} </span>
+                    <span className="text-[10px] text-[#86868b]"> {productCountByCategoryId.get(cat.id) ?? 0} </span>
                     {canManageCategories && (
                       <>
                         <button type="button" onClick={() => setEditingCatSettings(cat)} className="w-5 h-5 rounded flex items-center justify-center hover:bg-black/5"><Settings2 className="w-3 h-3 text-[#86868b]" /></button>

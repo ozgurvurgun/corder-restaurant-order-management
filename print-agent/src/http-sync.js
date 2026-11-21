@@ -181,6 +181,36 @@ async function fetchPendingPrintJobs(config) {
   }
 }
 
+async function fetchPendingSync(config) {
+  const base = httpBaseUrl(config)
+  if (!base || (!config.agentToken && !config.refreshToken)) {
+    return { kitchenOrders: [], printJobs: [] }
+  }
+  const url = `${base}/restaurant/print-agent/pending-sync`
+  try {
+    const res = await authorizedFetch(config, url)
+    if (res.status === 404) {
+      const [kitchenOrders, printJobs] = await Promise.all([
+        fetchPendingKitchenOrders(config),
+        fetchPendingPrintJobs(config),
+      ])
+      return { kitchenOrders, printJobs }
+    }
+    if (!res.ok) {
+      if (res.status !== 401) warn("pending-sync HTTP failed", { status: res.status })
+      return { kitchenOrders: [], printJobs: [] }
+    }
+    const data = await res.json()
+    return {
+      kitchenOrders: Array.isArray(data?.kitchenOrders) ? data.kitchenOrders : [],
+      printJobs: Array.isArray(data?.printJobs) ? data.printJobs : [],
+    }
+  } catch (e) {
+    warn("pending-sync HTTP error", { error: e instanceof Error ? e.message : String(e) })
+    return { kitchenOrders: [], printJobs: [] }
+  }
+}
+
 async function loginPrintAgent(username, password, preferredBackendUrl = null) {
   const cleanUser = String(username || "").trim().toLowerCase()
   const cleanPass = String(password || "")
@@ -289,6 +319,7 @@ module.exports = {
   ackPrintJobPrinted,
   fetchPendingKitchenOrders,
   fetchPendingPrintJobs,
+  fetchPendingSync,
   loginPrintAgent,
   logoutPrintAgent,
   refreshAgentSession,

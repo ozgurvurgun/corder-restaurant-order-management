@@ -286,13 +286,14 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     [selectedBranchId, branches, resetBranchScopedState]
   )
 
+  const catalogRef = useRef<PermissionCatalogResponse | null>(null)
   const refreshBranchDetails = useCallback(
     async (explicitBranchId?: string) => {
       const targetId = explicitBranchId || effectiveBranchId
       if (!targetId || !getBossToken()) return
       const [catRes, rolesRes, staffRes, tablesRes, ordersRes, productsRes, categoriesRes] =
         await Promise.all([
-          bossApi.roles.catalog(targetId),
+          catalogRef.current ? Promise.resolve(catalogRef.current) : bossApi.roles.catalog(targetId),
           bossApi.roles.list(targetId),
           bossApi.staff.list(targetId),
           bossApi.operations.tables(targetId),
@@ -300,6 +301,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
           bossApi.operations.products(targetId),
           bossApi.operations.categories(targetId),
         ])
+      catalogRef.current = catRes
       setCatalog(catRes)
       setRoles(rolesRes)
       setStaff(staffRes.map((s) => ({ ...s, name: formatTitleCase(s.name) })))
@@ -336,9 +338,19 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     setError(null)
     try {
+      const knownTargetBranchId =
+        selectedBranchId && selectedBranchId !== "ALL"
+          ? selectedBranchId
+          : (branches[0]?.id ?? "")
       const [meRes, ovRes] = await Promise.all([
         bossApi.auth.me(),
         bossApi.overview.get(selectedBranchId),
+        ...(knownTargetBranchId
+          ? [
+              refreshBranchDetails(knownTargetBranchId),
+              fetchPlatformNotifsSilently(knownTargetBranchId),
+            ]
+          : []),
       ])
       if (!meRes.user.isBoss && meRes.user.role !== "root") {
         logout()
@@ -357,7 +369,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
       void fetchFraudAlertsSilently(selectedBranchId)
       const targetBranchId =
         selectedBranchId && selectedBranchId !== "ALL" ? selectedBranchId : (meRes.restaurants[0]?.id ?? "")
-      if (targetBranchId) {
+      if (targetBranchId && targetBranchId !== knownTargetBranchId) {
         void fetchPlatformNotifsSilently(targetBranchId)
         await refreshBranchDetails(targetBranchId)
       }
@@ -370,7 +382,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false)
     }
-  }, [selectedBranchId, refreshBranchDetails, fetchFraudAlertsSilently, fetchPlatformNotifsSilently, logout])
+  }, [selectedBranchId, branches, refreshBranchDetails, fetchFraudAlertsSilently, fetchPlatformNotifsSilently, logout])
 
   useEffect(() => {
     if (!user?.id || !getBossToken()) return
@@ -380,6 +392,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
   useBossSocket({
     tokenVersion,
     userId: user?.id,
+    effectiveBranchId,
     socketRef,
     liveRefreshTimerRef,
     effectiveBranchIdRef,

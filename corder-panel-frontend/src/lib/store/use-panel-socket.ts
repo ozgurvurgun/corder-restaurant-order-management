@@ -104,7 +104,6 @@ export function usePanelSocket(params: {
           }
         }),
       )
-      void (refreshActivePosRef?.current ?? refreshPosRef.current)?.()
     }
 
     const handleOrdersMoved = () => void (refreshActivePosRef?.current ?? refreshPosRef.current)?.()

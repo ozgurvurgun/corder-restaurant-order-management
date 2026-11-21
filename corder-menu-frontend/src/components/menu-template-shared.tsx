@@ -76,6 +76,9 @@ export function normalizeSearchText(input: string | null | undefined): string {
     .trim()
 }
 
+let levPrevBuf = new Uint16Array(256)
+let levCurrBuf = new Uint16Array(256)
+
 export function levenshteinDistance(a: string, b: string): number {
   if (a === b) return 0
   const m = a.length
@@ -83,26 +86,56 @@ export function levenshteinDistance(a: string, b: string): number {
   if (m === 0) return n
   if (n === 0) return m
 
-  let prev = new Array<number>(n + 1)
-  let curr = new Array<number>(n + 1)
-  for (let j = 0; j <= n; j++) prev[j] = j
+  if (n + 1 > levPrevBuf.length) {
+    const nextSize = Math.max(n + 1, levPrevBuf.length * 2)
+    levPrevBuf = new Uint16Array(nextSize)
+    levCurrBuf = new Uint16Array(nextSize)
+  }
+  for (let j = 0; j <= n; j++) levPrevBuf[j] = j
 
   for (let i = 1; i <= m; i++) {
-    curr[0] = i
+    levCurrBuf[0] = i
     const aCode = a.charCodeAt(i - 1)
     for (let j = 1; j <= n; j++) {
       const cost = aCode === b.charCodeAt(j - 1) ? 0 : 1
-      curr[j] = Math.min(
-        prev[j] + 1,
-        curr[j - 1] + 1,
-        prev[j - 1] + cost
-      )
+      const del = levPrevBuf[j] + 1
+      const ins = levCurrBuf[j - 1] + 1
+      const sub = levPrevBuf[j - 1] + cost
+      levCurrBuf[j] = del < ins ? (del < sub ? del : sub) : ins < sub ? ins : sub
     }
-    const tmp = prev
-    prev = curr
-    curr = tmp
+    const tmp = levPrevBuf
+    levPrevBuf = levCurrBuf
+    levCurrBuf = tmp
   }
-  return prev[n]
+  return levPrevBuf[n]
+}
+
+interface NormalizedProductSearchTokens {
+  normName: string
+  normDesc: string
+  nameWords: string[]
+  descWords: string[]
+  compactName: string
+}
+
+const PRODUCT_SEARCH_TOKEN_CACHE = new WeakMap<ProductDisplay, NormalizedProductSearchTokens>()
+
+function getProductSearchTokens(product: ProductDisplay): NormalizedProductSearchTokens {
+  let cached = PRODUCT_SEARCH_TOKEN_CACHE.get(product)
+  if (cached) return cached
+  const normName = normalizeSearchText(product.name)
+  const normDesc = normalizeSearchText(product.description)
+  const nameWords = normName.split(" ").filter(Boolean)
+  const descWords = normDesc.split(" ").filter(Boolean)
+  cached = {
+    normName,
+    normDesc,
+    nameWords,
+    descWords,
+    compactName: nameWords.join(""),
+  }
+  PRODUCT_SEARCH_TOKEN_CACHE.set(product, cached)
+  return cached
 }
 
 function maxAllowedDistance(tokenLength: number): number {
@@ -164,11 +197,8 @@ export function searchProductsWithLevenshtein(
   const scored: Array<{ product: ProductDisplay; score: number }> = []
 
   for (const product of products) {
-    const normName = normalizeSearchText(product.name)
-    const normDesc = normalizeSearchText(product.description)
-    const nameWords = normName.split(" ").filter(Boolean)
-    const descWords = normDesc.split(" ").filter(Boolean)
-    const compactName = nameWords.join("")
+    const { normName, normDesc, nameWords, descWords, compactName } =
+      getProductSearchTokens(product)
 
     let totalScore = 0
 

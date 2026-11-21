@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import type { BossTier, Restaurant, RootAdmin } from "@/lib/types"
 import { Building2, Check, X } from "lucide-react"
 import { CorderEmailInput } from "@/components/CorderEmailInput"
@@ -57,11 +57,34 @@ export function BossFormModal({
         ? [restaurants[0].id]
         : []
   )
+  const [branchSearch, setBranchSearch] = useState("")
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
-  const existingBrands = Array.from(
-    new Set(restaurants.map((r) => r.brandName?.trim()).filter(Boolean) as string[])
+  const selectedSet = useMemo(
+    () => new Set(selectedRestaurantIds),
+    [selectedRestaurantIds]
+  )
+
+  const filteredBranchRestaurants = useMemo(() => {
+    const q = branchSearch.trim().toLowerCase()
+    const list = !q
+      ? restaurants
+      : restaurants.filter(
+          (r) =>
+            r.name.toLowerCase().includes(q) ||
+            r.slug.toLowerCase().includes(q) ||
+            (r.brandName ?? "").toLowerCase().includes(q)
+        )
+    return list.slice(0, 200)
+  }, [restaurants, branchSearch])
+
+  const existingBrands = useMemo(
+    () =>
+      Array.from(
+        new Set(restaurants.map((r) => r.brandName?.trim()).filter(Boolean) as string[])
+      ),
+    [restaurants]
   )
 
   useEffect(() => {
@@ -323,9 +346,18 @@ export function BossFormModal({
                 </button>
               </div>
             </div>
+            {restaurants.length > 10 && (
+              <input
+                type="text"
+                value={branchSearch}
+                onChange={(e) => setBranchSearch(e.target.value)}
+                placeholder={`Şube ara (${restaurants.length} şube)...`}
+                className="mb-1.5 h-9 w-full rounded-xl border border-[#d1d1d6] bg-[#f5f5f7] px-3 text-[12px] text-[#1d1d1f] outline-none focus:border-[#e63462] focus:bg-white"
+              />
+            )}
             <div className="max-h-48 overflow-y-auto rounded-xl border border-[#e5e5ea] bg-[#f9f9fb] p-2 space-y-1">
-              {restaurants.map((r) => {
-                const checked = selectedRestaurantIds.includes(r.id)
+              {filteredBranchRestaurants.map((r) => {
+                const checked = selectedSet.has(r.id)
                 return (
                   <button
                     key={r.id}

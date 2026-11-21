@@ -15,7 +15,7 @@ services:
       DB_USERNAME: ${DB_USERNAME:-corder}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
       DB_NAME: ${DB_NAME:-corder}
-      DB_POOL_MAX: ${DB_POOL_MAX:-20}
+      DB_POOL_MAX: ${DB_POOL_MAX:-30}
       DB_SSL: ${DB_SSL:-false}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-12h}

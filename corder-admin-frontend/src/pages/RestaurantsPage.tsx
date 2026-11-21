@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { useAdminStore } from "@/lib/store"
 import type { Restaurant, SubscriptionPaymentMethod } from "@/lib/types"
@@ -108,18 +108,19 @@ export function RestaurantsPage() {
     )
   }
 
-  const filtered = restaurants.filter((r) => {
-    if (!searchQuery.trim()) return true
+  const filtered = useMemo(() => {
     const q = searchQuery.toLowerCase().trim()
-    return (
-      r.name.toLowerCase().includes(q) ||
-      r.slug.toLowerCase().includes(q) ||
-      (r.brandName ?? "").toLowerCase().includes(q) ||
-      (r.bosses ?? []).some(
-        (b) => b.name.toLowerCase().includes(q) || b.email.toLowerCase().includes(q)
-      )
+    if (!q) return restaurants
+    return restaurants.filter(
+      (r) =>
+        r.name.toLowerCase().includes(q) ||
+        r.slug.toLowerCase().includes(q) ||
+        (r.brandName ?? "").toLowerCase().includes(q) ||
+        (r.bosses ?? []).some(
+          (b) => b.name.toLowerCase().includes(q) || b.email.toLowerCase().includes(q)
+        )
     )
-  })
+  }, [restaurants, searchQuery])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / RESTAURANTS_PAGE_SIZE))
   const safePage = Math.min(currentPage, totalPages)

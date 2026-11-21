@@ -76,6 +76,7 @@ export class OpenAccountsService {
     const rows = await this.repo.find({
       where: { restaurantId },
       order: { createdAt: 'DESC' },
+      take: 300,
     });
     if (rows.length === 0) return [];
 

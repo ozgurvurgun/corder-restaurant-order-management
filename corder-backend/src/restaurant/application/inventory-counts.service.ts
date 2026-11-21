@@ -30,6 +30,7 @@ export class InventoryCountsService {
     return this.repo.find({
       where: { restaurantId },
       order: { createdAt: 'DESC' },
+      take: 250,
     });
   }
 

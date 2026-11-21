@@ -75,10 +75,54 @@ export class BossOverviewService {
       this.fraudService.listForBranches(branchIds, branchNameById),
     ]);
 
+    const tablesByBranch = new Map<string, TableEntity[]>();
+    for (const t of data.tables) {
+      const list = tablesByBranch.get(t.restaurantId);
+      if (list) list.push(t);
+      else tablesByBranch.set(t.restaurantId, [t]);
+    }
+    const activeOrdersByBranch = new Map<string, OrderEntity[]>();
+    for (const o of data.activeOrders) {
+      const list = activeOrdersByBranch.get(o.restaurantId);
+      if (list) list.push(o);
+      else activeOrdersByBranch.set(o.restaurantId, [o]);
+    }
+    const completedMonthByBranch = new Map<string, CompletedOrderEntity[]>();
+    for (const co of data.completedMonth) {
+      const list = completedMonthByBranch.get(co.restaurantId);
+      if (list) list.push(co);
+      else completedMonthByBranch.set(co.restaurantId, [co]);
+    }
+    const openShiftsByBranch = new Map<string, CashShiftEntity[]>();
+    for (const s of data.openShifts) {
+      const list = openShiftsByBranch.get(s.restaurantId);
+      if (list) list.push(s);
+      else openShiftsByBranch.set(s.restaurantId, [s]);
+    }
+    const materialsByBranch = new Map<string, StockMaterialEntity[]>();
+    for (const m of data.materials) {
+      const list = materialsByBranch.get(m.restaurantId);
+      if (list) list.push(m);
+      else materialsByBranch.set(m.restaurantId, [m]);
+    }
+    const staffByBranch = new Map<string, RestaurantStaffEntity[]>();
+    for (const st of data.staffList) {
+      const list = staffByBranch.get(st.restaurantId);
+      if (list) list.push(st);
+      else staffByBranch.set(st.restaurantId, [st]);
+    }
+
     const branchPulses: BranchLivePulseDto[] = targetBranches.map((branch) =>
       BossOverviewPolicy.buildBranchPulse({
         branch,
-        ...data,
+        tables: tablesByBranch.get(branch.id) ?? [],
+        activeOrders: activeOrdersByBranch.get(branch.id) ?? [],
+        itemsByOrderId: data.itemsByOrderId,
+        completedMonth: completedMonthByBranch.get(branch.id) ?? [],
+        openShifts: openShiftsByBranch.get(branch.id) ?? [],
+        materials: materialsByBranch.get(branch.id) ?? [],
+        staffList: staffByBranch.get(branch.id) ?? [],
+        openLedgerBalanceByBranchId: data.openLedgerBalanceByBranchId,
         startOfToday,
         startOfWeek,
         startOfMonth,
@@ -185,6 +229,7 @@ export class BossOverviewService {
           'createdAt',
         ],
         order: { closedAt: 'DESC' },
+        take: 15000,
       }),
       em.find(CashShiftEntity, {
         where: { restaurantId: In(branchIds), status: 'open' },

@@ -106,13 +106,16 @@ export class MenuQueryService {
     if (!normalizedSlug) {
       throw new NotFoundException('restaurant query is required');
     }
+    const lowerSlug = normalizedSlug.toLowerCase();
     const restaurant =
       (await this.restaurantRepo.findOne({
-        where: { slug: normalizedSlug, status: 'active' },
+        where: { slug: lowerSlug, status: 'active' },
       })) ??
-      (await this.restaurantRepo.findOne({
-        where: { slug: normalizedSlug.toLowerCase(), status: 'active' },
-      }));
+      (lowerSlug !== normalizedSlug
+        ? await this.restaurantRepo.findOne({
+            where: { slug: normalizedSlug, status: 'active' },
+          })
+        : null);
     if (!restaurant || isRestaurantPaymentSuspended(restaurant)) {
       throw new NotFoundException('Business not found');
     }

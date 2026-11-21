@@ -1,8 +1,10 @@
 const { io } = require("socket.io-client")
 const {
+  ackKitchenPrinted,
   ackPrintJobPrinted,
   fetchPendingKitchenOrders,
   fetchPendingPrintJobs,
+  fetchPendingSync,
   refreshAgentSession,
 } = require("./http-sync")
 const { expandKitchenPrintJobs } = require("./kitchen-split")
@@ -105,12 +107,35 @@ function startAgent({ config: initialConfig, store, printer, onContextInvalidate
     return Date.now() - ts > 3 * 60 * 1000
   }
 
+  const ackSkippedParentJob = (jobId, printType) => {
+    if (!jobId || store.hasAcked(jobId) || ackInFlightIds.has(jobId)) return
+    ackInFlightIds.add(jobId)
+    const p =
+      printType === "kitchen"
+        ? ackKitchenPrinted(config, jobId)
+        : ackPrintJobPrinted(config, jobId)
+    void p
+      .then((ok) => {
+        if (ok) store.markAcked(jobId)
+      })
+      .finally(() => ackInFlightIds.delete(jobId))
+  }
+
   const enqueueKitchenJobsFromPayload = (payload, fromHttpPoll = false) => {
     const base = normalizeOrderCreated(payload, config.restaurantId)
     if (!base) return
     const expanded = expandKitchenPrintJobs(base, config)
     if (fromHttpPoll && isStaleBacklogJob(base)) {
       if (expanded.length) settleJobsAsSkipped(expanded)
+      else ackSkippedParentJob(base.jobId, "kitchen")
+      return
+    }
+    if (
+      expanded.length === 0 &&
+      ((Array.isArray(config.printers) && config.printers.length > 0) ||
+        config.defaultKitchenPrinterId === "none")
+    ) {
+      ackSkippedParentJob(base.jobId, "kitchen")
       return
     }
     enqueueJobs(expanded)
@@ -120,19 +145,22 @@ function startAgent({ config: initialConfig, store, printer, onContextInvalidate
     const evt = normalizePrintJob(payload, config.restaurantId)
     if (!evt) return
     if (evt.emptyJobId) {
-      if (!store.hasAcked(evt.emptyJobId) && !ackInFlightIds.has(evt.emptyJobId)) {
-        ackInFlightIds.add(evt.emptyJobId)
-        void ackPrintJobPrinted(config, evt.emptyJobId)
-          .then((ok) => {
-            if (ok) store.markAcked(evt.emptyJobId)
-          })
-          .finally(() => ackInFlightIds.delete(evt.emptyJobId))
-      }
+      ackSkippedParentJob(evt.emptyJobId, "print_job")
       return
     }
     const expanded = expandOrderPrintJob(evt, config)
     if (fromHttpPoll && isStaleBacklogJob(evt)) {
       if (expanded.length) settleJobsAsSkipped(expanded)
+      else ackSkippedParentJob(evt.jobId, "print_job")
+      return
+    }
+    if (
+      expanded.length === 0 &&
+      ((Array.isArray(config.printers) && config.printers.length > 0) ||
+        config.receiptPrinterId === "none" ||
+        config.defaultKitchenPrinterId === "none")
+    ) {
+      ackSkippedParentJob(evt.jobId, "print_job")
       return
     }
     enqueueJobs(expanded)
@@ -216,17 +244,32 @@ function startAgent({ config: initialConfig, store, printer, onContextInvalidate
     }
   }
 
-  const pullPendingFromHttp = () => {
+  let syncInFlight = false
+  let lastSyncCompletedAt = 0
+
+  const pullPendingFromHttp = async (opts = {}) => {
+    const force = Boolean(opts && opts.force)
     if (!config.backendWsUrl || (!config.agentToken && !config.refreshToken) || !config.restaurantId) {
       return
     }
+    if (syncInFlight) return
+    const now = Date.now()
+    const connectedInterval = Number(config.kitchenSyncConnectedIntervalMs) || 60000
+    const disconnectedInterval = Number(config.kitchenSyncIntervalMs) || 5000
+    const activeInterval = statusState.socketConnected ? connectedInterval : disconnectedInterval
+    if (!force && lastSyncCompletedAt > 0 && now - lastSyncCompletedAt < activeInterval - 250) {
+      return
+    }
+    syncInFlight = true
     statusState.lastHttpSyncAt = new Date().toISOString()
-    void fetchPendingKitchenOrders(config).then((list) =>
-      list.forEach((p) => enqueueKitchenJobsFromPayload(p, true)),
-    )
-    void fetchPendingPrintJobs(config).then((list) =>
-      list.forEach((p) => enqueueOrderPrintJobsFromPayload(p, true)),
-    )
+    try {
+      const { kitchenOrders, printJobs } = await fetchPendingSync(config)
+      kitchenOrders.forEach((p) => enqueueKitchenJobsFromPayload(p, true))
+      printJobs.forEach((p) => enqueueOrderPrintJobsFromPayload(p, true))
+    } finally {
+      lastSyncCompletedAt = Date.now()
+      syncInFlight = false
+    }
   }
 
   const scheduleReconnect = (delayMs = 3000) => {
@@ -288,7 +331,7 @@ function startAgent({ config: initialConfig, store, printer, onContextInvalidate
       statusState.lastError = null
       info("Print agent connected (socket.io)", { socketId: socket?.id })
       void scheduleDrainQueue()
-      pullPendingFromHttp()
+      void pullPendingFromHttp({ force: true })
     })
     socket.on(config.backendOrderEventName, enqueueKitchenJobsFromPayload)
     socket.on("order.print_job", enqueueOrderPrintJobsFromPayload)
@@ -356,7 +399,7 @@ function startAgent({ config: initialConfig, store, printer, onContextInvalidate
 
   setupTimers()
   connect()
-  setImmediate(pullPendingFromHttp)
+  setImmediate(() => void pullPendingFromHttp({ force: true }))
 
   return {
     flushQueue: flushQueueNow,
@@ -381,7 +424,7 @@ function startAgent({ config: initialConfig, store, printer, onContextInvalidate
       if (printer && typeof printer.updateConfig === "function") printer.updateConfig(nextConfig)
       setupTimers()
       if (reconnectNeeded || !statusState.socketConnected) connect()
-      pullPendingFromHttp()
+      void pullPendingFromHttp({ force: true })
       void scheduleDrainQueue()
     },
     stop() {

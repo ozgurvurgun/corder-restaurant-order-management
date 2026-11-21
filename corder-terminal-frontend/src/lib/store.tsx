@@ -208,12 +208,16 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     () => new Map(products.map((p) => [p.id, p])),
     [products]
   )
+  const rawTablesById = useMemo(
+    () => new Map(rawTables.map((t) => [t.id, t])),
+    [rawTables]
+  )
   const orders = useMemo(
     () =>
       rawOrders.map((dto) =>
-        mapOrderDtoToTerminalOrder(dto, rawTables, productsById)
+        mapOrderDtoToTerminalOrder(dto, rawTablesById, productsById)
       ),
-    [rawOrders, rawTables, productsById]
+    [rawOrders, rawTablesById, productsById]
   )
   const tables = useMemo(
     () => mapTablesWithOrders(rawTables, orders),
@@ -229,20 +233,24 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
 
   const inFlightTablesRef = useRef(false)
   const pendingTablesRef = useRef(false)
+  const lastTablesSyncAtRef = useRef(0)
   const inFlightLiveRef = useRef(false)
   const pendingLiveRef = useRef(false)
+  const lastLiveSyncAtRef = useRef(0)
 
   const pullTables = useCallback(async () => {
     const token = getToken()
     const staffSession = getStaffSession()
     if (!token || !staffSession?.staffToken) return
-    if (inFlightTablesRef.current) {
+    if (inFlightTablesRef.current || inFlightLiveRef.current) {
       pendingTablesRef.current = true
       return
     }
+    if (Date.now() - lastTablesSyncAtRef.current < 250) return
     inFlightTablesRef.current = true
     try {
       setRawTables(await api.tables.list(token))
+      lastTablesSyncAtRef.current = Date.now()
     } catch {
       /* ignore polling errors */
     } finally {
@@ -262,6 +270,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       pendingLiveRef.current = true
       return
     }
+    if (Date.now() - lastLiveSyncAtRef.current < 250) return
     inFlightLiveRef.current = true
     try {
       const [tablesRes, ordersRes] = await Promise.all([
@@ -270,6 +279,9 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       ])
       setRawTables(tablesRes)
       setRawOrders(ordersRes)
+      const now = Date.now()
+      lastLiveSyncAtRef.current = now
+      lastTablesSyncAtRef.current = now
     } catch {
       /* ignore background sync errors */
     } finally {

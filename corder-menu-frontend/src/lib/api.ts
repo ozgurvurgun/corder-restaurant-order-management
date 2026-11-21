@@ -218,18 +218,26 @@ export function isCampaignCurrentlyValid(campaign: MenuCampaign): boolean {
   return parsed.getTime() >= Date.now()
 }
 
+const MENU_PRICE_FMT_WHOLE = new Intl.NumberFormat("tr-TR", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+})
+const MENU_PRICE_FMT_DECIMALS = new Intl.NumberFormat("tr-TR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+
 export function formatMenuPrice(amount: number): string {
   if (!Number.isFinite(amount)) return "0"
   const minor = Math.round(amount * 100)
   const major = minor / 100
   const hasMinorUnits = minor % 100 !== 0
-  return new Intl.NumberFormat("tr-TR", {
-    minimumFractionDigits: hasMinorUnits ? 2 : 0,
-    maximumFractionDigits: 2,
-  }).format(major)
+  return (hasMinorUnits ? MENU_PRICE_FMT_DECIMALS : MENU_PRICE_FMT_WHOLE).format(major)
 }
 
 const TURKIC_CHAR_RE = /[çğıöşüÇĞİÖŞÜ]/u
+const TITLE_CASE_CACHE_MAX = 2500
+const TITLE_CASE_CACHE = new Map<string, string>()
 
 function resolveCasingLocale(text: string, explicitLocale?: string): string | undefined {
   if (explicitLocale) return explicitLocale
@@ -242,17 +250,26 @@ export function formatTitleCase(
   locale?: string,
 ): string {
   if (!input) return ""
+  const cacheKey = locale ? `${locale}\u0000${input}` : String(input)
+  const cached = TITLE_CASE_CACHE.get(cacheKey)
+  if (cached !== undefined) return cached
+
   const raw = String(input).trim().replace(/\s+/g, " ")
   if (!raw) return ""
   const resolvedLocale = resolveCasingLocale(raw, locale)
   const lower = (
     resolvedLocale ? raw.toLocaleLowerCase(resolvedLocale) : raw.toLowerCase()
   ).replace(/\u0307/g, "")
-  return lower.replace(
+  const formatted = lower.replace(
     /([^\p{L}']|^)(\p{L})/gu,
     (_match, prefix: string, letter: string) =>
       `${prefix}${resolvedLocale ? letter.toLocaleUpperCase(resolvedLocale) : letter.toUpperCase()}`,
   )
+  if (TITLE_CASE_CACHE.size >= TITLE_CASE_CACHE_MAX) {
+    TITLE_CASE_CACHE.clear()
+  }
+  TITLE_CASE_CACHE.set(cacheKey, formatted)
+  return formatted
 }
 
 function normalizeMenuCategoryTree(cat: MenuCategory): MenuCategory {
