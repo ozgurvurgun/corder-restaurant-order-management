@@ -211,7 +211,7 @@ function renderDiscoveredPrinters() {
       .map((p) => p.systemPrinterName),
   )
   if (!state.discoveredPrinters.length) {
-    container.innerHTML = `<div class="empty-hint">Sistemde tanımlı yazıcı bulunamadı veya henüz tarama yapılmadı.</div>`
+    container.innerHTML = `<div class="empty-hint">Bilgisayara bağlı aktif bir USB veya sistem yazıcısı bulunamadı. Yazıcının güç düğmesinin açık ve USB kablosunun bilgisayara tam takılı olduğundan emin olup "Bilgisayardaki Yazıcıları Tara" butonuna basın (ekstra sürücü kurmanıza gerek yoktur).</div>`
     return
   }
   container.innerHTML = state.discoveredPrinters

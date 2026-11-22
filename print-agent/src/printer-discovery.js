@@ -2,6 +2,7 @@ const fs = require("fs")
 const net = require("net")
 const os = require("os")
 const { execFile } = require("child_process")
+const { discoverWindowsDirectAndSpoolerPrinters } = require("./windows-usb-direct")
 
 const SAFE_HOST_RE = /^[a-zA-Z0-9.-]{1,253}$/
 const VIRTUAL_IFACE_RE = /^(lo|docker|br-|veth|virbr|tun|tap|wg|tailscale|zt|vmnet|vboxnet)/i
@@ -21,36 +22,6 @@ function execFileText(binary, args, timeoutMs = 6000) {
       },
     )
   })
-}
-
-async function discoverWindowsPrinters() {
-  const raw = await execFileText(
-    "powershell.exe",
-    [
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      "Get-Printer -ErrorAction SilentlyContinue | Where-Object { [string]$_.PrinterStatus -notmatch 'PendingDeletion|Deleting' } | Select-Object Name, DriverName, PortName, PrinterStatus | ConvertTo-Json -Compress",
-    ],
-    8000,
-  )
-  if (!raw) return []
-  try {
-    const parsed = JSON.parse(raw)
-    const list = Array.isArray(parsed) ? parsed : [parsed]
-    return list
-      .filter((item) => item && item.Name)
-      .map((item) => ({
-        name: String(item.Name).trim(),
-        driverName: String(item.DriverName || "Windows Spooler").trim(),
-        portName: String(item.PortName || "USB").trim(),
-        status: String(item.PrinterStatus ?? "Ready"),
-        isDefault: false,
-        source: "windows",
-      }))
-  } catch {
-    return []
-  }
 }
 
 async function discoverCupsAndLinuxUsbPrinters() {
@@ -115,57 +86,28 @@ async function discoverCupsAndLinuxUsbPrinters() {
 }
 
 async function discoverSystemPrinters(extraPrinters = []) {
-  // On Windows inside Electron, webContents.getPrintersAsync() provides native
-  // Win32 EnumPrintersW data without spawning PowerShell; bit 0x4 is
-  // PRINTER_STATUS_PENDING_DELETION.
-  if (process.platform === "win32" && Array.isArray(extraPrinters) && extraPrinters.length > 0) {
-    const winPrinters = []
-    for (const extra of extraPrinters) {
-      const name = String(extra?.name || extra?.displayName || "").trim()
-      if (!name) continue
-      const statusNum = Number(extra?.status)
-      if (Number.isFinite(statusNum) && (statusNum & 0x00000004) !== 0) {
-        continue
-      }
-      if (/pending|deleting/i.test(String(extra?.status || ""))) {
-        continue
-      }
-      winPrinters.push({
-        name,
-        driverName: String(extra?.driverName || extra?.description || "Windows Spooler").trim(),
-        portName: String(extra?.options?.["printer-location"] || "USB / Spooler").trim(),
-        status: "Ready",
-        isDefault: Boolean(extra?.isDefault),
-        source: "windows",
-      })
-    }
-    if (winPrinters.length > 0) return winPrinters
+  if (process.platform === "win32") {
+    return discoverWindowsDirectAndSpoolerPrinters(extraPrinters)
   }
 
-  const discovered =
-    process.platform === "win32"
-      ? await discoverWindowsPrinters()
-      : await discoverCupsAndLinuxUsbPrinters()
-
+  const discovered = await discoverCupsAndLinuxUsbPrinters()
   const mergedMap = new Map()
   for (const p of discovered) {
     if (p && p.name) mergedMap.set(p.name, p)
   }
-  if (process.platform !== "win32" || discovered.length === 0) {
-    for (const extra of extraPrinters || []) {
-      const name = String(extra?.name || extra?.displayName || "").trim()
-      if (!name || mergedMap.has(name)) continue
-      const statusNum = Number(extra?.status)
-      if (Number.isFinite(statusNum) && (statusNum & 0x00000004) !== 0) continue
-      mergedMap.set(name, {
-        name,
-        driverName: String(extra?.driverName || extra?.description || "Sistem Yazıcısı").trim(),
-        portName: "system",
-        status: String(extra?.status ?? "ready"),
-        isDefault: Boolean(extra?.isDefault),
-        source: "electron",
-      })
-    }
+  for (const extra of extraPrinters || []) {
+    const name = String(extra?.name || extra?.displayName || "").trim()
+    if (!name || mergedMap.has(name)) continue
+    const statusNum = Number(extra?.status)
+    if (Number.isFinite(statusNum) && (statusNum & 0x00000004) !== 0) continue
+    mergedMap.set(name, {
+      name,
+      driverName: String(extra?.driverName || extra?.description || "Sistem Yazıcısı").trim(),
+      portName: "system",
+      status: String(extra?.status ?? "ready"),
+      isDefault: Boolean(extra?.isDefault),
+      source: "electron",
+    })
   }
   return [...mergedMap.values()]
 }

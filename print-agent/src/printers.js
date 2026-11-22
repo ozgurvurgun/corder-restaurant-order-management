@@ -7,6 +7,8 @@ const { info, warn } = require("./logger")
 const { healNetworkPrinters } = require("./network-healer")
 const { loadSettings, saveSettings, buildRuntimeConfig } = require("./settings-store")
 const { pushPrintersToBackend } = require("./http-sync")
+const { getWindowsBinary } = require("./windows-usb-direct")
+const { WIN_RAW_SPOOL_PS } = require("./windows-raw-print")
 
 const SAFE_PRINTER_NAME_RE = /^[\p{L}\p{N}_. \-()+@#/:]{1,128}$/u
 const LINUX_USB_DEV_RE = /^\/dev\/(usb\/)?lp[0-9]$/
@@ -73,7 +75,7 @@ function sendRawTcp(host, port, bytes, timeoutMs = 8000) {
 function runExecFile(binary, args, timeoutMs = 25000, extraEnv = null) {
   return new Promise((resolve, reject) => {
     execFile(
-      binary,
+      getWindowsBinary(binary),
       args,
       {
         timeout: timeoutMs,
@@ -176,103 +178,6 @@ async function purgeSystemPrintQueues(config = {}) {
   }
   await runExecFile("cancel", ["-a"], 4000).catch(() => {})
 }
-
-const WIN_RAW_SPOOL_PS = `
-$ErrorActionPreference = 'Stop'
-$printerName = $env:CORDER_PRINTER_NAME
-$filePath = $env:CORDER_PRINT_FILE
-Add-Type -TypeDefinition @"
-using System;
-using System.IO;
-using System.Runtime.InteropServices;
-public class RawPrinterHelper {
-  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-  public class DOCINFOW {
-    [MarshalAs(UnmanagedType.LPWStr)] public string pDocName;
-    [MarshalAs(UnmanagedType.LPWStr)] public string pOutputFile;
-    [MarshalAs(UnmanagedType.LPWStr)] public string pDataType;
-  }
-  [DllImport("winspool.Drv", EntryPoint = "OpenPrinterW", SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true)]
-  public static extern bool OpenPrinter(string src, out IntPtr hPrinter, IntPtr pd);
-  [DllImport("winspool.Drv", EntryPoint = "ClosePrinter", SetLastError = true, ExactSpelling = true)]
-  public static extern bool ClosePrinter(IntPtr hPrinter);
-  [DllImport("winspool.Drv", EntryPoint = "StartDocPrinterW", SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true)]
-  public static extern int StartDocPrinter(IntPtr hPrinter, int level, [In] DOCINFOW di);
-  [DllImport("winspool.Drv", EntryPoint = "EndDocPrinter", SetLastError = true, ExactSpelling = true)]
-  public static extern bool EndDocPrinter(IntPtr hPrinter);
-  [DllImport("winspool.Drv", EntryPoint = "StartPagePrinter", SetLastError = true, ExactSpelling = true)]
-  public static extern bool StartPagePrinter(IntPtr hPrinter);
-  [DllImport("winspool.Drv", EntryPoint = "EndPagePrinter", SetLastError = true, ExactSpelling = true)]
-  public static extern bool EndPagePrinter(IntPtr hPrinter);
-  [DllImport("winspool.Drv", EntryPoint = "WritePrinter", SetLastError = true, ExactSpelling = true)]
-  public static extern bool WritePrinter(IntPtr hPrinter, byte[] pBytes, int dwCount, out int dwWritten);
-
-  public static int TrySendBytes(string targetPrinter, byte[] bytes, string dataType) {
-    IntPtr hPrinter;
-    if (!OpenPrinter(targetPrinter, out hPrinter, IntPtr.Zero)) return Marshal.GetLastWin32Error();
-    try {
-      DOCINFOW di = new DOCINFOW { pDocName = "Corder POS Ticket", pDataType = dataType };
-      if (StartDocPrinter(hPrinter, 1, di) == 0) return Marshal.GetLastWin32Error();
-      try {
-        StartPagePrinter(hPrinter);
-        try {
-          int written = 0;
-          if (!WritePrinter(hPrinter, bytes, bytes.Length, out written)) return Marshal.GetLastWin32Error();
-        } finally { EndPagePrinter(hPrinter); }
-      } finally { EndDocPrinter(hPrinter); }
-    } finally { ClosePrinter(hPrinter); }
-    return 0;
-  }
-
-  public static int SendFileWithResult(string targetPrinter, string filePath) {
-    byte[] bytes = File.ReadAllBytes(filePath);
-    int err = TrySendBytes(targetPrinter, bytes, "RAW");
-    if (err != 0 && TrySendBytes(targetPrinter, bytes, "XPS_PASS") == 0) return 0;
-    return err;
-  }
-}
-"@
-
-$errCode = [RawPrinterHelper]::SendFileWithResult($printerName, $filePath)
-if ($errCode -eq 1905 -or $errCode -eq 1801) {
-  $origPrinter = Get-Printer -Name $printerName -ErrorAction SilentlyContinue
-  $origDriver = if ($origPrinter) { [string]$origPrinter.DriverName } else { "" }
-  Get-PrintJob -PrinterName $printerName -ErrorAction SilentlyContinue | Remove-PrintJob -ErrorAction SilentlyContinue
-  Start-Sleep -Milliseconds 250
-  if ([RawPrinterHelper]::SendFileWithResult($printerName, $filePath) -eq 0) {
-    Write-Output "HEALED_PRINTER:$printerName"; exit 0
-  }
-  $baseName = ($printerName -replace '\\s*\\((Kopya|Copy)\\s*\\d+\\)\\s*$', '').Trim()
-  $allPrinters = @(Get-Printer -ErrorAction SilentlyContinue | Where-Object {
-    $_.Name -ne $printerName -and $_.Name -notmatch '^(Microsoft Print to PDF|Microsoft XPS Document Writer|OneNote|Fax)'
-  })
-  $candidates = New-Object System.Collections.Generic.List[object]
-  $seen = New-Object System.Collections.Generic.HashSet[string]([System.StringComparer]::OrdinalIgnoreCase)
-  foreach ($group in @(
-    ($allPrinters | Where-Object { $_.Name -like "$baseName*" }),
-    ($allPrinters | Where-Object { $origDriver -and $_.DriverName -eq $origDriver }),
-    ($allPrinters | Where-Object { $_.PortName -match '^(USB|POS|COM|TM|ESDPRT|LPT)' }),
-    $allPrinters
-  )) {
-    foreach ($p in @($group)) {
-      if ($p -and $p.Name -and -not $seen.Contains([string]$p.Name)) {
-        [void]$seen.Add([string]$p.Name); $candidates.Add($p)
-      }
-    }
-  }
-  foreach ($cand in $candidates) {
-    if ([RawPrinterHelper]::SendFileWithResult([string]$cand.Name, $filePath) -eq 0) {
-      Write-Output "HEALED_PRINTER:$($cand.Name)"; exit 0
-    }
-  }
-  [Console]::Error.WriteLine("Windows Yazici Hatasi (Win32=$errCode): '$printerName' yazicisi Windows'ta silinmis veya USB baglantisi kopmus. Lutfen yazicinin acik ve USB kablosunun takili oldugundan emin olup 'Bilgisayardaki Yazicilari Tara' butonuna basin.")
-  exit 1
-}
-if ($errCode -ne 0) {
-  [Console]::Error.WriteLine("Windows Yazici Hatasi (Win32=$errCode): '$printerName' yazicisina fis gonderilemedi.")
-  exit 1
-}
-`.trim()
 
 async function sendToWindowsPrinter(tempFile, safeName) {
   const stdout = await runExecFile(
