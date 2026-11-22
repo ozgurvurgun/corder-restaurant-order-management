@@ -8,7 +8,7 @@ const { healNetworkPrinters } = require("./network-healer")
 const { loadSettings, saveSettings, buildRuntimeConfig } = require("./settings-store")
 const { pushPrintersToBackend } = require("./http-sync")
 const { getWindowsBinary } = require("./windows-usb-direct")
-const { WIN_RAW_SPOOL_PS } = require("./windows-raw-print")
+const { WIN_RAW_SPOOL_PS, sendViaWarmWorker } = require("./windows-raw-print")
 
 const SAFE_PRINTER_NAME_RE = /^[\p{L}\p{N}_. \-()+@#/:]{1,128}$/u
 const LINUX_USB_DEV_RE = /^\/dev\/(usb\/)?lp[0-9]$/
@@ -198,6 +198,15 @@ async function sendToSystemPrinter(bytes, printerName, usbDrainMs) {
     const drain = Math.max(0, Number(usbDrainMs) || 0)
     if (drain > 0) await sleep(drain)
     return
+  }
+
+  if (process.platform === "win32") {
+    try {
+      const healed = await sendViaWarmWorker(safeName, bytes, 10000)
+      return healed
+    } catch (warmErr) {
+      if (warmErr && warmErr.isPrinterError) throw warmErr
+    }
   }
 
   const tempFile = path.join(

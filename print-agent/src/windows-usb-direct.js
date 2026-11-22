@@ -72,8 +72,14 @@ const WIN_DISCOVER_ALL_PS = `
 $ErrorActionPreference = 'SilentlyContinue'
 $result = @{ usbDirect = @(); comPorts = @(); spooler = @() }
 
+$dllPath = Join-Path $env:TEMP "CorderUsbSetupV3.dll"
 if (-not ('CorderUsbSetupApi' -as [type])) {
-  Add-Type -TypeDefinition @"
+  if (Test-Path $dllPath) {
+    try { [void][System.Reflection.Assembly]::LoadFrom($dllPath) } catch {}
+  }
+}
+if (-not ('CorderUsbSetupApi' -as [type])) {
+  $csSetup = @'
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
@@ -151,12 +157,20 @@ public class CorderUsbSetupApi {
     return list.ToArray();
   }
 }
-"@
+'@
+  try {
+    Add-Type -TypeDefinition $csSetup -OutputAssembly $dllPath -ErrorAction Stop
+    [void][System.Reflection.Assembly]::LoadFrom($dllPath)
+  } catch {
+    if (-not ('CorderUsbSetupApi' -as [type])) {
+      Add-Type -TypeDefinition $csSetup
+    }
+  }
 }
 
-$pnpList = @(Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue)
+$pnpList = @(Get-CimInstance Win32_PnPEntity -Filter "DeviceID LIKE 'USB%' OR DeviceID LIKE 'USBPRINT%'" -ErrorAction SilentlyContinue)
 if ($pnpList.Count -eq 0) {
-  $pnpList = @(Get-WmiObject Win32_PnPEntity -ErrorAction SilentlyContinue)
+  $pnpList = @(Get-WmiObject Win32_PnPEntity -Filter "DeviceID LIKE 'USB%' OR DeviceID LIKE 'USBPRINT%'" -ErrorAction SilentlyContinue)
 }
 
 $ieeeModels = @()
