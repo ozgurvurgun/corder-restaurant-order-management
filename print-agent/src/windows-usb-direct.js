@@ -72,10 +72,10 @@ const WIN_DISCOVER_ALL_PS = `
 $ErrorActionPreference = 'SilentlyContinue'
 $result = @{ usbDirect = @(); comPorts = @(); spooler = @() }
 
-$dllPath = Join-Path $env:TEMP "CorderUsbSetupV3.dll"
+$dllPath = Join-Path $env:TEMP "CorderUsbSetupV4.dll"
 if (-not ('CorderUsbSetupApi' -as [type])) {
   if (Test-Path $dllPath) {
-    try { [void][System.Reflection.Assembly]::LoadFrom($dllPath) } catch {}
+    try { Add-Type -Path $dllPath -ErrorAction Stop } catch {}
   }
 }
 if (-not ('CorderUsbSetupApi' -as [type])) {
@@ -158,9 +158,14 @@ public class CorderUsbSetupApi {
   }
 }
 '@
+  $tmpDll = Join-Path $env:TEMP "CorderUsbSetupV4_$PID.dll"
   try {
-    Add-Type -TypeDefinition $csSetup -OutputAssembly $dllPath -ErrorAction Stop
-    [void][System.Reflection.Assembly]::LoadFrom($dllPath)
+    Add-Type -TypeDefinition $csSetup -OutputAssembly $tmpDll -ErrorAction Stop
+    Copy-Item -LiteralPath $tmpDll -Destination $dllPath -Force -ErrorAction SilentlyContinue
+    Add-Type -Path $dllPath -ErrorAction SilentlyContinue
+    if (-not ('CorderUsbSetupApi' -as [type])) {
+      Add-Type -Path $tmpDll -ErrorAction Stop
+    }
   } catch {
     if (-not ('CorderUsbSetupApi' -as [type])) {
       Add-Type -TypeDefinition $csSetup

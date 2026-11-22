@@ -1,12 +1,16 @@
-const fs = require("fs")
-const { spawn, execFile } = require("child_process")
+const { spawn } = require("child_process")
 const { getWindowsBinary } = require("./windows-usb-direct")
 
 const CSHARP_RAW_PRINTER_SOURCE = `
 using System;
 using System.IO;
+using System.Text;
+using System.IO.Ports;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
+using Microsoft.Win32;
+
 public class RawPrinterHelper {
   private static string _cachedUsbPath = "";
 
@@ -85,6 +89,13 @@ public class RawPrinterHelper {
   [DllImport("winusb.dll", SetLastError = true)]
   public static extern bool WinUsb_WritePipe(IntPtr InterfaceHandle, byte PipeID, byte[] Buffer, uint BufferLength, out uint LengthTransferred, IntPtr Overlapped);
 
+  public static void WarmupUsbCache() {
+    try {
+      string[] paths = GetPresentDevicePaths("28d78fad-5a12-11d1-ae5b-0000f803a8c2");
+      if (paths != null && paths.Length > 0) _cachedUsbPath = paths[0];
+    } catch {}
+  }
+
   public static int TrySendBytes(string targetPrinter, byte[] bytes, string dataType) {
     IntPtr hPrinter;
     if (!OpenPrinter(targetPrinter, out hPrinter, IntPtr.Zero)) return Marshal.GetLastWin32Error();
@@ -137,6 +148,22 @@ public class RawPrinterHelper {
     return list.ToArray();
   }
 
+  public static string[] GetRegistryUsbPrintPaths() {
+    List<string> list = new List<string>();
+    try {
+      using (RegistryKey key = Registry.LocalMachine.OpenSubKey("SYSTEM\\\\CurrentControlSet\\\\Control\\\\DeviceClasses\\\\{28d78fad-5a12-11d1-ae5b-0000f803a8c2}")) {
+        if (key != null) {
+          foreach (string sub in key.GetSubKeyNames()) {
+            if (sub != null && sub.StartsWith("##?#")) {
+              list.Add("\\\\\\\\?\\\\" + sub.Substring(4));
+            }
+          }
+        }
+      }
+    } catch {}
+    return list.ToArray();
+  }
+
   public static bool WriteToDevicePath(string devPath, byte[] bytes) {
     if (string.IsNullOrEmpty(devPath)) return false;
     IntPtr hFile = CreateFileW(devPath, 0x40000000u, 3u, IntPtr.Zero, 3u, 0u, IntPtr.Zero);
@@ -186,7 +213,7 @@ public class RawPrinterHelper {
     } finally { CloseHandle(hFile); }
   }
 
-  public static string SendBytesToDirectUsb(string filterSubstr, byte[] bytes, string[] extraPaths) {
+  public static string SendBytesToDirectUsb(string filterSubstr, byte[] bytes) {
     if (!string.IsNullOrEmpty(_cachedUsbPath)) {
       if (string.IsNullOrEmpty(filterSubstr) || _cachedUsbPath.IndexOf(filterSubstr, StringComparison.OrdinalIgnoreCase) >= 0) {
         if (WriteToDevicePath(_cachedUsbPath, bytes)) return _cachedUsbPath;
@@ -207,18 +234,19 @@ public class RawPrinterHelper {
         return p;
       }
     }
-    if (extraPaths != null) {
-      foreach (string ep in extraPaths) {
-        if (!string.IsNullOrEmpty(ep) && (!string.IsNullOrEmpty(filterSubstr) ? ep.IndexOf(filterSubstr, StringComparison.OrdinalIgnoreCase) >= 0 : true) && WriteToDevicePath(ep, bytes)) {
+    string[] regPaths = GetRegistryUsbPrintPaths();
+    if (!string.IsNullOrEmpty(filterSubstr)) {
+      foreach (string ep in regPaths) {
+        if (ep.IndexOf(filterSubstr, StringComparison.OrdinalIgnoreCase) >= 0 && WriteToDevicePath(ep, bytes)) {
           _cachedUsbPath = ep;
           return ep;
         }
       }
-      foreach (string ep in extraPaths) {
-        if (!string.IsNullOrEmpty(ep) && WriteToDevicePath(ep, bytes)) {
-          _cachedUsbPath = ep;
-          return ep;
-        }
+    }
+    foreach (string ep in regPaths) {
+      if (WriteToDevicePath(ep, bytes)) {
+        _cachedUsbPath = ep;
+        return ep;
       }
     }
     string[] winUsbPaths = GetPresentDevicePaths("dee824ef-729b-4a0e-9c14-b7117d33a817");
@@ -227,154 +255,143 @@ public class RawPrinterHelper {
     }
     return "";
   }
+
+  public static bool ExecutePrintJob(string printerName, byte[] bytes, out string healedName, out string errMsg) {
+    healedName = "";
+    errMsg = "";
+    if (string.IsNullOrEmpty(printerName)) printerName = "";
+
+    Match comMatch = Regex.Match(printerName, "\\\\b(COM\\\\d{1,3})\\\\b", RegexOptions.IgnoreCase);
+    if (comMatch.Success) {
+      string comName = comMatch.Groups[1].Value.ToUpperInvariant();
+      try {
+        using (SerialPort sp = new SerialPort(comName, 115200, Parity.None, 8, StopBits.One)) {
+          sp.WriteTimeout = 4000;
+          sp.Open();
+          sp.Write(bytes, 0, bytes.Length);
+          sp.BaseStream.Flush();
+          sp.Close();
+          return true;
+        }
+      } catch {
+        if (WriteToDevicePath("\\\\\\\\.\\\\" + comName, bytes)) return true;
+      }
+    }
+
+    string vpFilter = "";
+    Match vpMatch = Regex.Match(printerName, "([0-9A-Fa-f]{4}):([0-9A-Fa-f]{4})");
+    if (vpMatch.Success) {
+      vpFilter = "vid_" + vpMatch.Groups[1].Value + "&pid_" + vpMatch.Groups[2].Value;
+    }
+
+    if (!string.IsNullOrEmpty(vpFilter) || printerName.StartsWith("USB Termal Yaz", StringComparison.OrdinalIgnoreCase)) {
+      string matched = SendBytesToDirectUsb(vpFilter, bytes);
+      if (!string.IsNullOrEmpty(matched)) return true;
+    }
+
+    int errCode = SendBytesWithResult(printerName, bytes);
+    if (errCode == 0) return true;
+
+    string directFallback = SendBytesToDirectUsb(vpFilter, bytes);
+    if (!string.IsNullOrEmpty(directFallback)) {
+      Match m = Regex.Match(directFallback, "vid_([0-9a-f]{4})&pid_([0-9a-f]{4})", RegexOptions.IgnoreCase);
+      if (m.Success) {
+        healedName = "USB Termal Yazıcı (" + m.Groups[1].Value.ToUpperInvariant() + ":" + m.Groups[2].Value.ToUpperInvariant() + ")";
+      }
+      return true;
+    }
+
+    errMsg = "Windows Yazici Hatasi (Win32=" + errCode + "): '" + printerName + "' yazicisina ulasilamadi. Lutfen yazicinin acik ve USB kablosunun takili oldugundan emin olun.";
+    return false;
+  }
+
+  public static void RunWorkerLoop() {
+    Console.InputEncoding = Encoding.UTF8;
+    Console.OutputEncoding = Encoding.UTF8;
+    WarmupUsbCache();
+    Console.Out.WriteLine("CORDER_WORKER_READY");
+    Console.Out.Flush();
+
+    string line;
+    while ((line = Console.In.ReadLine()) != null) {
+      if (string.IsNullOrEmpty(line) || !line.StartsWith("PRINT|")) continue;
+      string[] parts = line.Split('|');
+      if (parts.Length < 4) continue;
+      string reqId = parts[1];
+      try {
+        string pName = Encoding.UTF8.GetString(Convert.FromBase64String(parts[2]));
+        byte[] bytes = Convert.FromBase64String(parts[3]);
+        string healed;
+        string err;
+        if (ExecutePrintJob(pName, bytes, out healed, out err)) {
+          Console.Out.WriteLine("CORDER_RES|" + reqId + "|OK|" + (healed ?? ""));
+        } else {
+          Console.Out.WriteLine("CORDER_RES|" + reqId + "|ERR|" + (err ?? "Yazdirma hatasi"));
+        }
+      } catch (Exception ex) {
+        string msg = (ex.Message ?? "Hata").Replace("\\r", " ").Replace("\\n", " ").Replace("|", " ");
+        Console.Out.WriteLine("CORDER_RES|" + reqId + "|ERR|" + msg);
+      }
+      Console.Out.Flush();
+    }
+  }
 }
 `.trim()
 
 const PS_LOAD_HELPER_SNIPPET = `
-$dllPath = Join-Path $env:TEMP "CorderRawPrinterV3.dll"
+$dllPath = Join-Path $env:TEMP "CorderRawPrinterV4.dll"
 if (-not ('RawPrinterHelper' -as [type])) {
   if (Test-Path $dllPath) {
-    try { [void][System.Reflection.Assembly]::LoadFrom($dllPath) } catch {}
+    try { Add-Type -Path $dllPath -ErrorAction Stop } catch {}
   }
 }
 if (-not ('RawPrinterHelper' -as [type])) {
   $csCode = @'
 ${CSHARP_RAW_PRINTER_SOURCE}
 '@
+  $tmpDll = Join-Path $env:TEMP "CorderRawPrinterV4_$PID.dll"
   try {
-    Add-Type -TypeDefinition $csCode -OutputAssembly $dllPath -ErrorAction Stop
-    [void][System.Reflection.Assembly]::LoadFrom($dllPath)
+    Add-Type -TypeDefinition $csCode -OutputAssembly $tmpDll -ErrorAction Stop
+    Copy-Item -LiteralPath $tmpDll -Destination $dllPath -Force -ErrorAction SilentlyContinue
+    Add-Type -Path $dllPath -ErrorAction SilentlyContinue
+    if (-not ('RawPrinterHelper' -as [type])) {
+      Add-Type -Path $tmpDll -ErrorAction Stop
+    }
   } catch {
     if (-not ('RawPrinterHelper' -as [type])) {
       Add-Type -TypeDefinition $csCode
     }
   }
 }
-
-function Get-CorderExtraUsbPaths {
-  $extra = @()
-  $devClassKey = "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\{28d78fad-5a12-11d1-ae5b-0000f803a8c2}"
-  if (Test-Path $devClassKey) {
-    foreach ($item in @(Get-ChildItem -LiteralPath $devClassKey -ErrorAction SilentlyContinue)) {
-      $childName = [string]$item.PSChildName
-      if ($childName -like '##?#*') {
-        $extra += ("\\\\?\\" + $childName.Substring(4))
-      }
-    }
-  }
-  return [string[]]$extra
-}
-
-function Invoke-CorderPrintBytes([string]$printerName, [byte[]]$bytes) {
-  if ($printerName -match '\\b(COM\\d{1,3})\\b') {
-    $comName = $Matches[1].ToUpper()
-    try {
-      $sp = New-Object System.IO.Ports.SerialPort($comName, 115200, [System.IO.Ports.Parity]::None, 8, [System.IO.Ports.StopBits]::One)
-      $sp.WriteTimeout = 5000
-      $sp.Open()
-      $sp.Write($bytes, 0, $bytes.Length)
-      $sp.BaseStream.Flush()
-      $sp.Close()
-      return @{ ok = $true; healed = "" }
-    } catch {
-      if ([RawPrinterHelper]::WriteToDevicePath("\\\\.\\$comName", $bytes)) {
-        return @{ ok = $true; healed = "" }
-      }
-    }
-  }
-
-  $vpFilter = ""
-  if ($printerName -match '([0-9A-Fa-f]{4}):([0-9A-Fa-f]{4})') {
-    $vpFilter = "vid_$($Matches[1])&pid_$($Matches[2])"
-  }
-  if ($vpFilter -or $printerName -match '^USB Termal Yaz') {
-    $matched = [RawPrinterHelper]::SendBytesToDirectUsb($vpFilter, $bytes, $null)
-    if (-not $matched) {
-      $matched = [RawPrinterHelper]::SendBytesToDirectUsb($vpFilter, $bytes, (Get-CorderExtraUsbPaths))
-    }
-    if ($matched) { return @{ ok = $true; healed = "" } }
-  }
-
-  $errCode = [RawPrinterHelper]::SendBytesWithResult($printerName, $bytes)
-  if ($errCode -eq 0) { return @{ ok = $true; healed = "" } }
-
-  $directFast = [RawPrinterHelper]::SendBytesToDirectUsb($vpFilter, $bytes, (Get-CorderExtraUsbPaths))
-  if ($directFast) {
-    $healedName = ""
-    if ($directFast -match 'vid_([0-9a-f]{4})&pid_([0-9a-f]{4})') {
-      $healedName = "USB Termal Yazıcı ($($Matches[1].ToUpper()):$($Matches[2].ToUpper()))"
-    }
-    return @{ ok = $true; healed = $healedName }
-  }
-
-  $allPrinters = @(Get-Printer -ErrorAction SilentlyContinue | Where-Object {
-    $_.Name -ne $printerName -and $_.Name -notmatch '^(Microsoft Print to PDF|Microsoft XPS Document Writer|OneNote|Send To OneNote|Fax)'
-  })
-  foreach ($cand in $allPrinters) {
-    if ($cand -and $cand.Name -and [RawPrinterHelper]::SendBytesWithResult([string]$cand.Name, $bytes) -eq 0) {
-      return @{ ok = $true; healed = [string]$cand.Name }
-    }
-  }
-
-  return @{ ok = $false; error = "Windows Yazici Hatasi (Win32=$errCode): '$printerName' yazicisina ulasilamadi. Lutfen yazicinin acik ve USB kablosunun takili oldugundan emin olun." }
-}
 `.trim()
 
-const WIN_WORKER_LOOP_PS = `
+const WIN_WORKER_BOOTSTRAP_PS = `
 $ErrorActionPreference = 'Continue'
-[Console]::InputEncoding = [System.Text.Encoding]::UTF8
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 ${PS_LOAD_HELPER_SNIPPET}
-[Console]::Out.WriteLine("CORDER_WORKER_READY")
-[Console]::Out.Flush()
-
-while ($null -ne ($line = [Console]::In.ReadLine())) {
-  if (-not $line) { continue }
-  if ($line.StartsWith("PRINT|")) {
-    $parts = $line.Split('|')
-    if ($parts.Length -ge 4) {
-      $reqId = $parts[1]
-      try {
-        $pName = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($parts[2]))
-        $bytes = [Convert]::FromBase64String($parts[3])
-        $res = Invoke-CorderPrintBytes $pName $bytes
-        if ($res.ok) {
-          [Console]::Out.WriteLine("CORDER_RES|$reqId|OK|$($res.healed)")
-        } else {
-          [Console]::Out.WriteLine("CORDER_RES|$reqId|ERR|$($res.error)")
-        }
-      } catch {
-        $msg = ($_.Exception.Message -replace '[\\r\\n|]+', ' ').Trim()
-        [Console]::Out.WriteLine("CORDER_RES|$reqId|ERR|$msg")
-      }
-      [Console]::Out.Flush()
-    }
-  }
-}
+[RawPrinterHelper]::RunWorkerLoop()
 `.trim()
 
 const WIN_RAW_SPOOL_PS = `
 $ErrorActionPreference = 'Stop'
 ${PS_LOAD_HELPER_SNIPPET}
 $bytes = [System.IO.File]::ReadAllBytes($env:CORDER_PRINT_FILE)
-$res = Invoke-CorderPrintBytes $env:CORDER_PRINTER_NAME $bytes
-if ($res.ok) {
-  if ($res.healed) { Write-Output "HEALED_PRINTER:$($res.healed)" }
+$healed = ""
+$err = ""
+if ([RawPrinterHelper]::ExecutePrintJob($env:CORDER_PRINTER_NAME, $bytes, [ref]$healed, [ref]$err)) {
+  if ($healed) { Write-Output "HEALED_PRINTER:$healed" }
   exit 0
 }
-[Console]::Error.WriteLine($res.error)
+[Console]::Error.WriteLine($err)
 exit 1
 `.trim()
 
 let workerProc = null
-let workerReady = false
 let workerReqSeq = 0
 let stdoutBuf = ""
 const pendingReqs = new Map()
 
 function cleanupWorker(reason = "Worker closed") {
   workerProc = null
-  workerReady = false
   stdoutBuf = ""
   for (const [, req] of pendingReqs) {
     clearTimeout(req.timer)
@@ -388,13 +405,13 @@ function ensureWarmPrintWorker() {
   if (workerProc && !workerProc.killed) return workerProc
 
   try {
+    const encoded = Buffer.from(WIN_WORKER_BOOTSTRAP_PS, "utf16le").toString("base64")
     const proc = spawn(
       getWindowsBinary("powershell.exe"),
-      ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "-"],
+      ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
       { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] },
     )
     workerProc = proc
-    workerReady = false
     stdoutBuf = ""
 
     proc.stdout.setEncoding("utf8")
@@ -404,10 +421,6 @@ function ensureWarmPrintWorker() {
       while ((nlIdx = stdoutBuf.indexOf("\n")) >= 0) {
         const line = stdoutBuf.slice(0, nlIdx).trim()
         stdoutBuf = stdoutBuf.slice(nlIdx + 1)
-        if (line === "CORDER_WORKER_READY") {
-          workerReady = true
-          continue
-        }
         if (line.startsWith("CORDER_RES|")) {
           const parts = line.split("|")
           const reqId = parts[1]
@@ -432,8 +445,6 @@ function ensureWarmPrintWorker() {
     proc.on("error", () => cleanupWorker("Worker process error"))
     proc.on("exit", () => cleanupWorker("Worker process exited"))
     if (typeof proc.unref === "function") proc.unref()
-
-    proc.stdin.write(WIN_WORKER_LOOP_PS + "\n")
     return proc
   } catch {
     workerProc = null

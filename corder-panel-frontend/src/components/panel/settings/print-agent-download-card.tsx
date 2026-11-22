@@ -4,9 +4,9 @@ import { Download, Printer, ShieldCheck } from "lucide-react"
 const R2_PRINT_AGENT_BASE = "https://media.corders.uk/downloads/print-agent"
 
 export const PRINT_AGENT_DOWNLOADS = {
-  winBundleZip: `${R2_PRINT_AGENT_BASE}/Corder-Print-Agent-1.2.1-win-x64.zip`,
-  linuxDeb: `${R2_PRINT_AGENT_BASE}/Corder-Print-Agent-1.2.1-linux-amd64.deb`,
-  linuxAppImage: `${R2_PRINT_AGENT_BASE}/Corder-Print-Agent-1.2.1-linux-x86_64.AppImage`,
+  winBundleZip: `${R2_PRINT_AGENT_BASE}/Corder-Print-Agent-1.2.2-win-x64.zip`,
+  linuxDeb: `${R2_PRINT_AGENT_BASE}/Corder-Print-Agent-1.2.2-linux-amd64.deb`,
+  linuxAppImage: `${R2_PRINT_AGENT_BASE}/Corder-Print-Agent-1.2.2-linux-x86_64.AppImage`,
 }
 
 type DetectedOs = "windows" | "linux" | "other"
@@ -43,7 +43,7 @@ export function PrintAgentDownloadCard() {
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-[14px] font-semibold text-[#1d1d1f]">
-                Corder Print Agent Masaüstü Uygulaması (v1.2.1)
+                Corder Print Agent Masaüstü Uygulaması (v1.2.2)
               </h3>
               <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[10.5px] font-semibold text-emerald-700">
                 {osBadgeLabel}
@@ -58,7 +58,7 @@ export function PrintAgentDownloadCard() {
         <div className="flex flex-wrap items-center gap-2">
           <a
             href={PRINT_AGENT_DOWNLOADS.winBundleZip}
-            download="Corder-Print-Agent-1.2.1-win-x64.zip"
+            download="Corder-Print-Agent-1.2.2-win-x64.zip"
             className={os === "windows" ? activeBtnClass : neutralBtnClass}
           >
             <Download className="w-3.5 h-3.5" />
@@ -66,7 +66,7 @@ export function PrintAgentDownloadCard() {
           </a>
           <a
             href={PRINT_AGENT_DOWNLOADS.linuxDeb}
-            download="Corder-Print-Agent-1.2.1-linux-amd64.deb"
+            download="Corder-Print-Agent-1.2.2-linux-amd64.deb"
             className={os === "linux" ? activeBtnClass : neutralBtnClass}
           >
             <Download className="w-3.5 h-3.5" />
@@ -74,7 +74,7 @@ export function PrintAgentDownloadCard() {
           </a>
           <a
             href={PRINT_AGENT_DOWNLOADS.linuxAppImage}
-            download="Corder-Print-Agent-1.2.1-linux-x86_64.AppImage"
+            download="Corder-Print-Agent-1.2.2-linux-x86_64.AppImage"
             className={neutralBtnClass}
           >
             <Download className="w-3.5 h-3.5" />
