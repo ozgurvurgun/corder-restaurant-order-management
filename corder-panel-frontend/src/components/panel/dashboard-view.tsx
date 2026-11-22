@@ -146,13 +146,11 @@ export default function DashboardView(_props: DashboardViewProps) {
     ...(canViewFinancial
       ? [
           {
-            label: `${t("totalRevenue")} (Bugün)`,
+            label: t("totalRevenue"),
             value: `₺${formatCurrency(dailyReport.totalRevenue)}`,
             sublabel: shiftRevenueDiffers
-              ? `Açık Vardiya (${formatIstanbulTime(currentShift.openedAt)}): ₺${formatCurrency(currentShift.totalRevenue)}`
-              : currentShift
-                ? `Açık Vardiya (${formatIstanbulTime(currentShift.openedAt)}) ile aynı`
-                : undefined,
+              ? `Açık Vardiya Cirosu: ₺${formatCurrency(currentShift.totalRevenue)}`
+              : undefined,
             icon: DollarSign,
             color: "#34c759",
             change: revenueDelta.label,
