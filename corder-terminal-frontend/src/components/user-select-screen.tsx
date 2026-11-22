@@ -238,7 +238,7 @@ export function UserSelectScreen({ onSelect }: UserSelectScreenProps) {
         </div>
 
         {/* Footer */}
-        <div className="text-center pb-8 pt-6">
+        <div className="text-center pb-2 pt-3">
           <p className="text-white/40 text-[12px] font-medium">Powered By</p>
           <p className="text-white/70 font-bold text-[14px] tracking-wider mt-0.5">
             COMPART SOFTWARE
@@ -377,7 +377,7 @@ export function UserSelectScreen({ onSelect }: UserSelectScreenProps) {
         )}
       </div>
 
-      <div className="text-center pb-8 pt-6">
+      <div className="text-center pb-2 pt-3">
         <p className="text-white/40 text-[12px] font-medium">Powered By</p>
         <p className="text-white/70 font-bold text-[14px] tracking-wider mt-0.5">
           COMPART SOFTWARE

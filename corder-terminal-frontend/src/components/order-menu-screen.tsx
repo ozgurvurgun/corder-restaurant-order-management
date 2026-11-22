@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from "react"
-import { ChevronLeft, ShoppingCart, Search, X, Utensils, AlertTriangle } from "lucide-react"
+import { useState, useMemo, useEffect, useRef } from "react"
+import { ChevronLeft, ShoppingCart, Search, X, Utensils, AlertTriangle, RefreshCw } from "lucide-react"
 import { useApp } from "@/lib/store"
 import { formatCurrency, resolveImageUrl } from "@/lib/format"
 import { useToast } from "@/components/ios-toast"
@@ -178,23 +178,43 @@ export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreen
     addToCart,
     getCartItemCount,
     hasPermission,
+    refreshData,
     isLoading,
     error,
   } = useApp()
   const { showToast } = useToast()
   const [searchQuery, setSearchQuery] = useState("")
   const [showSearch, setShowSearch] = useState(false)
+  const autoReloadAttemptedRef = useRef(false)
 
   const canCreateOrder = hasPermission("order.create")
   const rootCategories = useMemo(() => categories.filter((c) => !c.parentId), [categories])
 
   useEffect(() => {
-    if (rootCategories.length > 0 && !selectedCategory) {
-      selectCategory(rootCategories[0].id)
+    if (products.length === 0 && !isLoading && !autoReloadAttemptedRef.current) {
+      autoReloadAttemptedRef.current = true
+      void refreshData()
+    }
+  }, [products.length, isLoading, refreshData])
+
+  useEffect(() => {
+    if (rootCategories.length === 0) return
+    const currentValid =
+      selectedCategory &&
+      rootCategories.some((c) => c.id === selectedCategory && c.productCount > 0)
+    if (!currentValid) {
+      const preferred =
+        rootCategories.find((c) => c.productCount > 0) ?? rootCategories[0]
+      if (preferred && preferred.id !== selectedCategory) {
+        selectCategory(preferred.id)
+      }
     }
   }, [rootCategories, selectedCategory, selectCategory])
 
-  const activeCategoryId = selectedCategory ?? rootCategories[0]?.id ?? ""
+  const activeCategoryId =
+    (selectedCategory && rootCategories.some((c) => c.id === selectedCategory)
+      ? selectedCategory
+      : rootCategories.find((c) => c.productCount > 0)?.id ?? rootCategories[0]?.id) ?? ""
   const activeRootCategory = useMemo(
     () => rootCategories.find((c) => c.id === activeCategoryId) ?? null,
     [rootCategories, activeCategoryId]
@@ -349,9 +369,21 @@ export function OrderMenuScreen({ tableId, onBack, onCartOpen }: OrderMenuScreen
             onAdd={handleAddProduct}
           />
         ) : (
-          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-            <Search className="h-8 w-8 mb-2 opacity-40" />
-            <p className="text-[15px]">Ürün bulunamadı</p>
+          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-3">
+            <Search className="h-8 w-8 opacity-40" />
+            <p className="text-[15px]">
+              {isLoading ? "Menü yükleniyor..." : "Ürün bulunamadı"}
+            </p>
+            {!isLoading && products.length === 0 && (
+              <button
+                type="button"
+                onClick={() => void refreshData()}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#e63462] px-4 py-2 text-[13px] font-semibold text-white active:opacity-85"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Menüyü Yenile
+              </button>
+            )}
           </div>
         )}
       </div>

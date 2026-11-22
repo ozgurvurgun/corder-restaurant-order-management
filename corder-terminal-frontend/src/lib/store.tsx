@@ -25,6 +25,7 @@ import {
   getRestaurant,
   getStaffSession,
   setStaffSession,
+  type MenuCategoryTree,
   type RawTableDto,
   type OrderDto,
 } from "./api"
@@ -35,7 +36,9 @@ import {
   mapTablesWithOrders,
 } from "./terminal-mappers"
 import {
+  loadStoredMenuCache,
   LOCKED_TABLE_STORAGE_KEY,
+  saveStoredMenuCache,
   useTerminalLifecycle,
 } from "./use-terminal-lifecycle"
 import { useTerminalCart } from "./use-terminal-cart"
@@ -44,12 +47,7 @@ import {
   mapSessionToTerminalUser,
   useTerminalSessionActions,
 } from "./use-terminal-session-actions"
-import {
-  getTerminalNotificationPrefs,
-  normalizeWaiterCallPayload,
-  triggerTerminalPushNotification,
-  type ActiveWaiterCall,
-} from "./terminal-notifications"
+import { useWaiterNotificationCallbacks } from "./use-terminal-api-sync"
 
 interface TerminalContextType {
   currentUser: TerminalUser | null
@@ -138,60 +136,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const seenWaiterCallIdsRef = useRef<Set<string>>(new Set())
-  const initialWaiterSyncDoneRef = useRef(false)
-
-  const handleWaiterCalled = useCallback((call: ActiveWaiterCall) => {
-    if (seenWaiterCallIdsRef.current.has(call.id)) return
-    seenWaiterCallIdsRef.current.add(call.id)
-    const prefs = getTerminalNotificationPrefs()
-    if (prefs.enabled && prefs.browserPushEnabled) {
-      const sectionLabel = call.sectionName || "Salon"
-      const actionLabel =
-        call.requestType === "bill" ? "Hesap İstiyor!" : "Garson Çağırıyor!"
-      const title = `🔔 ${call.tableName} (${sectionLabel}) - ${actionLabel}`
-      const body = call.note
-        ? `Not: ${call.note}`
-        : `${call.tableName} masası çağrı gönderdi.`
-      triggerTerminalPushNotification(title, body, `waiter-call-${call.id}`)
-    }
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("corder:waiter-called", { detail: call }))
-    }
-  }, [])
-
-  const syncNotifications = useCallback(async () => {
-    const token = getToken()
-    const staffSession = getStaffSession()
-    if (!token || !staffSession?.staffToken) return
-    try {
-      const state = await api.notifications.getState(token)
-      if (state.latestSystemUpdate?.id && typeof window !== "undefined") {
-        window.dispatchEvent(
-          new CustomEvent("corder:system-update", { detail: state.latestSystemUpdate })
-        )
-      }
-      const normalizedCalls = (state.waiterCalls ?? [])
-        .map((c) => normalizeWaiterCallPayload(c))
-        .filter((c): c is ActiveWaiterCall => Boolean(c))
-
-      if (!initialWaiterSyncDoneRef.current) {
-        initialWaiterSyncDoneRef.current = true
-        for (const call of normalizedCalls) {
-          seenWaiterCallIdsRef.current.add(call.id)
-        }
-        return
-      }
-
-      for (const call of normalizedCalls) {
-        if (!seenWaiterCallIdsRef.current.has(call.id)) {
-          handleWaiterCalled(call)
-        }
-      }
-    } catch {
-      /* ignore background notification sync errors */
-    }
-  }, [handleWaiterCalled])
+  const { handleWaiterCalled, syncNotifications } = useWaiterNotificationCallbacks()
 
   const lockedTableIdRef = useRef<string | null>(null)
   const pendingUnlockTableIdRef = useRef<string | null>(null)
@@ -237,6 +182,36 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   const inFlightLiveRef = useRef(false)
   const pendingLiveRef = useRef(false)
   const lastLiveSyncAtRef = useRef(0)
+  const hasMenuLoadedRef = useRef(false)
+
+  useEffect(() => {
+    hasMenuLoadedRef.current = categories.length > 0 && products.length > 0
+  }, [categories.length, products.length])
+
+  const applyMenuTree = useCallback(
+    (rawCategories: MenuCategoryTree[], persistCache = true) => {
+      const mapped = mapMenuTreeToCategoriesAndProducts(rawCategories)
+      setCategories(mapped.categories)
+      setProducts(mapped.products)
+      hasMenuLoadedRef.current =
+        mapped.categories.length > 0 && mapped.products.length > 0
+      setSelectedCategory((prev) => {
+        const roots = mapped.categories.filter((c) => !c.parentId)
+        if (prev && roots.some((c) => c.id === prev && c.productCount > 0)) {
+          return prev
+        }
+        return (
+          roots.find((c) => c.productCount > 0)?.id ??
+          roots[0]?.id ??
+          null
+        )
+      })
+      if (persistCache && mapped.products.length > 0) {
+        saveStoredMenuCache(rawCategories)
+      }
+    },
+    []
+  )
 
   const pullTables = useCallback(async () => {
     const token = getToken()
@@ -273,12 +248,17 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     if (Date.now() - lastLiveSyncAtRef.current < 250) return
     inFlightLiveRef.current = true
     try {
-      const [tablesRes, ordersRes] = await Promise.all([
+      const needMenuRecovery = !hasMenuLoadedRef.current
+      const [tablesRes, ordersRes, menuRes] = await Promise.all([
         api.tables.list(token),
         api.orders.list(token),
+        needMenuRecovery ? api.menu.terminal(token).catch(() => null) : Promise.resolve(null),
       ])
       setRawTables(tablesRes)
       setRawOrders(ordersRes)
+      if (menuRes?.categories) {
+        applyMenuTree(menuRes.categories, true)
+      }
       const now = Date.now()
       lastLiveSyncAtRef.current = now
       lastTablesSyncAtRef.current = now
@@ -291,7 +271,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
         void refreshLiveState()
       }
     }
-  }, [])
+  }, [applyMenuTree])
 
   const refreshData = useCallback(async () => {
     const token = getToken()
@@ -302,11 +282,26 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     try {
       const existingSession = getStaffSession()
       const hasStaffToken = Boolean(existingSession?.staffToken)
+      if (hasStaffToken && !hasMenuLoadedRef.current) {
+        const cachedMenu = loadStoredMenuCache()
+        if (cachedMenu) {
+          applyMenuTree(cachedMenu, false)
+        }
+      }
+
+      const fetchMenuWithRetry = async () => {
+        try {
+          return await api.menu.terminal(token)
+        } catch {
+          await new Promise((r) => setTimeout(r, 900))
+          return api.menu.terminal(token).catch(() => null)
+        }
+      }
 
       const [tablesRes, ordersRes, menuRes, staffUsersRes] = await Promise.all([
         hasStaffToken ? api.tables.list(token).catch(() => null) : Promise.resolve(null),
         hasStaffToken ? api.orders.list(token).catch(() => null) : Promise.resolve(null),
-        hasStaffToken ? api.menu.terminal(token).catch(() => null) : Promise.resolve(null),
+        hasStaffToken ? fetchMenuWithRetry() : Promise.resolve(null),
         api.staff.listTerminalUsers(token).catch((err: unknown) => {
           setUsersError(translateApiError(err, "Personel listesi yüklenemedi"))
           return null
@@ -349,20 +344,15 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       } else {
         setCurrentUser(mapSessionToTerminalUser(getStaffSession()))
       }
-      if (menuRes) {
-        const mapped = mapMenuTreeToCategoriesAndProducts(menuRes.categories)
-        setCategories(mapped.categories)
-        setProducts(mapped.products)
-        setSelectedCategory(
-          (prev) => prev ?? mapped.categories.find((c) => !c.parentId)?.id ?? null
-        )
+      if (menuRes?.categories) {
+        applyMenuTree(menuRes.categories, true)
       }
     } catch (err) {
       setError(translateApiError(err, "Veri yüklenemedi"))
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [applyMenuTree])
 
   useEffect(() => {
     const token = getToken()
@@ -373,11 +363,15 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
         sessionStorage.removeItem(LOCKED_TABLE_STORAGE_KEY)
         void api.tables.sessionUnlock(token, leftoverLockedId).catch(() => undefined)
       }
+      const cachedMenu = loadStoredMenuCache(rest.id)
+      if (cachedMenu) {
+        applyMenuTree(cachedMenu, false)
+      }
       setIsLoggedIn(true)
       setRestaurantState(rest)
       void refreshData()
     }
-  }, [refreshData])
+  }, [applyMenuTree, refreshData])
 
   const sessionActions = useTerminalSessionActions({
     currentUserRef,

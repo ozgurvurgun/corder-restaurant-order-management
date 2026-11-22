@@ -45,7 +45,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
       displayError!.toLowerCase().includes("access suspended"))
 
   return (
-    <div className="min-h-dvh flex flex-col items-center justify-between bg-gradient-to-b from-[#e63462] via-[#c62a6b] to-[#7b2d8e] px-6 py-12 safe-top safe-bottom">
+    <div className="min-h-dvh flex flex-col items-center justify-between bg-gradient-to-b from-[#e63462] via-[#c62a6b] to-[#7b2d8e] px-6 pt-10 pb-2 safe-top safe-bottom">
       <div className="flex-1 flex flex-col items-center justify-center w-full max-w-sm gap-10">
         <div className="flex flex-col items-center gap-2">
           <div className="w-20 h-20 rounded-[22px] bg-white/15 backdrop-blur-xl flex items-center justify-center shadow-lg overflow-hidden">
@@ -118,7 +118,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
         </button>
       </div>
 
-      <div className="text-center mt-8 pb-6">
+      <div className="text-center mt-6 pb-1.5">
         <p className="text-white/40 text-[12px] font-medium">Powered By</p>
         <p className="text-white/70 font-bold text-[14px] tracking-wider mt-0.5">
           COMPART SOFTWARE

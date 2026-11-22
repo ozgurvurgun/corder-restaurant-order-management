@@ -346,7 +346,7 @@ function TabBarButton({
     <button
       type="button"
       onClick={onClick}
-      className={`flex-1 flex flex-col items-center gap-0.5 py-3 min-h-[54px] ${
+      className={`flex-1 flex flex-col items-center gap-0.5 pt-2 pb-1 min-h-[44px] ${
         active ? "text-[#e63462]" : "text-muted-foreground"
       }`}
     >

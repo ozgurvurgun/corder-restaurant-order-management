@@ -1,5 +1,5 @@
 import { useEffect, type MutableRefObject } from "react"
-import { acquireTerminalCoords, api, getStaffSession, getToken } from "./api"
+import { acquireTerminalCoords, api, getRestaurant, getStaffSession, getToken, type MenuCategoryTree } from "./api"
 import { computeClientHaversineMeters } from "./terminal-geofence"
 import type { TerminalOrderItem, TerminalStaffMember, TerminalUser } from "./types"
 import type { ActiveWaiterCall } from "./terminal-notifications"
@@ -7,7 +7,36 @@ import { useTerminalApiSync } from "./use-terminal-api-sync"
 
 export const CARTS_STORAGE_KEY = "terminal_carts_v1"
 export const LOCKED_TABLE_STORAGE_KEY = "terminal_locked_table_id"
+const MENU_CACHE_KEY_PREFIX = "terminal_menu_cache_v1"
 const LOCK_HEARTBEAT_MS = 45_000 // Refresh 120s server lock every 45s while active
+
+export function loadStoredMenuCache(restaurantId?: string | null): MenuCategoryTree[] | null {
+  if (typeof window === "undefined") return null
+  const id = (restaurantId || getRestaurant()?.id || "").trim()
+  if (!id) return null
+  try {
+    const raw = localStorage.getItem(`${MENU_CACHE_KEY_PREFIX}:${id}`)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) && parsed.length > 0 ? (parsed as MenuCategoryTree[]) : null
+  } catch {
+    return null
+  }
+}
+
+export function saveStoredMenuCache(
+  categories: MenuCategoryTree[],
+  restaurantId?: string | null
+): void {
+  if (typeof window === "undefined" || !Array.isArray(categories) || categories.length === 0) return
+  const id = (restaurantId || getRestaurant()?.id || "").trim()
+  if (!id) return
+  try {
+    localStorage.setItem(`${MENU_CACHE_KEY_PREFIX}:${id}`, JSON.stringify(categories))
+  } catch {
+    // Ignore storage quota errors
+  }
+}
 
 export function loadStoredCarts(): Record<string, TerminalOrderItem[]> {
   if (typeof window === "undefined") return {}

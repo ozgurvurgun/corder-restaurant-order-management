@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react"
+import { useCallback, useEffect, useRef } from "react"
 import { io, type Socket } from "socket.io-client"
-import { api, getBase, getToken, notifyAuthExpired } from "./api"
+import { api, getBase, getStaffSession, getToken, notifyAuthExpired } from "./api"
 import {
   getTerminalNotificationPrefs,
   normalizeWaiterCallPayload,
@@ -8,6 +8,65 @@ import {
   triggerTerminalPushNotification,
   type ActiveWaiterCall,
 } from "./terminal-notifications"
+
+export function useWaiterNotificationCallbacks() {
+  const seenWaiterCallIdsRef = useRef<Set<string>>(new Set())
+  const initialWaiterSyncDoneRef = useRef(false)
+
+  const handleWaiterCalled = useCallback((call: ActiveWaiterCall) => {
+    if (seenWaiterCallIdsRef.current.has(call.id)) return
+    seenWaiterCallIdsRef.current.add(call.id)
+    const prefs = getTerminalNotificationPrefs()
+    if (prefs.enabled && prefs.browserPushEnabled) {
+      const sectionLabel = call.sectionName || "Salon"
+      const actionLabel =
+        call.requestType === "bill" ? "Hesap İstiyor!" : "Garson Çağırıyor!"
+      const title = `🔔 ${call.tableName} (${sectionLabel}) - ${actionLabel}`
+      const body = call.note
+        ? `Not: ${call.note}`
+        : `${call.tableName} masası çağrı gönderdi.`
+      triggerTerminalPushNotification(title, body, `waiter-call-${call.id}`)
+    }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("corder:waiter-called", { detail: call }))
+    }
+  }, [])
+
+  const syncNotifications = useCallback(async () => {
+    const token = getToken()
+    const staffSession = getStaffSession()
+    if (!token || !staffSession?.staffToken) return
+    try {
+      const state = await api.notifications.getState(token)
+      if (state.latestSystemUpdate?.id && typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("corder:system-update", { detail: state.latestSystemUpdate })
+        )
+      }
+      const normalizedCalls = (state.waiterCalls ?? [])
+        .map((c) => normalizeWaiterCallPayload(c))
+        .filter((c): c is ActiveWaiterCall => Boolean(c))
+
+      if (!initialWaiterSyncDoneRef.current) {
+        initialWaiterSyncDoneRef.current = true
+        for (const call of normalizedCalls) {
+          seenWaiterCallIdsRef.current.add(call.id)
+        }
+        return
+      }
+
+      for (const call of normalizedCalls) {
+        if (!seenWaiterCallIdsRef.current.has(call.id)) {
+          handleWaiterCalled(call)
+        }
+      }
+    } catch {
+      /* ignore background notification sync errors */
+    }
+  }, [handleWaiterCalled])
+
+  return { handleWaiterCalled, syncNotifications }
+}
 
 export function useTerminalApiSync(params: {
   isLoggedIn: boolean

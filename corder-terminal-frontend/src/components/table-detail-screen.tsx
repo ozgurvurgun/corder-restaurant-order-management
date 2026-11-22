@@ -183,14 +183,14 @@ export function TableDetailScreen({
       <button
         type="button"
         onClick={onBack}
-        className="flex items-center justify-center gap-2 text-white/80 active:text-white py-4 mx-6 transition-colors"
+        className="flex items-center justify-center gap-2 text-white/80 active:text-white py-2.5 mx-6 transition-colors"
       >
         <ArrowLeft className="h-[18px] w-[18px]" />
         <span className="font-semibold text-[15px]">Masalara Dön</span>
       </button>
 
       {/* Footer */}
-      <div className="text-center pb-6">
+      <div className="text-center pb-1.5 pt-0.5">
         <p className="text-white/30 text-[12px] font-medium">Powered By</p>
         <p className="text-white/60 font-bold text-[13px] tracking-wider mt-0.5">
           COMPART SOFTWARE
