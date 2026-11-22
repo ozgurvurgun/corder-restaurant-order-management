@@ -198,10 +198,9 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
   )
 
   const fetchFraudAlertsSilently = useCallback(async (branchFilter?: string) => {
-    const token = getBossToken()
-    if (!token) return
+    if (!getBossToken()) return
     try {
-      setBackendFraudAlerts(await bossApi.getFraudAlerts(token, branchFilter))
+      setBackendFraudAlerts(await bossApi.getFraudAlerts(branchFilter))
     } catch {
       // Fallback to heuristic alerts when endpoint is not populated
     }
@@ -243,9 +242,8 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
 
   const updateFraudAlertStatus = useCallback(
     async (id: string, status: FraudAlertStatus, resolutionNote?: string) => {
-      const token = getBossToken()
-      if (!token) return
-      const updated = await bossApi.updateFraudAlert(token, id, { status, resolutionNote })
+      if (!getBossToken()) return
+      const updated = await bossApi.updateFraudAlert(id, { status, resolutionNote })
       setBackendFraudAlerts((prev) =>
         prev.map((a) => (a.id === id ? { ...a, ...updated, status, resolutionNote } : a))
       )
@@ -256,10 +254,9 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
 
   const deleteFraudAlerts = useCallback(
     async (opts: { ids?: string[]; deleteAll?: boolean; onlyResolved?: boolean }) => {
-      const token = getBossToken()
-      if (!token) return
+      if (!getBossToken()) return
       try {
-        const res = await bossApi.bulkDeleteFraudAlerts(token, {
+        const res = await bossApi.bulkDeleteFraudAlerts({
           ...opts,
           branchId: selectedBranchId,
         })

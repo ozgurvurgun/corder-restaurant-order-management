@@ -50,7 +50,6 @@ export default function DashboardView(_props: DashboardViewProps) {
     tables,
     closedTables,
     dailyReport,
-    currentShift,
     settings,
     auditLogs,
     currentUser,
@@ -126,10 +125,6 @@ export default function DashboardView(_props: DashboardViewProps) {
     }
   }, [dailyReport.totalTables, dailyReport.totalOrders, yesterdayStats.ordersCount])
 
-  const shiftRevenueDiffers =
-    currentShift != null &&
-    toMinorUnits(currentShift.totalRevenue) !== todayRevenueMinorUnits
-
   const paymentData = dailyReport.paymentBreakdown.map((p) => ({
     name: PAYMENT_METHOD_LABELS[p.method] || p.method,
     value: p.total,
@@ -148,9 +143,7 @@ export default function DashboardView(_props: DashboardViewProps) {
           {
             label: t("totalRevenue"),
             value: `₺${formatCurrency(dailyReport.totalRevenue)}`,
-            sublabel: shiftRevenueDiffers
-              ? `Açık Vardiya Cirosu: ₺${formatCurrency(currentShift.totalRevenue)}`
-              : undefined,
+            sublabel: undefined,
             icon: DollarSign,
             color: "#34c759",
             change: revenueDelta.label,

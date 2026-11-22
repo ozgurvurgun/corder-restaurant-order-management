@@ -159,60 +159,11 @@ export class PlatformAuthService {
     };
   }
 
-  private async isAuthCodeValidForAdmin(
-    admin: PlatformAdminEntity,
-    rawCode: string,
-  ): Promise<boolean> {
+  private isAuthCodeValid(rawCode: string): boolean {
     const code = (rawCode ?? '').trim();
-    if (!code) return false;
     const envAuthCode = process.env.PLATFORM_ADMIN_AUTH_CODE?.trim();
-    const envPassword = process.env.PLATFORM_ADMIN_PASSWORD?.trim();
-    if (envAuthCode) {
-      return matchesAuthCodeOrTotp(code, envAuthCode);
-    }
-    if (envPassword && matchesAuthCodeOrTotp(code, envPassword)) {
-      return true;
-    }
-    return bcrypt.compare(code, admin.passwordHash);
-  }
-
-  private async validateByAuthCode(
-    rawCode: string,
-  ): Promise<PlatformAdminEntity | null> {
-    const code = (rawCode ?? '').trim();
-    if (!code) return null;
-
-    const envAuthCode = process.env.PLATFORM_ADMIN_AUTH_CODE?.trim();
-    const envPassword = process.env.PLATFORM_ADMIN_PASSWORD?.trim();
-    const allAdmins = await this.repo.find({ order: { createdAt: 'ASC' } });
-
-    const matchesEnv =
-      matchesAuthCodeOrTotp(code, envAuthCode) ||
-      matchesAuthCodeOrTotp(code, envPassword);
-
-    if (matchesEnv) {
-      if (allAdmins.length > 0) {
-        return allAdmins[0];
-      }
-      const defaultEmail =
-        process.env.PLATFORM_ADMIN_EMAIL?.trim().toLowerCase() ||
-        'admin@corder.app';
-      const passwordHash = await bcrypt.hash(code, 10);
-      return this.repo.save(
-        this.repo.create({
-          email: defaultEmail,
-          name: 'Platform Admin',
-          passwordHash,
-        }),
-      );
-    }
-
-    for (const admin of allAdmins) {
-      if (await bcrypt.compare(code, admin.passwordHash)) {
-        return admin;
-      }
-    }
-    return null;
+    if (!code || !envAuthCode) return false;
+    return matchesAuthCodeOrTotp(code, envAuthCode);
   }
 
   async login(
@@ -221,29 +172,21 @@ export class PlatformAuthService {
     accessToken: string;
     admin: { id: string; email: string; name: string };
   }> {
-    let admin: PlatformAdminEntity | null = null;
-    if (dto.email?.trim() && dto.password && dto.authCode?.trim()) {
-      const candidate = await this.validateAdmin(dto.email, dto.password);
-      if (!candidate) {
-        throw new UnauthorizedException(
-          'Geçersiz yönetici kullanıcı adı veya parola',
-        );
-      }
-      const codeOk = await this.isAuthCodeValidForAdmin(candidate, dto.authCode);
-      if (!codeOk) {
-        throw new UnauthorizedException('Geçersiz Platform Admin Auth Kodu');
-      }
-      admin = candidate;
-    } else if (dto.authCode?.trim()) {
-      admin = await this.validateByAuthCode(dto.authCode);
-    } else if (dto.email?.trim() && dto.password) {
-      admin = await this.validateAdmin(dto.email, dto.password);
-    } else if (dto.password?.trim()) {
-      admin = await this.validateByAuthCode(dto.password);
+    if (!dto.email?.trim() || !dto.password || !dto.authCode?.trim()) {
+      throw new UnauthorizedException(
+        'Yönetici kullanıcı adı, parola ve Google Authenticator / Auth kodu zorunludur',
+      );
     }
 
+    const admin = await this.validateAdmin(dto.email, dto.password);
     if (!admin) {
-      throw new UnauthorizedException('Geçersiz yetki kodu veya kimlik bilgisi');
+      throw new UnauthorizedException(
+        'Geçersiz yönetici kullanıcı adı veya parola',
+      );
+    }
+
+    if (!this.isAuthCodeValid(dto.authCode)) {
+      throw new UnauthorizedException('Geçersiz Platform Admin Auth Kodu');
     }
 
     const payload: PlatformTokenPayload = {

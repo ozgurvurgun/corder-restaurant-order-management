@@ -89,7 +89,6 @@ export interface ShiftSummaryDto {
   closingBalance?: number | null
   expectedCash?: number
   cashDifference?: number
-  difference?: number
   totalRevenue?: number
   totalCash?: number
   totalCard?: number

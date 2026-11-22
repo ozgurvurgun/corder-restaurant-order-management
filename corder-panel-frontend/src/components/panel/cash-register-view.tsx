@@ -281,7 +281,7 @@ export default function CashRegisterView() {
             <span className="text-[11.5px] text-[#636366] font-medium">
               {currentShift
                 ? `Açık Vardiya (${formatIstanbulTime(currentShift.openedAt)}'den itibaren): ${shiftClosedTables.length} kapanan masa${canViewCashTotals ? ` | \u20BA${formatCurrency(shiftTotals.totalRevenue)}` : ""}`
-                : `Bugün (00:00'dan itibaren): ${filteredClosedTables.length} kapanan masa${canViewCashTotals ? ` | \u20BA${formatCurrency(filteredNetTotal)}` : ""}`}
+                : `Bugün (${settings.autoCloseShiftEnabled !== false ? settings.autoCloseShiftTime || "04:00" : "00:00"}'dan itibaren): ${filteredClosedTables.length} kapanan masa${canViewCashTotals ? ` | \u20BA${formatCurrency(filteredNetTotal)}` : ""}`}
             </span>
           ) : activeTab === "z-report" ? (
             <span className="text-[11.5px] text-[#636366] font-medium">

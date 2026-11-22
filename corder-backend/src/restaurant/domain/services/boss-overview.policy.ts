@@ -152,16 +152,22 @@ export class BossOverviewPolicy {
     const bActiveOrders = input.activeOrders.filter((o) => o.restaurantId === branch.id);
     const bCompletedMonth = filterCompletedSince(input.completedMonth, branch.id, startOfMonth);
     const bCompletedWeek = filterCompletedSince(bCompletedMonth, branch.id, startOfWeek);
-    const bCompletedToday = filterCompletedWindow(input.completedMonth, branch.id, startOfToday, endOfToday);
     const bShift = input.openShifts.find((s) => s.restaurantId === branch.id) ?? null;
+    const effectiveStartOfToday = !endOfToday && bShift ? bShift.openedAt : startOfToday;
+    const bCompletedToday = filterCompletedWindow(
+      input.completedMonth,
+      branch.id,
+      effectiveStartOfToday,
+      endOfToday,
+    );
     const bMaterials = input.materials.filter((m) => m.restaurantId === branch.id);
     const bStaff = input.staffList.filter((s) => s.restaurantId === branch.id);
     const bLedger = (input.ledgerEntries ?? []).filter((l) => l.restaurantId === branch.id);
     const openLedgerBalance =
       input.openLedgerBalanceByBranchId?.get(branch.id) ?? computeOpenLedgerBalance(bLedger);
 
-    const activeStats = summarizeActiveOrders(bActiveOrders, itemsByOrderId, startOfToday);
-    const todayStats = summarizeCompletedToday(bCompletedToday, startOfToday);
+    const activeStats = summarizeActiveOrders(bActiveOrders, itemsByOrderId, effectiveStartOfToday);
+    const todayStats = summarizeCompletedToday(bCompletedToday, effectiveStartOfToday);
     const monthRev = sumNetAmount(bCompletedMonth);
     const royaltyPct = Number(branch.royaltyRate || 0);
     const estimatedTodayRoyalty =

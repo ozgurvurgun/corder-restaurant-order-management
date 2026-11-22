@@ -324,7 +324,6 @@ export class BossOverviewDetailsPolicy {
           closingMinor != null ? fromMinorUnits(closingMinor) : null,
         expectedCash: fromMinorUnits(expectedMinor),
         cashDifference: fromMinorUnits(diffMinor),
-        difference: fromMinorUnits(diffMinor),
         totalRevenue: Number(s.totalRevenue || 0),
         totalCash: Number(s.totalCash || 0),
         totalCard: Number(s.totalCard || 0),

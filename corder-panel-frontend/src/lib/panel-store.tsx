@@ -150,12 +150,14 @@ export function PanelProvider({ children }: { children: ReactNode }) {
         cancelledItems,
         settings.autoCloseShiftTime,
         settings.autoCloseShiftEnabled !== false,
+        currentShift,
       ),
     [
       closedTables,
       cancelledItems,
       settings.autoCloseShiftTime,
       settings.autoCloseShiftEnabled,
+      currentShift,
     ],
   )
 

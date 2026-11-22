@@ -237,7 +237,7 @@ export function BossAnalyticsSections({
           <>
             <div className="space-y-3">
               {pagedShifts.map((sh) => {
-                const diff = sh.cashDifference ?? sh.difference ?? 0
+                const diff = sh.cashDifference ?? 0
                 const isExpanded = expandedShiftId === sh.id
                 const txs = sh.transactions ?? []
                 const carried = sh.carriedOverTablesSnapshot ?? []

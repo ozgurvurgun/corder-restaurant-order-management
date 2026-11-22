@@ -1,6 +1,7 @@
 import {
   itemCountsTowardBill,
   type CancelledItem,
+  type CashShift,
   type ClosedTable,
   type DailyReport,
   type RestaurantSettings,
@@ -318,21 +319,34 @@ export function computeDailyReport(
   cancelledItems: CancelledItem[],
   cutoffTimeHHmm?: string | null,
   autoCloseEnabled: boolean = true,
+  currentShift?: CashShift | null,
 ): DailyReport {
   const cutoffMinutes = resolveBusinessDayCutoffMinutes(
     cutoffTimeHHmm,
     autoCloseEnabled,
   )
   const todayYmd = getCurrentIstanbulBusinessDayYmd(new Date(), cutoffMinutes)
-  const bounds = computeDateFilterBounds(
-    "today",
-    "",
-    "",
-    cutoffTimeHHmm,
-    autoCloseEnabled,
-  )
-  const startToday = bounds ? bounds.from : startOfIstanbulDay(todayYmd)
-  const endToday = bounds ? bounds.to : endOfIstanbulDay(todayYmd)
+  const hasOpenShift = Boolean(currentShift && currentShift.status === "open")
+  const bounds = hasOpenShift
+    ? null
+    : computeDateFilterBounds(
+        "today",
+        "",
+        "",
+        cutoffTimeHHmm,
+        autoCloseEnabled,
+      )
+  const startToday =
+    hasOpenShift && currentShift
+      ? new Date(currentShift.openedAt)
+      : bounds
+        ? bounds.from
+        : startOfIstanbulDay(todayYmd)
+  const endToday = hasOpenShift
+    ? new Date()
+    : bounds
+      ? bounds.to
+      : endOfIstanbulDay(todayYmd)
 
   const todaysClosed = closedTables.filter((ct) => {
     const d = new Date(ct.closedAt)

@@ -257,7 +257,7 @@ export function AnalyticsAuditTab() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
             {shiftSummaries.slice(0, 12).map((sh) => {
-              const diff = sh.cashDifference ?? sh.difference ?? 0
+              const diff = sh.cashDifference ?? 0
               return (
                 <div
                   key={sh.id}

@@ -233,19 +233,15 @@ function normalizeFraudAlert(raw: Record<string, unknown>, idx: number): FraudAl
 }
 
 export async function getFraudAlerts(
-  token?: string | null,
   branchId?: string | null
 ): Promise<FraudAlertDto[]> {
-  const effectiveToken = token && token.includes(".") ? token : getBossToken()
-  const effectiveBranch =
-    token && !token.includes(".") && branchId === undefined ? token : branchId
   const q =
-    effectiveBranch && effectiveBranch !== "ALL"
-      ? `?branchId=${encodeURIComponent(effectiveBranch)}`
+    branchId && branchId !== "ALL"
+      ? `?branchId=${encodeURIComponent(branchId)}`
       : ""
   const res = await bossFetch<
     FraudAlertDto[] | { alerts?: unknown[]; items?: unknown[] }
-  >(`/restaurant/boss/fraud-alerts${q}`, {}, effectiveBranch, effectiveToken)
+  >(`/restaurant/boss/fraud-alerts${q}`, {}, branchId)
   const list = Array.isArray(res)
     ? res
     : Array.isArray(res?.alerts)
@@ -259,40 +255,29 @@ export async function getFraudAlerts(
 }
 
 export async function updateFraudAlert(
-  token: string,
   id: string,
   body: { status: string; resolutionNote?: string }
 ): Promise<FraudAlertDto> {
-  const effectiveToken = token && token.includes(".") ? token : getBossToken()
   const raw = await bossFetch<Record<string, unknown>>(
     `/restaurant/boss/fraud-alerts/${encodeURIComponent(id)}`,
-    { method: "PATCH", body: JSON.stringify(body) },
-    undefined,
-    effectiveToken
+    { method: "PATCH", body: JSON.stringify(body) }
   )
   return normalizeFraudAlert(raw ?? { id, ...body }, 0)
 }
 
-export async function deleteFraudAlert(token: string, id: string): Promise<{ ok: boolean; deletedCount: number }> {
-  const effectiveToken = token && token.includes(".") ? token : getBossToken()
+export async function deleteFraudAlert(id: string): Promise<{ ok: boolean; deletedCount: number }> {
   return bossFetch<{ ok: boolean; deletedCount: number }>(
     `/restaurant/boss/fraud-alerts/${encodeURIComponent(id)}`,
-    { method: "DELETE" },
-    undefined,
-    effectiveToken
+    { method: "DELETE" }
   )
 }
 
 export async function bulkDeleteFraudAlerts(
-  token: string,
   body: { ids?: string[]; deleteAll?: boolean; onlyResolved?: boolean; branchId?: string }
 ): Promise<{ ok: boolean; deletedCount: number }> {
-  const effectiveToken = token && token.includes(".") ? token : getBossToken()
   return bossFetch<{ ok: boolean; deletedCount: number }>(
     "/restaurant/boss/fraud-alerts/bulk-delete",
-    { method: "POST", body: JSON.stringify(body) },
-    undefined,
-    effectiveToken
+    { method: "POST", body: JSON.stringify(body) }
   )
 }
 
