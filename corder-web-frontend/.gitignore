@@ -1,0 +1,9 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.env.local
+# .env.production is committed (VITE_API_URL only; no secrets)
+
+.vite-cache
