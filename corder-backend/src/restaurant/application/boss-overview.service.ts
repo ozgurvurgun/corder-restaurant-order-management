@@ -65,13 +65,31 @@ export class BossOverviewService {
       };
     }
 
-    const { startOfToday, startOfWeek, startOfMonth } =
-      computeIstanbulDateBoundaries(new Date());
+    const now = new Date();
+    const defaultBounds = computeIstanbulDateBoundaries(now);
+    const branchBoundsById = new Map(
+      targetBranches.map((b) => [
+        b.id,
+        computeIstanbulDateBoundaries(
+          now,
+          b.autoCloseShiftTime,
+          b.autoCloseShiftEnabled !== false,
+        ),
+      ]),
+    );
+    const earliestStartOfMonth = targetBranches.reduce((minDate, b) => {
+      const bStart = branchBoundsById.get(b.id)?.startOfMonth ?? defaultBounds.startOfMonth;
+      return bStart < minDate ? bStart : minDate;
+    }, defaultBounds.startOfMonth);
+    const primaryStartOfToday =
+      branchBoundsById.get(targetBranches[0].id)?.startOfToday ??
+      defaultBounds.startOfToday;
+
     const branchIds = targetBranches.map((b) => b.id);
     const branchNameById = new Map(ownedBranches.map((b) => [b.id, b.name]));
 
     const [data, fraudData] = await Promise.all([
-      this.loadBranchesRawData(branchIds, startOfMonth),
+      this.loadBranchesRawData(branchIds, earliestStartOfMonth),
       this.fraudService.listForBranches(branchIds, branchNameById),
     ]);
 
@@ -112,8 +130,9 @@ export class BossOverviewService {
       else staffByBranch.set(st.restaurantId, [st]);
     }
 
-    const branchPulses: BranchLivePulseDto[] = targetBranches.map((branch) =>
-      BossOverviewPolicy.buildBranchPulse({
+    const branchPulses: BranchLivePulseDto[] = targetBranches.map((branch) => {
+      const bBounds = branchBoundsById.get(branch.id) ?? defaultBounds;
+      return BossOverviewPolicy.buildBranchPulse({
         branch,
         tables: tablesByBranch.get(branch.id) ?? [],
         activeOrders: activeOrdersByBranch.get(branch.id) ?? [],
@@ -123,11 +142,11 @@ export class BossOverviewService {
         materials: materialsByBranch.get(branch.id) ?? [],
         staffList: staffByBranch.get(branch.id) ?? [],
         openLedgerBalanceByBranchId: data.openLedgerBalanceByBranchId,
-        startOfToday,
-        startOfWeek,
-        startOfMonth,
-      }),
-    );
+        startOfToday: bBounds.startOfToday,
+        startOfWeek: bBounds.startOfWeek,
+        startOfMonth: bBounds.startOfMonth,
+      });
+    });
 
     const baseConsolidated = BossOverviewPolicy.computeConsolidatedMetrics(branchPulses);
     const extendedKpis = BossOverviewDetailsPolicy.computeExtendedKpis(baseConsolidated);
@@ -168,7 +187,7 @@ export class BossOverviewService {
       },
       hourlySales: BossOverviewDetailsPolicy.build24HourlySales(
         data.completedMonth,
-        startOfToday,
+        primaryStartOfToday,
       ),
       categoryBreakdown,
       topProducts,

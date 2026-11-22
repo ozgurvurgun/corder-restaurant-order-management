@@ -146,8 +146,8 @@ export default function CashRegisterView() {
   )
 
   const dateBounds = useMemo(
-    () => computeDateFilterBounds(filterDate, customStartDate, customEndDate),
-    [filterDate, customStartDate, customEndDate],
+    () => computeDateFilterBounds(filterDate, customStartDate, customEndDate, settings.autoCloseShiftTime, settings.autoCloseShiftEnabled !== false),
+    [filterDate, customStartDate, customEndDate, settings.autoCloseShiftTime, settings.autoCloseShiftEnabled],
   )
   const ledgerBounds = useMemo(
     () => (dateBounds ? { from: dateBounds.from.toISOString(), to: dateBounds.to.toISOString() } : undefined),

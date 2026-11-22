@@ -439,5 +439,27 @@ describe('WebPushService, DTO validation & CompletedOrderEditLogPolicy', () => {
       tableNames: ['B4', 'Teras 3'],
     });
     assert.ok(note.includes('Yeni vardiyaya devreden açık masa: 2 adet (B4, Teras 3)'));
+
+    // When openTablesCount > 0 (active late-night service), defer up to 45m of idle time after last activity
+    const openTablesActiveCheck = ShiftAutoClosePolicy.isShiftDueForAutoClose({
+      openedAt,
+      autoCloseEnabled: true,
+      autoCloseTime: '04:00',
+      now: new Date('2026-11-21T01:30:00.000Z'), // 04:30 Istanbul
+      lastActivityAt: new Date('2026-11-21T01:05:00.000Z'), // 04:05 Istanbul (25m ago < 45m)
+      openTablesCount: 3,
+    });
+    assert.equal(openTablesActiveCheck.due, false);
+
+    // Once open tables have been completely idle for > 45m past cutoff, auto-close and carry over
+    const openTablesIdleDueCheck = ShiftAutoClosePolicy.isShiftDueForAutoClose({
+      openedAt,
+      autoCloseEnabled: true,
+      autoCloseTime: '04:00',
+      now: new Date('2026-11-21T02:00:00.000Z'), // 05:00 Istanbul
+      lastActivityAt: new Date('2026-11-21T01:05:00.000Z'), // 04:05 Istanbul (55m ago > 45m)
+      openTablesCount: 3,
+    });
+    assert.equal(openTablesIdleDueCheck.due, true);
   });
 });

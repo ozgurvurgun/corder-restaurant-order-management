@@ -249,34 +249,87 @@ export function parseFlexibleDateInput(
   return Number.isNaN(fallback.getTime()) ? null : fallback
 }
 
+export function resolveBusinessDayCutoffMinutes(
+  cutoffTimeHHmm?: string | null,
+  autoCloseEnabled: boolean = true,
+): number {
+  if (autoCloseEnabled === false || !cutoffTimeHHmm) return 0
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(cutoffTimeHHmm.trim())
+  if (!m) return 0
+  const hour = Number(m[1])
+  const minute = Number(m[2])
+  if (hour >= 0 && hour < 12) {
+    return hour * 60 + minute
+  }
+  return 0
+}
+
+export function getCurrentIstanbulBusinessDayYmd(
+  now: Date = new Date(),
+  cutoffMinutes: number = 0,
+): string {
+  const shifted =
+    cutoffMinutes > 0
+      ? new Date(now.getTime() - cutoffMinutes * 60 * 1000)
+      : now
+  return getIstanbulYmd(shifted)
+}
+
+export function getIstanbulBusinessDayBounds(
+  ymd: string,
+  cutoffMinutes: number = 0,
+): { from: Date; to: Date } {
+  if (cutoffMinutes <= 0) {
+    return { from: startOfIstanbulDay(ymd), to: endOfIstanbulDay(ymd) }
+  }
+  const from = new Date(
+    startOfIstanbulDay(ymd).getTime() + cutoffMinutes * 60 * 1000,
+  )
+  const to = new Date(from.getTime() + 24 * 3600 * 1000 - 1)
+  return { from, to }
+}
+
 export function computeDateFilterBounds(
   filterDate: string,
   customStartDate: string,
   customEndDate: string,
+  cutoffTimeHHmm?: string | null,
+  autoCloseEnabled: boolean = true,
 ): { from: Date; to: Date } | null {
   if (filterDate === "all") return null
-  const todayYmd = getIstanbulYmd()
-  const startToday = startOfIstanbulDay(todayYmd)
-  const endToday = endOfIstanbulDay(todayYmd)
+  const cutoffMinutes = resolveBusinessDayCutoffMinutes(
+    cutoffTimeHHmm,
+    autoCloseEnabled,
+  )
+  const todayYmd = getCurrentIstanbulBusinessDayYmd(new Date(), cutoffMinutes)
+  const todayBounds = getIstanbulBusinessDayBounds(todayYmd, cutoffMinutes)
 
   if (filterDate === "today") {
-    return { from: startToday, to: endToday }
+    return todayBounds
   }
   if (filterDate === "yesterday") {
     const yestYmd = shiftIstanbulYmd(todayYmd, -1)
-    return { from: startOfIstanbulDay(yestYmd), to: endOfIstanbulDay(yestYmd) }
+    return getIstanbulBusinessDayBounds(yestYmd, cutoffMinutes)
   }
   if (filterDate === "week") {
     const weekAgoYmd = shiftIstanbulYmd(todayYmd, -7)
-    return { from: startOfIstanbulDay(weekAgoYmd), to: endToday }
+    const weekAgoBounds = getIstanbulBusinessDayBounds(
+      weekAgoYmd,
+      cutoffMinutes,
+    )
+    return { from: weekAgoBounds.from, to: todayBounds.to }
   }
   if (filterDate === "month") {
     const monthAgoYmd = shiftIstanbulYmd(todayYmd, -30)
-    return { from: startOfIstanbulDay(monthAgoYmd), to: endToday }
+    const monthAgoBounds = getIstanbulBusinessDayBounds(
+      monthAgoYmd,
+      cutoffMinutes,
+    )
+    return { from: monthAgoBounds.from, to: todayBounds.to }
   }
   if (filterDate === "custom") {
     const start = parseFlexibleDateInput(customStartDate, false)
-    const end = parseFlexibleDateInput(customEndDate, true) ?? endToday
+    const end = parseFlexibleDateInput(customEndDate, true) ?? todayBounds.to
     if (!start) return null
     return start <= end ? { from: start, to: end } : { from: end, to: start }
   }

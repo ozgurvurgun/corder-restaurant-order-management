@@ -162,7 +162,11 @@ export class PlatformSupportService {
       throw new NotFoundException('Restaurant not found');
     }
 
-    const { startOfToday } = computeIstanbulDateBoundaries(new Date());
+    const { startOfToday } = computeIstanbulDateBoundaries(
+      new Date(),
+      restaurant.autoCloseShiftTime,
+      restaurant.autoCloseShiftEnabled !== false,
+    );
     const [
       tables,
       activeOrdersCount,

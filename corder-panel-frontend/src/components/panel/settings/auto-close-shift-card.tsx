@@ -9,6 +9,8 @@ const CUTOFF_PRESETS = [
   { time: "04:00", label: "04:00 (Önerilen)" },
   { time: "05:00", label: "05:00" },
   { time: "06:00", label: "06:00" },
+  { time: "07:00", label: "07:00" },
+  { time: "08:00", label: "08:00" },
   { time: "23:59", label: "23:59 (Gece Yarısı)" },
 ]
 
@@ -117,7 +119,7 @@ export function AutoCloseShiftCard() {
           <div className="flex items-center gap-1.5 rounded-lg bg-emerald-50/70 border border-emerald-200/70 px-3 py-1.5 text-[11px] text-emerald-800">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
             <span>
-              Kapanış anında ödeme alınıyorsa sistem son işlemden 15 dk sonra kasayı güvenli şekilde kapatır.
+              Açık masa veya aktif sipariş varsa gece servisi bölünmez; son işlemden sonra kasa güvenli şekilde otomatik kapatılır ve İş Günü (SOD/EOD) bu saate göre hesaplanır.
             </span>
           </div>
         </div>

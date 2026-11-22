@@ -84,7 +84,7 @@ export class CashShiftService implements OnModuleInit, OnModuleDestroy {
         })
         .catch(() => null);
       if (restaurant && restaurant.autoCloseShiftEnabled !== false) {
-        const lastActivityAt = await this.findLatestShiftActivityTime(
+        const activity = await this.getShiftActivitySnapshot(
           this.dataSource.manager,
           restaurantId,
           shift.id,
@@ -95,7 +95,8 @@ export class CashShiftService implements OnModuleInit, OnModuleDestroy {
           autoCloseEnabled: restaurant.autoCloseShiftEnabled,
           autoCloseTime: restaurant.autoCloseShiftTime,
           now: new Date(),
-          lastActivityAt,
+          lastActivityAt: activity.lastActivityAt,
+          openTablesCount: activity.openTablesCount,
         });
         if (check.due) {
           await this.autoCloseSingleShift(shift.id, restaurantId, check.normalizedTime).catch((err) =>
@@ -108,21 +109,32 @@ export class CashShiftService implements OnModuleInit, OnModuleDestroy {
     return shift;
   }
 
-  private async findLatestShiftActivityTime(
+  private async getShiftActivitySnapshot(
     em: EntityManager,
     restaurantId: string,
     shiftId: string,
     openedAt: Date,
-  ): Promise<Date | null> {
-    if (typeof em.findOne !== 'function') return null;
-    const [lastTx, lastCompleted] = await Promise.all([
+  ): Promise<{ lastActivityAt: Date | null; openTablesCount: number }> {
+    if (typeof em.findOne !== 'function') {
+      return { lastActivityAt: null, openTablesCount: 0 };
+    }
+    const [lastTx, lastCompleted, activeOrders] = await Promise.all([
       em.findOne(CashTransactionEntity, { where: { restaurantId, shiftId }, order: { createdAt: 'DESC' }, select: ['id', 'createdAt'] }).catch(() => null),
       em.findOne(CompletedOrderEntity, { where: { restaurantId }, order: { closedAt: 'DESC' }, select: ['id', 'closedAt'] }).catch(() => null),
+      typeof em.find === 'function'
+        ? em.find(OrderEntity, { where: { restaurantId, status: 'active' }, select: ['id', 'tableId', 'createdAt', 'updatedAt'] }).catch(() => [] as OrderEntity[])
+        : Promise.resolve([] as OrderEntity[]),
     ]);
     let latestMs = openedAt.getTime();
     if (lastTx?.createdAt && lastTx.createdAt.getTime() > latestMs) latestMs = lastTx.createdAt.getTime();
     if (lastCompleted?.closedAt && lastCompleted.closedAt.getTime() > latestMs) latestMs = lastCompleted.closedAt.getTime();
-    return new Date(latestMs);
+    const openTableIds = new Set<string>();
+    for (const ord of activeOrders) {
+      if (ord.tableId) openTableIds.add(ord.tableId);
+      const ordMs = Math.max(ord.updatedAt?.getTime?.() ?? 0, ord.createdAt?.getTime?.() ?? 0);
+      if (ordMs > latestMs) latestMs = ordMs;
+    }
+    return { lastActivityAt: new Date(latestMs), openTablesCount: openTableIds.size };
   }
 
   async computeOpenTablesRolloverSnapshot(
@@ -348,7 +360,7 @@ export class CashShiftService implements OnModuleInit, OnModuleDestroy {
         const restaurant = shift.restaurant;
         if (restaurant && restaurant.autoCloseShiftEnabled === false) continue;
         const autoCloseTime = ShiftAutoClosePolicy.normalizeAutoCloseTime(restaurant?.autoCloseShiftTime);
-        const lastActivityAt = await this.findLatestShiftActivityTime(
+        const activity = await this.getShiftActivitySnapshot(
           this.dataSource.manager,
           shift.restaurantId,
           shift.id,
@@ -359,7 +371,8 @@ export class CashShiftService implements OnModuleInit, OnModuleDestroy {
           autoCloseEnabled: restaurant?.autoCloseShiftEnabled ?? true,
           autoCloseTime,
           now,
-          lastActivityAt,
+          lastActivityAt: activity.lastActivityAt,
+          openTablesCount: activity.openTablesCount,
         });
         if (!check.due) continue;
 

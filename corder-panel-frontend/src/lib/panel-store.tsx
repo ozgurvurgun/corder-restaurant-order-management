@@ -144,8 +144,19 @@ export function PanelProvider({ children }: { children: ReactNode }) {
   )
 
   const dailyReport = useMemo(
-    () => computeDailyReport(closedTables, cancelledItems),
-    [closedTables, cancelledItems],
+    () =>
+      computeDailyReport(
+        closedTables,
+        cancelledItems,
+        settings.autoCloseShiftTime,
+        settings.autoCloseShiftEnabled !== false,
+      ),
+    [
+      closedTables,
+      cancelledItems,
+      settings.autoCloseShiftTime,
+      settings.autoCloseShiftEnabled,
+    ],
   )
 
   const systemActions = useSystemActions({

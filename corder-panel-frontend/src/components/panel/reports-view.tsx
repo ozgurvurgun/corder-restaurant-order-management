@@ -45,8 +45,21 @@ export default function ReportsView() {
     useReportAnalyticsData(closedTables, cancelledItems)
 
   const dateBounds = useMemo(
-    () => computeDateFilterBounds(filterDate, customStartDate, customEndDate),
-    [filterDate, customStartDate, customEndDate],
+    () =>
+      computeDateFilterBounds(
+        filterDate,
+        customStartDate,
+        customEndDate,
+        settings.autoCloseShiftTime,
+        settings.autoCloseShiftEnabled !== false,
+      ),
+    [
+      filterDate,
+      customStartDate,
+      customEndDate,
+      settings.autoCloseShiftTime,
+      settings.autoCloseShiftEnabled,
+    ],
   )
 
   const filteredClosedTables = useMemo(() => {

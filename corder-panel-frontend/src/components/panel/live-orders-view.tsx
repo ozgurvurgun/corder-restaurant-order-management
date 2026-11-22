@@ -24,6 +24,7 @@ export default function CompletedOrdersView() {
     reprintReceipt,
     users,
     ledgerCustomers,
+    settings,
     currentUser,
     hasPermission,
   } = usePanelStore()
@@ -55,8 +56,21 @@ export default function CompletedOrdersView() {
   }, [filterWaiter, filterTable, filterDate, customStartDate, customEndDate])
 
   const dateBounds = useMemo(
-    () => computeDateFilterBounds(filterDate, customStartDate, customEndDate),
-    [filterDate, customStartDate, customEndDate],
+    () =>
+      computeDateFilterBounds(
+        filterDate,
+        customStartDate,
+        customEndDate,
+        settings.autoCloseShiftTime,
+        settings.autoCloseShiftEnabled !== false,
+      ),
+    [
+      filterDate,
+      customStartDate,
+      customEndDate,
+      settings.autoCloseShiftTime,
+      settings.autoCloseShiftEnabled,
+    ],
   )
 
   const filteredTables = useMemo(() => {

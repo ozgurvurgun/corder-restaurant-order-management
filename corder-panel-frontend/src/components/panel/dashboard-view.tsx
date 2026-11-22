@@ -51,6 +51,7 @@ export default function DashboardView(_props: DashboardViewProps) {
     closedTables,
     dailyReport,
     currentShift,
+    settings,
     auditLogs,
     currentUser,
     hasPermission,
@@ -73,7 +74,13 @@ export default function DashboardView(_props: DashboardViewProps) {
   const recentAuditLogs = auditLogs.slice(0, 8)
 
   const yesterdayStats = useMemo(() => {
-    const bounds = computeDateFilterBounds("yesterday", "", "")
+    const bounds = computeDateFilterBounds(
+      "yesterday",
+      "",
+      "",
+      settings.autoCloseShiftTime,
+      settings.autoCloseShiftEnabled !== false,
+    )
     if (!bounds) return { revenueMinorUnits: 0, ordersCount: 0 }
     const yTables = closedTables.filter((ct) => {
       const d = new Date(ct.closedAt)
@@ -83,7 +90,7 @@ export default function DashboardView(_props: DashboardViewProps) {
       revenueMinorUnits: yTables.reduce((s, ct) => s + toMinorUnits(ct.netAmount), 0),
       ordersCount: yTables.length,
     }
-  }, [closedTables])
+  }, [closedTables, settings.autoCloseShiftTime, settings.autoCloseShiftEnabled])
 
   const todayRevenueMinorUnits = toMinorUnits(dailyReport.totalRevenue)
   const revenueDelta = useMemo(() => {

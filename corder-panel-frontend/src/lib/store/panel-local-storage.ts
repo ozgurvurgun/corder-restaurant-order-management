@@ -7,10 +7,13 @@ import {
 } from "../panel-types"
 import { getRestaurant } from "../api/http-client"
 import {
+  computeDateFilterBounds,
   endOfIstanbulDay,
   fromMinorUnits,
+  getCurrentIstanbulBusinessDayYmd,
   getIstanbulHour,
   getIstanbulYmd,
+  resolveBusinessDayCutoffMinutes,
   startOfIstanbulDay,
   toMinorUnits,
 } from "../format"
@@ -313,10 +316,23 @@ export function computeReportForClosedTables(
 export function computeDailyReport(
   closedTables: ClosedTable[],
   cancelledItems: CancelledItem[],
+  cutoffTimeHHmm?: string | null,
+  autoCloseEnabled: boolean = true,
 ): DailyReport {
-  const todayYmd = getIstanbulYmd()
-  const startToday = startOfIstanbulDay(todayYmd)
-  const endToday = endOfIstanbulDay(todayYmd)
+  const cutoffMinutes = resolveBusinessDayCutoffMinutes(
+    cutoffTimeHHmm,
+    autoCloseEnabled,
+  )
+  const todayYmd = getCurrentIstanbulBusinessDayYmd(new Date(), cutoffMinutes)
+  const bounds = computeDateFilterBounds(
+    "today",
+    "",
+    "",
+    cutoffTimeHHmm,
+    autoCloseEnabled,
+  )
+  const startToday = bounds ? bounds.from : startOfIstanbulDay(todayYmd)
+  const endToday = bounds ? bounds.to : endOfIstanbulDay(todayYmd)
 
   const todaysClosed = closedTables.filter((ct) => {
     const d = new Date(ct.closedAt)

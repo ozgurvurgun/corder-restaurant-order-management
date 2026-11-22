@@ -29,11 +29,20 @@ export const MIN_SHIFT_AGE_BEFORE_AUTO_CLOSE_MS = 2 * 3600 * 1000;
 
 /**
  * If a cashier actively processed a transaction within the last 15 minutes
- * around the cutoff time, defer auto-close briefly so we never close a shift
- * in the middle of an active checkout (up to 60 minutes max past cutoff).
+ * around the cutoff time (and all tables are empty), defer auto-close briefly
+ * so we never close a shift in the middle of an active checkout
+ * (up to 60 minutes max past cutoff).
  */
 export const ACTIVE_TRANSACTION_GRACE_MS = 15 * 60 * 1000;
 export const MAX_GRACE_AFTER_CUTOFF_MS = 60 * 60 * 1000;
+
+/**
+ * When the restaurant still has open tables (active late-night service),
+ * never split a shift while staff are actively taking orders or closing checks.
+ * Wait until 45 minutes of complete inactivity (up to 4 hours max overtime past cutoff).
+ */
+export const OPEN_TABLES_IDLE_GRACE_MS = 45 * 60 * 1000;
+export const MAX_OPEN_TABLES_OVERTIME_MS = 4 * 3600 * 1000;
 
 const ISTANBUL_UTC_OFFSET_MS = 3 * 3600 * 1000;
 const ONE_DAY_MS = 24 * 3600 * 1000;
@@ -51,6 +60,27 @@ export class ShiftAutoClosePolicy {
     const normalized = this.normalizeAutoCloseTime(hhmm);
     const [h, m] = normalized.split(':').map(Number);
     return { hour: h || 0, minute: m || 0 };
+  }
+
+  /**
+   * Resolves the POS Business Day (SOD/EOD İş Günü) boundary time in Europe/Istanbul.
+   * Morning cutoff times (00:00 - 11:59, e.g. 04:00 or 07:00) define the start/end of
+   * the 24-hour operational business day. Evening cutoffs (>= 12:00) use 00:00 midnight.
+   */
+  static resolveBusinessDayCutoffHourMinute(
+    autoCloseTime?: string | null,
+    autoCloseEnabled: boolean = true,
+  ): { hour: number; minute: number } {
+    if (autoCloseEnabled === false) {
+      return { hour: 0, minute: 0 };
+    }
+    const { hour, minute } = this.parseHourMinute(
+      autoCloseTime ?? DEFAULT_AUTO_CLOSE_SHIFT_TIME,
+    );
+    if (hour >= 0 && hour < 12) {
+      return { hour, minute };
+    }
+    return { hour: 0, minute: 0 };
   }
 
   /**
@@ -92,6 +122,7 @@ export class ShiftAutoClosePolicy {
     autoCloseTime?: string | null;
     now?: Date;
     lastActivityAt?: Date | null;
+    openTablesCount?: number;
   }): { due: boolean; cutoffDate: Date; normalizedTime: string } {
     const normalizedTime = this.normalizeAutoCloseTime(params.autoCloseTime);
     const cutoffDate = this.computeShiftAutoCloseCutoffDate(
@@ -105,6 +136,20 @@ export class ShiftAutoClosePolicy {
     const cutoffMs = cutoffDate.getTime();
     if (nowMs < cutoffMs) {
       return { due: false, cutoffDate, normalizedTime };
+    }
+
+    const openTablesCount = Math.max(0, Number(params.openTablesCount ?? 0));
+    if (openTablesCount > 0) {
+      const latestActivityMs = params.lastActivityAt
+        ? params.lastActivityAt.getTime()
+        : params.openedAt.getTime();
+      if (
+        nowMs - cutoffMs < MAX_OPEN_TABLES_OVERTIME_MS &&
+        nowMs - latestActivityMs < OPEN_TABLES_IDLE_GRACE_MS
+      ) {
+        return { due: false, cutoffDate, normalizedTime };
+      }
+      return { due: true, cutoffDate, normalizedTime };
     }
 
     if (

@@ -9,23 +9,45 @@ import { RestaurantStaffEntity } from '../restaurant-staff.entity';
 import { LedgerEntryEntity } from '../ledger-entry.entity';
 import { AuditLogEntity } from '../audit-log.entity';
 import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
+import { ShiftAutoClosePolicy } from './shift-auto-close.policy';
 
 /** Permanent UTC+3 offset for Europe/Istanbul (Turkey). */
 const ISTANBUL_OFFSET_MS = 3 * 60 * 60 * 1000;
 
-export function computeIstanbulDateBoundaries(now: Date = new Date()): {
+export function computeIstanbulDateBoundaries(
+  now: Date = new Date(),
+  cutoffTimeHHmm?: string | null,
+  autoCloseEnabled: boolean = true,
+): {
   startOfToday: Date;
   startOfWeek: Date;
   startOfMonth: Date;
 } {
-  const istanbulShifted = new Date(now.getTime() + ISTANBUL_OFFSET_MS);
-  const year = istanbulShifted.getUTCFullYear();
-  const month = istanbulShifted.getUTCMonth();
-  const day = istanbulShifted.getUTCDate();
+  const { hour: cutoffHour, minute: cutoffMinute } =
+    cutoffTimeHHmm != null
+      ? ShiftAutoClosePolicy.resolveBusinessDayCutoffHourMinute(
+          cutoffTimeHHmm,
+          autoCloseEnabled,
+        )
+      : { hour: 0, minute: 0 };
+  const cutoffOffsetMs = (cutoffHour * 60 + cutoffMinute) * 60 * 1000;
 
-  const startOfToday = new Date(Date.UTC(year, month, day) - ISTANBUL_OFFSET_MS);
-  const startOfWeek = new Date(startOfToday.getTime() - 6 * 24 * 60 * 60 * 1000);
-  const startOfMonth = new Date(Date.UTC(year, month, 1) - ISTANBUL_OFFSET_MS);
+  const istanbulBusinessShifted = new Date(
+    now.getTime() + ISTANBUL_OFFSET_MS - cutoffOffsetMs,
+  );
+  const year = istanbulBusinessShifted.getUTCFullYear();
+  const month = istanbulBusinessShifted.getUTCMonth();
+  const day = istanbulBusinessShifted.getUTCDate();
+
+  const startOfToday = new Date(
+    Date.UTC(year, month, day) - ISTANBUL_OFFSET_MS + cutoffOffsetMs,
+  );
+  const startOfWeek = new Date(
+    startOfToday.getTime() - 6 * 24 * 60 * 60 * 1000,
+  );
+  const startOfMonth = new Date(
+    Date.UTC(year, month, 1) - ISTANBUL_OFFSET_MS + cutoffOffsetMs,
+  );
   return { startOfToday, startOfWeek, startOfMonth };
 }
 
