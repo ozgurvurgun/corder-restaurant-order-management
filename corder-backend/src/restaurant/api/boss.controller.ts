@@ -45,9 +45,11 @@ export class BossController {
   getOverview(
     @RestaurantUser() user: { sub: string; role?: string; isBoss?: boolean },
     @Query('branchId') branchId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ) {
     this.assertBossActor(user, 'Only Boss accounts can access the multi-branch overview');
-    return this.bossOverview.getOverview(user.sub, branchId);
+    return this.bossOverview.getOverview(user.sub, branchId, { from, to });
   }
 
   @Get('sub-bosses')

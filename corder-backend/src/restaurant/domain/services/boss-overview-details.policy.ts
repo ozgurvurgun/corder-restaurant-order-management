@@ -4,6 +4,7 @@ import { OrderEntity } from '../order.entity';
 import { OrderItemEntity } from '../order-item.entity';
 import { CompletedOrderEntity } from '../completed-order.entity';
 import { CashShiftEntity } from '../cash-shift.entity';
+import { CashTransactionEntity } from '../cash-transaction.entity';
 import {
   ConsolidatedOverviewMetricsDto,
   getIstanbulHour,
@@ -14,6 +15,7 @@ export class BossOverviewDetailsPolicy {
   static build24HourlySales(
     completedMonth: CompletedOrderEntity[],
     startOfToday: Date,
+    endOfToday?: Date,
   ) {
     const hourlyMap = new Map<
       number,
@@ -28,6 +30,7 @@ export class BossOverviewDetailsPolicy {
     }
     for (const c of completedMonth) {
       if (c.closedAt < startOfToday) continue;
+      if (endOfToday && c.closedAt > endOfToday) continue;
       const h = getIstanbulHour(new Date(c.closedAt));
       const bucket = hourlyMap.get(h);
       if (bucket) {
@@ -248,8 +251,18 @@ export class BossOverviewDetailsPolicy {
   static buildShiftSummaries(
     shifts: CashShiftEntity[],
     branchNameById: Map<string, string>,
+    completedOrders: CompletedOrderEntity[] = [],
+    cashTransactions: CashTransactionEntity[] = [],
   ) {
-    return shifts.slice(0, 20).map((s) => {
+    const txsByShiftId = new Map<string, CashTransactionEntity[]>();
+    for (const tx of cashTransactions) {
+      if (!tx.shiftId) continue;
+      const list = txsByShiftId.get(tx.shiftId) ?? [];
+      list.push(tx);
+      txsByShiftId.set(tx.shiftId, list);
+    }
+
+    return shifts.slice(0, 40).map((s) => {
       const openingMinor = toMinorUnits(s.openingBalance || 0);
       const cashInMinor = toMinorUnits(s.cashIn || 0);
       const cashOutMinor = toMinorUnits(s.cashOut || 0);
@@ -258,6 +271,42 @@ export class BossOverviewDetailsPolicy {
         s.closingBalance != null ? toMinorUnits(s.closingBalance) : null;
       const diffMinor =
         closingMinor != null ? closingMinor - expectedMinor : 0;
+
+      const windowStart = s.openedAt;
+      const windowEnd = s.closedAt ?? new Date();
+      let ledgerMinor = 0;
+      let discountMinor = 0;
+      let closedCount = 0;
+      for (const co of completedOrders) {
+        if (co.restaurantId !== s.restaurantId) continue;
+        if (co.closedAt < windowStart || co.closedAt > windowEnd) continue;
+        closedCount += 1;
+        discountMinor += toMinorUnits(co.discountAmount || 0);
+        if (co.paymentMethod === 'ledger') {
+          ledgerMinor += toMinorUnits(co.netAmount || 0);
+        } else if (co.paymentMethod === 'split' && Array.isArray(co.paymentSplit)) {
+          for (const part of co.paymentSplit as Array<{ method?: string; amount?: number }>) {
+            if (part.method === 'ledger') {
+              ledgerMinor += toMinorUnits(part.amount || 0);
+            }
+          }
+        }
+      }
+
+      const shiftTxs = (txsByShiftId.get(s.id) ?? []).map((tx) => ({
+        id: tx.id,
+        type: tx.type,
+        amount: Number(tx.amount || 0),
+        description: tx.description,
+        reference: tx.reference ?? null,
+        paymentMethod:
+          tx.type === 'expense' &&
+          (tx.reference ?? '').trim().toLowerCase() === 'credit-card'
+            ? 'credit-card'
+            : 'cash',
+        createdBy: tx.createdBy,
+        createdAt: tx.createdAt.toISOString(),
+      }));
 
       return {
         id: s.id,
@@ -269,13 +318,30 @@ export class BossOverviewDetailsPolicy {
         openedAt: s.openedAt.toISOString(),
         closedAt: s.closedAt ? s.closedAt.toISOString() : null,
         openingBalance: fromMinorUnits(openingMinor),
+        cashIn: fromMinorUnits(cashInMinor),
+        cashOut: fromMinorUnits(cashOutMinor),
         closingBalance:
           closingMinor != null ? fromMinorUnits(closingMinor) : null,
         expectedCash: fromMinorUnits(expectedMinor),
         cashDifference: fromMinorUnits(diffMinor),
+        difference: fromMinorUnits(diffMinor),
         totalRevenue: Number(s.totalRevenue || 0),
         totalCash: Number(s.totalCash || 0),
         totalCard: Number(s.totalCard || 0),
+        totalMealCard: Number(s.totalMealCard || 0),
+        totalMultinet: Number(s.totalMultinet || 0),
+        totalLedger: fromMinorUnits(ledgerMinor),
+        discountTotal: fromMinorUnits(discountMinor),
+        closedTablesCount: closedCount || Number(s.transactionCount || 0),
+        transactionCount: Number(s.transactionCount || closedCount || 0),
+        isAutoClosed: Boolean(s.isAutoClosed),
+        notes: s.notes ?? null,
+        carriedOverTablesCount: Number(s.carriedOverTablesCount ?? 0),
+        carriedOverTablesAmount: Number(s.carriedOverTablesAmount ?? 0),
+        carriedOverTablesSnapshot: Array.isArray(s.carriedOverTablesSnapshot)
+          ? s.carriedOverTablesSnapshot
+          : [],
+        transactions: shiftTxs,
       };
     });
   }

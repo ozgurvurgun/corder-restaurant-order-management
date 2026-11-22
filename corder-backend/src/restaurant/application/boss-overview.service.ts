@@ -7,6 +7,7 @@ import { OrderEntity } from '../domain/order.entity';
 import { OrderItemEntity } from '../domain/order-item.entity';
 import { CompletedOrderEntity } from '../domain/completed-order.entity';
 import { CashShiftEntity } from '../domain/cash-shift.entity';
+import { CashTransactionEntity } from '../domain/cash-transaction.entity';
 import { StockMaterialEntity } from '../domain/stock-material.entity';
 import { RestaurantStaffEntity } from '../domain/restaurant-staff.entity';
 import { LedgerEntryEntity } from '../domain/ledger-entry.entity';
@@ -39,7 +40,11 @@ export class BossOverviewService {
     private readonly fraudService: FraudDetectionService,
   ) {}
 
-  async getOverview(bossId: string, branchIdFilter?: string) {
+  async getOverview(
+    bossId: string,
+    branchIdFilter?: string,
+    dateRange?: { from?: string; to?: string },
+  ) {
     const ownedBranches = await this.hierarchyService.loadBossOwnedBranches(bossId);
     const targetBranches: RestaurantEntity[] =
       branchIdFilter && branchIdFilter !== 'ALL'
@@ -66,6 +71,15 @@ export class BossOverviewService {
     }
 
     const now = new Date();
+    const parsedFrom =
+      dateRange?.from && !Number.isNaN(new Date(dateRange.from).getTime())
+        ? new Date(dateRange.from)
+        : null;
+    const parsedTo =
+      dateRange?.to && !Number.isNaN(new Date(dateRange.to).getTime())
+        ? new Date(dateRange.to)
+        : null;
+
     const defaultBounds = computeIstanbulDateBoundaries(now);
     const branchBoundsById = new Map(
       targetBranches.map((b) => [
@@ -81,15 +95,21 @@ export class BossOverviewService {
       const bStart = branchBoundsById.get(b.id)?.startOfMonth ?? defaultBounds.startOfMonth;
       return bStart < minDate ? bStart : minDate;
     }, defaultBounds.startOfMonth);
+    const queryCompletedSince =
+      parsedFrom && parsedFrom < earliestStartOfMonth
+        ? parsedFrom
+        : earliestStartOfMonth;
     const primaryStartOfToday =
+      parsedFrom ??
       branchBoundsById.get(targetBranches[0].id)?.startOfToday ??
       defaultBounds.startOfToday;
+    const primaryEndOfToday = parsedTo ?? undefined;
 
     const branchIds = targetBranches.map((b) => b.id);
     const branchNameById = new Map(ownedBranches.map((b) => [b.id, b.name]));
 
     const [data, fraudData] = await Promise.all([
-      this.loadBranchesRawData(branchIds, earliestStartOfMonth),
+      this.loadBranchesRawData(branchIds, queryCompletedSince),
       this.fraudService.listForBranches(branchIds, branchNameById),
     ]);
 
@@ -142,28 +162,50 @@ export class BossOverviewService {
         materials: materialsByBranch.get(branch.id) ?? [],
         staffList: staffByBranch.get(branch.id) ?? [],
         openLedgerBalanceByBranchId: data.openLedgerBalanceByBranchId,
-        startOfToday: bBounds.startOfToday,
+        startOfToday: parsedFrom ?? bBounds.startOfToday,
+        endOfToday: parsedTo ?? undefined,
         startOfWeek: bBounds.startOfWeek,
         startOfMonth: bBounds.startOfMonth,
       });
     });
 
+    const periodCompletedOrders = parsedFrom
+      ? data.completedMonth.filter(
+          (co) =>
+            co.closedAt >= parsedFrom && (!parsedTo || co.closedAt <= parsedTo),
+        )
+      : data.completedMonth;
+    const filteredRecentShifts = parsedFrom
+      ? data.recentShifts.filter((s) => {
+          const end = s.closedAt ?? now;
+          return end >= parsedFrom && (!parsedTo || s.openedAt <= parsedTo);
+        })
+      : data.recentShifts;
+    const filteredRecentAudits = parsedFrom
+      ? data.recentAudits.filter(
+          (a) =>
+            a.createdAt >= parsedFrom && (!parsedTo || a.createdAt <= parsedTo),
+        )
+      : data.recentAudits;
+
     const baseConsolidated = BossOverviewPolicy.computeConsolidatedMetrics(branchPulses);
     const extendedKpis = BossOverviewDetailsPolicy.computeExtendedKpis(baseConsolidated);
     const { categoryBreakdown, topProducts } =
       BossOverviewDetailsPolicy.buildCategoryAndProductBreakdown(
-        data.completedMonth,
+        periodCompletedOrders,
         data.products,
         data.categories,
       );
     const waiterPerformance = BossOverviewDetailsPolicy.buildWaiterPerformance(
-      data.completedMonth,
+      periodCompletedOrders,
       data.activeOrders,
       data.itemsByOrderId,
     );
     const shiftSummaries = BossOverviewDetailsPolicy.buildShiftSummaries(
-      data.recentShifts,
+      filteredRecentShifts,
       branchNameById,
+      data.completedMonth,
+      data.shiftTransactions,
     );
 
     return {
@@ -188,6 +230,7 @@ export class BossOverviewService {
       hourlySales: BossOverviewDetailsPolicy.build24HourlySales(
         data.completedMonth,
         primaryStartOfToday,
+        primaryEndOfToday,
       ),
       categoryBreakdown,
       topProducts,
@@ -205,7 +248,7 @@ export class BossOverviewService {
         branchNameById,
       ),
       recentAudits: BossOverviewPolicy.buildRecentAudits(
-        data.recentAudits,
+        filteredRecentAudits,
         branchNameById,
       ),
     };
@@ -257,7 +300,7 @@ export class BossOverviewService {
       em.find(CashShiftEntity, {
         where: { restaurantId: In(branchIds) },
         order: { openedAt: 'DESC' },
-        take: 25,
+        take: 40,
       }),
       this.stockRepo.find({ where: { restaurantId: In(branchIds) } }),
       em.find(RestaurantStaffEntity, { where: { restaurantId: In(branchIds), isActive: true } }),
@@ -275,9 +318,23 @@ export class BossOverviewService {
       this.auditRepo.find({
         where: { restaurantId: In(branchIds) },
         order: { createdAt: 'DESC' },
-        take: 40,
+        take: 100,
       }),
     ]);
+
+    const recentShiftIds = recentShifts.map((s) => s.id);
+    const shiftTransactions =
+      recentShiftIds.length && typeof em.find === 'function'
+        ? await em
+            .find(CashTransactionEntity, {
+              where: {
+                restaurantId: In(branchIds),
+                shiftId: In(recentShiftIds),
+              },
+              order: { createdAt: 'DESC' },
+            })
+            .catch(() => [] as CashTransactionEntity[])
+        : [];
 
     const categoryIds = categories.map((c) => c.id);
     const products = categoryIds.length
@@ -309,6 +366,7 @@ export class BossOverviewService {
       completedMonth,
       openShifts,
       recentShifts,
+      shiftTransactions,
       materials,
       staffList,
       categories,

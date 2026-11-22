@@ -339,8 +339,12 @@ export const bossApi = {
     },
   },
   overview: {
-    async get(branchId?: string) {
-      const q = branchId ? `?branchId=${encodeURIComponent(branchId)}` : ""
+    async get(branchId?: string, dateRange?: { from?: string; to?: string }) {
+      const qs = new URLSearchParams()
+      if (branchId) qs.set("branchId", branchId)
+      if (dateRange?.from) qs.set("from", dateRange.from)
+      if (dateRange?.to) qs.set("to", dateRange.to)
+      const q = qs.toString() ? `?${qs.toString()}` : ""
       return normalizeBossOverview(await bossFetch<BossOverviewResponse>(`/restaurant/boss/overview${q}`))
     },
     async syncRoles(sourceRestaurantId: string, targetRestaurantIds?: string[]) {

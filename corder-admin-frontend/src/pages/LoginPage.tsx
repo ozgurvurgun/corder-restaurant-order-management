@@ -219,7 +219,7 @@ export function LoginPage() {
 
               <div>
                 <label className="block text-[13px] font-medium text-[#1d1d1f] mb-1.5">
-                  Platform Admin Auth Kodu
+                  Google Authenticator Kodu (6 Haneli) veya Auth Kodu
                 </label>
                 <div className="relative">
                   <KeyRound className="w-4 h-4 text-[#86868b] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -228,8 +228,9 @@ export function LoginPage() {
                     type={showAuthCode ? "text" : "password"}
                     value={authCode}
                     onChange={(e) => setAuthCode(e.target.value)}
-                    placeholder="Platform Admin Auth Kodunu girin…"
+                    placeholder="6 haneli Google Auth kodu veya Auth Kodu…"
                     autoComplete="one-time-code"
+                    inputMode="text"
                     className={`w-full h-[44px] pl-10 pr-11 text-[14px] bg-[#f5f5f7] rounded-xl border border-[#d1d1d6]/60 text-[#1d1d1f] focus:outline-none focus:border-[#e63462] focus:ring-2 focus:ring-[#e63462]/20 transition-all ${
                       showAuthCode ? "font-mono text-[13px]" : ""
                     }`}

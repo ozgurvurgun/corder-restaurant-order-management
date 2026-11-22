@@ -461,5 +461,21 @@ describe('WebPushService, DTO validation & CompletedOrderEditLogPolicy', () => {
       openTablesCount: 3,
     });
     assert.equal(openTablesIdleDueCheck.due, true);
+
+    // RFC 4648 Base32 & RFC 6238 Google Authenticator TOTP verification
+    const {
+      decodeBase32Secret,
+      computeTotpCode,
+      verifyTotpCode,
+    } = await import('../src/platform/application/platform-auth.service');
+    const base32Secret = 'K4M7P2V5X3N6R4T7W2Z5C3F6H4J7L2Q5';
+    const decoded = decodeBase32Secret(base32Secret);
+    assert.ok(decoded && decoded.length === 20);
+    const fixedNowMs = 1_795_340_000_000;
+    const step = Math.floor(fixedNowMs / 30_000);
+    const valid6Digit = computeTotpCode(decoded!, step, 6);
+    assert.equal(valid6Digit.length, 6);
+    assert.equal(verifyTotpCode(base32Secret, valid6Digit, fixedNowMs), true);
+    assert.equal(verifyTotpCode(base32Secret, '000000', fixedNowMs), valid6Digit === '000000');
   });
 });

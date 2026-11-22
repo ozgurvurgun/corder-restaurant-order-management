@@ -243,6 +243,29 @@ export function installCustomFormValidation() {
   window.addEventListener("scroll", () => clearCustomFieldValidation(), true)
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") clearCustomFieldValidation()
+    if ((e.ctrlKey || e.metaKey) && (e.key === "+" || e.key === "-" || e.key === "=" || e.key === "0")) {
+      e.preventDefault()
+    }
   })
+
+  // Prevent pinch-to-zoom, double-tap zoom, and Ctrl+wheel zoom for native mobile app feel
+  const preventZoom = (e: Event) => e.preventDefault()
+  document.addEventListener("gesturestart", preventZoom, { passive: false })
+  document.addEventListener("gesturechange", preventZoom, { passive: false })
+  document.addEventListener("gestureend", preventZoom, { passive: false })
+  document.addEventListener(
+    "touchmove",
+    (e) => {
+      if (e.touches.length > 1) e.preventDefault()
+    },
+    { passive: false }
+  )
+  document.addEventListener(
+    "wheel",
+    (e) => {
+      if (e.ctrlKey || e.metaKey) e.preventDefault()
+    },
+    { passive: false }
+  )
 }
 

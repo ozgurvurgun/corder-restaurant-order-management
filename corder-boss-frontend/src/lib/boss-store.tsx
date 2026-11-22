@@ -7,7 +7,7 @@ import {
   getStoredActiveBranchId, getStoredBossUser, getStoredBranches, setBossSession,
   setStoredActiveBranchId, setStoredBranches, type StoredBossUser,
 } from "./api"
-import { formatTitleCase, normalizeBossBranch } from "./format"
+import { computeBossDateFilterBounds, formatTitleCase, normalizeBossBranch } from "./format"
 import {
   getBossDismissedNotifIds, getBossReadNotifIds, getFraudPushSoundEnabled,
   markBossNotifReadLocal, markBossNotifsDismissedLocal, requestBrowserNotificationPermission,
@@ -15,7 +15,7 @@ import {
 } from "./fraud-notifier"
 import { useBossSocket } from "./use-boss-socket"
 import type {
-  BossOverviewResponse, BossPlatformNotificationDto, BranchSummary, CatalogCategoryDto, CatalogProductDto,
+  BossDatePreset, BossOverviewResponse, BossPlatformNotificationDto, BranchSummary, CatalogCategoryDto, CatalogProductDto,
   FraudAlertDto, FraudAlertStatus, LiveOrderDto, LiveTableDto,
   PermissionCatalogResponse, RoleDefinition, StaffMemberDto,
 } from "./types"
@@ -24,6 +24,10 @@ interface BossStoreContextValue {
   isAuthenticated: boolean; user: StoredBossUser | null; branches: BranchSummary[]
   selectedBranchId: string; effectiveBranchId: string; effectiveBranch: BranchSummary | null
   setSelectedBranchId: (id: string) => void; overview: BossOverviewResponse | null
+  datePreset: BossDatePreset; setDatePreset: (p: BossDatePreset) => void
+  customFrom: string; setCustomFrom: (v: string) => void
+  customTo: string; setCustomTo: (v: string) => void
+  dateFilterBounds: { from?: string; to?: string; label: string }
   catalog: PermissionCatalogResponse | null; roles: RoleDefinition[]; staff: StaffMemberDto[]
   tables: LiveTableDto[]; orders: LiveOrderDto[]; products: CatalogProductDto[]
   categories: CatalogCategoryDto[]; fraudAlerts: FraudAlertDto[]; openCriticalHighAlertCount: number
@@ -70,6 +74,13 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     return stored.length > 1 ? "ALL" : (stored[0]?.id ?? "")
   })
   const [tokenVersion, setTokenVersion] = useState(0)
+  const [datePreset, setDatePreset] = useState<BossDatePreset>("today")
+  const [customFrom, setCustomFrom] = useState<string>("")
+  const [customTo, setCustomTo] = useState<string>("")
+  const dateFilterBounds = useMemo(
+    () => computeBossDateFilterBounds(datePreset, customFrom, customTo, 7),
+    [datePreset, customFrom, customTo]
+  )
   const [overview, setOverview] = useState<BossOverviewResponse | null>(null)
   const [catalog, setCatalog] = useState<PermissionCatalogResponse | null>(null)
   const [roles, setRoles] = useState<RoleDefinition[]>([])
@@ -318,7 +329,10 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
       if (!branchId || !getBossToken()) return
       try {
         const [ovRes, tablesRes, ordersRes] = await Promise.all([
-          bossApi.overview.get(overviewFilter),
+          bossApi.overview.get(overviewFilter, {
+            from: dateFilterBounds.from,
+            to: dateFilterBounds.to,
+          }),
           bossApi.operations.tables(branchId),
           bossApi.operations.orders(branchId),
         ])
@@ -330,7 +344,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
         // 401 handled via BOSS_UNAUTHORIZED_EVENT
       }
     },
-    [fetchFraudAlertsSilently]
+    [fetchFraudAlertsSilently, dateFilterBounds.from, dateFilterBounds.to]
   )
 
   const refreshAll = useCallback(async () => {
@@ -344,7 +358,10 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
           : (branches[0]?.id ?? "")
       const [meRes, ovRes] = await Promise.all([
         bossApi.auth.me(),
-        bossApi.overview.get(selectedBranchId),
+        bossApi.overview.get(selectedBranchId, {
+          from: dateFilterBounds.from,
+          to: dateFilterBounds.to,
+        }),
         ...(knownTargetBranchId
           ? [
               refreshBranchDetails(knownTargetBranchId),
@@ -382,12 +399,12 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false)
     }
-  }, [selectedBranchId, branches, refreshBranchDetails, fetchFraudAlertsSilently, fetchPlatformNotifsSilently, logout])
+  }, [selectedBranchId, branches, dateFilterBounds.from, dateFilterBounds.to, refreshBranchDetails, fetchFraudAlertsSilently, fetchPlatformNotifsSilently, logout])
 
   useEffect(() => {
     if (!user?.id || !getBossToken()) return
     void refreshAll()
-  }, [user?.id, selectedBranchId, refreshAll])
+  }, [user?.id, selectedBranchId, dateFilterBounds.from, dateFilterBounds.to, refreshAll])
 
   useBossSocket({
     tokenVersion,
@@ -440,6 +457,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
       value={{
         isAuthenticated: Boolean(user && getBossToken()),
         user, branches, selectedBranchId, effectiveBranchId, effectiveBranch, setSelectedBranchId,
+        datePreset, setDatePreset, customFrom, setCustomFrom, customTo, setCustomTo, dateFilterBounds,
         overview, catalog, roles, staff, tables, orders, products, categories,
         fraudAlerts, openCriticalHighAlertCount,
         platformNotifications, markPlatformNotificationRead, clearPlatformNotifications,

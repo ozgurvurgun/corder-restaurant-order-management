@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react"
 import { useBossStore } from "@/lib/boss-store"
 import { formatIstanbulDateTime } from "@/lib/format"
-import type { BossTabId } from "@/lib/types"
+import type { BossDatePreset, BossTabId } from "@/lib/types"
+import { CustomDatePicker, CustomSelect } from "./ui/custom-inputs"
 import {
   Bell,
   Building2,
+  Calendar,
   ChevronDown,
   Layers,
   LogOut,
@@ -30,6 +32,12 @@ export function BranchSwitcherHeader({ activeTab = "dashboard" }: { activeTab?: 
     selectedBranchId,
     setSelectedBranchId,
     effectiveBranch,
+    datePreset,
+    setDatePreset,
+    customFrom,
+    setCustomFrom,
+    customTo,
+    setCustomTo,
     platformNotifications,
     markPlatformNotificationRead,
     clearPlatformNotifications,
@@ -37,6 +45,8 @@ export function BranchSwitcherHeader({ activeTab = "dashboard" }: { activeTab?: 
     refreshAll,
     logout,
   } = useBossStore()
+  const showDateFilter =
+    activeTab === "dashboard" || activeTab === "analytics" || activeTab === "security"
   const [openSheet, setOpenSheet] = useState(false)
   const [showNotifs, setShowNotifs] = useState(false)
   const notifRef = useRef<HTMLDivElement>(null)
@@ -84,8 +94,42 @@ export function BranchSwitcherHeader({ activeTab = "dashboard" }: { activeTab?: 
           </span>
         </div>
 
-        {/* Right: Branch Selector & Actions */}
+        {/* Right: Date Filter, Branch Selector & Actions */}
         <div className="flex items-center gap-2">
+          {showDateFilter && (
+            <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-[#e5e5ea] bg-[#f5f5f7]/70">
+                <Calendar className="h-3.5 w-3.5 text-[#e63462] flex-shrink-0" />
+                <CustomSelect
+                  value={datePreset}
+                  onChange={(e) => setDatePreset(e.target.value as BossDatePreset)}
+                  className="bg-transparent text-[11.5px] font-semibold text-[#1d1d1f]"
+                >
+                  <option value="today">Bugün (İş Günü)</option>
+                  <option value="yesterday">Dün</option>
+                  <option value="week">Son 7 Gün</option>
+                  <option value="month">Son 30 Gün</option>
+                  <option value="custom">Özel Tarih</option>
+                </CustomSelect>
+              </div>
+              {datePreset === "custom" && (
+                <div className="hidden lg:flex items-center gap-1">
+                  <CustomDatePicker
+                    value={customFrom.slice(0, 10)}
+                    onChange={(e) => setCustomFrom(e.target.value)}
+                    className="h-8 px-2 text-[11px] bg-[#f5f5f7] rounded-lg border border-[#e5e5ea]"
+                  />
+                  <span className="text-[11px] text-[#86868b]">-</span>
+                  <CustomDatePicker
+                    value={customTo.slice(0, 10)}
+                    onChange={(e) => setCustomTo(e.target.value)}
+                    className="h-8 px-2 text-[11px] bg-[#f5f5f7] rounded-lg border border-[#e5e5ea]"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => setOpenSheet(true)}
@@ -193,6 +237,22 @@ export function BranchSwitcherHeader({ activeTab = "dashboard" }: { activeTab?: 
           </button>
         </div>
       </header>
+      {showDateFilter && datePreset === "custom" && (
+        <div className="lg:hidden flex items-center justify-end gap-1.5 px-4 py-2 border-b border-[#e5e5ea] bg-white/90">
+          <span className="text-[11px] font-medium text-[#86868b]">Tarih Aralığı:</span>
+          <CustomDatePicker
+            value={customFrom.slice(0, 10)}
+            onChange={(e) => setCustomFrom(e.target.value)}
+            className="h-7 px-2 text-[11px] bg-[#f5f5f7] rounded-lg border border-[#e5e5ea]"
+          />
+          <span className="text-[11px] text-[#86868b]">-</span>
+          <CustomDatePicker
+            value={customTo.slice(0, 10)}
+            onChange={(e) => setCustomTo(e.target.value)}
+            className="h-7 px-2 text-[11px] bg-[#f5f5f7] rounded-lg border border-[#e5e5ea]"
+          />
+        </div>
+      )}
 
       {/* Branch Switcher Modal */}
       {openSheet && (

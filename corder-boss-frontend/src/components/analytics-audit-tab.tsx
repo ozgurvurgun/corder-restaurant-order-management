@@ -42,6 +42,7 @@ export function AnalyticsAuditTab() {
     selectedBranchId,
     effectiveBranchId,
     effectiveBranch,
+    dateFilterBounds,
   } = useBossStore()
 
   const [auditCategory, setAuditCategory] = useState<AuditCategory | "ALL">("ALL")
@@ -52,7 +53,7 @@ export function AnalyticsAuditTab() {
 
   useEffect(() => {
     setAuditPage(1)
-  }, [auditCategory, selectedBranchId, effectiveBranchId])
+  }, [auditCategory, selectedBranchId, effectiveBranchId, dateFilterBounds.from, dateFilterBounds.to])
 
   useEffect(() => {
     if (!effectiveBranchId || selectedBranchId === "ALL") {
@@ -64,7 +65,9 @@ export function AnalyticsAuditTab() {
     bossApi.auditLogs
       .list(effectiveBranchId, {
         category: auditCategory === "ALL" ? undefined : auditCategory,
-        limit: 60,
+        limit: 120,
+        from: dateFilterBounds.from,
+        to: dateFilterBounds.to,
       })
       .then((res) => {
         if (!cancelled) setBranchAudits(res)
@@ -78,11 +81,12 @@ export function AnalyticsAuditTab() {
     return () => {
       cancelled = true
     }
-  }, [effectiveBranchId, selectedBranchId, auditCategory])
+  }, [effectiveBranchId, selectedBranchId, auditCategory, dateFilterBounds.from, dateFilterBounds.to])
 
   const hourly = overview?.hourlySales ?? []
   const topProducts = overview?.topProducts ?? []
   const staffPerf = overview?.waiterPerformance ?? []
+  const shiftSummaries = overview?.shiftSummaries ?? []
 
   const audits = useMemo(() => {
     if (selectedBranchId !== "ALL" && branchAudits) {
@@ -113,10 +117,10 @@ export function AnalyticsAuditTab() {
           <BarChart3 className="h-4 w-4 text-[#e63462]" />
           <div>
             <h3 className="text-[14px] font-semibold text-[#1d1d1f]">
-              Saatlik Satış Yoğunluğu (Bugün)
+              Saatlik Satış Yoğunluğu ({dateFilterBounds.label})
             </h3>
             <p className="text-[11px] text-[#86868b]">
-              Saat dilimlerine göre kapanan adisyon ciro dağılımı (Türkiye Saati)
+              Seçili dönemdeki kapanan adisyonların saat dilimlerine göre ciro dağılımı (Türkiye Saati)
             </p>
           </div>
         </div>
@@ -229,6 +233,76 @@ export function AnalyticsAuditTab() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Cash Shifts Summary on Reports & Audit Tab */}
+      <div className="rounded-2xl border border-[#d1d1d6]/60 bg-white p-4">
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-[#e63462]" />
+            <div>
+              <h3 className="text-[14px] font-semibold text-[#1d1d1f]">
+                Kasa Vardiyaları &amp; Z Raporu Özeti ({shiftSummaries.length})
+              </h3>
+              <p className="text-[11px] text-[#86868b]">
+                Seçili dönemdeki ({dateFilterBounds.label}) açık ve kapanmış kasa vardiyaları
+              </p>
+            </div>
+          </div>
+        </div>
+        {shiftSummaries.length === 0 ? (
+          <p className="py-5 text-center text-[12px] text-[#86868b]">
+            Seçili tarih aralığında kasa vardiyası kaydı bulunmuyor.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+            {shiftSummaries.slice(0, 12).map((sh) => {
+              const diff = sh.cashDifference ?? sh.difference ?? 0
+              return (
+                <div
+                  key={sh.id}
+                  className="rounded-xl border border-[#e5e5ea] bg-[#f9f9fb] p-3 text-[12px]"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-[#1d1d1f] truncate">
+                      {sh.branchName ? `${sh.branchName} • ` : ""}Açan: {sh.openedBy}
+                    </span>
+                    <span className="font-black text-[#e63462] tabular-nums">
+                      Ciro: ₺{formatMoney(sh.totalRevenue ?? 0)}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[10.5px] text-[#86868b]">
+                    {formatIstanbulDateTime(sh.openedAt)}
+                    {sh.closedAt ? ` → ${formatIstanbulDateTime(sh.closedAt)}` : " • Açık Vardiya"}
+                    {sh.isAutoClosed ? " (Otomatik Gün Sonu)" : ""}
+                  </p>
+                  <div className="mt-2 grid grid-cols-4 gap-1.5 border-t border-[#e5e5ea] pt-2 text-center text-[10.5px]">
+                    <div>
+                      <span className="text-[#86868b] block">Açılış</span>
+                      <strong className="text-[#1d1d1f]">₺{formatMoney(sh.openingBalance)}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[#86868b] block">Beklenen</span>
+                      <strong className="text-[#1d1d1f]">₺{formatMoney(sh.expectedCash ?? sh.openingBalance)}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[#86868b] block">Sayılan</span>
+                      <strong className="text-[#1d1d1f]">
+                        {sh.closingBalance != null ? `₺${formatMoney(sh.closingBalance)}` : "-"}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-[#86868b] block">Fark</span>
+                      <strong className={diff < 0 ? "text-red-600" : diff > 0 ? "text-amber-600" : "text-emerald-600"}>
+                        ₺{formatMoney(diff)}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Audit & Critical Operation Logs */}

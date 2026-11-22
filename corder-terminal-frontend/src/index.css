@@ -129,6 +129,21 @@
 
 html {
   overscroll-behavior: none;
+  touch-action: pan-x pan-y;
+  -webkit-text-size-adjust: 100%;
+}
+
+html,
+body,
+* {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+}
+
+body {
+  overscroll-behavior: none;
+  touch-action: pan-x pan-y;
 }
 
 @supports (-moz-appearance: none) {

@@ -243,6 +243,39 @@ export function installCustomFormValidation() {
   window.addEventListener("scroll", () => clearCustomFieldValidation(), true)
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") clearCustomFieldValidation()
+    if (e.ctrlKey || e.metaKey) {
+      const k = e.key.toLowerCase()
+      if (k === "+" || k === "-" || k === "=" || k === "0" || k === "c" || k === "x" || k === "a") {
+        e.preventDefault()
+      }
+    }
   })
+
+  // Prevent pinch-to-zoom, double-tap zoom, and Ctrl+wheel zoom for native mobile app feel
+  const preventDefaultEvent = (e: Event) => e.preventDefault()
+  document.addEventListener("gesturestart", preventDefaultEvent, { passive: false })
+  document.addEventListener("gesturechange", preventDefaultEvent, { passive: false })
+  document.addEventListener("gestureend", preventDefaultEvent, { passive: false })
+  document.addEventListener(
+    "touchmove",
+    (e) => {
+      if (e.touches.length > 1) e.preventDefault()
+    },
+    { passive: false }
+  )
+  document.addEventListener(
+    "wheel",
+    (e) => {
+      if (e.ctrlKey || e.metaKey) e.preventDefault()
+    },
+    { passive: false }
+  )
+
+  // Block manual copying/selection everywhere (intentional copy buttons use navigator.clipboard.writeText)
+  document.addEventListener("copy", preventDefaultEvent, true)
+  document.addEventListener("cut", preventDefaultEvent, true)
+  document.addEventListener("selectstart", preventDefaultEvent, true)
+  document.addEventListener("contextmenu", preventDefaultEvent, true)
+  document.addEventListener("dragstart", preventDefaultEvent, true)
 }
 

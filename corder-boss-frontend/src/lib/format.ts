@@ -258,6 +258,20 @@ export function normalizeBossOverview(ov: BossOverviewResponse): BossOverviewRes
       branchName: formatTitleCase(s.branchName),
       openedBy: formatTitleCase(s.openedBy),
       closedBy: s.closedBy ? formatTitleCase(s.closedBy) : s.closedBy,
+      carriedOverTablesSnapshot: Array.isArray(s.carriedOverTablesSnapshot)
+        ? s.carriedOverTablesSnapshot.map((t) => ({
+            ...t,
+            tableName: formatTitleCase(t.tableName),
+            section: formatTitleCase(t.section),
+          }))
+        : [],
+      transactions: Array.isArray(s.transactions)
+        ? s.transactions.map((tx) => ({
+            ...tx,
+            description: formatTitleCase(tx.description),
+            createdBy: formatTitleCase(tx.createdBy),
+          }))
+        : [],
     })),
     criticalMaterials: (ov.criticalMaterials ?? []).map((m) => ({
       ...m,
@@ -270,6 +284,76 @@ export function normalizeBossOverview(ov: BossOverviewResponse): BossOverviewRes
       branchName: formatTitleCase(a.branchName),
     })),
   }
+}
+
+export function computeBossDateFilterBounds(
+  preset: "today" | "yesterday" | "week" | "month" | "custom",
+  customFrom: string,
+  customTo: string,
+  cutoffHour = 4,
+): { from?: string; to?: string; label: string } {
+  const now = new Date()
+  const cutoffMs = cutoffHour * 3600 * 1000
+  const shiftedNow = new Date(now.getTime() - cutoffMs)
+  const todayYmd = trDayKeyFormatter.format(shiftedNow)
+  const shiftYmd = (ymd: string, deltaDays: number) => {
+    const [y, m, d] = ymd.split("-").map(Number)
+    const dt = new Date(Date.UTC(y, m - 1, d + deltaDays))
+    return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`
+  }
+  const dayBounds = (ymd: string) => {
+    const start = new Date(`${ymd}T00:00:00.000+03:00`).getTime() + cutoffMs
+    return {
+      from: new Date(start),
+      to: new Date(start + 24 * 3600 * 1000 - 1),
+    }
+  }
+
+  if (preset === "today") {
+    return { label: "Bugün (Aktif İş Günü)" }
+  }
+  if (preset === "yesterday") {
+    const yBounds = dayBounds(shiftYmd(todayYmd, -1))
+    return {
+      from: yBounds.from.toISOString(),
+      to: yBounds.to.toISOString(),
+      label: "Dün (Önceki İş Günü)",
+    }
+  }
+  if (preset === "week") {
+    const wBounds = dayBounds(shiftYmd(todayYmd, -6))
+    const tBounds = dayBounds(todayYmd)
+    return {
+      from: wBounds.from.toISOString(),
+      to: tBounds.to.toISOString(),
+      label: "Son 7 Gün",
+    }
+  }
+  if (preset === "month") {
+    const mBounds = dayBounds(shiftYmd(todayYmd, -29))
+    const tBounds = dayBounds(todayYmd)
+    return {
+      from: mBounds.from.toISOString(),
+      to: tBounds.to.toISOString(),
+      label: "Son 30 Gün",
+    }
+  }
+  if (preset === "custom" && customFrom) {
+    const fromDt = new Date(`${customFrom.slice(0, 10)}T00:00:00.000+03:00`)
+    const toDt = customTo
+      ? new Date(`${customTo.slice(0, 10)}T23:59:59.999+03:00`)
+      : new Date()
+    if (!Number.isNaN(fromDt.getTime()) && !Number.isNaN(toDt.getTime())) {
+      const start = fromDt <= toDt ? fromDt : toDt
+      const end = fromDt <= toDt ? toDt : fromDt
+      return {
+        from: start.toISOString(),
+        to: end.toISOString(),
+        label: `${customFrom.slice(0, 10)} - ${(customTo || customFrom).slice(0, 10)}`,
+      }
+    }
+  }
+  return { label: "Bugün (Aktif İş Günü)" }
 }
 
 const ERROR_TRANSLATIONS: Array<[RegExp, string | ((m: RegExpMatchArray) => string)]> = [

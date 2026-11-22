@@ -56,19 +56,60 @@ export interface FraudSummaryDto {
   totalAmountImpact: number
 }
 
+export interface ShiftTransactionDto {
+  id: string
+  type: "cash-in" | "cash-out" | "expense" | "sale" | string
+  amount: number
+  description: string
+  reference?: string | null
+  paymentMethod?: "cash" | "credit-card" | string
+  createdBy: string
+  createdAt: string
+}
+
+export interface CarriedOverTableItemDto {
+  tableId: string
+  tableName: string
+  section: string
+  openAmount: number
+  itemCount: number
+  openedAt: string
+}
+
 export interface ShiftSummaryDto {
   id: string
+  branchId?: string
   branchName?: string
   openedBy: string
   closedBy?: string | null
   status: string
   openingBalance: number
+  cashIn?: number
+  cashOut?: number
   closingBalance?: number | null
   expectedCash?: number
+  cashDifference?: number
   difference?: number
+  totalRevenue?: number
+  totalCash?: number
+  totalCard?: number
+  totalMealCard?: number
+  totalMultinet?: number
+  totalLedger?: number
+  discountTotal?: number
+  closedTablesCount?: number
+  transactionCount?: number
+  isAutoClosed?: boolean
+  notes?: string | null
+  carriedOverTablesCount?: number
+  carriedOverTablesAmount?: number
+  carriedOverTablesSnapshot?: CarriedOverTableItemDto[]
+  transactions?: ShiftTransactionDto[]
   openedAt: string
   closedAt?: string | null
 }
+
+export type BossDatePreset = "today" | "yesterday" | "week" | "month" | "custom"
 
 export interface WaiterPerformanceDto {
   waiterName: string

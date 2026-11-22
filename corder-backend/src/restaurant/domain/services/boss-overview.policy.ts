@@ -128,6 +128,7 @@ export interface BranchPulseInput {
   ledgerEntries?: LedgerEntryEntity[];
   openLedgerBalanceByBranchId?: Map<string, number>;
   startOfToday: Date;
+  endOfToday?: Date;
   startOfWeek: Date;
   startOfMonth: Date;
 }
@@ -146,12 +147,12 @@ export class BossOverviewPolicy {
   }
 
   static buildBranchPulse(input: BranchPulseInput): BranchLivePulseDto {
-    const { branch, itemsByOrderId, startOfToday, startOfWeek, startOfMonth } = input;
+    const { branch, itemsByOrderId, startOfToday, endOfToday, startOfWeek, startOfMonth } = input;
     const bTables = input.tables.filter((t) => t.restaurantId === branch.id);
     const bActiveOrders = input.activeOrders.filter((o) => o.restaurantId === branch.id);
     const bCompletedMonth = filterCompletedSince(input.completedMonth, branch.id, startOfMonth);
     const bCompletedWeek = filterCompletedSince(bCompletedMonth, branch.id, startOfWeek);
-    const bCompletedToday = filterCompletedSince(bCompletedMonth, branch.id, startOfToday);
+    const bCompletedToday = filterCompletedWindow(input.completedMonth, branch.id, startOfToday, endOfToday);
     const bShift = input.openShifts.find((s) => s.restaurantId === branch.id) ?? null;
     const bMaterials = input.materials.filter((m) => m.restaurantId === branch.id);
     const bStaff = input.staffList.filter((s) => s.restaurantId === branch.id);
@@ -306,6 +307,20 @@ export class BossOverviewPolicy {
 
 function filterCompletedSince(list: CompletedOrderEntity[], restaurantId: string, since: Date): CompletedOrderEntity[] {
   return list.filter((c) => c.restaurantId === restaurantId && c.closedAt >= since);
+}
+
+function filterCompletedWindow(
+  list: CompletedOrderEntity[],
+  restaurantId: string,
+  since: Date,
+  until?: Date,
+): CompletedOrderEntity[] {
+  return list.filter(
+    (c) =>
+      c.restaurantId === restaurantId &&
+      c.closedAt >= since &&
+      (!until || c.closedAt <= until),
+  );
 }
 
 function sumNetAmount(orders: CompletedOrderEntity[]): number {
