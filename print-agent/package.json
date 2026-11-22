@@ -1,6 +1,6 @@
 {
   "name": "corder-print-agent",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "Corder Desktop Print Agent & Control Center (Linux, Windows, macOS)",
   "author": "Corder <dev@corders.uk>",
@@ -18,8 +18,8 @@
     "dev": "node --watch src/index.js",
     "dist": "electron-builder --publish never",
     "dist:linux": "electron-builder --linux AppImage deb --x64 --publish never",
-    "dist:win": "electron-builder --win portable zip --x64 --publish never",
-    "dist:all": "electron-builder --linux AppImage deb --win portable zip --x64 --publish never"
+    "dist:win": "electron-builder --win zip --x64 --publish never",
+    "dist:all": "electron-builder --linux AppImage deb --win zip --x64 --publish never"
   },
   "dependencies": {
     "socket.io-client": "^4.8.1"
@@ -76,13 +76,9 @@
     "win": {
       "icon": "build/icon.png",
       "target": [
-        "portable",
         "zip"
       ],
       "artifactName": "${productName}-${version}-win-${arch}.${ext}"
-    },
-    "portable": {
-      "artifactName": "${productName}-${version}-win-${arch}-portable.${ext}"
     }
   }
 }

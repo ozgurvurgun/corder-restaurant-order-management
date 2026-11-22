@@ -1,13 +1,10 @@
 const fs = require("fs")
 const os = require("os")
 const path = require("path")
-const { execFile } = require("child_process")
 const { info, warn } = require("./logger")
 
 const APP_ROOT = path.resolve(__dirname, "..")
 const MAIN_ENTRY = path.join(APP_ROOT, "electron", "main.js")
-const WIN_REG_KEY = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
-const WIN_REG_NAME = "CorderPrintAgent"
 
 function getLinuxAutostartFile() {
   const configHome = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config")
@@ -115,25 +112,6 @@ function configureMacAutostart(enabled, electronApp = null) {
   }
 }
 
-function configureWindowsRegistryAutostart(enabled, electronApp = null) {
-  return new Promise((resolve) => {
-    const { binary, args } = resolveLaunchCommand(electronApp)
-    const commandValue = `"${binary}" ${args.map((a) => `"${a}"`).join(" ")}`.trim()
-    const regArgs = enabled
-      ? ["add", WIN_REG_KEY, "/v", WIN_REG_NAME, "/t", "REG_SZ", "/d", commandValue, "/f"]
-      : ["delete", WIN_REG_KEY, "/v", WIN_REG_NAME, "/f"]
-
-    execFile("reg.exe", regArgs, { windowsHide: true, shell: false, timeout: 5000 }, (err) => {
-      if (err && enabled) {
-        warn("Windows startup registry update failed", { error: err.message })
-        resolve(false)
-        return
-      }
-      resolve(true)
-    })
-  })
-}
-
 async function applyAutoStartSetting(enabled, electronApp = null) {
   const shouldEnable = enabled !== false
   try {
@@ -148,9 +126,6 @@ async function applyAutoStartSetting(enabled, electronApp = null) {
         path: binary,
         args,
       })
-    }
-    if (process.platform === "win32") {
-      await configureWindowsRegistryAutostart(shouldEnable, electronApp)
     } else if (process.platform === "linux") {
       configureLinuxAutostart(shouldEnable, electronApp)
     } else if (process.platform === "darwin" && !electronApp) {

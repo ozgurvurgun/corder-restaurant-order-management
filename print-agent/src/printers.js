@@ -192,18 +192,8 @@ public class RawPrinterHelper {
     [MarshalAs(UnmanagedType.LPWStr)] public string pOutputFile;
     [MarshalAs(UnmanagedType.LPWStr)] public string pDataType;
   }
-  [StructLayout(LayoutKind.Sequential)]
-  public struct PRINTER_DEFAULTS {
-    public IntPtr pDatatype;
-    public IntPtr pDevMode;
-    public int DesiredAccess;
-  }
   [DllImport("winspool.Drv", EntryPoint = "OpenPrinterW", SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true)]
   public static extern bool OpenPrinter(string src, out IntPtr hPrinter, IntPtr pd);
-  [DllImport("winspool.Drv", EntryPoint = "OpenPrinterW", SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true)]
-  public static extern bool OpenPrinterWithDefaults(string src, out IntPtr hPrinter, ref PRINTER_DEFAULTS pd);
-  [DllImport("winspool.Drv", EntryPoint = "SetPrinterW", SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true)]
-  public static extern bool SetPrinter(IntPtr hPrinter, int level, IntPtr pPrinter, int command);
   [DllImport("winspool.Drv", EntryPoint = "ClosePrinter", SetLastError = true, ExactSpelling = true)]
   public static extern bool ClosePrinter(IntPtr hPrinter);
   [DllImport("winspool.Drv", EntryPoint = "StartDocPrinterW", SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true)]
@@ -216,15 +206,6 @@ public class RawPrinterHelper {
   public static extern bool EndPagePrinter(IntPtr hPrinter);
   [DllImport("winspool.Drv", EntryPoint = "WritePrinter", SetLastError = true, ExactSpelling = true)]
   public static extern bool WritePrinter(IntPtr hPrinter, byte[] pBytes, int dwCount, out int dwWritten);
-
-  public static void PurgeQueue(string targetPrinter) {
-    IntPtr hPrinter;
-    PRINTER_DEFAULTS pd = new PRINTER_DEFAULTS();
-    pd.DesiredAccess = 0x000F000C;
-    if (OpenPrinterWithDefaults(targetPrinter, out hPrinter, ref pd) || OpenPrinter(targetPrinter, out hPrinter, IntPtr.Zero)) {
-      try { SetPrinter(hPrinter, 0, IntPtr.Zero, 3); } finally { ClosePrinter(hPrinter); }
-    }
-  }
 
   public static int TrySendBytes(string targetPrinter, byte[] bytes, string dataType) {
     IntPtr hPrinter;
@@ -256,16 +237,11 @@ $errCode = [RawPrinterHelper]::SendFileWithResult($printerName, $filePath)
 if ($errCode -eq 1905 -or $errCode -eq 1801) {
   $origPrinter = Get-Printer -Name $printerName -ErrorAction SilentlyContinue
   $origDriver = if ($origPrinter) { [string]$origPrinter.DriverName } else { "" }
-  $origPort = if ($origPrinter) { [string]$origPrinter.PortName } else { "" }
-
-  [RawPrinterHelper]::PurgeQueue($printerName)
   Get-PrintJob -PrinterName $printerName -ErrorAction SilentlyContinue | Remove-PrintJob -ErrorAction SilentlyContinue
-  Start-Sleep -Milliseconds 350
-
+  Start-Sleep -Milliseconds 250
   if ([RawPrinterHelper]::SendFileWithResult($printerName, $filePath) -eq 0) {
     Write-Output "HEALED_PRINTER:$printerName"; exit 0
   }
-
   $baseName = ($printerName -replace '\\s*\\((Kopya|Copy)\\s*\\d+\\)\\s*$', '').Trim()
   $allPrinters = @(Get-Printer -ErrorAction SilentlyContinue | Where-Object {
     $_.Name -ne $printerName -and $_.Name -notmatch '^(Microsoft Print to PDF|Microsoft XPS Document Writer|OneNote|Fax)'
@@ -287,28 +263,6 @@ if ($errCode -eq 1905 -or $errCode -eq 1801) {
   foreach ($cand in $candidates) {
     if ([RawPrinterHelper]::SendFileWithResult([string]$cand.Name, $filePath) -eq 0) {
       Write-Output "HEALED_PRINTER:$($cand.Name)"; exit 0
-    }
-  }
-
-  $useDriver = $origDriver
-  if (-not $useDriver) {
-    $drvObj = Get-PrinterDriver -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch 'Microsoft|Generic|Fax|XPS|OneNote|PDF' } | Select-Object -First 1
-    if ($drvObj) { $useDriver = [string]$drvObj.Name }
-  }
-  if ($useDriver) {
-    Remove-Printer -Name $printerName -ErrorAction SilentlyContinue
-    Start-Sleep -Milliseconds 250
-    $usbPorts = @(Get-PrinterPort -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^(USB|POS|ESDPRT)\\d*' } | Sort-Object Name -Descending | ForEach-Object { [string]$_.Name })
-    $tryPorts = New-Object System.Collections.Generic.List[string]
-    if ($origPort) { $tryPorts.Add($origPort) }
-    foreach ($up in $usbPorts) { if (-not $tryPorts.Contains($up)) { $tryPorts.Add($up) } }
-    foreach ($portName in $tryPorts) {
-      Remove-Printer -Name $printerName -ErrorAction SilentlyContinue
-      Add-Printer -Name $printerName -DriverName $useDriver -PortName $portName -ErrorAction SilentlyContinue | Out-Null
-      Start-Sleep -Milliseconds 250
-      if ([RawPrinterHelper]::SendFileWithResult($printerName, $filePath) -eq 0) {
-        Write-Output "HEALED_PRINTER:$printerName"; exit 0
-      }
     }
   }
   [Console]::Error.WriteLine("Windows Yazici Hatasi (Win32=$errCode): '$printerName' yazicisi Windows'ta silinmis veya USB baglantisi kopmus. Lutfen yazicinin acik ve USB kablosunun takili oldugundan emin olup 'Bilgisayardaki Yazicilari Tara' butonuna basin.")

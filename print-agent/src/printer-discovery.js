@@ -24,23 +24,14 @@ function execFileText(binary, args, timeoutMs = 6000) {
 }
 
 async function discoverWindowsPrinters() {
-  const psScript = `
-    $deadNames = New-Object System.Collections.Generic.HashSet[string]([System.StringComparer]::OrdinalIgnoreCase)
-    Get-CimInstance Win32_Printer -ErrorAction SilentlyContinue | ForEach-Object {
-      $st = [int]($_.PrinterState)
-      $statusStr = [string]($_.Status)
-      if ((($st -band 4) -ne 0) -or ($statusStr -match 'Degraded|Pending|Deleting')) {
-        [void]$deadNames.Add([string]$_.Name)
-      }
-    }
-    Get-Printer -ErrorAction SilentlyContinue | Where-Object {
-      -not $deadNames.Contains([string]$_.Name) -and
-      ([string]$_.PrinterStatus -notmatch 'PendingDeletion|Deleting')
-    } | Select-Object Name, DriverName, PortName, PrinterStatus | ConvertTo-Json -Compress
-  `.trim()
   const raw = await execFileText(
     "powershell.exe",
-    ["-NoProfile", "-NonInteractive", "-Command", psScript],
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "Get-Printer -ErrorAction SilentlyContinue | Where-Object { [string]$_.PrinterStatus -notmatch 'PendingDeletion|Deleting' } | Select-Object Name, DriverName, PortName, PrinterStatus | ConvertTo-Json -Compress",
+    ],
     8000,
   )
   if (!raw) return []
@@ -124,6 +115,33 @@ async function discoverCupsAndLinuxUsbPrinters() {
 }
 
 async function discoverSystemPrinters(extraPrinters = []) {
+  // On Windows inside Electron, webContents.getPrintersAsync() provides native
+  // Win32 EnumPrintersW data without spawning PowerShell; bit 0x4 is
+  // PRINTER_STATUS_PENDING_DELETION.
+  if (process.platform === "win32" && Array.isArray(extraPrinters) && extraPrinters.length > 0) {
+    const winPrinters = []
+    for (const extra of extraPrinters) {
+      const name = String(extra?.name || extra?.displayName || "").trim()
+      if (!name) continue
+      const statusNum = Number(extra?.status)
+      if (Number.isFinite(statusNum) && (statusNum & 0x00000004) !== 0) {
+        continue
+      }
+      if (/pending|deleting/i.test(String(extra?.status || ""))) {
+        continue
+      }
+      winPrinters.push({
+        name,
+        driverName: String(extra?.driverName || extra?.description || "Windows Spooler").trim(),
+        portName: String(extra?.options?.["printer-location"] || "USB / Spooler").trim(),
+        status: "Ready",
+        isDefault: Boolean(extra?.isDefault),
+        source: "windows",
+      })
+    }
+    if (winPrinters.length > 0) return winPrinters
+  }
+
   const discovered =
     process.platform === "win32"
       ? await discoverWindowsPrinters()
@@ -133,13 +151,12 @@ async function discoverSystemPrinters(extraPrinters = []) {
   for (const p of discovered) {
     if (p && p.name) mergedMap.set(p.name, p)
   }
-  // On Windows, discoverWindowsPrinters() queries the Spooler directly and
-  // excludes PendingDeletion zombie queues; only fall back to extraPrinters if
-  // PowerShell returned nothing.
   if (process.platform !== "win32" || discovered.length === 0) {
     for (const extra of extraPrinters || []) {
       const name = String(extra?.name || extra?.displayName || "").trim()
       if (!name || mergedMap.has(name)) continue
+      const statusNum = Number(extra?.status)
+      if (Number.isFinite(statusNum) && (statusNum & 0x00000004) !== 0) continue
       mergedMap.set(name, {
         name,
         driverName: String(extra?.driverName || extra?.description || "Sistem Yazıcısı").trim(),
