@@ -24,14 +24,23 @@ function execFileText(binary, args, timeoutMs = 6000) {
 }
 
 async function discoverWindowsPrinters() {
+  const psScript = `
+    $deadNames = New-Object System.Collections.Generic.HashSet[string]([System.StringComparer]::OrdinalIgnoreCase)
+    Get-CimInstance Win32_Printer -ErrorAction SilentlyContinue | ForEach-Object {
+      $st = [int]($_.PrinterState)
+      $statusStr = [string]($_.Status)
+      if ((($st -band 4) -ne 0) -or ($statusStr -match 'Degraded|Pending|Deleting')) {
+        [void]$deadNames.Add([string]$_.Name)
+      }
+    }
+    Get-Printer -ErrorAction SilentlyContinue | Where-Object {
+      -not $deadNames.Contains([string]$_.Name) -and
+      ([string]$_.PrinterStatus -notmatch 'PendingDeletion|Deleting')
+    } | Select-Object Name, DriverName, PortName, PrinterStatus | ConvertTo-Json -Compress
+  `.trim()
   const raw = await execFileText(
     "powershell.exe",
-    [
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      "Get-Printer | Where-Object { $_.PrinterStatus -notmatch 'PendingDeletion|Deleting' } | Select-Object Name, DriverName, PortName, PrinterStatus | ConvertTo-Json -Compress",
-    ],
+    ["-NoProfile", "-NonInteractive", "-Command", psScript],
     8000,
   )
   if (!raw) return []
@@ -124,17 +133,22 @@ async function discoverSystemPrinters(extraPrinters = []) {
   for (const p of discovered) {
     if (p && p.name) mergedMap.set(p.name, p)
   }
-  for (const extra of extraPrinters || []) {
-    const name = String(extra?.name || extra?.displayName || "").trim()
-    if (!name || mergedMap.has(name)) continue
-    mergedMap.set(name, {
-      name,
-      driverName: String(extra?.driverName || extra?.description || "Sistem Yazıcısı").trim(),
-      portName: "system",
-      status: String(extra?.status ?? "ready"),
-      isDefault: Boolean(extra?.isDefault),
-      source: "electron",
-    })
+  // On Windows, discoverWindowsPrinters() queries the Spooler directly and
+  // excludes PendingDeletion zombie queues; only fall back to extraPrinters if
+  // PowerShell returned nothing.
+  if (process.platform !== "win32" || discovered.length === 0) {
+    for (const extra of extraPrinters || []) {
+      const name = String(extra?.name || extra?.displayName || "").trim()
+      if (!name || mergedMap.has(name)) continue
+      mergedMap.set(name, {
+        name,
+        driverName: String(extra?.driverName || extra?.description || "Sistem Yazıcısı").trim(),
+        portName: "system",
+        status: String(extra?.status ?? "ready"),
+        isDefault: Boolean(extra?.isDefault),
+        source: "electron",
+      })
+    }
   }
   return [...mergedMap.values()]
 }

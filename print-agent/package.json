@@ -1,6 +1,6 @@
 {
   "name": "corder-print-agent",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Corder Desktop Print Agent & Control Center (Linux, Windows, macOS)",
   "author": "Corder <dev@corders.uk>",

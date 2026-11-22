@@ -5,7 +5,7 @@ const path = require("path")
 const { execFile } = require("child_process")
 const { info, warn } = require("./logger")
 const { healNetworkPrinters } = require("./network-healer")
-const { buildRuntimeConfig } = require("./settings-store")
+const { loadSettings, saveSettings, buildRuntimeConfig } = require("./settings-store")
 const { pushPrintersToBackend } = require("./http-sync")
 
 const SAFE_PRINTER_NAME_RE = /^[\p{L}\p{N}_. \-()+@#/:]{1,128}$/u
@@ -192,8 +192,18 @@ public class RawPrinterHelper {
     [MarshalAs(UnmanagedType.LPWStr)] public string pOutputFile;
     [MarshalAs(UnmanagedType.LPWStr)] public string pDataType;
   }
+  [StructLayout(LayoutKind.Sequential)]
+  public struct PRINTER_DEFAULTS {
+    public IntPtr pDatatype;
+    public IntPtr pDevMode;
+    public int DesiredAccess;
+  }
   [DllImport("winspool.Drv", EntryPoint = "OpenPrinterW", SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true)]
   public static extern bool OpenPrinter(string src, out IntPtr hPrinter, IntPtr pd);
+  [DllImport("winspool.Drv", EntryPoint = "OpenPrinterW", SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true)]
+  public static extern bool OpenPrinterWithDefaults(string src, out IntPtr hPrinter, ref PRINTER_DEFAULTS pd);
+  [DllImport("winspool.Drv", EntryPoint = "SetPrinterW", SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true)]
+  public static extern bool SetPrinter(IntPtr hPrinter, int level, IntPtr pPrinter, int command);
   [DllImport("winspool.Drv", EntryPoint = "ClosePrinter", SetLastError = true, ExactSpelling = true)]
   public static extern bool ClosePrinter(IntPtr hPrinter);
   [DllImport("winspool.Drv", EntryPoint = "StartDocPrinterW", SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true)]
@@ -207,44 +217,36 @@ public class RawPrinterHelper {
   [DllImport("winspool.Drv", EntryPoint = "WritePrinter", SetLastError = true, ExactSpelling = true)]
   public static extern bool WritePrinter(IntPtr hPrinter, byte[] pBytes, int dwCount, out int dwWritten);
 
+  public static void PurgeQueue(string targetPrinter) {
+    IntPtr hPrinter;
+    PRINTER_DEFAULTS pd = new PRINTER_DEFAULTS();
+    pd.DesiredAccess = 0x000F000C;
+    if (OpenPrinterWithDefaults(targetPrinter, out hPrinter, ref pd) || OpenPrinter(targetPrinter, out hPrinter, IntPtr.Zero)) {
+      try { SetPrinter(hPrinter, 0, IntPtr.Zero, 3); } finally { ClosePrinter(hPrinter); }
+    }
+  }
+
   public static int TrySendBytes(string targetPrinter, byte[] bytes, string dataType) {
     IntPtr hPrinter;
-    if (!OpenPrinter(targetPrinter, out hPrinter, IntPtr.Zero)) {
-      return Marshal.GetLastWin32Error();
-    }
+    if (!OpenPrinter(targetPrinter, out hPrinter, IntPtr.Zero)) return Marshal.GetLastWin32Error();
     try {
-      DOCINFOW di = new DOCINFOW();
-      di.pDocName = "Corder POS Ticket";
-      di.pDataType = dataType;
-      if (StartDocPrinter(hPrinter, 1, di) == 0) {
-        return Marshal.GetLastWin32Error();
-      }
+      DOCINFOW di = new DOCINFOW { pDocName = "Corder POS Ticket", pDataType = dataType };
+      if (StartDocPrinter(hPrinter, 1, di) == 0) return Marshal.GetLastWin32Error();
       try {
         StartPagePrinter(hPrinter);
         try {
           int written = 0;
-          if (!WritePrinter(hPrinter, bytes, bytes.Length, out written)) {
-            return Marshal.GetLastWin32Error();
-          }
-        } finally {
-          EndPagePrinter(hPrinter);
-        }
-      } finally {
-        EndDocPrinter(hPrinter);
-      }
-    } finally {
-      ClosePrinter(hPrinter);
-    }
+          if (!WritePrinter(hPrinter, bytes, bytes.Length, out written)) return Marshal.GetLastWin32Error();
+        } finally { EndPagePrinter(hPrinter); }
+      } finally { EndDocPrinter(hPrinter); }
+    } finally { ClosePrinter(hPrinter); }
     return 0;
   }
 
   public static int SendFileWithResult(string targetPrinter, string filePath) {
     byte[] bytes = File.ReadAllBytes(filePath);
     int err = TrySendBytes(targetPrinter, bytes, "RAW");
-    if (err != 0) {
-      int v4Err = TrySendBytes(targetPrinter, bytes, "XPS_PASS");
-      if (v4Err == 0) return 0;
-    }
+    if (err != 0 && TrySendBytes(targetPrinter, bytes, "XPS_PASS") == 0) return 0;
     return err;
   }
 }
@@ -252,47 +254,81 @@ public class RawPrinterHelper {
 
 $errCode = [RawPrinterHelper]::SendFileWithResult($printerName, $filePath)
 if ($errCode -eq 1905 -or $errCode -eq 1801) {
+  $origPrinter = Get-Printer -Name $printerName -ErrorAction SilentlyContinue
+  $origDriver = if ($origPrinter) { [string]$origPrinter.DriverName } else { "" }
+  $origPort = if ($origPrinter) { [string]$origPrinter.PortName } else { "" }
+
+  [RawPrinterHelper]::PurgeQueue($printerName)
   Get-PrintJob -PrinterName $printerName -ErrorAction SilentlyContinue | Remove-PrintJob -ErrorAction SilentlyContinue
+  Start-Sleep -Milliseconds 350
+
+  if ([RawPrinterHelper]::SendFileWithResult($printerName, $filePath) -eq 0) {
+    Write-Output "HEALED_PRINTER:$printerName"; exit 0
+  }
+
   $baseName = ($printerName -replace '\\s*\\((Kopya|Copy)\\s*\\d+\\)\\s*$', '').Trim()
   $allPrinters = @(Get-Printer -ErrorAction SilentlyContinue | Where-Object {
-    $_.Name -ne $printerName -and
-    $_.Name -notmatch '^(Microsoft Print to PDF|Microsoft XPS Document Writer|OneNote|Fax)'
+    $_.Name -ne $printerName -and $_.Name -notmatch '^(Microsoft Print to PDF|Microsoft XPS Document Writer|OneNote|Fax)'
   })
-  $fallback = $allPrinters | Where-Object { $_.Name -like "$baseName*" } | Select-Object -First 1
-  if (-not $fallback) {
-    $fallback = $allPrinters | Where-Object { $_.PortName -match '^(USB|POS|COM|TM)' } | Select-Object -First 1
-  }
-  if ($fallback -and $fallback.Name) {
-    $retryCode = [RawPrinterHelper]::SendFileWithResult($fallback.Name, $filePath)
-    if ($retryCode -eq 0) {
-      exit 0
+  $candidates = New-Object System.Collections.Generic.List[object]
+  $seen = New-Object System.Collections.Generic.HashSet[string]([System.StringComparer]::OrdinalIgnoreCase)
+  foreach ($group in @(
+    ($allPrinters | Where-Object { $_.Name -like "$baseName*" }),
+    ($allPrinters | Where-Object { $origDriver -and $_.DriverName -eq $origDriver }),
+    ($allPrinters | Where-Object { $_.PortName -match '^(USB|POS|COM|TM|ESDPRT|LPT)' }),
+    $allPrinters
+  )) {
+    foreach ($p in @($group)) {
+      if ($p -and $p.Name -and -not $seen.Contains([string]$p.Name)) {
+        [void]$seen.Add([string]$p.Name); $candidates.Add($p)
+      }
     }
   }
-  throw "Windows Yazici Hatasi (Win32=$errCode): '$printerName' yazicisi Windows'ta silinmis, askida kalmis veya farkli bir USB portuna takildigi icin yeni isim almis. Lutfen Print-Agent'ta 'Sistem Yazicilarini Yenile' butonuna basip aktif yaziciyi secin."
+  foreach ($cand in $candidates) {
+    if ([RawPrinterHelper]::SendFileWithResult([string]$cand.Name, $filePath) -eq 0) {
+      Write-Output "HEALED_PRINTER:$($cand.Name)"; exit 0
+    }
+  }
+
+  $useDriver = $origDriver
+  if (-not $useDriver) {
+    $drvObj = Get-PrinterDriver -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch 'Microsoft|Generic|Fax|XPS|OneNote|PDF' } | Select-Object -First 1
+    if ($drvObj) { $useDriver = [string]$drvObj.Name }
+  }
+  if ($useDriver) {
+    Remove-Printer -Name $printerName -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 250
+    $usbPorts = @(Get-PrinterPort -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^(USB|POS|ESDPRT)\\d*' } | Sort-Object Name -Descending | ForEach-Object { [string]$_.Name })
+    $tryPorts = New-Object System.Collections.Generic.List[string]
+    if ($origPort) { $tryPorts.Add($origPort) }
+    foreach ($up in $usbPorts) { if (-not $tryPorts.Contains($up)) { $tryPorts.Add($up) } }
+    foreach ($portName in $tryPorts) {
+      Remove-Printer -Name $printerName -ErrorAction SilentlyContinue
+      Add-Printer -Name $printerName -DriverName $useDriver -PortName $portName -ErrorAction SilentlyContinue | Out-Null
+      Start-Sleep -Milliseconds 250
+      if ([RawPrinterHelper]::SendFileWithResult($printerName, $filePath) -eq 0) {
+        Write-Output "HEALED_PRINTER:$printerName"; exit 0
+      }
+    }
+  }
+  [Console]::Error.WriteLine("Windows Yazici Hatasi (Win32=$errCode): '$printerName' yazicisi Windows'ta silinmis veya USB baglantisi kopmus. Lutfen yazicinin acik ve USB kablosunun takili oldugundan emin olup 'Bilgisayardaki Yazicilari Tara' butonuna basin.")
+  exit 1
 }
 if ($errCode -ne 0) {
-  throw "StartDocPrinter failed (Win32=$errCode) for '$printerName'"
+  [Console]::Error.WriteLine("Windows Yazici Hatasi (Win32=$errCode): '$printerName' yazicisina fis gonderilemedi.")
+  exit 1
 }
 `.trim()
 
 async function sendToWindowsPrinter(tempFile, safeName) {
-  try {
-    await runExecFile(
-      "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-Command", WIN_RAW_SPOOL_PS],
-      25000,
-      { CORDER_PRINTER_NAME: safeName, CORDER_PRINT_FILE: tempFile },
-    )
-  } catch (spoolErr) {
-    await runExecFile("cmd.exe", [
-      "/d",
-      "/s",
-      "/c",
-      `copy /b "${tempFile}" "\\\\localhost\\${safeName}"`,
-    ]).catch(() => {
-      throw spoolErr
-    })
-  }
+  const stdout = await runExecFile(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-Command", WIN_RAW_SPOOL_PS],
+    25000,
+    { CORDER_PRINTER_NAME: safeName, CORDER_PRINT_FILE: tempFile },
+  )
+  const match = String(stdout || "").match(/HEALED_PRINTER:(.+)/)
+  return match && match[1] ? match[1].trim() : null
 }
 
 async function sendToSystemPrinter(bytes, printerName, usbDrainMs) {
@@ -312,9 +348,10 @@ async function sendToSystemPrinter(bytes, printerName, usbDrainMs) {
   fs.writeFileSync(tempFile, bytes, { mode: 0o600 })
 
   const started = Date.now()
+  let healedPrinterName = null
   try {
     if (process.platform === "win32") {
-      await sendToWindowsPrinter(tempFile, safeName)
+      healedPrinterName = await sendToWindowsPrinter(tempFile, safeName)
     } else {
       if (process.platform === "linux") {
         await assertLinuxCupsPrinterReady(safeName)
@@ -346,6 +383,7 @@ async function sendToSystemPrinter(bytes, printerName, usbDrainMs) {
 
   const drain = Math.max(0, Number(usbDrainMs) || 0)
   if (drain > 0) await sleep(drain)
+  return healedPrinterName
 }
 
 async function printBytes(config, bytes, opts = {}) {
@@ -396,7 +434,36 @@ async function printBytes(config, bytes, opts = {}) {
       targetPrinter?.name ||
       explicitPrinterName ||
       config.printerName
-    await sendToSystemPrinter(bytes, sysName, config.printUsbDrainMs)
+    const healedName = await sendToSystemPrinter(bytes, sysName, config.printUsbDrainMs)
+    if (healedName && healedName !== sysName) {
+      info(`Windows printer queue self-healed: "${sysName}" -> "${healedName}"`)
+      if (targetPrinter) targetPrinter.systemPrinterName = healedName
+      try {
+        const current = loadSettings()
+        let updated = false
+        const nextPrinters = (current.printers || []).map((p) => {
+          if (
+            (targetPrinter?.id && p.id === targetPrinter.id) ||
+            p.systemPrinterName === sysName ||
+            p.name === sysName
+          ) {
+            updated = true
+            return { ...p, systemPrinterName: healedName }
+          }
+          return p
+        })
+        if (updated) {
+          const saved = saveSettings({ printers: nextPrinters })
+          const nextRuntime = buildRuntimeConfig(saved)
+          if (typeof config.onHealedRuntimeConfig === "function") {
+            config.onHealedRuntimeConfig(nextRuntime)
+          }
+          void pushPrintersToBackend(nextRuntime, saved)
+        }
+      } catch {
+        // ignore persistence error after successful print
+      }
+    }
     return
   }
 
