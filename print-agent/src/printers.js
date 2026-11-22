@@ -207,25 +207,24 @@ public class RawPrinterHelper {
   [DllImport("winspool.Drv", EntryPoint = "WritePrinter", SetLastError = true, ExactSpelling = true)]
   public static extern bool WritePrinter(IntPtr hPrinter, byte[] pBytes, int dwCount, out int dwWritten);
 
-  public static void SendFile(string printerName, string filePath) {
-    byte[] bytes = File.ReadAllBytes(filePath);
+  public static int TrySendBytes(string targetPrinter, byte[] bytes, string dataType) {
     IntPtr hPrinter;
-    if (!OpenPrinter(printerName, out hPrinter, IntPtr.Zero)) {
-      throw new Exception("OpenPrinter failed for '" + printerName + "' (Win32=" + Marshal.GetLastWin32Error() + ")");
+    if (!OpenPrinter(targetPrinter, out hPrinter, IntPtr.Zero)) {
+      return Marshal.GetLastWin32Error();
     }
     try {
       DOCINFOW di = new DOCINFOW();
       di.pDocName = "Corder POS Ticket";
-      di.pDataType = "RAW";
+      di.pDataType = dataType;
       if (StartDocPrinter(hPrinter, 1, di) == 0) {
-        throw new Exception("StartDocPrinter failed (Win32=" + Marshal.GetLastWin32Error() + ")");
+        return Marshal.GetLastWin32Error();
       }
       try {
         StartPagePrinter(hPrinter);
         try {
           int written = 0;
           if (!WritePrinter(hPrinter, bytes, bytes.Length, out written)) {
-            throw new Exception("WritePrinter failed (Win32=" + Marshal.GetLastWin32Error() + ")");
+            return Marshal.GetLastWin32Error();
           }
         } finally {
           EndPagePrinter(hPrinter);
@@ -236,10 +235,44 @@ public class RawPrinterHelper {
     } finally {
       ClosePrinter(hPrinter);
     }
+    return 0;
+  }
+
+  public static int SendFileWithResult(string targetPrinter, string filePath) {
+    byte[] bytes = File.ReadAllBytes(filePath);
+    int err = TrySendBytes(targetPrinter, bytes, "RAW");
+    if (err != 0) {
+      int v4Err = TrySendBytes(targetPrinter, bytes, "XPS_PASS");
+      if (v4Err == 0) return 0;
+    }
+    return err;
   }
 }
 "@
-[RawPrinterHelper]::SendFile($printerName, $filePath)
+
+$errCode = [RawPrinterHelper]::SendFileWithResult($printerName, $filePath)
+if ($errCode -eq 1905 -or $errCode -eq 1801) {
+  Get-PrintJob -PrinterName $printerName -ErrorAction SilentlyContinue | Remove-PrintJob -ErrorAction SilentlyContinue
+  $baseName = ($printerName -replace '\\s*\\((Kopya|Copy)\\s*\\d+\\)\\s*$', '').Trim()
+  $allPrinters = @(Get-Printer -ErrorAction SilentlyContinue | Where-Object {
+    $_.Name -ne $printerName -and
+    $_.Name -notmatch '^(Microsoft Print to PDF|Microsoft XPS Document Writer|OneNote|Fax)'
+  })
+  $fallback = $allPrinters | Where-Object { $_.Name -like "$baseName*" } | Select-Object -First 1
+  if (-not $fallback) {
+    $fallback = $allPrinters | Where-Object { $_.PortName -match '^(USB|POS|COM|TM)' } | Select-Object -First 1
+  }
+  if ($fallback -and $fallback.Name) {
+    $retryCode = [RawPrinterHelper]::SendFileWithResult($fallback.Name, $filePath)
+    if ($retryCode -eq 0) {
+      exit 0
+    }
+  }
+  throw "Windows Yazici Hatasi (Win32=$errCode): '$printerName' yazicisi Windows'ta silinmis, askida kalmis veya farkli bir USB portuna takildigi icin yeni isim almis. Lutfen Print-Agent'ta 'Sistem Yazicilarini Yenile' butonuna basip aktif yaziciyi secin."
+}
+if ($errCode -ne 0) {
+  throw "StartDocPrinter failed (Win32=$errCode) for '$printerName'"
+}
 `.trim()
 
 async function sendToWindowsPrinter(tempFile, safeName) {

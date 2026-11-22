@@ -30,7 +30,7 @@ async function discoverWindowsPrinters() {
       "-NoProfile",
       "-NonInteractive",
       "-Command",
-      "Get-Printer | Select-Object Name, DriverName, PortName, PrinterStatus | ConvertTo-Json -Compress",
+      "Get-Printer | Where-Object { $_.PrinterStatus -notmatch 'PendingDeletion|Deleting' } | Select-Object Name, DriverName, PortName, PrinterStatus | ConvertTo-Json -Compress",
     ],
     8000,
   )
