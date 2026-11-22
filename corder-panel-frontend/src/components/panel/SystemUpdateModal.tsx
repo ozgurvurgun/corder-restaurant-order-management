@@ -101,9 +101,10 @@ export function SystemUpdateModal() {
   if (!activeUpdate) return null
 
   const title = activeUpdate.title?.trim() || "Yeni Sistem Güncellemesi Yayınlandı"
-  const message =
+  const rawMessage =
     activeUpdate.message?.trim() ||
-    "Sistemimizde yeni özellikler ve performans iyileştirmeleri devreye alındı. Güncel sürümü yüklemek ve tarayıcı önbelleğini temizlemek için aşağıdaki butona tıklayın."
+    "Sistemimizde yeni özellikler ve performans iyileştirmeleri devreye alındı. Güncel sürümü yüklemek ve önbelleği temizlemek için aşağıdaki butona tıklayın."
+  const message = rawMessage.replace(/tarayıcı\s+/gi, "")
 
   const handleApply = async () => {
     if (applying) return
@@ -135,7 +136,7 @@ export function SystemUpdateModal() {
         <div className="flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 text-[12px] text-emerald-900">
           <ShieldCheck className="h-4 w-4 text-emerald-600 flex-shrink-0 mt-0.5" />
           <span>
-            Açık oturumunuz ve verileriniz korunacaktır. Yalnızca eski tarayıcı önbelleği temizlenip en güncel sürüm yüklenecektir.
+            Açık oturumunuz ve verileriniz korunacaktır. Yalnızca eski önbellek temizlenip en güncel sürüm yüklenecektir.
           </span>
         </div>
 

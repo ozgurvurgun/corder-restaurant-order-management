@@ -187,7 +187,7 @@ export function BossStoreProvider({ children }: { children: ReactNode }) {
         showToast(
           perm === "granted"
             ? "Anlık Push Güvenlik Bildirimleri aktif edildi"
-            : "Push bildirimi için tarayıcı bildirim izni gereklidir",
+            : "Push bildirimi için bildirim izni gereklidir",
           perm === "granted" ? "success" : "error"
         )
       } else {

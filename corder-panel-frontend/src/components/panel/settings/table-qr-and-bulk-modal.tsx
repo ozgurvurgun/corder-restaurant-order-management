@@ -180,7 +180,7 @@ export function NotificationSoundSettingsCard() {
     if (nextPerm === "granted") {
       showPanelToast("Push bildirim izni verildi", "success")
     } else if (nextPerm === "denied") {
-      showPanelToast("Bildirim izni reddedildi. Tarayıcı adres çubuğundan izin verebilirsiniz.", "error")
+      showPanelToast("Bildirim izni reddedildi. Cihaz veya uygulama ayarlarından bildirim izni verebilirsiniz.", "error")
     } else {
       showPanelToast("Bildirim izni durumu: " + nextPerm, "info")
     }
@@ -202,7 +202,7 @@ export function NotificationSoundSettingsCard() {
       )
       showPanelToast("Test Push bildirimi gönderildi", "success")
     } else {
-      showPanelToast("Push bildirimi için tarayıcı bildirim izni gereklidir.", "error")
+      showPanelToast("Push bildirimi için bildirim izni gereklidir.", "error")
     }
   }
 
@@ -216,7 +216,7 @@ export function NotificationSoundSettingsCard() {
               Anlık Push Bildirim Ayarları (Garson Çağrısı &amp; Uyarılar)
             </h3>
             <p className="text-[11px] text-[#86868b]">
-              Masalardan gelen QR garson çağrıları ve güvenlik uyarıları standart cihaz/tarayıcı Push bildirimi ve sistem bildirim sesi ile iletilir.
+              Masalardan gelen QR garson çağrıları ve güvenlik uyarıları standart sistem Push bildirimi ve bildirim sesi ile iletilir.
             </p>
           </div>
         </div>

@@ -157,7 +157,7 @@ export function SecurityFraudTab() {
       })
       showToast("Test Push bildirimi gönderildi")
     } else {
-      showToast("Push bildirimi için tarayıcı bildirim izni verilmedi", "error")
+      showToast("Push bildirimi için bildirim izni verilmedi", "error")
     }
   }
 

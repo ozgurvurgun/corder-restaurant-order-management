@@ -79,7 +79,7 @@ export function TableQrCodesModal(props: {
   const printQrItems = (items: Array<{ tableName: string; url: string }>) => {
     if (items.length === 0) return showPanelToast("Yazdırılacak imzalı QR kodlu masa bulunamadı", "error")
     const win = window.open("", "_blank")
-    if (!win) return showPanelToast("Lütfen tarayıcıda açılır pencere (pop-up) izni verin", "error")
+    if (!win) return showPanelToast("Lütfen yazdırma penceresi (pop-up) izni verin", "error")
     win.document.write(buildPrintableQrDocumentHtml({ items, prefs }))
     win.document.close()
   }

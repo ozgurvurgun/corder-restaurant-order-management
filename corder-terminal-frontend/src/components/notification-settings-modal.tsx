@@ -152,7 +152,7 @@ export function TerminalNotificationSettingsModal(props: {
                     ? "Aktif"
                     : "İzinli (Kapalı)"
                   : pushPerm === "denied"
-                    ? "Tarayıcıda Engellendi"
+                    ? "İzin Engellendi"
                     : pushPerm === "unsupported"
                       ? "Desteklenmiyor"
                       : "İzin Bekliyor"}
@@ -160,7 +160,7 @@ export function TerminalNotificationSettingsModal(props: {
             </div>
             <p className="text-[11px] text-muted-foreground">
               {pushPerm === "denied"
-                ? "Tarayıcı adres çubuğundaki kilit ikonundan Bildirimler iznini 'İzin Ver' olarak değiştirin."
+                ? "Cihaz veya uygulama ayarlarından Bildirimler iznini 'İzin Ver' olarak değiştirin."
                 : "Çağrılar uygulama içi toast olmadan doğrudan cihazın kendi Push bildirim sistemi ve sesi ile gösterilir."}
             </p>
             <button

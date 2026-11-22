@@ -151,7 +151,7 @@ export function TerminalGeofenceBossCard() {
       },
       () => {
         setLocating(false)
-        showToast("GPS konumu alınamadı, tarayıcı konum iznini açın", "error")
+        showToast("GPS konumu alınamadı, cihaz konum iznini açın", "error")
       },
       { enableHighAccuracy: true, timeout: 10000 }
     )

@@ -13,7 +13,7 @@ interface SystemUpdateBroadcastCardProps {
 
 const DEFAULT_UPDATE_TITLE = "Yeni Sistem Güncellemesi Yayınlandı"
 const DEFAULT_UPDATE_MESSAGE =
-  "Sistemimizde yeni özellikler ve performans iyileştirmeleri devreye alındı. Güncel sürümü yüklemek ve tarayıcı önbelleğini temizlemek için lütfen aşağıdaki güncelleme butonuna tıklayın."
+  "Sistemimizde yeni özellikler ve performans iyileştirmeleri devreye alındı. Güncel sürümü yüklemek ve önbelleği temizlemek için lütfen aşağıdaki güncelleme butonuna tıklayın."
 
 export function SystemUpdateBroadcastCard({
   venueScope,
@@ -85,7 +85,7 @@ export function SystemUpdateBroadcastCard({
               </span>
             </div>
             <p className="text-[12px] text-[#636366] mt-0.5">
-              Müşteri ekranlarında anında güncelleme modalı açar; butona bastıklarında oturumları kapanmadan tarayıcı önbelleği temizlenip en güncel sürüm yüklenir.
+              Müşteri ekranlarında anında güncelleme modalı açar; butona bastıklarında oturumları kapanmadan önbellek temizlenip en güncel sürüm yüklenir.
             </p>
           </div>
         </div>

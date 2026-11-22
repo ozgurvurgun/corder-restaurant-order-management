@@ -96,7 +96,7 @@ export function TerminalGeofenceCard() {
 
   const handleUseCurrentGps = () => {
     if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
-      showToast("Tarayıcınız GPS konum özelliğini desteklemiyor.", "error")
+      showToast("Cihazınız GPS konum özelliğini desteklemiyor.", "error")
       return
     }
     setLocating(true)
@@ -117,7 +117,7 @@ export function TerminalGeofenceCard() {
       },
       () => {
         setLocating(false)
-        showToast("Konum alınamadı. Tarayıcı konum iznini kontrol edin.", "error")
+        showToast("Konum alınamadı. Cihaz konum iznini kontrol edin.", "error")
       },
       { enableHighAccuracy: true, timeout: 10000 }
     )

@@ -315,7 +315,7 @@ export class PlatformNotificationsService
       (dto.title ?? '').trim() || 'Yeni Sistem Güncellemesi Yayınlandı';
     const message =
       (dto.message ?? '').trim() ||
-      'Sistemimizde yeni özellikler ve performans iyileştirmeleri devreye alındı. Güncel sürümü yüklemek ve tarayıcı önbelleğini temizlemek için aşağıdaki butona tıklayın.';
+      'Sistemimizde yeni özellikler ve performans iyileştirmeleri devreye alındı. Güncel sürümü yüklemek ve önbelleği temizlemek için aşağıdaki butona tıklayın.';
 
     return this.create(
       {
