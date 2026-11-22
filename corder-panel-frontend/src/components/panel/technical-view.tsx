@@ -18,6 +18,7 @@ import { computeDateFilterBounds, formatIstanbulDateTime, formatTitleCase } from
 import { CustomDatePicker } from "@/components/ui/custom-inputs"
 import { PaginationBar } from "@/components/ui/pagination-bar"
 import { SecurityFraudTab } from "./security-fraud-tab"
+import { PrintAgentDownloadCard } from "./settings/print-agent-download-card"
 
 type TechnicalTab = "notifications" | "printers" | "security" | "audit"
 
@@ -295,23 +296,14 @@ export default function TechnicalView() {
 
           {activeTab === "printers" && canManagePrinters && (
             <div className="space-y-4">
+              <PrintAgentDownloadCard />
               <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-[14px] font-semibold text-[#1d1d1f]">
-                    Print Agent Masaüstü Uygulaması Yazıcıları
-                  </h3>
-                  <p className="text-[12px] text-[#86868b] mt-0.5">
-                    Yazıcılar şube bilgisayarındaki Corder Print Agent masaüstü uygulamasından otomatik eşitlenir (salt-okunur).
-                  </p>
+                  <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Print Agent Masaüstü Uygulaması Yazıcıları</h3>
+                  <p className="text-[12px] text-[#86868b] mt-0.5">Yazıcılar şube bilgisayarındaki Corder Print Agent masaüstü uygulamasından otomatik eşitlenir (salt-okunur).</p>
                 </div>
-                <button
-                  type="button"
-                  disabled={refreshingPrinters}
-                  onClick={() => void handleRefreshPrinters()}
-                  className="h-[32px] px-3.5 flex items-center gap-1.5 bg-[#f5f5f7] hover:bg-[#e8e8ed] border border-[#d1d1d6]/60 text-[#1d1d1f] rounded-lg text-[12px] font-medium disabled:opacity-50"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${refreshingPrinters ? "animate-spin" : ""}`} />
-                  Listeyi Yenile
+                <button type="button" disabled={refreshingPrinters} onClick={() => void handleRefreshPrinters()} className="h-[32px] px-3.5 flex items-center gap-1.5 bg-[#f5f5f7] hover:bg-[#e8e8ed] border border-[#d1d1d6]/60 text-[#1d1d1f] rounded-lg text-[12px] font-medium disabled:opacity-50">
+                  <RefreshCw className={`w-3.5 h-3.5 ${refreshingPrinters ? "animate-spin" : ""}`} /> Listeyi Yenile
                 </button>
               </div>
 
