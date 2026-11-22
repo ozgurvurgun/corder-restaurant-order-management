@@ -12,7 +12,7 @@ import { CashShiftService } from '../cash-shift.service';
 import { TableService } from '../table.service';
 import { OrderQueryService } from './order-query.service';
 import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
-import { normalizeStorageText } from '../../../common/text/text-normalizer';
+import { formatTitleCase, normalizeStorageText } from '../../../common/text/text-normalizer';
 
 export function formatIstanbulOrderDatePrefix(date = new Date()): string {
   try {
@@ -210,18 +210,22 @@ export class CreateOrderUseCase {
     });
 
     const serialized = await this.orderQuery.serializeOrderEntityById(savedId, restaurantId);
+    const rawWaiter = (serialized.userName as string | null) ?? null;
     const payload: Record<string, unknown> = {
       ...serialized,
       orderNumber: (serialized.orderNumber as string | null) ?? savedOrderNumber,
       restaurantId,
-      tableName,
-      waiterName: (serialized.userName as string | null) ?? null,
+      tableName: tableName ? formatTitleCase(tableName, 'tr') || tableName : null,
+      waiterName: rawWaiter ? formatTitleCase(rawWaiter, 'tr') || rawWaiter : null,
     };
     const payloadItems = payload.items as
-      | Array<{ productId?: string } & Record<string, unknown>>
+      | Array<{ productId?: string; productName?: string } & Record<string, unknown>>
       | undefined;
     if (payloadItems?.length) {
       for (const item of payloadItems) {
+        if (typeof item.productName === 'string' && item.productName) {
+          item.productName = formatTitleCase(item.productName, 'tr') || item.productName;
+        }
         const pid = item.productId;
         const prod = pid ? productById.get(pid) : undefined;
         if (prod) {

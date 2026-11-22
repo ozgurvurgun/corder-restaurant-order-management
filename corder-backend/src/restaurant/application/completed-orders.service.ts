@@ -253,6 +253,17 @@ export class CompletedOrdersService {
         safeActorName,
       );
 
+      const auditTableLabel = formatTitleCase(row.tableName, 'tr') || row.tableName;
+      const methodLabels: Record<string, string> = {
+        cash: 'Nakit',
+        'credit-card': 'Kredi Kartı',
+        'meal-card': 'Yemek Kartı',
+        multinet: 'Multinet',
+        split: 'Çoklu Ödeme',
+        ledger: 'Cari',
+      };
+      const prevMethodLabel = methodLabels[prevMethod] || prevMethod;
+      const nextMethodLabel = methodLabels[dto.payment.method] || dto.payment.method;
       await em.save(
         AuditLogEntity,
         em.create(AuditLogEntity, {
@@ -261,7 +272,7 @@ export class CompletedOrdersService {
           userName: safeActorName,
           action: 'completed_order_updated',
           category: 'payment',
-          details: `${row.tableName} completed check updated (${prevMethod} ${fromMinorUnits(prevNetMinor)} TL -> ${dto.payment.method} ${netAmount} TL)`,
+          details: `${auditTableLabel} tamamlanan adisyonu düzenlendi (${prevMethodLabel} ${fromMinorUnits(prevNetMinor)} TL -> ${nextMethodLabel} ${netAmount} TL)`,
           metadata: {
             completedOrderId: row.id,
             tableName: row.tableName,

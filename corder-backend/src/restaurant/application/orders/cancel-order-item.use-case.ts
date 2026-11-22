@@ -13,7 +13,7 @@ import { TableService } from '../table.service';
 import { FraudDetectionService } from '../fraud-detection.service';
 import { OrderQueryService } from './order-query.service';
 import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
-import { normalizeStorageText } from '../../../common/text/text-normalizer';
+import { formatTitleCase, normalizeStorageText } from '../../../common/text/text-normalizer';
 
 @Injectable()
 export class CancelOrderItemUseCase {
@@ -172,7 +172,7 @@ export class CancelOrderItemUseCase {
       (order.userDisplayName && order.userDisplayName.trim()) || waiter?.name?.trim() || '-';
     const printItems = [
       {
-        productName: item.productName,
+        productName: formatTitleCase(item.productName, 'tr') || item.productName,
         quantity: item.quantity,
         price: Number(item.price),
         note: item.note ?? undefined,
@@ -190,9 +190,9 @@ export class CancelOrderItemUseCase {
       order: {
         orderId: order.id,
         ...(order.orderNumber ? { orderNumber: order.orderNumber } : {}),
-        tableName: (table.name ?? '').trim() || '-',
-        waiterName,
-        cancelledBy: item.cancelledBy ?? '-',
+        tableName: formatTitleCase(table.name ?? '', 'tr') || '-',
+        waiterName: formatTitleCase(waiterName, 'tr') || '-',
+        cancelledBy: formatTitleCase(item.cancelledBy ?? '', 'tr') || '-',
         cancelReason: item.cancelReason ?? '-',
         items: printItems,
         total: fromMinorUnits(toMinorUnits(item.price) * item.quantity),

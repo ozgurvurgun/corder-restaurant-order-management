@@ -166,13 +166,14 @@ export function useSystemActions(params: {
       api.staff
         .update(token, id, payload)
         .then((updated) => {
+          const mapped = mapStaffDtoToPanelUser(updated)
           setUsers((prev) =>
-            prev.map((u) => (u.id === id ? { ...u, ...mapStaffDtoToPanelUser(updated), createdAt: u.createdAt } : u)),
+            prev.map((u) => (u.id === id ? { ...u, ...mapped, createdAt: u.createdAt } : u)),
           )
           logActivity({
             action: "staff_updated",
             category: "user",
-            details: `Kullanıcı güncellendi: ${updated.name}`,
+            details: `Kullanıcı güncellendi: ${mapped.name}`,
             metadata: { userId: id, fields: Object.keys(payload) },
           })
           const onlyTerminalToggled =
@@ -181,8 +182,8 @@ export function useSystemActions(params: {
           if (onlyTerminalToggled) {
             showPanelToast(
               payload.canAccessTerminal
-                ? `${updated.name} el terminali erişimi açıldı`
-                : `${updated.name} el terminalinden anında düşürüldü ve girişi kapatıldı`,
+                ? `${mapped.name} el terminali erişimi açıldı`
+                : `${mapped.name} el terminalinden anında düşürüldü ve girişi kapatıldı`,
               payload.canAccessTerminal ? "success" : "info",
             )
           } else {
@@ -354,13 +355,14 @@ export function useSystemActions(params: {
               autoCut: created.autoCut,
             },
           ])
+          const displayName = formatTitleCase(created.name)
           logActivity({
             action: "printer_created",
             category: "settings",
-            details: `Yazıcı eklendi: ${created.name}`,
+            details: `Yazıcı eklendi: ${displayName}`,
             metadata: { printerId: created.id, type: created.type, connection: created.connection },
           })
-          showPanelToast(`Yazıcı eklendi: ${created.name}`, "success")
+          showPanelToast(`Yazıcı eklendi: ${displayName}`, "success")
         })
         .catch((err) => showPanelToast(err instanceof Error ? err.message : "Yazıcı eklenemedi", "error"))
     },
@@ -401,7 +403,7 @@ export function useSystemActions(params: {
                 : p,
             ),
           )
-          logActivity({ action: "printer_updated", category: "settings", details: `Yazıcı güncellendi: ${updated.name}`, metadata: { printerId: id } })
+          logActivity({ action: "printer_updated", category: "settings", details: `Yazıcı güncellendi: ${formatTitleCase(updated.name)}`, metadata: { printerId: id } })
           showPanelToast("Yazıcı güncellendi", "success")
         })
         .catch((err) => showPanelToast(err instanceof Error ? err.message : "Yazıcı güncellenemedi", "error"))

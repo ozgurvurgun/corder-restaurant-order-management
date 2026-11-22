@@ -167,12 +167,8 @@ export function mapCompletedOrderDtoToClosedTable(
       }))
     : []
 
-  const rawTableLower = (dto.tableName || "").trim().toLowerCase()
-  const resolvedTableName =
-    rawTableLower === "walk-in sale" ? "Hızlı Satış" : formatTitleCase(dto.tableName)
-  const rawSectionLower = (dto.section || "").trim().toLowerCase()
-  const resolvedSection =
-    rawSectionLower === "register" ? "Kasa" : formatTitleCase(dto.section)
+  const resolvedTableName = formatTitleCase(dto.tableName)
+  const resolvedSection = formatTitleCase(dto.section)
 
   return {
     id: dto.id,

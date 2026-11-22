@@ -12,6 +12,7 @@ import { PrintReceiptDto } from '../../api/dto/print-receipt.dto';
 import { OrdersGateway, PrintJobSocketPayload } from '../../api/orders.gateway';
 import { OrderQueryService } from './order-query.service';
 import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
+import { formatTitleCase } from '../../../common/text/text-normalizer';
 
 export interface ReceiptLineItem {
   productName: string;
@@ -468,14 +469,19 @@ export class PrintReceiptUseCase {
         ...(resolved.orderId ? { orderId: resolved.orderId } : {}),
         ...(resolved.orderNumber ? { orderNumber: resolved.orderNumber } : {}),
         ...(resolved.completedOrderId ? { completedOrderId: resolved.completedOrderId } : {}),
-        tableName: resolved.tableName, waiterName: resolved.waiterName,
+        tableName: formatTitleCase(resolved.tableName, 'tr') || resolved.tableName,
+        waiterName: formatTitleCase(resolved.waiterName, 'tr') || resolved.waiterName,
         ...(paymentMethod ? { paymentMethod } : {}),
         subtotal: resolved.subtotal,
         ...(resolved.discountAmount && resolved.discountAmount > 0
           ? { discountAmount: resolved.discountAmount, ...(resolved.discountLabel ? { discountLabel: resolved.discountLabel } : {}) }
           : {}),
         ...(resolved.tipAmount && resolved.tipAmount > 0 ? { tipAmount: resolved.tipAmount } : {}),
-        items: resolved.items, total: resolved.total,
+        items: resolved.items.map((it) => ({
+          ...it,
+          productName: formatTitleCase(it.productName, 'tr') || it.productName,
+        })),
+        total: resolved.total,
       },
     };
     await this.printJobRepo.save(

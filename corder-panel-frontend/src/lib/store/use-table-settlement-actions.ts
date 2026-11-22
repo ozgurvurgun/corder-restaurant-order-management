@@ -18,6 +18,14 @@ import { showPanelToast } from "@/components/panel/panel-toast"
 import { genId, getStoredCustomSections, setStoredCustomSections } from "./panel-local-storage"
 import type { LogActivityFn } from "./panel-store-context"
 
+const SHARE_METHOD_TR: Record<string, string> = {
+  cash: "Nakit",
+  "credit-card": "Kredi Kartı",
+  "meal-card": "Yemek Kartı",
+  multinet: "Multinet",
+  ledger: "Cari",
+}
+
 export function useTableSettlementActions(params: {
   token: string | null
   restaurantId?: string | null
@@ -471,7 +479,7 @@ export function useTableSettlementActions(params: {
           userName: currentUser?.name || "Sistem",
           action: "person_share_paid",
           category: "payment",
-          details: `${table.name}: ${shareIndex + 1}/${personCount}. kişi payı ödendi (${newShare.amount.toFixed(2)} TL - ${method})`,
+          details: `${table.name}: ${shareIndex + 1}/${personCount}. kişi payı ödendi (${newShare.amount.toFixed(2)} TL - ${SHARE_METHOD_TR[method] || method})`,
         })
         return { ok: true, fullyClosed: false }
       } catch (err) {

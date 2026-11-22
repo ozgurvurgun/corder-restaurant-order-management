@@ -8,6 +8,30 @@ import { CashTransactionEntity } from '../cash-transaction.entity';
 import { PrintJobEntity } from '../print-job.entity';
 import { AuditLogEntity } from '../audit-log.entity';
 import { fromMinorUnits, toMinorUnits } from '../../../common/money/minor-units';
+import { formatTitleCase, normalizeStorageText } from '../../../common/text/text-normalizer';
+
+const PAYMENT_METHOD_TR: Record<string, string> = {
+  cash: 'Nakit',
+  'credit-card': 'Kredi Kartı',
+  'meal-card': 'Yemek Kartı',
+  multinet: 'Multinet',
+  split: 'Çoklu Ödeme',
+  ledger: 'Cari',
+  complimentary: 'İkram',
+};
+
+function formatDisplayLabel(raw: string | null | undefined, fallback = ''): string {
+  const norm = normalizeStorageText(raw || '');
+  if (!norm) return fallback;
+  if (norm === 'walk-in sale') return 'Hızlı Satış';
+  if (norm === 'register') return 'Kasa';
+  return formatTitleCase(norm, 'tr') || fallback;
+}
+
+function formatMethodTr(method: string | null | undefined): string {
+  const clean = (method || '').trim().toLowerCase();
+  return PAYMENT_METHOD_TR[clean] || formatDisplayLabel(clean, clean);
+}
 
 export interface CreateFraudAlertInput {
   restaurantId: string;
@@ -79,12 +103,15 @@ export class FraudRulesPolicy {
       const ord = orderById.get(item.orderId);
       if (!ord) continue;
       const tbl = tableById.get(ord.tableId);
-      const tableName = tbl?.name || ord.tableId;
+      const tableName = formatDisplayLabel(tbl?.name, ord.tableId);
+      const productName = formatDisplayLabel(item.productName, 'Ürün');
       const lineAmount = fromMinorUnits(
         toMinorUnits(item.price || 0) * Math.max(1, Number(item.quantity || 1)),
       );
-      const actorName =
-        item.cancelledBy?.trim() || ord.userDisplayName?.trim() || 'Personel';
+      const actorName = formatDisplayLabel(
+        item.cancelledBy?.trim() || ord.userDisplayName?.trim(),
+        'Personel',
+      );
       const cancelledAt = item.cancelledAt ?? ord.updatedAt ?? ord.createdAt;
       const cancelDayKey = toIstanbulDayKey(cancelledAt);
 
@@ -113,7 +140,7 @@ export class FraudRulesPolicy {
           severity: 'critical',
           riskScore: 92,
           title: 'Hesap Fişi Basıldıktan Sonra Ürün İptali',
-          description: `${tableName} masasında adisyon fişi basıldıktan sonra "${item.productName}" (${item.quantity} adet, ${lineAmount} TL) iptal edildi.`,
+          description: `${tableName} masasında adisyon fişi basıldıktan sonra "${productName}" (${item.quantity} adet, ${lineAmount} TL) iptal edildi.`,
           actorName,
           actorId: ord.userId,
           tableName,
@@ -123,7 +150,7 @@ export class FraudRulesPolicy {
             itemId: item.id,
             orderId: ord.id,
             orderCreatedAt: ord.createdAt.toISOString(),
-            productName: item.productName,
+            productName,
             quantity: item.quantity,
             cancelReason: item.cancelReason,
             receiptJobId: priorReceipt.id,
@@ -133,13 +160,14 @@ export class FraudRulesPolicy {
       }
 
       if (ord.mergedFrom) {
+        const fromTableName = formatDisplayLabel(ord.mergedFrom, ord.mergedFrom);
         out.push({
           restaurantId,
           ruleCode: 'TRANSFER_THEN_VOID',
           severity: 'high',
           riskScore: 82,
           title: 'Masa Taşıma / Aktarım Sonrası Ürün İptali',
-          description: `"${ord.mergedFrom}" masasından "${tableName}" masasına aktarılan "${item.productName}" (${item.quantity} adet, ${lineAmount} TL) kısa süre sonra iptal edildi.`,
+          description: `"${fromTableName}" masasından "${tableName}" masasına aktarılan "${productName}" (${item.quantity} adet, ${lineAmount} TL) kısa süre sonra iptal edildi.`,
           actorName,
           actorId: ord.userId,
           tableName,
@@ -148,9 +176,9 @@ export class FraudRulesPolicy {
           evidence: {
             itemId: item.id,
             orderId: ord.id,
-            fromTable: ord.mergedFrom,
+            fromTable: fromTableName,
             toTable: tableName,
-            productName: item.productName,
+            productName,
             cancelReason: item.cancelReason,
           },
         });
@@ -169,7 +197,7 @@ export class FraudRulesPolicy {
       cur.count += Math.max(1, Number(item.quantity || 1));
       cur.amountMinor += toMinorUnits(lineAmount);
       cur.tables.add(tableName);
-      if (cur.itemNames.length < 5) cur.itemNames.push(item.productName);
+      if (cur.itemNames.length < 5) cur.itemNames.push(productName);
       voidStatsByActorDay.set(bucketKey, cur);
     }
 
@@ -220,16 +248,20 @@ export class FraudRulesPolicy {
         (nextMethod === 'ledger' || nextMethod === 'complimentary' || netDrop > 0);
 
       if (netDrop > 0 || cashDowngraded) {
+        const displayTable = formatDisplayLabel(meta.tableName, 'Masa');
+        const displayActor = formatDisplayLabel(audit.userName, 'Personel');
+        const prevMethodTr = formatMethodTr(prevMethod);
+        const nextMethodTr = formatMethodTr(nextMethod);
         out.push({
           restaurantId,
           ruleCode: 'CLOSED_CHECK_DOWNGRADE',
           severity: 'critical',
           riskScore: 90,
           title: 'Kapanmış Adisyonda Tutar Düşürme / Ödeme Değişikliği',
-          description: `${meta.tableName || 'Masa'} kapanmış adisyonu ${audit.userName} tarafından düzenlendi (${prevMethod} ${prevNet} TL -> ${nextMethod} ${nextNet} TL).`,
-          actorName: audit.userName,
+          description: `${displayTable} kapanmış adisyonu ${displayActor} tarafından düzenlendi (${prevMethodTr} ${prevNet} TL -> ${nextMethodTr} ${nextNet} TL).`,
+          actorName: displayActor,
           actorId: audit.userId,
-          tableName: meta.tableName || null,
+          tableName: displayTable,
           amountImpact: netDrop > 0 ? netDrop : prevNet,
           sourceKey: `closed-check-downgrade:${audit.id}`,
           evidence: {
@@ -254,14 +286,18 @@ export class FraudRulesPolicy {
       const diffMinor = closingMinor - expectedMinor;
       if (diffMinor < -2000) {
         const shortage = fromMinorUnits(Math.abs(diffMinor));
+        const shiftActor = formatDisplayLabel(
+          shift.closedBy || shift.openedBy,
+          'Kasiyer',
+        );
         out.push({
           restaurantId,
           ruleCode: 'CASH_DRAWER_DISCREPANCY',
           severity: shortage >= 250 ? 'critical' : 'high',
           riskScore: shortage >= 250 ? 91 : 85,
           title: `Vardiya Kapanışında Kasa Nakit Açığı (-${shortage} TL)`,
-          description: `${shift.closedBy || shift.openedBy} tarafından kapatılan vardiyada beklenen nakit ${fromMinorUnits(expectedMinor)} TL iken sayılan ${fromMinorUnits(closingMinor)} TL (-${shortage} TL açık).`,
-          actorName: shift.closedBy || shift.openedBy,
+          description: `${shiftActor} tarafından kapatılan vardiyada beklenen nakit ${fromMinorUnits(expectedMinor)} TL iken sayılan ${fromMinorUnits(closingMinor)} TL (-${shortage} TL açık).`,
+          actorName: shiftActor,
           amountImpact: shortage,
           sourceKey: `cash-discrepancy:${shift.id}`,
           evidence: {
@@ -276,16 +312,24 @@ export class FraudRulesPolicy {
 
     for (const tx of cashTxs) {
       if (tx.type === 'cash-in' || tx.type === 'sale') continue;
+      if (
+        tx.type === 'expense' &&
+        (tx.reference ?? '').trim().toLowerCase() === 'credit-card'
+      ) {
+        continue;
+      }
       const amt = Number(tx.amount || 0);
       if (amt >= 1000) {
+        const txActor = formatDisplayLabel(tx.createdBy, 'Kasiyer');
+        const txDesc = formatDisplayLabel(tx.description, tx.description);
         out.push({
           restaurantId,
           ruleCode: 'UNUSUAL_CASH_OUT',
           severity: amt >= 2500 ? 'high' : 'medium',
           riskScore: amt >= 2500 ? 80 : 72,
           title: `Yüksek Tutarlı Kasadan Nakit Çıkışı (${amt} TL)`,
-          description: `${tx.createdBy} tarafından "${tx.description}" açıklamasıyla kasadan ${amt} TL nakit çıkış kaydı girildi.`,
-          actorName: tx.createdBy,
+          description: `${txActor} tarafından "${txDesc}" açıklamasıyla kasadan ${amt} TL nakit çıkış kaydı girildi.`,
+          actorName: txActor,
           amountImpact: amt,
           sourceKey: `unusual-cash-out:${tx.id}`,
           evidence: {
@@ -293,7 +337,7 @@ export class FraudRulesPolicy {
             shiftId: tx.shiftId,
             type: tx.type,
             amount: amt,
-            description: tx.description,
+            description: txDesc,
           },
         });
       }
@@ -306,10 +350,13 @@ export class FraudRulesPolicy {
       const pct = Math.round((discMinor * 100) / totalMinor);
       if (pct >= 30 || discMinor >= 50_000) {
         const discAmt = fromMinorUnits(discMinor);
-        const appliedBy =
+        const appliedBy = formatDisplayLabel(
           (co.paymentDiscount as { appliedBy?: string } | null)?.appliedBy ||
-          co.closedBy ||
-          co.waiter;
+            co.closedBy ||
+            co.waiter,
+          'Personel',
+        );
+        const coTable = formatDisplayLabel(co.tableName, 'Masa');
         out.push({
           restaurantId,
           ruleCode: 'BOUNDARY_DISCOUNT_ABUSE',
@@ -317,11 +364,11 @@ export class FraudRulesPolicy {
           riskScore: pct >= 50 ? 79 : 68,
           title:
             pct >= 100
-              ? `Tam İkram (%100 İndirim) Kapatılan Hesap (${co.tableName})`
+              ? `Tam İkram (%100 İndirim) Kapatılan Hesap (${coTable})`
               : `Yüksek Oranlı İndirim (%${pct} - ${discAmt} TL)`,
-          description: `${co.tableName} masasında ${fromMinorUnits(totalMinor)} TL tutarındaki hesaba %${pct} (${discAmt} TL) indirim/ikram uygulandı.`,
+          description: `${coTable} masasında ${fromMinorUnits(totalMinor)} TL tutarındaki hesaba %${pct} (${discAmt} TL) indirim/ikram uygulandı.`,
           actorName: appliedBy,
-          tableName: co.tableName,
+          tableName: coTable,
           amountImpact: discAmt,
           sourceKey: `boundary-discount:${co.id}`,
           evidence: {

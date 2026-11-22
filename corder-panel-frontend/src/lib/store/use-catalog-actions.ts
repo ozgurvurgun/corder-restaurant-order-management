@@ -86,13 +86,14 @@ export function useCatalogActions(params: {
       api.products
         .update(token, id, body)
         .then((updated) => {
+          const mapped = mapApiProductsToPanel([updated], stockMaterials)[0]
           setProducts((prev) =>
-            prev.map((p) => (p.id === id ? mapApiProductsToPanel([updated], stockMaterials)[0] : p)),
+            prev.map((p) => (p.id === id ? mapped : p)),
           )
           logActivity({
             action: "product_updated",
             category: "product",
-            details: `Ürün güncellendi: ${updated.name}`,
+            details: `Ürün güncellendi: ${mapped.name}`,
             metadata: { productId: id, fields: Object.keys(body) },
           })
           showPanelToast("Ürün güncellendi", "success")
@@ -220,13 +221,14 @@ export function useCatalogActions(params: {
       api.categories
         .update(token, id, payload)
         .then((updated) => {
+          const mapped = mapApiCategoriesToPanel([updated])[0]
           setCategories((prev) =>
-            prev.map((c) => (c.id === id ? mapApiCategoriesToPanel([updated])[0] : c)),
+            prev.map((c) => (c.id === id ? mapped : c)),
           )
           logActivity({
             action: "category_updated",
             category: "product",
-            details: `Kategori güncellendi: ${updated.name}`,
+            details: `Kategori güncellendi: ${mapped.name}`,
             metadata: { categoryId: id, fields: Object.keys(payload) },
           })
           showPanelToast("Kategori güncellendi", "success")
@@ -297,11 +299,12 @@ export function useCatalogActions(params: {
           isActive: c.isActive,
         })
         .then((created) => {
-          setCampaigns((prev) => [...prev, mapCampaignDtoToPanel(created)])
+          const mapped = mapCampaignDtoToPanel(created)
+          setCampaigns((prev) => [...prev, mapped])
           logActivity({
             action: "campaign_created",
             category: "settings",
-            details: `Kampanya eklendi: ${created.title}`,
+            details: `Kampanya eklendi: ${mapped.title}`,
             metadata: { campaignId: created.id, isActive: created.isActive },
           })
           showPanelToast("Kampanya eklendi", "success")
@@ -326,13 +329,14 @@ export function useCatalogActions(params: {
           isActive: data.isActive,
         })
         .then((updated) => {
+          const mapped = mapCampaignDtoToPanel(updated)
           setCampaigns((prev) =>
-            prev.map((c) => (c.id === id ? mapCampaignDtoToPanel(updated) : c)),
+            prev.map((c) => (c.id === id ? mapped : c)),
           )
           logActivity({
             action: "campaign_updated",
             category: "settings",
-            details: `Kampanya güncellendi: ${updated.title}`,
+            details: `Kampanya güncellendi: ${mapped.title}`,
             metadata: { campaignId: id, fields: Object.keys(data) },
           })
           showPanelToast("Kampanya güncellendi", "success")

@@ -25,6 +25,15 @@ import { showPanelToast } from "@/components/panel/panel-toast"
 import type { LogActivityFn } from "./panel-store-context"
 import { useTableSettlementActions } from "./use-table-settlement-actions"
 
+const PAYMENT_METHOD_TR: Record<string, string> = {
+  cash: "Nakit",
+  "credit-card": "Kredi Kartı",
+  "meal-card": "Yemek Kartı",
+  multinet: "Multinet",
+  split: "Çoklu Ödeme",
+  ledger: "Cari",
+}
+
 export function useTableOrderActions(params: {
   token: string | null
   restaurantId?: string | null
@@ -106,11 +115,12 @@ export function useTableOrderActions(params: {
         return false
       }
       const fromName = tables.find((t) => t.id === fromId)?.name || fromId
+      const toName = tables.find((t) => t.id === toId)?.name || toId
       await syncOrdersAndTablesFromServer()
       logActivity({
         action: "table_moved",
         category: "table",
-        details: `${fromName} masasındaki adisyon ${toId} masaya taşındı`,
+        details: `${fromName} masasındaki adisyon ${toName} masasına taşındı`,
         metadata: { fromId, toId },
       })
       return true
@@ -225,7 +235,7 @@ export function useTableOrderActions(params: {
         logActivity({
           action: res.tableFullyClosed === false ? "table_partial_checkout" : "table_closed_with_payment",
           category: "payment",
-          details: `${mapped.tableName} ${res.tableFullyClosed === false ? "kısmi ödeme alındı" : "kapatıldı"}. Yöntem: ${method}, Net: ${mapped.netAmount}`,
+          details: `${mapped.tableName} ${res.tableFullyClosed === false ? "kısmi ödeme alındı" : "kapatıldı"}. Yöntem: ${PAYMENT_METHOD_TR[method] || method}, Net: ${mapped.netAmount} TL`,
           metadata: {
             tableId,
             tableName: mapped.tableName,
@@ -267,7 +277,7 @@ export function useTableOrderActions(params: {
         logActivity({
           action: "quick_sale_completed",
           category: "payment",
-          details: `Elden Satış tamamlandı. Yöntem: ${method}, Net: ${mapped.netAmount}`,
+          details: `Hızlı Satış tamamlandı. Yöntem: ${PAYMENT_METHOD_TR[method] || method}, Net: ${mapped.netAmount} TL`,
           metadata: { completedOrderId: mapped.id, method, netAmount: mapped.netAmount, itemCount: items.length },
         })
         return { ok: true, completedOrder: mapped }

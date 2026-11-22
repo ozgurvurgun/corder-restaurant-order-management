@@ -51,14 +51,15 @@ export function useInventoryActions(params: {
           category: m.category,
         })
         .then((created) => {
-          setStockMaterials((prev) => [...prev, mapStockMaterialDtoToPanel(created)])
+          const mapped = mapStockMaterialDtoToPanel(created)
+          setStockMaterials((prev) => [...prev, mapped])
           logActivity({
             action: "material_created",
             category: "stock",
-            details: `Malzeme eklendi: ${created.name}`,
+            details: `Malzeme eklendi: ${mapped.name}`,
             metadata: { materialId: created.id, stock: created.currentStock, unit: created.unit },
           })
-          showPanelToast(`Malzeme eklendi: ${created.name}`, "success")
+          showPanelToast(`Malzeme eklendi: ${mapped.name}`, "success")
         })
         .catch((err) => showPanelToast(err instanceof Error ? err.message : "Malzeme eklenemedi", "error"))
     },
@@ -80,13 +81,14 @@ export function useInventoryActions(params: {
       api.stock.materials
         .update(token, id, body)
         .then((updated) => {
+          const mapped = mapStockMaterialDtoToPanel(updated)
           setStockMaterials((prev) =>
-            prev.map((m) => (m.id === id ? mapStockMaterialDtoToPanel(updated) : m)),
+            prev.map((m) => (m.id === id ? mapped : m)),
           )
           logActivity({
             action: "material_updated",
             category: "stock",
-            details: `Malzeme güncellendi: ${updated.name}`,
+            details: `Malzeme güncellendi: ${mapped.name}`,
             metadata: { materialId: id, fields: Object.keys(body) },
           })
           showPanelToast("Malzeme güncellendi", "success")
@@ -134,7 +136,8 @@ export function useInventoryActions(params: {
           createdBy: m.createdBy,
         })
         .then((created) => {
-          setStockMovements((prev) => [mapStockMovementDtoToPanel(created), ...prev])
+          const mapped = mapStockMovementDtoToPanel(created)
+          setStockMovements((prev) => [mapped, ...prev])
           setStockMaterials((mats) =>
             mats.map((sm) =>
               sm.id === created.materialId
@@ -145,7 +148,7 @@ export function useInventoryActions(params: {
           logActivity({
             action: "stock_movement_created",
             category: "stock",
-            details: `${created.materialName} için ${created.type} hareketi (${created.quantity})`,
+            details: `${mapped.materialName} için ${created.type} hareketi (${created.quantity})`,
             metadata: { movementId: created.id, materialId: created.materialId, type: created.type, quantity: created.quantity },
           })
           showPanelToast("Stok hareketi kaydedildi", "success")
@@ -200,14 +203,15 @@ export function useInventoryActions(params: {
           notes: s.notes,
         })
         .then((created) => {
-          setSuppliers((prev) => [...prev, mapSupplierDtoToPanel(created)])
+          const mapped = mapSupplierDtoToPanel(created)
+          setSuppliers((prev) => [...prev, mapped])
           logActivity({
             action: "supplier_created",
             category: "stock",
-            details: `Tedarikçi eklendi: ${created.name}`,
+            details: `Tedarikçi eklendi: ${mapped.name}`,
             metadata: { supplierId: created.id, phone: created.phone ?? undefined },
           })
-          showPanelToast(`Tedarikçi eklendi: ${created.name}`, "success")
+          showPanelToast(`Tedarikçi eklendi: ${mapped.name}`, "success")
           return true
         })
         .catch((err) => {
@@ -232,11 +236,12 @@ export function useInventoryActions(params: {
           active: data.active,
         })
         .then((updated) => {
-          setSuppliers((prev) => prev.map((s) => (s.id === id ? mapSupplierDtoToPanel(updated) : s)))
+          const mapped = mapSupplierDtoToPanel(updated)
+          setSuppliers((prev) => prev.map((s) => (s.id === id ? mapped : s)))
           logActivity({
             action: "supplier_updated",
             category: "stock",
-            details: `Tedarikçi güncellendi: ${updated.name}`,
+            details: `Tedarikçi güncellendi: ${mapped.name}`,
             metadata: { supplierId: id, fields: Object.keys(data) },
           })
           showPanelToast("Tedarikçi güncellendi", "success")

@@ -1,6 +1,6 @@
 import * as crypto from 'node:crypto';
 import * as net from 'node:net';
-import { normalizeStorageText } from '../../../common/text/text-normalizer';
+import { formatTitleCase } from '../../../common/text/text-normalizer';
 import type { WebPushAppType } from '../web-push-subscription.entity';
 
 export interface WebPushSubscriptionInput {
@@ -200,8 +200,8 @@ export function buildWaiterCallPushNotification(
   const rawTable = typeof payload.tableName === 'string' ? payload.tableName.trim() : '';
   const rawSection =
     typeof payload.sectionName === 'string' ? payload.sectionName.trim() : '';
-  const tableName = rawTable ? normalizeStorageText(rawTable) : 'Masa';
-  const sectionName = rawSection ? normalizeStorageText(rawSection) : 'Salon';
+  const tableName = rawTable ? formatTitleCase(rawTable, 'tr') : 'Masa';
+  const sectionName = rawSection ? formatTitleCase(rawSection, 'tr') : 'Salon';
   const isBill = payload.requestType === 'bill';
   const actionLabel = isBill ? 'Hesap İstiyor!' : 'Garson Çağırıyor!';
   const note = typeof payload.note === 'string' ? payload.note.trim() : '';

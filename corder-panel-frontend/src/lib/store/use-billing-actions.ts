@@ -26,6 +26,20 @@ import { mapStockMovementDtoToPanel } from "../mappers/catalog-inventory.mapper"
 import { showPanelToast } from "@/components/panel/panel-toast"
 import type { LogActivityFn } from "./panel-store-context"
 
+const TX_TYPE_LABELS: Record<string, string> = {
+  expense: "Gider",
+  "cash-in": "Nakit Giriş",
+  "cash-out": "Nakit Çıkış",
+  refund: "İade",
+}
+
+const PAYMENT_METHOD_TR: Record<string, string> = {
+  cash: "Nakit",
+  "credit-card": "Kredi Kartı",
+  "meal-card": "Yemek Kartı",
+  multinet: "Multinet",
+}
+
 export function useBillingActions(params: {
   token: string | null
   currentUser: PanelUser | null
@@ -190,10 +204,14 @@ export function useBillingActions(params: {
         setCashShifts((prev) =>
           prev.map((s) => (s.id === res.shift.id ? mapShiftDtoToPanel(res.shift) : s)),
         )
+        const txLabel =
+          t.type === "expense" && t.reference === "credit-card"
+            ? "Gider (Kredi Kartı)"
+            : TX_TYPE_LABELS[t.type] || t.type
         logActivity({
           action: "cash_transaction_created",
           category: "cash-register",
-          details: `${t.type} işlemi: ${t.amount} - ${t.description}`,
+          details: `${txLabel} işlemi: ${t.amount} TL - ${tx.description}`,
           metadata: {
             shiftId: res.shift.id,
             type: t.type,
@@ -293,7 +311,7 @@ export function useBillingActions(params: {
         logActivity({
           action: "ledger_payment_added",
           category: "payment",
-          details: `${customerName} hesabına ödeme eklendi: ${pay} (${paymentMethod})`,
+          details: `${customerName} hesabına ödeme eklendi: ${pay} TL (${PAYMENT_METHOD_TR[paymentMethod] || paymentMethod})`,
           metadata: { customerId, amount: pay, paymentMethod },
         })
         showPanelToast("Tahsilat kaydedildi", "success")
@@ -342,11 +360,12 @@ export function useBillingActions(params: {
               }))
             : undefined,
         })
-        setOpenAccounts((prev) => [mapOpenAccountDtoToPanel(created), ...prev])
+        const mapped = mapOpenAccountDtoToPanel(created)
+        setOpenAccounts((prev) => [mapped, ...prev])
         logActivity({
           action: "open_account_created",
           category: "payment",
-          details: `Veresiye hesap oluşturuldu: ${created.customerName}`,
+          details: `Veresiye hesap oluşturuldu: ${mapped.customerName}`,
           metadata: { accountId: created.id, amount: created.amount },
         })
         showPanelToast("Veresiye hesap oluşturuldu", "success")
@@ -371,14 +390,15 @@ export function useBillingActions(params: {
       if (!token) return false
       try {
         const updated = await api.openAccounts.pay(token, id, amount, paymentMethod)
+        const mapped = mapOpenAccountDtoToPanel(updated)
         setOpenAccounts((prev) =>
-          prev.map((a) => (a.id === updated.id ? mapOpenAccountDtoToPanel(updated) : a)),
+          prev.map((a) => (a.id === updated.id ? mapped : a)),
         )
         await refreshCurrentShiftAndTx()
         logActivity({
           action: "open_account_payment_received",
           category: "payment",
-          details: `Veresiye tahsilat alındı: ${updated.customerName} - ${amount}`,
+          details: `Veresiye tahsilat alındı: ${mapped.customerName} - ${amount} TL (${PAYMENT_METHOD_TR[paymentMethod] || paymentMethod})`,
           metadata: { accountId: id, amount, paymentMethod },
         })
         showPanelToast("Veresiye tahsilatı alındı", "success")
