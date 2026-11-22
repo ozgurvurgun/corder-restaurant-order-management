@@ -342,7 +342,7 @@ export default function ReportsView() {
             </>
           )}
           <span className="text-[11px] text-[#86868b] ml-2">
-            {filteredClosedTables.length} sipariş
+            {filteredClosedTables.length} kapanan masa · {filteredReport.totalOrders} mutfak fişi
             {canViewFinancial
               ? ` | \u20BA${formatCurrency(filteredReport.totalRevenue)}`
               : ""}

@@ -9,7 +9,7 @@ import { AddCashTransactionModal, CloseShiftModal, OpenShiftModal } from "./cash
 import { CashTransactionsSection, ShiftOverviewSection } from "./cash-register/open-accounts-section"
 import { LedgerCustomersSection } from "./cash-register/ledger-customers-section"
 import { DetailReportSection, ZReportSection, type ShiftTotalsSummary } from "./cash-register/shift-history-section"
-import { computeDateFilterBounds, formatCurrency, fromMinorUnits, toMinorUnits } from "@/lib/format"
+import { computeDateFilterBounds, formatCurrency, formatIstanbulTime, fromMinorUnits, toMinorUnits } from "@/lib/format"
 import { CustomDatePicker, CustomSelect } from "@/components/ui/custom-inputs"
 import { showPanelToast } from "./panel-toast"
 
@@ -277,35 +277,51 @@ export default function CashRegisterView() {
     <div className="h-full flex flex-col">
       <div className="flex-shrink-0 border-b border-[#d1d1d6]/60 bg-white/70 backdrop-blur-xl px-3.5 sm:px-5 py-2.5 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap">
-          <Filter className="w-3.5 h-3.5 text-[#86868b]" />
-          <CustomSelect
-            value={filterDate}
-            onChange={(e) => setFilterDate(e.target.value)}
-            className="h-[30px] px-2.5 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 cursor-pointer"
-          >
-            <option value="today">Bugün</option>
-            <option value="yesterday">Dün</option>
-            <option value="week">Son 7 Gün</option>
-            <option value="month">Son 30 Gün</option>
-            <option value="custom">Özel Tarih</option>
-            <option value="all">Tümü</option>
-          </CustomSelect>
-          {filterDate === "custom" && (
+          {activeTab === "overview" ? (
+            <span className="text-[11.5px] text-[#636366] font-medium">
+              {currentShift
+                ? `Açık Vardiya (${formatIstanbulTime(currentShift.openedAt)}'den itibaren): ${shiftClosedTables.length} kapanan masa${canViewCashTotals ? ` | \u20BA${formatCurrency(shiftTotals.totalRevenue)}` : ""}`
+                : `Bugün (00:00'dan itibaren): ${filteredClosedTables.length} kapanan masa${canViewCashTotals ? ` | \u20BA${formatCurrency(filteredNetTotal)}` : ""}`}
+            </span>
+          ) : activeTab === "z-report" ? (
+            <span className="text-[11.5px] text-[#636366] font-medium">
+              {selectedReportShift
+                ? `Seçili Vardiya: ${reportShiftClosedTables.length} kapanan masa${canViewCashTotals ? ` | \u20BA${formatCurrency(reportShiftTotals.totalRevenue)}` : ""}`
+                : "Vardiya Raporları"}
+            </span>
+          ) : (
             <>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-[#86868b]">Başlangıç:</span>
-                <CustomDatePicker value={customStartDate.slice(0, 10)} onChange={(e) => setCustomStartDate(e.target.value)} className="h-[30px] px-2.5 text-[11px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-[#86868b]">Bitiş:</span>
-                <CustomDatePicker value={customEndDate.slice(0, 10)} onChange={(e) => setCustomEndDate(e.target.value)} className="h-[30px] px-2.5 text-[11px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
-              </div>
+              <Filter className="w-3.5 h-3.5 text-[#86868b]" />
+              <CustomSelect
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                className="h-[30px] px-2.5 text-[12px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50 cursor-pointer"
+              >
+                <option value="today">Bugün</option>
+                <option value="yesterday">Dün</option>
+                <option value="week">Son 7 Gün</option>
+                <option value="month">Son 30 Gün</option>
+                <option value="custom">Özel Tarih</option>
+                <option value="all">Tümü</option>
+              </CustomSelect>
+              {filterDate === "custom" && (
+                <>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-[#86868b]">Başlangıç:</span>
+                    <CustomDatePicker value={customStartDate.slice(0, 10)} onChange={(e) => setCustomStartDate(e.target.value)} className="h-[30px] px-2.5 text-[11px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-[#86868b]">Bitiş:</span>
+                    <CustomDatePicker value={customEndDate.slice(0, 10)} onChange={(e) => setCustomEndDate(e.target.value)} className="h-[30px] px-2.5 text-[11px] bg-[#f5f5f7] rounded-lg border border-[#d1d1d6]/60 focus:outline-none focus:border-[#e63462]/50" />
+                  </div>
+                </>
+              )}
+              <span className="text-[11px] text-[#86868b] ml-2">
+                {filteredClosedTables.length} kapanan masa
+                {canViewCashTotals ? ` | \u20BA${formatCurrency(filteredNetTotal)}` : ""}
+              </span>
             </>
           )}
-          <span className="text-[11px] text-[#86868b] ml-2">
-            {filteredClosedTables.length} sipariş
-            {canViewCashTotals ? ` | \u20BA${formatCurrency(filteredNetTotal)}` : ""}
-          </span>
         </div>
         <div className="flex items-center gap-3">
           {currentShift ? (

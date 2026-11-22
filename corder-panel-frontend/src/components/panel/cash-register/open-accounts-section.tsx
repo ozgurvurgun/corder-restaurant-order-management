@@ -3,6 +3,7 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   Banknote,
+  BookUser,
   ChevronRight,
   CreditCard,
   DollarSign,
@@ -191,10 +192,10 @@ export function ShiftOverviewSection(props: {
   return (
     <>
       {canViewCashTotals && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {[
             {
-              label: "Toplam Ciro",
+              label: "Açık Vardiya Cirosu",
               value: shiftTotals.totalRevenue,
               icon: DollarSign,
               color: "#34c759",
@@ -219,6 +220,12 @@ export function ShiftOverviewSection(props: {
               ),
               icon: UtensilsCrossed,
               color: "#af52de",
+            },
+            {
+              label: "Cari (Açık Hesap)",
+              value: shiftTotals.totalLedger,
+              icon: BookUser,
+              color: "#e63462",
             },
           ].map((card) => {
             const Icon = card.icon

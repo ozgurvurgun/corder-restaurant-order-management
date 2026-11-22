@@ -50,6 +50,7 @@ export default function DashboardView(_props: DashboardViewProps) {
     tables,
     closedTables,
     dailyReport,
+    currentShift,
     auditLogs,
     currentUser,
     hasPermission,
@@ -104,7 +105,7 @@ export default function DashboardView(_props: DashboardViewProps) {
   }, [todayRevenueMinorUnits, yesterdayStats.revenueMinorUnits])
 
   const ordersDelta = useMemo(() => {
-    const diff = dailyReport.totalOrders - yesterdayStats.ordersCount
+    const diff = dailyReport.totalTables - yesterdayStats.ordersCount
     if (yesterdayStats.ordersCount > 0) {
       const sign = diff >= 0 ? "+" : ""
       return {
@@ -113,10 +114,14 @@ export default function DashboardView(_props: DashboardViewProps) {
       }
     }
     return {
-      label: `${dailyReport.totalOrders} adisyon`,
-      up: dailyReport.totalOrders > 0,
+      label: `${dailyReport.totalOrders} mutfak fişi`,
+      up: dailyReport.totalTables > 0,
     }
-  }, [dailyReport.totalOrders, yesterdayStats.ordersCount])
+  }, [dailyReport.totalTables, dailyReport.totalOrders, yesterdayStats.ordersCount])
+
+  const shiftRevenueDiffers =
+    currentShift != null &&
+    toMinorUnits(currentShift.totalRevenue) !== todayRevenueMinorUnits
 
   const paymentData = dailyReport.paymentBreakdown.map((p) => ({
     name: PAYMENT_METHOD_LABELS[p.method] || p.method,
@@ -134,8 +139,13 @@ export default function DashboardView(_props: DashboardViewProps) {
     ...(canViewFinancial
       ? [
           {
-            label: t("totalRevenue"),
+            label: `${t("totalRevenue")} (Bugün)`,
             value: `₺${formatCurrency(dailyReport.totalRevenue)}`,
+            sublabel: shiftRevenueDiffers
+              ? `Açık Vardiya (${formatIstanbulTime(currentShift.openedAt)}): ₺${formatCurrency(currentShift.totalRevenue)}`
+              : currentShift
+                ? `Açık Vardiya (${formatIstanbulTime(currentShift.openedAt)}) ile aynı`
+                : undefined,
             icon: DollarSign,
             color: "#34c759",
             change: revenueDelta.label,
@@ -145,7 +155,11 @@ export default function DashboardView(_props: DashboardViewProps) {
       : []),
     {
       label: t("totalOrders"),
-      value: dailyReport.totalOrders.toString(),
+      value: dailyReport.totalTables.toString(),
+      sublabel:
+        dailyReport.totalOrders > dailyReport.totalTables
+          ? `${dailyReport.totalTables} kapanan adisyon · ${dailyReport.totalOrders} mutfak fişi`
+          : undefined,
       icon: ShoppingCart,
       color: "#007aff",
       change: ordersDelta.label,
@@ -154,6 +168,7 @@ export default function DashboardView(_props: DashboardViewProps) {
     {
       label: t("occupiedTables"),
       value: `${occupiedCount} / ${tables.length}`,
+      sublabel: undefined,
       icon: LayoutGrid,
       color: "#ff9500",
       change: `${emptyCount} ${t("empty")}`,
@@ -162,6 +177,7 @@ export default function DashboardView(_props: DashboardViewProps) {
     {
       label: t("cancellations"),
       value: dailyReport.cancelledItems.length.toString(),
+      sublabel: undefined,
       icon: Ban,
       color: "#ff3b30",
       change: `₺${formatCurrency(dailyReport.cancelledAmount)}`,
@@ -213,6 +229,11 @@ export default function DashboardView(_props: DashboardViewProps) {
                 <p className="text-[12px] text-[var(--panel-text-secondary)] mt-0.5">
                   {stat.label}
                 </p>
+                {stat.sublabel && (
+                  <p className="text-[11px] font-medium text-[#e63462] mt-1">
+                    {stat.sublabel}
+                  </p>
+                )}
               </div>
             )
           })}
