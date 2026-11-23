@@ -136,6 +136,7 @@ export function PanelProvider({ children }: { children: ReactNode }) {
     setCancelledItems,
     setNotifications,
     restaurantId,
+    setAuditLogs,
   )
 
   const currentShift = useMemo(

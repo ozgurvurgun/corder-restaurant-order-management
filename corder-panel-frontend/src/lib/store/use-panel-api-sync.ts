@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react"
 import type {
+  AuditLog,
   Campaign,
   CancelledItem,
   CashShift,
@@ -22,6 +23,7 @@ import type {
 } from "../panel-types"
 import {
   api,
+  type AuditLogDto,
   type CampaignDto,
   type CashTransactionDto,
   type InventoryCountDto,
@@ -62,7 +64,21 @@ import {
   mergeDerivedAndRealtimeNotifications,
   syncServerNotificationState,
 } from "./panel-notification-sync.helper"
+import { formatTitleCase } from "../format"
 import { usePanelSocket } from "./use-panel-socket"
+
+function mapAuditLogDtos(logs: AuditLogDto[]): AuditLog[] {
+  return logs.map((l) => ({
+    id: l.id,
+    userId: l.userId,
+    userName: formatTitleCase(l.userName),
+    action: l.action,
+    category: l.category as AuditLog["category"],
+    details: l.details,
+    metadata: l.metadata ?? undefined,
+    createdAt: new Date(l.createdAt),
+  }))
+}
 
 export function usePanelApiSync(
   token: string | null,
@@ -86,6 +102,7 @@ export function usePanelApiSync(
   setCancelledItems?: (v: CancelledItem[] | ((prev: CancelledItem[]) => CancelledItem[])) => void,
   setNotifications?: (v: PanelNotification[] | ((prev: PanelNotification[]) => PanelNotification[])) => void,
   restaurantId?: string | null,
+  setAuditLogs?: (v: AuditLog[] | ((prev: AuditLog[]) => AuditLog[])) => void,
 ) {
   const loadRef = useRef<() => Promise<void>>(null!)
   const refreshPosRef = useRef<() => Promise<void>>(null!)
@@ -158,16 +175,27 @@ export function usePanelApiSync(
       }
       inFlightPosRef.current = true
       try {
-        const [apiTables, ordersRes, currentShiftRes, completedOrdersRes, openAccountsRes, ledgerCustomersRes, cashTxRes] =
-          await Promise.all([
-            api.tables.list(token).catch(() => null),
-            api.orders.list(token).catch(() => null),
-            api.shifts.getCurrent(token).catch(() => null),
-            api.completedOrders.list(token, { limit: 500 }).catch(() => null),
-            api.openAccounts.list(token).catch(() => null),
-            api.ledgerCustomers.list(token).catch(() => null),
-            setCashTransactions ? api.cashTransactions.list(token, undefined, { limit: 500 }).catch(() => null) : Promise.resolve(null),
-          ])
+        const [
+          apiTables,
+          ordersRes,
+          currentShiftRes,
+          shiftsListRes,
+          completedOrdersRes,
+          openAccountsRes,
+          ledgerCustomersRes,
+          cashTxRes,
+          auditLogsRes,
+        ] = await Promise.all([
+          api.tables.list(token).catch(() => null),
+          api.orders.list(token).catch(() => null),
+          api.shifts.getCurrent(token).catch(() => null),
+          api.shifts.list(token).catch(() => null),
+          api.completedOrders.list(token, { limit: 500 }).catch(() => null),
+          api.openAccounts.list(token).catch(() => null),
+          api.ledgerCustomers.list(token).catch(() => null),
+          setCashTransactions ? api.cashTransactions.list(token, undefined, { limit: 500 }).catch(() => null) : Promise.resolve(null),
+          setAuditLogs ? api.technical.listAuditLogs(token, { limit: 1000 }).catch(() => null) : Promise.resolve(null),
+        ])
         if (cancelled) return
 
         const nextOrders = ordersRes ? mapApiOrdersToPanel(ordersRes) : null
@@ -194,7 +222,17 @@ export function usePanelApiSync(
           }
         }
 
-        if (currentShiftRes) {
+        if (shiftsListRes) {
+          const shifts = currentShiftRes
+            ? [
+                mapShiftDtoToPanel(currentShiftRes),
+                ...shiftsListRes
+                  .filter((s) => s.id !== currentShiftRes.id)
+                  .map(mapShiftDtoToPanel),
+              ]
+            : shiftsListRes.map(mapShiftDtoToPanel)
+          setCashShifts(shifts)
+        } else if (currentShiftRes) {
           const mappedShift = mapShiftDtoToPanel(currentShiftRes)
           setCashShifts((prev) =>
             prev.some((s) => s.id === mappedShift.id)
@@ -204,6 +242,9 @@ export function usePanelApiSync(
         }
         if (setCashTransactions && cashTxRes) {
           setCashTransactions(cashTxRes.map(mapCashTransactionDtoToPanel))
+        }
+        if (setAuditLogs && auditLogsRes) {
+          setAuditLogs(mapAuditLogDtos(auditLogsRes))
         }
 
         if (openAccountsRes) setOpenAccounts?.(openAccountsRes.map(mapOpenAccountDtoToPanel))
@@ -319,7 +360,7 @@ export function usePanelApiSync(
   useEffect(() => {
     if (!token) return
     const onVis = () => {
-      if (document.visibilityState === "visible") void refreshActivePosRef.current?.()
+      if (document.visibilityState === "visible") void refreshPosRef.current?.()
     }
     const onOnline = () => void loadRef.current?.()
     document.addEventListener("visibilitychange", onVis)

@@ -26,7 +26,9 @@ import type { PanelViewId } from "@/lib/panel-types"
 import {
   computeDateFilterBounds,
   formatCurrency,
+  formatIstanbulDateTime,
   formatIstanbulTime,
+  getIstanbulYmd,
   toMinorUnits,
 } from "@/lib/format"
 
@@ -52,6 +54,7 @@ export default function DashboardView(_props: DashboardViewProps) {
     dailyReport,
     settings,
     auditLogs,
+    currentShift,
     currentUser,
     hasPermission,
   } = usePanelStore()
@@ -70,7 +73,32 @@ export default function DashboardView(_props: DashboardViewProps) {
 
   const occupiedCount = tables.filter((tb) => tb.status !== "empty").length
   const emptyCount = tables.filter((tb) => tb.status === "empty").length
-  const recentAuditLogs = auditLogs.slice(0, 8)
+  const recentAuditLogs = useMemo(() => {
+    const hasOpenShift = Boolean(currentShift && currentShift.status === "open")
+    const bounds = computeDateFilterBounds(
+      "today",
+      "",
+      "",
+      settings.autoCloseShiftTime,
+      settings.autoCloseShiftEnabled !== false,
+    )
+    const cutoffStart =
+      hasOpenShift && currentShift
+        ? new Date(currentShift.openedAt)
+        : bounds
+          ? bounds.from
+          : null
+    if (!cutoffStart) return auditLogs.slice(0, 8)
+    return auditLogs
+      .filter((log) => new Date(log.createdAt) >= cutoffStart)
+      .slice(0, 8)
+  }, [
+    auditLogs,
+    currentShift,
+    settings.autoCloseShiftTime,
+    settings.autoCloseShiftEnabled,
+  ])
+  const todayYmd = getIstanbulYmd()
 
   const yesterdayStats = useMemo(() => {
     const bounds = computeDateFilterBounds(
@@ -410,20 +438,33 @@ export default function DashboardView(_props: DashboardViewProps) {
                 {t("recentActivity")}
               </h3>
               <div className="flex flex-col gap-1.5">
-                {recentAuditLogs.map((log) => (
-                  <div key={log.id} className="flex items-start gap-2.5 py-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#e63462] mt-1.5 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[12px] text-[var(--panel-text)] truncate">
-                        {log.details}
-                      </p>
-                      <p className="text-[10px] text-[var(--panel-text-secondary)]">
-                        {log.userName} -{" "}
-                        {mounted ? formatIstanbulTime(log.createdAt) : ""}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                {recentAuditLogs.length === 0 ? (
+                  <p className="text-[12px] text-[var(--panel-text-secondary)] py-4">
+                    Bu vardiyada henüz işlem yok
+                  </p>
+                ) : (
+                  recentAuditLogs.map((log) => {
+                    const isSameDay = getIstanbulYmd(log.createdAt) === todayYmd
+                    return (
+                      <div key={log.id} className="flex items-start gap-2.5 py-1.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#e63462] mt-1.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] text-[var(--panel-text)] truncate">
+                            {log.details}
+                          </p>
+                          <p className="text-[10px] text-[var(--panel-text-secondary)]">
+                            {log.userName} -{" "}
+                            {mounted
+                              ? isSameDay
+                                ? formatIstanbulTime(log.createdAt)
+                                : formatIstanbulDateTime(log.createdAt)
+                              : ""}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
               </div>
             </div>
           )}
