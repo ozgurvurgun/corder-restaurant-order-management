@@ -10,6 +10,7 @@ const {
   mapBackendPrinters,
   mergePrintersWithBackend,
   seedDepartmentCategoryRoutes,
+  isSamePhysicalPrinter,
 } = require("./settings-store")
 const {
   discoverSystemPrinters,
@@ -32,140 +33,83 @@ const { printBytes, purgeSystemPrintQueues } = require("./printers")
 const { info, warn, getRecentLogs, clearLogs } = require("./logger")
 
 const PUBLIC_DIR = path.resolve(__dirname, "..", "public")
-const MIME_TYPES = {
-  ".html": "text/html; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".js": "application/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-}
-
+const MIME_TYPES = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "application/javascript; charset=utf-8", ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png" }
 const SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "no-referrer",
-  "Content-Security-Policy":
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'",
+  "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'",
   "Cache-Control": "no-store",
 }
-
 function sendJson(res, statusCode, payload) {
-  res.writeHead(statusCode, {
-    ...SECURITY_HEADERS,
-    "Content-Type": "application/json; charset=utf-8",
-  })
+  res.writeHead(statusCode, { ...SECURITY_HEADERS, "Content-Type": "application/json; charset=utf-8" })
   res.end(JSON.stringify(payload))
 }
-
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = []
     let total = 0
     req.on("data", (chunk) => {
       total += chunk.length
-      if (total > 256 * 1024) {
-        reject(new Error("Payload too large"))
-        req.destroy()
-        return
-      }
+      if (total > 256 * 1024) { reject(new Error("Payload too large")); req.destroy(); return }
       chunks.push(chunk)
     })
     req.on("end", () => {
-      try {
-        const raw = Buffer.concat(chunks).toString("utf8").trim()
-        resolve(raw ? JSON.parse(raw) : {})
-      } catch {
-        reject(new Error("Invalid JSON body"))
-      }
+      try { const raw = Buffer.concat(chunks).toString("utf8").trim(); resolve(raw ? JSON.parse(raw) : {}) }
+      catch { reject(new Error("Invalid JSON body")) }
     })
     req.on("error", reject)
   })
 }
-
 function parseCookies(cookieHeader) {
   const out = {}
   for (const part of String(cookieHeader || "").split(";")) {
     const idx = part.indexOf("=")
-    if (idx > 0) {
-      out[part.slice(0, idx).trim()] = part.slice(idx + 1).trim()
-    }
+    if (idx > 0) out[part.slice(0, idx).trim()] = part.slice(idx + 1).trim()
   }
   return out
 }
-
 function isLoopbackHost(req) {
   const host = String(req.headers.host || "").toLowerCase().trim()
-  return (
-    host === "127.0.0.1" ||
-    host === "localhost" ||
-    host.startsWith("127.0.0.1:") ||
-    host.startsWith("localhost:")
-  )
+  return host === "127.0.0.1" || host === "localhost" || host.startsWith("127.0.0.1:") || host.startsWith("localhost:")
 }
-
 function safeTokenEqual(candidate, expected) {
   if (!candidate || !expected) return false
-  const a = Buffer.from(String(candidate), "utf8")
-  const b = Buffer.from(String(expected), "utf8")
-  if (a.length !== b.length) return false
-  return crypto.timingSafeEqual(a, b)
+  const a = Buffer.from(String(candidate), "utf8"), b = Buffer.from(String(expected), "utf8")
+  return a.length === b.length && crypto.timingSafeEqual(a, b)
 }
-
 function isAllowedLoopbackRequest(req, sessionToken) {
-  if (!isLoopbackHost(req)) {
-    return false
-  }
-  const headerToken = String(req.headers["x-corder-session"] || "").trim()
-  if (safeTokenEqual(headerToken, sessionToken)) return true
-
-  const cookies = parseCookies(req.headers.cookie)
-  if (!safeTokenEqual(cookies.corder_pa_session, sessionToken)) return false
-
+  if (!isLoopbackHost(req)) return false
+  if (safeTokenEqual(String(req.headers["x-corder-session"] || "").trim(), sessionToken)) return true
+  if (!safeTokenEqual(parseCookies(req.headers.cookie).corder_pa_session, sessionToken)) return false
   if (req.method !== "GET" && req.method !== "HEAD") {
     const origin = String(req.headers.origin || "").toLowerCase()
-    if (!origin.startsWith("http://127.0.0.1:") && !origin.startsWith("http://localhost:")) {
-      return false
-    }
+    if (!origin.startsWith("http://127.0.0.1:") && !origin.startsWith("http://localhost:")) return false
   }
   return true
 }
-
 function serveStaticFile(req, res, urlPath, sessionToken) {
-  if (!isLoopbackHost(req)) {
-    sendJson(res, 403, { ok: false, error: "Forbidden host" })
-    return
-  }
-  if (req.method !== "GET" && req.method !== "HEAD") {
-    sendJson(res, 405, { ok: false, error: "Method not allowed" })
-    return
-  }
+  if (!isLoopbackHost(req)) return sendJson(res, 403, { ok: false, error: "Forbidden host" })
+  if (req.method !== "GET" && req.method !== "HEAD") return sendJson(res, 405, { ok: false, error: "Method not allowed" })
   const relPath = urlPath === "/" ? "index.html" : urlPath.replace(/^\/+/, "")
   const safePath = path.normalize(relPath).replace(/^(\.\.(\/|\\|$))+/, "")
   const fullPath = path.join(PUBLIC_DIR, safePath)
   if (!fullPath.startsWith(PUBLIC_DIR) || !fs.existsSync(fullPath) || fs.statSync(fullPath).isDirectory()) {
-    sendJson(res, 404, { ok: false, error: "Not found" })
-    return
+    return sendJson(res, 404, { ok: false, error: "Not found" })
   }
   const ext = path.extname(fullPath).toLowerCase()
-  const headers = {
-    ...SECURITY_HEADERS,
-    "Content-Type": MIME_TYPES[ext] || "application/octet-stream",
-  }
-  if (relPath === "index.html") {
-    headers["Set-Cookie"] = `corder_pa_session=${sessionToken}; Path=/; HttpOnly; SameSite=Strict`
-  }
+  const headers = { ...SECURITY_HEADERS, "Content-Type": MIME_TYPES[ext] || "application/octet-stream" }
+  if (relPath === "index.html") headers["Set-Cookie"] = `corder_pa_session=${sessionToken}; Path=/; HttpOnly; SameSite=Strict`
   res.writeHead(200, headers)
-  if (req.method === "HEAD") {
-    res.end()
-    return
-  }
+  if (req.method === "HEAD") return res.end()
   fs.createReadStream(fullPath).pipe(res)
 }
 
 function createUiServer({ store, agent }) {
   let electronPrinterProvider = null
   let electronAppRef = null
+  let lastLocalPrinterMutationAt = 0
+  let activePushCount = 0
   const sessionToken = crypto.randomBytes(32).toString("hex")
 
   const applyAndReload = (partial) => {
@@ -176,12 +120,45 @@ function createUiServer({ store, agent }) {
     return { settings: saved, publicSettings: getPublicSettings(saved), runtimeConfig }
   }
 
+  const triggerBackendPrinterSync = (runtimeConfig, settings) => {
+    lastLocalPrinterMutationAt = Date.now()
+    activePushCount++
+    void Promise.resolve(pushPrintersToBackend(runtimeConfig, settings))
+      .catch(() => false)
+      .finally(() => {
+        activePushCount = Math.max(0, activePushCount - 1)
+        lastLocalPrinterMutationAt = Date.now()
+      })
+  }
+
   startNetworkPrinterWatchdog({ agent, intervalMs: 45000 })
 
   const syncContextFromBackend = async (reason = "manual") => {
+    if (
+      reason === "ws-printers-updated" &&
+      (activePushCount > 0 || Date.now() - lastLocalPrinterMutationAt < 4000)
+    ) {
+      const saved = loadSettings()
+      return {
+        settings: saved,
+        publicSettings: getPublicSettings(saved),
+        runtimeConfig: buildRuntimeConfig(saved),
+      }
+    }
+    const initial = loadSettings()
+    const ctx = await fetchAgentContext(buildRuntimeConfig(initial))
+    if (
+      reason === "ws-printers-updated" &&
+      (activePushCount > 0 || Date.now() - lastLocalPrinterMutationAt < 4000)
+    ) {
+      const saved = loadSettings()
+      return {
+        settings: saved,
+        publicSettings: getPublicSettings(saved),
+        runtimeConfig: buildRuntimeConfig(saved),
+      }
+    }
     const current = loadSettings()
-    const runtimeConfig = buildRuntimeConfig(current)
-    const ctx = await fetchAgentContext(runtimeConfig)
     const nextCategories = ctx.categories || []
     const nextPrinters = mergePrintersWithBackend(current.printers, ctx.printers)
     const nextRoutes = seedDepartmentCategoryRoutes(
@@ -197,7 +174,7 @@ function createUiServer({ store, agent }) {
       categoryRoutes: nextRoutes,
     })
     if (reason !== "ws-printers-updated") {
-      void pushPrintersToBackend(res.runtimeConfig, res.settings)
+      triggerBackendPrinterSync(res.runtimeConfig, res.settings)
     }
     return res
   }
@@ -294,24 +271,32 @@ function createUiServer({ store, agent }) {
       }
 
       if (method === "POST" && pathname === "/api/printers") {
+        lastLocalPrinterMutationAt = Date.now()
         const current = loadSettings()
         const printers = [...current.printers]
         const entry = await buildSavedPrinterEntry(body, printers)
-        const idx = printers.findIndex((p) => p.id === entry.id)
-        if (idx >= 0) printers[idx] = entry
-        else printers.push(entry)
+        const idx = printers.findIndex(
+          (p) => p.id === entry.id || isSamePhysicalPrinter(p, entry),
+        )
+        if (idx >= 0) {
+          entry.id = printers[idx].id
+          printers[idx] = { ...printers[idx], ...entry, id: printers[idx].id }
+        } else {
+          printers.push(entry)
+        }
 
         const hadNoPrinters = current.printers.length === 0
         const { settings, publicSettings, runtimeConfig } = applyAndReload({ printers })
         if (hadNoPrinters && typeof agent.clearPendingQueue === "function") {
           await agent.clearPendingQueue()
         }
-        void pushPrintersToBackend(runtimeConfig, settings)
+        triggerBackendPrinterSync(runtimeConfig, settings)
         info("Printer saved", { id: entry.id, name: entry.name, mode: entry.mode })
         return { statusCode: 200, payload: { ok: true, printer: entry, settings: publicSettings } }
       }
 
       if (method === "DELETE" && pathname.startsWith("/api/printers/")) {
+        lastLocalPrinterMutationAt = Date.now()
         const id = decodeURIComponent(pathname.slice("/api/printers/".length)).trim()
         const current = loadSettings()
         const printers = current.printers.filter((p) => p.id !== id)
@@ -326,12 +311,13 @@ function createUiServer({ store, agent }) {
             current.defaultKitchenPrinterId === id ? printers[0]?.id || "" : current.defaultKitchenPrinterId,
           receiptPrinterId: current.receiptPrinterId === id ? printers[0]?.id || "" : current.receiptPrinterId,
         })
-        void pushPrintersToBackend(runtimeConfig, settings)
+        triggerBackendPrinterSync(runtimeConfig, settings)
         info("Printer removed", { id })
         return { statusCode: 200, payload: { ok: true, settings: publicSettings } }
       }
 
       if (method === "POST" && pathname === "/api/routes") {
+        lastLocalPrinterMutationAt = Date.now()
         const current = loadSettings()
         const patch = {}
         for (const k of [
@@ -351,7 +337,7 @@ function createUiServer({ store, agent }) {
         }
 
         const { settings, publicSettings, runtimeConfig } = applyAndReload({ ...current, ...patch })
-        void pushPrintersToBackend(runtimeConfig, settings)
+        triggerBackendPrinterSync(runtimeConfig, settings)
         return { statusCode: 200, payload: { ok: true, settings: publicSettings } }
       }
 

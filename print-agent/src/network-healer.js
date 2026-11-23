@@ -4,7 +4,12 @@ const {
   testTcpPrinterConnection,
   readArpMacMap,
 } = require("./printer-discovery")
-const { loadSettings, saveSettings, buildRuntimeConfig } = require("./settings-store")
+const {
+  loadSettings,
+  saveSettings,
+  buildRuntimeConfig,
+  isSamePhysicalPrinter,
+} = require("./settings-store")
 const { pushPrintersToBackend } = require("./http-sync")
 const { info, warn } = require("./logger")
 
@@ -227,9 +232,20 @@ function startNetworkPrinterWatchdog({ agent, intervalMs = 45000 } = {}) {
 }
 
 async function buildSavedPrinterEntry(body = {}, existingPrinters = []) {
-  const incomingId = body.id ? String(body.id).trim() : crypto.randomUUID()
   const isNet = body.mode === "network"
-  const existingEntry = existingPrinters.find((p) => p.id === incomingId)
+  const draft = {
+    id: body.id ? String(body.id).trim() : "",
+    name: String(body.name || body.systemPrinterName || body.host || "Printer").trim(),
+    mode: isNet ? "network" : "system",
+    systemPrinterName: isNet ? "" : String(body.systemPrinterName || "").trim(),
+    host: String(body.host || "127.0.0.1").trim(),
+    port: Number(body.port) || 9100,
+    mac: isNet ? normalizeMacAddress(body.mac || "") : "",
+  }
+  const existingEntry = existingPrinters.find(
+    (p) => (draft.id && p.id === draft.id) || isSamePhysicalPrinter(p, draft),
+  )
+  const resolvedId = existingEntry?.id || draft.id || crypto.randomUUID()
   let resolvedMac = isNet
     ? normalizeMacAddress(body.mac || existingEntry?.mac || "")
     : ""
@@ -238,18 +254,25 @@ async function buildSavedPrinterEntry(body = {}, existingPrinters = []) {
     resolvedMac = normalizeMacAddress(arpMap.get(String(body.host).trim()))
   }
   return {
-    id: incomingId,
-    name: String(body.name || body.systemPrinterName || body.host || "Printer").trim(),
-    type: String(body.type || "thermal").trim(),
+    id: resolvedId,
+    name: draft.name,
+    type: String(body.type || existingEntry?.type || "thermal").trim(),
     mode: isNet ? "network" : "system",
-    systemPrinterName: isNet ? "" : String(body.systemPrinterName || "").trim(),
-    host: String(body.host || "127.0.0.1").trim(),
-    port: Number(body.port) || 9100,
+    systemPrinterName: isNet
+      ? ""
+      : String(body.systemPrinterName || existingEntry?.systemPrinterName || draft.name).trim(),
+    host: draft.host,
+    port: draft.port,
     mac: resolvedMac,
-    department: body.department ? String(body.department).trim() : null,
-    paperWidth: Number(body.paperWidth) === 58 ? 58 : 80,
-    feedLinesBeforeCut: Number(body.feedLinesBeforeCut ?? 6),
-    autoCut: body.autoCut !== false,
+    department:
+      body.department !== undefined
+        ? body.department
+          ? String(body.department).trim()
+          : null
+        : (existingEntry?.department ?? null),
+    paperWidth: Number(body.paperWidth ?? existingEntry?.paperWidth) === 58 ? 58 : 80,
+    feedLinesBeforeCut: Number(body.feedLinesBeforeCut ?? existingEntry?.feedLinesBeforeCut ?? 3),
+    autoCut: body.autoCut !== undefined ? body.autoCut !== false : existingEntry?.autoCut !== false,
   }
 }
 

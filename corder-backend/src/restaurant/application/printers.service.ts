@@ -238,7 +238,23 @@ export class PrintersService {
           match = existing.find(
             (e) =>
               !claimedIds.has(e.id) &&
-              e.name.trim().toLowerCase() === name.toLowerCase(),
+              normalizeStorageText(e.name) === name,
+          );
+        }
+        if (
+          !match &&
+          ipAddress &&
+          ipAddress !== 'USB' &&
+          ipAddress !== '127.0.0.1'
+        ) {
+          match = existing.find(
+            (e) =>
+              !claimedIds.has(e.id) &&
+              e.connection === connection &&
+              (e.ipAddress ?? '').trim().toLowerCase() ===
+                ipAddress.trim().toLowerCase() &&
+              (connection !== 'network' ||
+                (e.port ?? 9100) === (port ?? 9100)),
           );
         }
 
@@ -274,7 +290,15 @@ export class PrintersService {
           }
         } else {
           rowsChanged = true;
+          const validIncomingId =
+            p.id &&
+            uuidRe.test(p.id) &&
+            !existing.some((e) => e.id === p.id) &&
+            !claimedIds.has(p.id)
+              ? p.id
+              : undefined;
           const created = em.create(PrinterConfigEntity, {
+            ...(validIncomingId ? { id: validIncomingId } : {}),
             restaurantId,
             name,
             type: nextType,

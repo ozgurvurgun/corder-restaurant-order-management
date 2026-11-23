@@ -142,7 +142,7 @@ function bindAuthEvents() {
 function bindPrinterManagementEvents() {
   $("configuredPrintersList").addEventListener("click", async (e) => {
     const btn = e.target.closest("button[data-action]")
-    if (!btn) return
+    if (!btn || btn.disabled) return
     const action = btn.dataset.action
     const id = btn.dataset.id
     if (action === "rename-printer") {
@@ -154,25 +154,34 @@ function bindPrinterManagementEvents() {
       const name = String(next).trim()
       if (!name) return showToast("Takma ad boş olamaz", true)
       if (name === current) return
+      btn.disabled = true
       try {
-        await apiCall("/api/printers", { method: "POST", body: JSON.stringify({ ...p, name }) })
+        const res = await apiCall("/api/printers", { method: "POST", body: JSON.stringify({ ...p, name }) })
+        if (res?.settings) state.settings = res.settings
         showToast(`Takma ad güncellendi: ${name}`)
         await loadState(true)
       } catch (err) {
         showToast(err.message, true)
+      } finally {
+        btn.disabled = false
       }
     } else if (action === "toggle-width") {
       const paperWidth = Number(btn.dataset.width) || 80
       const p = (state.settings.printers || []).find((item) => item.id === id)
       if (!p) return
+      btn.disabled = true
       try {
-        await apiCall("/api/printers", { method: "POST", body: JSON.stringify({ ...p, paperWidth }) })
+        const res = await apiCall("/api/printers", { method: "POST", body: JSON.stringify({ ...p, paperWidth }) })
+        if (res?.settings) state.settings = res.settings
         showToast(`${printerLabel(p)} kağıt genişliği ${paperWidth}mm yapıldı`)
         await loadState(true)
       } catch (err) {
         showToast(err.message, true)
+      } finally {
+        btn.disabled = false
       }
     } else if (action === "test-print") {
+      btn.disabled = true
       try {
         showToast("Test fişi gönderiliyor...")
         await apiCall("/api/test-print", { method: "POST", body: JSON.stringify({ printerId: id }) })
@@ -180,34 +189,44 @@ function bindPrinterManagementEvents() {
         await loadState(false)
       } catch (err) {
         showToast(`Yazdırma hatası: ${err.message}`, true)
+      } finally {
+        btn.disabled = false
       }
     } else if (action === "delete-printer") {
+      btn.disabled = true
       try {
-        await apiCall(`/api/printers/${encodeURIComponent(id)}`, { method: "DELETE" })
+        const res = await apiCall(`/api/printers/${encodeURIComponent(id)}`, { method: "DELETE" })
+        if (res?.settings) state.settings = res.settings
         showToast("Yazıcı kaldırıldı")
         await loadState(true)
       } catch (err) {
         showToast(err.message, true)
+      } finally {
+        btn.disabled = false
       }
     }
   })
 
   $("discoveredPrintersList").addEventListener("click", async (e) => {
     const btn = e.target.closest('button[data-action="use-system-printer"]')
-    if (!btn) return
+    if (!btn || btn.disabled) return
     const sysName = btn.dataset.name
     const nickRaw = await askNicknameModal(`Yazıcı Ekle (${sysName})`, sysName)
     if (nickRaw == null) return
     const name = String(nickRaw).trim() || sysName
+    btn.disabled = true
     try {
-      await apiCall("/api/printers", {
+      const res = await apiCall("/api/printers", {
         method: "POST",
         body: JSON.stringify({ name, mode: "system", systemPrinterName: sysName, paperWidth: 80 }),
       })
+      if (res?.settings) state.settings = res.settings
       showToast(`"${name}" eklendi (${sysName})`)
       await loadState(true)
     } catch (err) {
       showToast(err.message, true)
+    } finally {
+      btn.disabled = false
     }
   })
 
@@ -251,22 +270,26 @@ function bindPrinterManagementEvents() {
   if ($("discoveredNetworkPrintersList")) {
     $("discoveredNetworkPrintersList").addEventListener("click", async (e) => {
       const btn = e.target.closest('button[data-action="use-network-printer"]')
-      if (!btn) return
+      if (!btn || btn.disabled) return
       const host = btn.dataset.host
       const port = Number(btn.dataset.port) || 9100
       const mac = btn.dataset.mac || ""
       const nickRaw = await askNicknameModal(`Ağ Yazıcısı Ekle (${host}:${port})`, `Mutfak`)
       if (nickRaw == null) return
       const name = String(nickRaw).trim() || `Yazıcı (${host})`
+      btn.disabled = true
       try {
-        await apiCall("/api/printers", {
+        const res = await apiCall("/api/printers", {
           method: "POST",
           body: JSON.stringify({ name, mode: "network", host, port, mac, paperWidth: 80 }),
         })
+        if (res?.settings) state.settings = res.settings
         showToast(`"${name}" ağ yazıcısı eklendi (${host}:${port})`)
         await loadState(true)
       } catch (err) {
         showToast(err.message, true)
+      } finally {
+        btn.disabled = false
       }
     })
   }

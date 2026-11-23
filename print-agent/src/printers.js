@@ -8,7 +8,11 @@ const { healNetworkPrinters } = require("./network-healer")
 const { loadSettings, saveSettings, buildRuntimeConfig } = require("./settings-store")
 const { pushPrintersToBackend } = require("./http-sync")
 const { getWindowsBinary } = require("./windows-usb-direct")
-const { WIN_RAW_SPOOL_PS, sendViaWarmWorker } = require("./windows-raw-print")
+const {
+  WIN_RAW_SPOOL_PS,
+  ensureWindowsHelperPaths,
+  sendViaWarmWorker,
+} = require("./windows-raw-print")
 
 const SAFE_PRINTER_NAME_RE = /^[\p{L}\p{N}_. \-()+@#/:]{1,128}$/u
 const LINUX_USB_DEV_RE = /^\/dev\/(usb\/)?lp[0-9]$/
@@ -180,11 +184,17 @@ async function purgeSystemPrintQueues(config = {}) {
 }
 
 async function sendToWindowsPrinter(tempFile, safeName) {
+  const { csPath, dllPath } = ensureWindowsHelperPaths()
   const stdout = await runExecFile(
     "powershell.exe",
     ["-NoProfile", "-NonInteractive", "-Command", WIN_RAW_SPOOL_PS],
     25000,
-    { CORDER_PRINTER_NAME: safeName, CORDER_PRINT_FILE: tempFile },
+    {
+      CORDER_PRINTER_NAME: safeName,
+      CORDER_PRINT_FILE: tempFile,
+      CORDER_CS_PATH: csPath,
+      CORDER_DLL_PATH: dllPath,
+    },
   )
   const match = String(stdout || "").match(/HEALED_PRINTER:(.+)/)
   return match && match[1] ? match[1].trim() : null

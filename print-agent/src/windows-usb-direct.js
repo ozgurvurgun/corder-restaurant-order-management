@@ -1,6 +1,7 @@
 const fs = require("fs")
 const path = require("path")
 const { execFile } = require("child_process")
+const { getAppDataDir } = require("./config")
 
 const VIRTUAL_WIN_PRINTER_RE =
   /^(Microsoft Print to PDF|Microsoft XPS Document Writer|OneNote|Send To OneNote|Fax|Adobe PDF|Foxit .* PDF|CutePDF|Bullzip PDF|doPDF|PDFCreator)/i
@@ -72,7 +73,8 @@ const WIN_DISCOVER_ALL_PS = `
 $ErrorActionPreference = 'SilentlyContinue'
 $result = @{ usbDirect = @(); comPorts = @(); spooler = @() }
 
-$dllPath = Join-Path $env:TEMP "CorderUsbSetupV4.dll"
+$dllPath = $env:CORDER_USB_SETUP_DLL
+if (-not $dllPath) { $dllPath = Join-Path $env:TEMP "CorderUsbSetupV5.dll" }
 if (-not ('CorderUsbSetupApi' -as [type])) {
   if (Test-Path $dllPath) {
     try { Add-Type -Path $dllPath -ErrorAction Stop } catch {}
@@ -307,10 +309,12 @@ $result | ConvertTo-Json -Compress -Depth 4
 `.trim()
 
 async function discoverWindowsDirectAndSpoolerPrinters(extraPrinters = []) {
+  const setupDllPath = path.join(getAppDataDir(), "CorderUsbSetupV5.dll")
   const psRaw = await execWinText(
     "powershell.exe",
     ["-NoProfile", "-NonInteractive", "-Command", WIN_DISCOVER_ALL_PS],
     9000,
+    { CORDER_USB_SETUP_DLL: setupDllPath },
   )
 
   let psData = { usbDirect: [], comPorts: [], spooler: [] }

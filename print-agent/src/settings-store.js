@@ -92,6 +92,54 @@ function decryptSecret(stored) {
   return clean
 }
 
+function normalizeMatchToken(str) {
+  if (!str) return ""
+  return String(str)
+    .trim()
+    .toLocaleLowerCase("tr-TR")
+    .replace(/\u0307/g, "")
+    .replaceAll("\u0131", "i").replaceAll("\u015f", "s").replaceAll("\u011f", "g")
+    .replaceAll("\u00fc", "u").replaceAll("\u00f6", "o").replaceAll("\u00e7", "c")
+}
+
+function isSamePhysicalPrinter(a, b) {
+  if (!a || !b) return false
+  if (a.id && b.id && String(a.id).trim() === String(b.id).trim()) return true
+  const modeA = a.mode === "network" ? "network" : "system"
+  const modeB = b.mode === "network" ? "network" : "system"
+  if (modeA !== modeB) return false
+
+  if (modeA === "system") {
+    const sysA = normalizeMatchToken(a.systemPrinterName)
+    const sysB = normalizeMatchToken(b.systemPrinterName)
+    if (sysA && sysB && sysA !== "usb" && sysB !== "usb" && sysA === sysB) {
+      return true
+    }
+    const nameA = normalizeMatchToken(a.name)
+    const nameB = normalizeMatchToken(b.name)
+    if (nameA && nameB && nameA === nameB) return true
+    if (sysA && nameB && sysA === nameB) return true
+    if (nameA && sysB && nameA === sysB) return true
+    return false
+  }
+
+  const macA = String(a.mac || "").trim().toUpperCase().replace(/-/g, ":")
+  const macB = String(b.mac || "").trim().toUpperCase().replace(/-/g, ":")
+  if (macA && macB && macA === macB) return true
+
+  const hostA = String(a.host || "").trim().toLowerCase()
+  const hostB = String(b.host || "").trim().toLowerCase()
+  const portA = Number(a.port) || 9100
+  const portB = Number(b.port) || 9100
+  if (hostA && hostB && hostA !== "127.0.0.1" && hostA === hostB && portA === portB) {
+    return true
+  }
+
+  const nameA = normalizeMatchToken(a.name)
+  const nameB = normalizeMatchToken(b.name)
+  return Boolean(nameA && nameB && nameA === nameB)
+}
+
 function mapBackendPrinters(backendPrinters = [], localPrinters = []) {
   return backendPrinters
     .filter((p) => p && p.name)
@@ -99,27 +147,39 @@ function mapBackendPrinters(backendPrinters = [], localPrinters = []) {
       const isNetwork =
         p.connection === "network" ||
         p.connection === "ethernet" ||
-        (!p.connection && Boolean(p.ipAddress))
+        (!p.connection && Boolean(p.ipAddress) && p.connection !== "usb")
+      const rawSysName = isNetwork ? "" : String(p.systemPrinterName || p.ipAddress || p.name).trim()
+      const candidate = {
+        id: p.id || "",
+        name: String(p.name).trim(),
+        mode: isNetwork ? "network" : "system",
+        systemPrinterName: rawSysName === "USB" ? "" : rawSysName,
+        host: isNetwork ? String(p.ipAddress || "127.0.0.1").trim() : "127.0.0.1",
+        port: isNetwork ? Number(p.port) || 9100 : 9100,
+        mac: isNetwork ? String(p.mac || "").trim().toUpperCase() : "",
+      }
       const existing = Array.isArray(localPrinters)
-        ? localPrinters.find(
-            (lp) =>
-              (lp.id && p.id && lp.id === p.id) ||
-              (lp.name && lp.name.toLowerCase() === String(p.name).trim().toLowerCase()),
-          )
+        ? localPrinters.find((lp) => isSamePhysicalPrinter(lp, candidate))
         : null
       return {
-        id: p.id || crypto.randomUUID(),
-        name: String(p.name).trim(),
-        type: String(p.type || "thermal").trim(),
+        id: existing?.id || p.id || crypto.randomUUID(),
+        name: existing?.name || String(p.name).trim(),
+        type: String(p.type || existing?.type || "thermal").trim(),
         mode: isNetwork ? "network" : "system",
-        systemPrinterName: isNetwork ? "" : String(p.systemPrinterName || p.ipAddress || existing?.systemPrinterName || p.name).trim(),
+        systemPrinterName: isNetwork
+          ? ""
+          : String(
+              existing?.systemPrinterName ||
+                (rawSysName && rawSysName !== "USB" ? rawSysName : "") ||
+                p.name,
+            ).trim(),
         host: isNetwork ? String(p.ipAddress || existing?.host || "127.0.0.1").trim() : "127.0.0.1",
         port: isNetwork ? Number(p.port) || 9100 : 9100,
         mac: isNetwork ? String(p.mac || existing?.mac || "").trim().toUpperCase() : "",
-        department: p.department ? String(p.department).trim() : null,
-        paperWidth: Number(p.paperWidth) === 58 ? 58 : 80,
-        feedLinesBeforeCut: 3,
-        autoCut: p.autoCut !== false,
+        department: p.department ? String(p.department).trim() : existing?.department || null,
+        paperWidth: Number(existing?.paperWidth ?? p.paperWidth) === 58 ? 58 : 80,
+        feedLinesBeforeCut: Number(existing?.feedLinesBeforeCut ?? 3),
+        autoCut: existing !== undefined && existing !== null ? existing.autoCut !== false : p.autoCut !== false,
       }
     })
 }
@@ -131,18 +191,16 @@ function mergePrintersWithBackend(localPrinters = [], backendPrinters = []) {
 
   const result = localPrinters.map((lp) => ({ ...lp }))
   for (const cp of mappedCloud) {
-    const existingIdx = result.findIndex(
-      (lp) => lp.id === cp.id || lp.name.toLowerCase() === cp.name.toLowerCase(),
-    )
+    const existingIdx = result.findIndex((lp) => isSamePhysicalPrinter(lp, cp))
     if (existingIdx >= 0) {
       const existing = result[existingIdx]
       result[existingIdx] = {
         ...existing,
-        id: cp.id || existing.id,
-        type: cp.type || existing.type,
-        department: cp.department ?? existing.department ?? null,
-        paperWidth: cp.paperWidth || existing.paperWidth,
-        autoCut: cp.autoCut,
+        id: existing.id || cp.id,
+        type: existing.type || cp.type,
+        department: existing.department ?? cp.department ?? null,
+        paperWidth: existing.paperWidth || cp.paperWidth,
+        autoCut: existing.autoCut !== undefined ? existing.autoCut : cp.autoCut,
         ...(cp.mode === "network" && cp.host && cp.host !== "127.0.0.1"
           ? {
               mode: "network",
@@ -153,10 +211,9 @@ function mergePrintersWithBackend(localPrinters = [], backendPrinters = []) {
             }
           : {
               systemPrinterName: String(
-                (existing.systemPrinterName && existing.systemPrinterName !== existing.name
-                  ? existing.systemPrinterName
-                  : cp.systemPrinterName) ||
-                  existing.systemPrinterName ||
+                existing.systemPrinterName ||
+                  cp.systemPrinterName ||
+                  existing.name ||
                   cp.name,
               ).trim(),
             }),
@@ -166,15 +223,6 @@ function mergePrintersWithBackend(localPrinters = [], backendPrinters = []) {
     }
   }
   return result
-}
-
-function normalizeMatchToken(str) {
-  if (!str) return ""
-  return String(str)
-    .trim()
-    .toLocaleLowerCase("tr-TR")
-    .replaceAll("\u0131", "i").replaceAll("\u015f", "s").replaceAll("\u011f", "g")
-    .replaceAll("\u00fc", "u").replaceAll("\u00f6", "o").replaceAll("\u00e7", "c")
 }
 
 function seedDepartmentCategoryRoutes(existingRoutes = {}, categories = [], printers = []) {
@@ -223,7 +271,7 @@ function normalizeSettings(raw) {
   merged.restaurantName = String(merged.restaurantName || "").trim()
   merged.restaurantSlug = String(merged.restaurantSlug || "").trim()
   merged.autoStartOnBoot = merged.autoStartOnBoot !== false
-  merged.printers = Array.isArray(merged.printers)
+  const rawPrinters = Array.isArray(merged.printers)
     ? merged.printers.map((p, idx) => ({
         id: String(p.id || `p-${idx + 1}`),
         name: String(p.name || p.systemPrinterName || p.host || `Printer ${idx + 1}`).trim(),
@@ -239,10 +287,52 @@ function normalizeSettings(raw) {
         autoCut: p.autoCut !== false,
       }))
     : []
+
+  const dedupedPrinters = []
+  const idRemap = new Map()
+  for (const item of rawPrinters) {
+    const dupIdx = dedupedPrinters.findIndex((ep) => isSamePhysicalPrinter(ep, item))
+    if (dupIdx >= 0) {
+      const canonical = dedupedPrinters[dupIdx]
+      if (item.id && item.id !== canonical.id) {
+        idRemap.set(item.id, canonical.id)
+      }
+      dedupedPrinters[dupIdx] = {
+        ...canonical,
+        ...item,
+        id: canonical.id,
+        systemPrinterName:
+          item.mode === "network"
+            ? ""
+            : item.systemPrinterName && item.systemPrinterName !== "USB"
+              ? item.systemPrinterName
+              : canonical.systemPrinterName || item.name,
+        mac: item.mac || canonical.mac || "",
+        department: item.department ?? canonical.department ?? null,
+      }
+    } else {
+      dedupedPrinters.push(item)
+    }
+  }
+  merged.printers = dedupedPrinters
+
   merged.categoryRoutes =
     merged.categoryRoutes && typeof merged.categoryRoutes === "object" && !Array.isArray(merged.categoryRoutes)
       ? { ...merged.categoryRoutes }
       : {}
+  if (idRemap.size > 0) {
+    if (idRemap.has(merged.defaultKitchenPrinterId)) {
+      merged.defaultKitchenPrinterId = idRemap.get(merged.defaultKitchenPrinterId)
+    }
+    if (idRemap.has(merged.receiptPrinterId)) {
+      merged.receiptPrinterId = idRemap.get(merged.receiptPrinterId)
+    }
+    for (const [catId, pId] of Object.entries(merged.categoryRoutes)) {
+      if (idRemap.has(pId)) {
+        merged.categoryRoutes[catId] = idRemap.get(pId)
+      }
+    }
+  }
   merged.categories = Array.isArray(merged.categories) ? merged.categories : []
 
   if (!merged.defaultKitchenPrinterId && merged.printers.length > 0) {
@@ -385,4 +475,6 @@ module.exports = {
   mapBackendPrinters,
   mergePrintersWithBackend,
   seedDepartmentCategoryRoutes,
+  isSamePhysicalPrinter,
+  normalizeMatchToken,
 }

@@ -103,7 +103,7 @@ const config = {
   ticketCharsPerLine: 42,
   ticketFeedLinesBeforeCut: 3,
   asciiFallback: true,
-  printUsbDrainMs: process.platform === "win32" ? 400 : 100,
+  printUsbDrainMs: 50,
 }
 
 module.exports = {
