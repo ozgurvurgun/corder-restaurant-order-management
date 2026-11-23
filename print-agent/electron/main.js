@@ -44,15 +44,19 @@ if (
   return
 }
 
-const { app, BrowserWindow, ipcMain } = electronModule
+const { app, BrowserWindow, ipcMain, powerSaveBlocker, powerMonitor } = electronModule
 const { getAppDataDir } = require("../src/config")
 const { loadSettings } = require("../src/settings-store")
 const { applyAutoStartSetting } = require("../src/autostart")
 const { startPrintAgentApp } = require("../src/index")
+const { ensureWarmPrintWorker } = require("../src/windows-raw-print")
 const { info, error } = require("../src/logger")
 
 app.setName("corder-print-agent-v2")
 app.setPath("userData", path.join(getAppDataDir(), "desktop-profile"))
+app.commandLine.appendSwitch("disable-background-timer-throttling")
+app.commandLine.appendSwitch("disable-renderer-backgrounding")
+app.commandLine.appendSwitch("disable-backgrounding-occluded-windows")
 
 if (process.platform === "linux") {
   app.commandLine.appendSwitch("no-sandbox")
@@ -64,6 +68,35 @@ if (process.platform === "linux") {
 
 let mainWindow = null
 let agentApp = null
+let powerBlockerId = null
+
+function ensurePowerSaveBlocker() {
+  try {
+    if (
+      powerSaveBlocker &&
+      (powerBlockerId === null || !powerSaveBlocker.isStarted(powerBlockerId))
+    ) {
+      powerBlockerId = powerSaveBlocker.start("prevent-app-suspension")
+    }
+  } catch {
+    // ignore powerSaveBlocker errors on unsupported environments
+  }
+}
+
+function stopPowerSaveBlocker() {
+  try {
+    if (
+      powerSaveBlocker &&
+      powerBlockerId !== null &&
+      powerSaveBlocker.isStarted(powerBlockerId)
+    ) {
+      powerSaveBlocker.stop(powerBlockerId)
+    }
+  } catch {
+    // ignore
+  }
+  powerBlockerId = null
+}
 
 async function createMainWindow(uiServer) {
   mainWindow = new BrowserWindow({
@@ -82,6 +115,7 @@ async function createMainWindow(uiServer) {
       sandbox: false,
       webSecurity: true,
       allowRunningInsecureContent: false,
+      backgroundThrottling: false,
     },
   })
 
@@ -120,6 +154,21 @@ if (!singleInstanceLock) {
 
   app.whenReady().then(async () => {
     try {
+      ensurePowerSaveBlocker()
+      if (powerMonitor && typeof powerMonitor.on === "function") {
+        const handleSystemWakeOrUnlock = () => {
+          ensurePowerSaveBlocker()
+          if (process.platform === "win32") {
+            ensureWarmPrintWorker()
+          }
+          if (agentApp?.agent && typeof agentApp.agent.flushQueue === "function") {
+            void agentApp.agent.flushQueue()
+          }
+        }
+        powerMonitor.on("resume", handleSystemWakeOrUnlock)
+        powerMonitor.on("unlock-screen", handleSystemWakeOrUnlock)
+      }
+
       const initialSettings = loadSettings()
       await applyAutoStartSetting(initialSettings.autoStartOnBoot !== false, app).catch(() => {})
       agentApp = await startPrintAgentApp({
@@ -148,6 +197,7 @@ if (!singleInstanceLock) {
 
   app.on("window-all-closed", () => {
     if (process.platform !== "darwin") {
+      stopPowerSaveBlocker()
       if (agentApp) agentApp.stop()
       app.quit()
     }
@@ -155,6 +205,7 @@ if (!singleInstanceLock) {
 
   app.on("before-quit", () => {
     info("Shutting down Electron Print Agent")
+    stopPowerSaveBlocker()
     if (agentApp) agentApp.stop()
   })
 }
