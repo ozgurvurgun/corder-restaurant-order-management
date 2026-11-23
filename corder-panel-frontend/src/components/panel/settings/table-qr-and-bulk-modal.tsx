@@ -5,16 +5,20 @@ import {
   Loader2,
   ToggleLeft,
   ToggleRight,
+  Volume2,
   X,
 } from "lucide-react"
 import type { PanelSection, PanelTable } from "@/lib/panel-types"
 import { showPanelToast } from "../panel-toast"
 import {
+  NOTIF_PREFS_UPDATED_EVENT,
   getBrowserNotificationPermission,
   getNotificationPrefs,
+  isSpeechSynthesisSupported,
   requestBrowserNotificationPermission,
   saveNotificationPrefs,
   showBrowserNotification,
+  speakWaiterCallAnnouncement,
   type NotificationPrefs,
 } from "@/lib/notification-sound"
 
@@ -168,6 +172,15 @@ export function NotificationSoundSettingsCard() {
   const [perm, setPerm] = useState<NotificationPermission | "unsupported">(() =>
     getBrowserNotificationPermission(),
   )
+  const speechSupported = useMemo(() => isSpeechSynthesisSupported(), [])
+
+  useEffect(() => {
+    const handlePrefsSync = () => {
+      setPrefs(getNotificationPrefs())
+    }
+    window.addEventListener(NOTIF_PREFS_UPDATED_EVENT, handlePrefsSync)
+    return () => window.removeEventListener(NOTIF_PREFS_UPDATED_EVENT, handlePrefsSync)
+  }, [])
 
   const updatePref = (patch: Partial<NotificationPrefs>) => {
     setPrefs(saveNotificationPrefs(patch))
@@ -206,6 +219,24 @@ export function NotificationSoundSettingsCard() {
     }
   }
 
+  const handleTestVoice = () => {
+    if (!speechSupported) {
+      showPanelToast("Cihazınız veya tarayıcınız sesli anons (TTS) özelliğini desteklemiyor.", "error")
+      return
+    }
+    const ok = speakWaiterCallAnnouncement({
+      tableName: "Masa 12",
+      sectionName: "Salon",
+      requestType: "bill",
+      force: true,
+    })
+    if (ok) {
+      showPanelToast('Sesli anons testi: "Masa 12 hesap talebinde bulundu."', "success")
+    } else {
+      showPanelToast("Sesli anons başlatılamadı.", "error")
+    }
+  }
+
   return (
     <div className="bg-white rounded-xl border border-[#d1d1d6]/60 p-5">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -213,14 +244,21 @@ export function NotificationSoundSettingsCard() {
           <Bell className="w-4 h-4 text-[#e63462]" />
           <div>
             <h3 className="text-[14px] font-semibold text-[#1d1d1f]">
-              Anlık Push Bildirim Ayarları (Garson Çağrısı &amp; Uyarılar)
+              Anlık Push Bildirim &amp; Sesli Anons Ayarları (Garson Çağrısı &amp; Uyarılar)
             </h3>
             <p className="text-[11px] text-[#86868b]">
-              Masalardan gelen QR garson çağrıları ve güvenlik uyarıları standart sistem Push bildirimi ve bildirim sesi ile iletilir.
+              Masalardan gelen QR garson çağrıları ve hesap talepleri bildirim, sistem sesi ve isteğe bağlı Türkçe sesli anons ile iletilir.
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={handleTestVoice}
+            className="h-[30px] px-3 rounded-lg bg-[#f5f5f7] hover:bg-[#e8e8ed] border border-[#d1d1d6]/60 text-[12px] font-medium text-[#1d1d1f] flex items-center gap-1.5"
+          >
+            <Volume2 className="w-3.5 h-3.5 text-[#e63462]" /> Sesli Anonsu Test Et
+          </button>
           <button
             type="button"
             onClick={() => void handleTestPush()}
@@ -240,8 +278,8 @@ export function NotificationSoundSettingsCard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div className="flex items-center justify-between p-3 bg-[#f5f5f7] rounded-xl">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="flex items-center justify-between p-3 bg-[#f5f5f7] rounded-xl gap-2">
           <div>
             <p className="text-[13px] font-medium text-[#1d1d1f]">Garson Çağrısı Bildirimi</p>
             <p className="text-[11px] text-[#86868b]">QR menüden gelen çağrıları bildirim olarak al</p>
@@ -251,7 +289,43 @@ export function NotificationSoundSettingsCard() {
           </button>
         </div>
 
-        <div className="flex items-center justify-between p-3 bg-[#f5f5f7] rounded-xl">
+        <div className="flex items-center justify-between p-3 bg-[#f5f5f7] rounded-xl gap-2">
+          <div>
+            <p className="text-[13px] font-medium text-[#1d1d1f]">Sesli Anons (Masa &amp; Talep Okuma)</p>
+            <p className="text-[11px] text-[#86868b]">
+              {speechSupported
+                ? 'Örn: "Masa 12 hesap talebinde bulundu" sesli okunur'
+                : "Tarayıcınızda sesli anons (TTS) desteği bulunamadı"}
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={!speechSupported}
+            onClick={() => {
+              const nextEnabled = !prefs.voiceAnnouncementEnabled
+              updatePref({ voiceAnnouncementEnabled: nextEnabled })
+              if (nextEnabled) {
+                speakWaiterCallAnnouncement({
+                  tableName: "Masa 12",
+                  sectionName: "Salon",
+                  requestType: "bill",
+                  force: true,
+                })
+              } else if (typeof window !== "undefined" && "speechSynthesis" in window) {
+                window.speechSynthesis.cancel()
+              }
+            }}
+            className="disabled:opacity-50"
+          >
+            {speechSupported && prefs.voiceAnnouncementEnabled ? (
+              <ToggleRight className="w-8 h-8 text-[#e63462]" />
+            ) : (
+              <ToggleLeft className="w-8 h-8 text-[#d1d1d6]" />
+            )}
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between p-3 bg-[#f5f5f7] rounded-xl gap-2">
           <div>
             <p className="text-[13px] font-medium text-[#1d1d1f]">Standart Push Bildirimi (Sistem Sesi)</p>
             <p className="text-[11px] text-[#86868b]">

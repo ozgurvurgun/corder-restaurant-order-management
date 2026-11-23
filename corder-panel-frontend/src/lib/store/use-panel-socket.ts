@@ -12,6 +12,7 @@ import { mapOrder } from "../mappers/orders-tables.mapper"
 import {
   getNotificationPrefs,
   showBrowserNotification,
+  speakWaiterCallAnnouncement,
   syncPanelWebPushSubscription,
 } from "../notification-sound"
 import {
@@ -167,6 +168,12 @@ export function usePanelSocket(params: {
       })
       showPanelToast(title, "info")
       showBrowserNotification(title, message, `waiter-call-${notifId}`)
+      speakWaiterCallAnnouncement({
+        id: notifId,
+        tableName,
+        sectionName,
+        requestType: payload.requestType,
+      })
     }
 
     const handleFraudAlert = (payload: {
