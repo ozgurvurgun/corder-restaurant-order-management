@@ -104,7 +104,7 @@ async function createMainWindow(uiServer) {
     height: 840,
     minWidth: 960,
     minHeight: 640,
-    title: "Corder Print Agent v1.2.2",
+    title: "Corder Print Agent v2.0.0",
     icon: path.join(__dirname, "..", "public", "corder-logo.png"),
     autoHideMenuBar: true,
     backgroundColor: "#f4f6f9",
