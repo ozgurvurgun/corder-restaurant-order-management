@@ -3,7 +3,6 @@ import { getBase, getRestaurant, getToken } from "./api"
 export interface NotificationPrefs {
   waiterCallEnabled: boolean
   browserPushEnabled: boolean
-  voiceAnnouncementEnabled: boolean
 }
 
 const NOTIF_PREFS_KEY = "corder-panel-notification-prefs"
@@ -12,11 +11,9 @@ export const NOTIF_PREFS_UPDATED_EVENT = "corder:notification-prefs-updated"
 const DEFAULT_PREFS: NotificationPrefs = {
   waiterCallEnabled: true,
   browserPushEnabled: true,
-  voiceAnnouncementEnabled: true,
 }
 
 const recentShownTags = new Map<string, number>()
-const recentSpokenTags = new Map<string, number>()
 const DEDUP_TTL_MS = 45_000
 let swRegistrationPromise: Promise<ServiceWorkerRegistration | null> | null = null
 let pushSetupInstalled = false
@@ -29,11 +26,6 @@ function pruneRecentShownTags(): void {
   for (const [k, ts] of recentShownTags.entries()) {
     if (now - ts > DEDUP_TTL_MS) {
       recentShownTags.delete(k)
-    }
-  }
-  for (const [k, ts] of recentSpokenTags.entries()) {
-    if (now - ts > DEDUP_TTL_MS) {
-      recentSpokenTags.delete(k)
     }
   }
 }
@@ -52,10 +44,6 @@ export function getNotificationPrefs(): NotificationPrefs {
         typeof parsed.browserPushEnabled === "boolean"
           ? parsed.browserPushEnabled
           : DEFAULT_PREFS.browserPushEnabled,
-      voiceAnnouncementEnabled:
-        typeof parsed.voiceAnnouncementEnabled === "boolean"
-          ? parsed.voiceAnnouncementEnabled
-          : DEFAULT_PREFS.voiceAnnouncementEnabled,
     }
   } catch {
     return DEFAULT_PREFS
@@ -316,90 +304,6 @@ export function showBrowserNotification(
     new Notification(title, options)
   } catch {
     // ignore browser notification errors
-  }
-}
-
-export function isSpeechSynthesisSupported(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    "speechSynthesis" in window &&
-    typeof window.SpeechSynthesisUtterance === "function"
-  )
-}
-
-export function buildWaiterCallSpeechText(params: {
-  tableName?: string | null
-  sectionName?: string | null
-  requestType?: string | null
-}): string {
-  const rawTable = (params.tableName ?? "").trim()
-  let spokenTable = "Masa"
-  if (rawTable) {
-    spokenTable = /^\d+$/.test(rawTable) ? `Masa ${rawTable}` : rawTable
-  }
-
-  const rawSection = (params.sectionName ?? "").trim()
-  const includeSection =
-    Boolean(rawSection) &&
-    rawSection.toLocaleLowerCase("tr-TR") !== "salon" &&
-    !spokenTable.toLocaleLowerCase("tr-TR").includes(rawSection.toLocaleLowerCase("tr-TR"))
-
-  const subject = includeSection ? `${rawSection} ${spokenTable}` : spokenTable
-  const actionText =
-    params.requestType === "bill" ? "hesap talebinde bulundu" : "garson çağırıyor"
-
-  return `${subject} ${actionText}.`
-}
-
-export function speakWaiterCallAnnouncement(params: {
-  id?: string | null
-  tableName?: string | null
-  sectionName?: string | null
-  requestType?: string | null
-  force?: boolean
-}): boolean {
-  if (!isSpeechSynthesisSupported()) return false
-
-  if (!params.force) {
-    const prefs = getNotificationPrefs()
-    if (!prefs.waiterCallEnabled || !prefs.voiceAnnouncementEnabled) return false
-  }
-
-  const dedupKey = params.id ? `waiter-voice-${params.id}` : ""
-  if (!params.force && dedupKey) {
-    pruneRecentShownTags()
-    if (recentSpokenTags.has(dedupKey)) return false
-    recentSpokenTags.set(dedupKey, Date.now())
-  }
-
-  const text = buildWaiterCallSpeechText(params)
-  try {
-    const synth = window.speechSynthesis
-    if (params.force) {
-      synth.cancel()
-    } else if (synth.paused) {
-      synth.resume()
-    }
-
-    const utterance = new window.SpeechSynthesisUtterance(text)
-    utterance.lang = "tr-TR"
-    utterance.rate = 1.0
-    utterance.pitch = 1.0
-    utterance.volume = 1.0
-
-    const voices = synth.getVoices?.() ?? []
-    const turkishVoice =
-      voices.find((v) => v.lang?.toLowerCase() === "tr-tr" && v.localService) ||
-      voices.find((v) => v.lang?.toLowerCase() === "tr-tr") ||
-      voices.find((v) => v.lang?.toLowerCase().startsWith("tr"))
-    if (turkishVoice) {
-      utterance.voice = turkishVoice
-    }
-
-    synth.speak(utterance)
-    return true
-  } catch {
-    return false
   }
 }
 

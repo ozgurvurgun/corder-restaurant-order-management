@@ -356,6 +356,7 @@ export interface RestaurantSettingsDto {
   locationRadiusMeters?: number
   autoCloseShiftEnabled?: boolean
   autoCloseShiftTime?: string
+  voiceAnnouncementEnabled?: boolean
 }
 
 export interface FraudAlertDto {

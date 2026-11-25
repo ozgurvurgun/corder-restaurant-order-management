@@ -5,4 +5,8 @@ contextBridge.exposeInMainWorld("corderDesktop", {
   platform: process.platform,
   invokeApi: (method, pathname, body) =>
     ipcRenderer.invoke("corder:api", { method, pathname, body }),
+  onPlayTts: (callback) => {
+    if (typeof callback !== "function") return
+    ipcRenderer.on("corder:play-tts", (_event, data) => callback(data))
+  },
 })

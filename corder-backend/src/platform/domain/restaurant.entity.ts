@@ -179,6 +179,13 @@ export class RestaurantEntity {
   })
   autoCloseShiftTime: string;
 
+  @Column({
+    name: 'voice_announcement_enabled',
+    type: 'boolean',
+    default: true,
+  })
+  voiceAnnouncementEnabled: boolean;
+
   @Column({ name: 'notifications_cleared_at', type: 'timestamptz', nullable: true })
   notificationsClearedAt?: Date | null;
 

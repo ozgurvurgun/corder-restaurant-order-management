@@ -9,16 +9,17 @@ import {
   X,
 } from "lucide-react"
 import type { PanelSection, PanelTable } from "@/lib/panel-types"
+import { api } from "@/lib/api"
+import { usePanelAuth } from "@/lib/panel-auth"
+import { usePanelStore } from "@/lib/panel-store"
 import { showPanelToast } from "../panel-toast"
 import {
   NOTIF_PREFS_UPDATED_EVENT,
   getBrowserNotificationPermission,
   getNotificationPrefs,
-  isSpeechSynthesisSupported,
   requestBrowserNotificationPermission,
   saveNotificationPrefs,
   showBrowserNotification,
-  speakWaiterCallAnnouncement,
   type NotificationPrefs,
 } from "@/lib/notification-sound"
 
@@ -168,11 +169,18 @@ export function BulkCreateTablesModal(props: {
 }
 
 export function NotificationSoundSettingsCard() {
+  const { token } = usePanelAuth()
+  const { settings, updateSettings, printers } = usePanelStore()
   const [prefs, setPrefs] = useState<NotificationPrefs>(() => getNotificationPrefs())
   const [perm, setPerm] = useState<NotificationPermission | "unsupported">(() =>
     getBrowserNotificationPermission(),
   )
-  const speechSupported = useMemo(() => isSpeechSynthesisSupported(), [])
+  const [testingVoice, setTestingVoice] = useState(false)
+  const voiceEnabled = settings.voiceAnnouncementEnabled !== false
+  const printAgentOnline = useMemo(
+    () => printers.some((p) => p.status === "online"),
+    [printers],
+  )
 
   useEffect(() => {
     const handlePrefsSync = () => {
@@ -219,21 +227,29 @@ export function NotificationSoundSettingsCard() {
     }
   }
 
-  const handleTestVoice = () => {
-    if (!speechSupported) {
-      showPanelToast("Cihazınız veya tarayıcınız sesli anons (TTS) özelliğini desteklemiyor.", "error")
-      return
-    }
-    const ok = speakWaiterCallAnnouncement({
-      tableName: "Masa 12",
-      sectionName: "Salon",
-      requestType: "bill",
-      force: true,
-    })
-    if (ok) {
-      showPanelToast('Sesli anons testi: "Masa 12 hesap talebinde bulundu."', "success")
-    } else {
-      showPanelToast("Sesli anons başlatılamadı.", "error")
+  const handleTestVoice = async () => {
+    if (!token || testingVoice) return
+    setTestingVoice(true)
+    try {
+      const res = await api.restaurant.testVoiceAnnouncement(token, "waiter")
+      if (res.agentOnline) {
+        showPanelToast(
+          `Print Agent sesli anons testi gönderildi (${res.sectionName} - ${res.tableName})`,
+          "success",
+        )
+      } else {
+        showPanelToast(
+          "Print Agent şu an çevrimdışı görünüyor. Sesli anonsun okunması için kasa bilgisayarında Corder Print Agent açık olmalıdır.",
+          "info",
+        )
+      }
+    } catch (err) {
+      showPanelToast(
+        err instanceof Error ? err.message : "Sesli anons testi gönderilemedi",
+        "error",
+      )
+    } finally {
+      setTestingVoice(false)
     }
   }
 
@@ -244,20 +260,22 @@ export function NotificationSoundSettingsCard() {
           <Bell className="w-4 h-4 text-[#e63462]" />
           <div>
             <h3 className="text-[14px] font-semibold text-[#1d1d1f]">
-              Anlık Push Bildirim &amp; Sesli Anons Ayarları (Garson Çağrısı &amp; Uyarılar)
+              Anlık Push Bildirim &amp; Print Agent Türkçe Sesli Anons Ayarları
             </h3>
             <p className="text-[11px] text-[#86868b]">
-              Masalardan gelen QR garson çağrıları ve hesap talepleri bildirim, sistem sesi ve isteğe bağlı Türkçe sesli anons ile iletilir.
+              Masalardan gelen QR garson ve hesap çağrıları kasa bilgisayarındaki Corder Print Agent üzerinden doğal Türkçe sesle anons edilir; yeni eklenen veya silinen masalara otomatik uyum sağlar.
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
-            onClick={handleTestVoice}
-            className="h-[30px] px-3 rounded-lg bg-[#f5f5f7] hover:bg-[#e8e8ed] border border-[#d1d1d6]/60 text-[12px] font-medium text-[#1d1d1f] flex items-center gap-1.5"
+            disabled={testingVoice}
+            onClick={() => void handleTestVoice()}
+            className="h-[30px] px-3 rounded-lg bg-[#f5f5f7] hover:bg-[#e8e8ed] disabled:opacity-50 border border-[#d1d1d6]/60 text-[12px] font-medium text-[#1d1d1f] flex items-center gap-1.5"
           >
-            <Volume2 className="w-3.5 h-3.5 text-[#e63462]" /> Sesli Anonsu Test Et
+            <Volume2 className="w-3.5 h-3.5 text-[#e63462]" />
+            {testingVoice ? "Gönderiliyor…" : "Print Agent Sesli Anonsu Test Et"}
           </button>
           <button
             type="button"
@@ -282,7 +300,7 @@ export function NotificationSoundSettingsCard() {
         <div className="flex items-center justify-between p-3 bg-[#f5f5f7] rounded-xl gap-2">
           <div>
             <p className="text-[13px] font-medium text-[#1d1d1f]">Garson Çağrısı Bildirimi</p>
-            <p className="text-[11px] text-[#86868b]">QR menüden gelen çağrıları bildirim olarak al</p>
+            <p className="text-[11px] text-[#86868b]">QR menüden gelen çağrıları panelde bildirim olarak göster</p>
           </div>
           <button type="button" onClick={() => updatePref({ waiterCallEnabled: !prefs.waiterCallEnabled })}>
             {prefs.waiterCallEnabled ? <ToggleRight className="w-8 h-8 text-[#e63462]" /> : <ToggleLeft className="w-8 h-8 text-[#d1d1d6]" />}
@@ -291,33 +309,29 @@ export function NotificationSoundSettingsCard() {
 
         <div className="flex items-center justify-between p-3 bg-[#f5f5f7] rounded-xl gap-2">
           <div>
-            <p className="text-[13px] font-medium text-[#1d1d1f]">Sesli Anons (Masa &amp; Talep Okuma)</p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <p className="text-[13px] font-medium text-[#1d1d1f]">Print Agent Türkçe Sesli Anons</p>
+              <span
+                className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                  printAgentOnline
+                    ? "bg-[#34c759]/15 text-[#248a3d]"
+                    : "bg-[#86868b]/15 text-[#86868b]"
+                }`}
+              >
+                {printAgentOnline ? "Print Agent Bağlı" : "Print Agent Bekleniyor"}
+              </span>
+            </div>
             <p className="text-[11px] text-[#86868b]">
-              {speechSupported
-                ? 'Örn: "Masa 12 hesap talebinde bulundu" sesli okunur'
-                : "Tarayıcınızda sesli anons (TTS) desteği bulunamadı"}
+              Kasa bilgisayarındaki Print Agent üzerinden Türkçe okunur
             </p>
           </div>
           <button
             type="button"
-            disabled={!speechSupported}
             onClick={() => {
-              const nextEnabled = !prefs.voiceAnnouncementEnabled
-              updatePref({ voiceAnnouncementEnabled: nextEnabled })
-              if (nextEnabled) {
-                speakWaiterCallAnnouncement({
-                  tableName: "Masa 12",
-                  sectionName: "Salon",
-                  requestType: "bill",
-                  force: true,
-                })
-              } else if (typeof window !== "undefined" && "speechSynthesis" in window) {
-                window.speechSynthesis.cancel()
-              }
+              updateSettings({ voiceAnnouncementEnabled: !voiceEnabled })
             }}
-            className="disabled:opacity-50"
           >
-            {speechSupported && prefs.voiceAnnouncementEnabled ? (
+            {voiceEnabled ? (
               <ToggleRight className="w-8 h-8 text-[#e63462]" />
             ) : (
               <ToggleLeft className="w-8 h-8 text-[#d1d1d6]" />

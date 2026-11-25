@@ -270,6 +270,27 @@ async function logoutPrintAgent(config) {
   }
 }
 
+async function updateBackendVoiceSettings(config, voiceAnnouncementEnabled) {
+  const base = httpBaseUrl(config)
+  if (!base || (!config?.agentToken && !config?.refreshToken)) return false
+  const url = `${base}/restaurant/print-agent/voice-settings`
+  try {
+    const res = await authorizedFetch(config, url, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        voiceAnnouncementEnabled: voiceAnnouncementEnabled !== false,
+      }),
+    })
+    return res.ok
+  } catch (e) {
+    warn("updateBackendVoiceSettings error", {
+      error: e instanceof Error ? e.message : String(e),
+    })
+    return false
+  }
+}
+
 module.exports = {
   httpBaseUrl,
   ackKitchenPrinted,
@@ -280,4 +301,5 @@ module.exports = {
   refreshAgentSession,
   fetchAgentContext,
   pushPrintersToBackend,
+  updateBackendVoiceSettings,
 }

@@ -56,17 +56,9 @@ export function useSystemActions(params: {
   switchBusiness?: (branchId: string) => Promise<void>
 }) {
   const {
-    token,
-    currentUser,
-    printers,
-    setUsers,
-    setSettings,
-    setNotifications,
-    setAuditLogs,
-    setBranches,
-    setPrinters,
-    setPrinterDepartments,
-    switchBusiness,
+    token, currentUser, printers, setUsers, setSettings,
+    setNotifications, setAuditLogs, setBranches, setPrinters,
+    setPrinterDepartments, switchBusiness,
   } = params
 
   const addAuditLog = useCallback(
@@ -225,7 +217,7 @@ export function useSystemActions(params: {
         }
       }
       if (!token) return
-      const serverFields = ["name", "logoUrl", "address", "phone", "taxId", "whatsapp", "instagram", "facebook", "website", "workingHours", "menuTemplate", "terminalLocationRestrictionEnabled", "locationLatitude", "locationLongitude", "locationRadiusMeters", "autoCloseShiftEnabled", "autoCloseShiftTime"] as const
+      const serverFields = ["name", "logoUrl", "address", "phone", "taxId", "whatsapp", "instagram", "facebook", "website", "workingHours", "menuTemplate", "terminalLocationRestrictionEnabled", "locationLatitude", "locationLongitude", "locationRadiusMeters", "autoCloseShiftEnabled", "autoCloseShiftTime", "voiceAnnouncementEnabled"] as const
       if (!serverFields.some((k) => s[k] !== undefined || k in s)) return
       api.restaurant
         .updateSettings(token, {
@@ -246,11 +238,22 @@ export function useSystemActions(params: {
           ...(s.locationRadiusMeters !== undefined ? { locationRadiusMeters: s.locationRadiusMeters } : {}),
           ...(s.autoCloseShiftEnabled !== undefined ? { autoCloseShiftEnabled: s.autoCloseShiftEnabled } : {}),
           ...(s.autoCloseShiftTime !== undefined ? { autoCloseShiftTime: s.autoCloseShiftTime } : {}),
+          ...(s.voiceAnnouncementEnabled !== undefined ? { voiceAnnouncementEnabled: s.voiceAnnouncementEnabled } : {}),
         })
         .then(() => {
           logActivity({ action: "settings_updated", category: "settings", details: "Restoran ayarları güncellendi", metadata: { fields: Object.keys(s) } })
           const isTplOnly = s.menuTemplate !== undefined && Object.keys(s).length === 1
-          showPanelToast(isTplOnly ? "QR menü tasarım şablonu güncellendi" : "Ayarlar kaydedildi", "success")
+          const isVoiceOnly = s.voiceAnnouncementEnabled !== undefined && Object.keys(s).length === 1
+          if (isVoiceOnly) {
+            showPanelToast(
+              s.voiceAnnouncementEnabled
+                ? "Print Agent Türkçe sesli masa çağrı anonsu açıldı"
+                : "Print Agent sesli masa çağrı anonsu kapatıldı",
+              s.voiceAnnouncementEnabled ? "success" : "info",
+            )
+          } else {
+            showPanelToast(isTplOnly ? "QR menü tasarım şablonu güncellendi" : "Ayarlar kaydedildi", "success")
+          }
         })
         .catch((err) => showPanelToast(err instanceof Error ? err.message : "Ayarlar güncellenemedi", "error"))
     },

@@ -14,6 +14,8 @@ const {
   printJob,
   expandOrderPrintJob,
 } = require("./job-normalizer")
+const { announceWaiterCall } = require("./turkish-tts")
+const { saveSettings } = require("./settings-store")
 const { info, warn, error } = require("./logger")
 
 function startAgent({ config: initialConfig, store, printer, onContextInvalidated }) {
@@ -335,6 +337,25 @@ function startAgent({ config: initialConfig, store, printer, onContextInvalidate
       if (typeof onContextInvalidated === "function") {
         void Promise.resolve(onContextInvalidated("ws-printers-updated")).catch(() => {})
       }
+    })
+    socket.on("waiter:called", (payload) => {
+      if (config.voiceAnnouncementEnabled === false) return
+      announceWaiterCall(payload || {})
+    })
+    socket.on("waiter:voice-test", (payload) => {
+      announceWaiterCall({ ...(payload || {}), isTest: true })
+    })
+    socket.on("waiter:voice-settings-updated", (payload) => {
+      const enabled = payload?.voiceAnnouncementEnabled !== false
+      config.voiceAnnouncementEnabled = enabled
+      try {
+        saveSettings({ voiceAnnouncementEnabled: enabled })
+      } catch {
+        // ignore disk write race
+      }
+      info("Voice announcement setting updated from Merchant Panel", {
+        voiceAnnouncementEnabled: enabled,
+      })
     })
     socket.on("auth:expired", () => {
       warn("Socket auth token expired; refreshing session")

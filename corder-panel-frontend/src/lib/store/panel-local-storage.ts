@@ -161,6 +161,7 @@ export const DEFAULT_SETTINGS: RestaurantSettings = {
   currency: "TRY",
   currencySymbol: "₺",
   menuTemplate: "classic",
+  voiceAnnouncementEnabled: true,
   fontSize: "medium",
   tableCardSize: "normal",
   showProductImages: true,

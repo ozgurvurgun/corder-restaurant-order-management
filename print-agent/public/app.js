@@ -26,6 +26,12 @@ async function loadState(rerenderAll = false) {
       $("inputUsbDrainMs").value = state.settings.printUsbDrainMs ?? 400
       $("inputAutoStartOnBoot").checked = state.settings.autoStartOnBoot !== false
     }
+    if ($("inputVoiceAnnouncementEnabled")) {
+      $("inputVoiceAnnouncementEnabled").checked = state.settings.voiceAnnouncementEnabled !== false
+    }
+    if (Array.isArray(data.audioEvents) && typeof window.playWaiterCallAudioEvent === "function") {
+      data.audioEvents.forEach((evt) => window.playWaiterCallAudioEvent(evt))
+    }
     renderAuthGateAndHeader()
     if (state.settings.authenticated) {
       renderQueueAndLogs()
@@ -351,6 +357,9 @@ function bindRoutingAndQueueEvents() {
           printFooterLine: formatTitleCase($("inputFooterLine").value.trim()),
           printUsbDrainMs: Number($("inputUsbDrainMs").value) || 0,
           autoStartOnBoot: $("inputAutoStartOnBoot").checked,
+          voiceAnnouncementEnabled: $("inputVoiceAnnouncementEnabled")
+            ? $("inputVoiceAnnouncementEnabled").checked
+            : true,
         }),
       })
       $("inputFooterLine").value = formatTitleCase($("inputFooterLine").value.trim())
@@ -360,6 +369,19 @@ function bindRoutingAndQueueEvents() {
       showToast(err.message, true)
     }
   })
+
+  if ($("btnTestVoiceAnnouncement")) {
+    $("btnTestVoiceAnnouncement").addEventListener("click", async () => {
+      try {
+        await apiCall("/api/test-voice", {
+          method: "POST",
+          body: JSON.stringify({ tableName: "B12", sectionName: "Bahçe", requestType: "waiter" }),
+        })
+      } catch (err) {
+        showToast(err.message, true)
+      }
+    })
+  }
 
   const flushNow = async () => {
     await apiCall("/api/queue/flush", { method: "POST" })
@@ -384,14 +406,8 @@ let activeInvalidEl = null
 let activeValidationTimer = null
 
 function clearCustomFieldValidation() {
-  if (activeValidationTimer) {
-    clearTimeout(activeValidationTimer)
-    activeValidationTimer = null
-  }
-  if (activeInvalidEl) {
-    activeInvalidEl.classList.remove("c-field-invalid")
-    activeInvalidEl = null
-  }
+  if (activeValidationTimer) { clearTimeout(activeValidationTimer); activeValidationTimer = null }
+  if (activeInvalidEl) { activeInvalidEl.classList.remove("c-field-invalid"); activeInvalidEl = null }
   const pop = document.getElementById("corder-validation-popover")
   if (pop) pop.remove()
 }
@@ -399,17 +415,8 @@ function clearCustomFieldValidation() {
 function getTurkishValidationMessage(el) {
   const v = el.validity
   if (!v) return "Lütfen bu alanı kontrol edin."
-  if (v.valueMissing) {
-    if (el.type === "checkbox" || el.type === "radio") {
-      return "Lütfen devam etmek için bu seçeneği işaretleyin."
-    }
-    return "Lütfen bu alanı doldurun."
-  }
-  if (v.typeMismatch) {
-    if (el.type === "email") return "Lütfen geçerli bir e-posta adresi girin."
-    if (el.type === "url") return "Lütfen geçerli bir bağlantı (URL) girin."
-    return "Lütfen geçerli bir değer girin."
-  }
+  if (v.valueMissing) return el.type === "checkbox" || el.type === "radio" ? "Lütfen devam etmek için bu seçeneği işaretleyin." : "Lütfen bu alanı doldurun."
+  if (v.typeMismatch) return el.type === "email" ? "Lütfen geçerli bir e-posta adresi girin." : el.type === "url" ? "Lütfen geçerli bir bağlantı (URL) girin." : "Lütfen geçerli bir değer girin."
   if (v.tooShort) return `Lütfen en az ${el.minLength} karakter girin.`
   if (v.tooLong) return `Lütfen en fazla ${el.maxLength} karakter girin.`
   if (v.rangeUnderflow) return `Değer en az ${el.min} olmalıdır.`

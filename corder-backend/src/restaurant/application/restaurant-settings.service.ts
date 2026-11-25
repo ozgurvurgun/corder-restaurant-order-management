@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -13,7 +13,9 @@ import {
   computeRestaurantBillingSummary,
   toPaymentRecordDto,
 } from '../../platform/domain/subscription-billing.policy';
+import { TableEntity } from '../domain/table.entity';
 import { OrdersGateway } from '../api/orders.gateway';
+import { PrintersService } from './printers.service';
 import { normalizeStorageText } from '../../common/text/text-normalizer';
 import { ShiftAutoClosePolicy } from '../domain/services/shift-auto-close.policy';
 
@@ -36,6 +38,7 @@ export interface RestaurantSettingsDto {
   locationRadiusMeters?: number;
   autoCloseShiftEnabled?: boolean;
   autoCloseShiftTime?: string;
+  voiceAnnouncementEnabled?: boolean;
 }
 
 export interface MerchantBillingInfoDto {
@@ -95,6 +98,11 @@ export class RestaurantSettingsService {
     @InjectRepository(RestaurantSubscriptionPaymentEntity)
     private readonly paymentRepo: Repository<RestaurantSubscriptionPaymentEntity>,
     private readonly ordersGateway: OrdersGateway,
+    @Optional()
+    @InjectRepository(TableEntity)
+    private readonly tableRepo?: Repository<TableEntity>,
+    @Optional()
+    private readonly printersService?: PrintersService,
   ) {}
 
   async get(restaurantId: string): Promise<RestaurantSettingsDto> {
@@ -123,6 +131,7 @@ export class RestaurantSettingsService {
       autoCloseShiftTime: ShiftAutoClosePolicy.normalizeAutoCloseTime(
         r.autoCloseShiftTime,
       ),
+      voiceAnnouncementEnabled: r.voiceAnnouncementEnabled !== false,
     };
   }
 
@@ -276,6 +285,12 @@ export class RestaurantSettingsService {
         dto.autoCloseShiftTime,
       );
     }
+    let voiceSettingsChanged = false;
+    if (dto.voiceAnnouncementEnabled !== undefined) {
+      const nextVoice = Boolean(dto.voiceAnnouncementEnabled);
+      voiceSettingsChanged = r.voiceAnnouncementEnabled !== nextVoice;
+      r.voiceAnnouncementEnabled = nextVoice;
+    }
     if (r.terminalLocationRestrictionEnabled) {
       const lat = r.locationLatitude != null ? Number(r.locationLatitude) : NaN;
       const lng = r.locationLongitude != null ? Number(r.locationLongitude) : NaN;
@@ -298,6 +313,50 @@ export class RestaurantSettingsService {
     if (geofenceChanged) {
       this.ordersGateway.emitStaffSessionUpdated(restaurantId);
     }
+    if (voiceSettingsChanged) {
+      this.ordersGateway.emitVoiceSettingsUpdated(restaurantId, {
+        voiceAnnouncementEnabled: r.voiceAnnouncementEnabled !== false,
+      });
+      this.ordersGateway.emitPrintersUpdated(restaurantId);
+    }
     return this.get(restaurantId);
+  }
+
+  async testVoiceAnnouncement(
+    restaurantId: string,
+    requestType: 'waiter' | 'bill' = 'waiter',
+  ) {
+    const sampleTable = this.tableRepo
+      ? await this.tableRepo.findOne({
+          where: { restaurantId },
+          order: { createdAt: 'ASC' },
+        })
+      : null;
+    const tableName = (sampleTable?.name || 'B12').trim();
+    const rawSection = (sampleTable?.section || '').trim();
+    const sectionName =
+      rawSection && rawSection.toLowerCase() !== 'default'
+        ? rawSection
+        : 'Bahçe';
+    const agentOnline = this.printersService
+      ? this.printersService.isAgentOnline(restaurantId)
+      : true;
+    const payload = {
+      id: `test-voice-${Date.now()}`,
+      tableId: sampleTable?.id || 'test-table',
+      tableName,
+      sectionName,
+      requestType,
+      isTest: true,
+      createdAt: new Date().toISOString(),
+    };
+    this.ordersGateway.emitWaiterVoiceTest(restaurantId, payload);
+    return {
+      ok: true,
+      agentOnline,
+      tableName,
+      sectionName,
+      requestType,
+    };
   }
 }

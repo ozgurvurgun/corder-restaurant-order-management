@@ -3,30 +3,21 @@ const fs = require("fs")
 const path = require("path")
 const crypto = require("crypto")
 const {
-  loadSettings,
-  saveSettings,
-  getPublicSettings,
-  buildRuntimeConfig,
-  mapBackendPrinters,
-  mergePrintersWithBackend,
-  seedDepartmentCategoryRoutes,
-  isSamePhysicalPrinter,
+  loadSettings, saveSettings, getPublicSettings, buildRuntimeConfig,
+  mapBackendPrinters, mergePrintersWithBackend, seedDepartmentCategoryRoutes, isSamePhysicalPrinter,
 } = require("./settings-store")
 const {
-  discoverSystemPrinters,
-  discoverNetworkPrinters,
-  testTcpPrinterConnection,
+  discoverSystemPrinters, discoverNetworkPrinters, testTcpPrinterConnection,
 } = require("./printer-discovery")
 const {
-  startNetworkPrinterWatchdog,
-  buildSavedPrinterEntry,
+  startNetworkPrinterWatchdog, buildSavedPrinterEntry,
 } = require("./network-healer")
 const {
-  loginPrintAgent,
-  logoutPrintAgent,
-  fetchAgentContext,
-  pushPrintersToBackend,
+  loginPrintAgent, logoutPrintAgent, fetchAgentContext, pushPrintersToBackend, updateBackendVoiceSettings,
 } = require("./http-sync")
+const {
+  announceWaiterCall, getRecentUiAudioEvents,
+} = require("./turkish-tts")
 const { applyAutoStartSetting } = require("./autostart")
 const { buildTestTicket } = require("./escpos")
 const { printBytes, purgeSystemPrintQueues } = require("./printers")
@@ -38,7 +29,7 @@ const SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "no-referrer",
-  "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'",
+  "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' data: blob:; connect-src 'self'",
   "Cache-Control": "no-store",
 }
 function sendJson(res, statusCode, payload) {
@@ -169,6 +160,9 @@ function createUiServer({ store, agent }) {
     const res = applyAndReload({
       restaurantId: ctx.restaurant?.id || current.restaurantId,
       restaurantName: ctx.restaurant?.name || current.restaurantName,
+      ...(ctx.restaurant?.voiceAnnouncementEnabled !== undefined
+        ? { voiceAnnouncementEnabled: ctx.restaurant.voiceAnnouncementEnabled !== false }
+        : {}),
       categories: nextCategories,
       printers: nextPrinters,
       categoryRoutes: nextRoutes,
@@ -196,6 +190,7 @@ function createUiServer({ store, agent }) {
             queue: store.getPendingJobs(),
             recentPrinted: store.getRecentPrinted(15),
             logs: getRecentLogs().slice(0, 40),
+            audioEvents: getRecentUiAudioEvents(),
           },
         }
       }
@@ -234,6 +229,9 @@ function createUiServer({ store, agent }) {
           username: String(body.username || "").trim().toLowerCase(),
           restaurantId: loginResult.restaurant?.id || "",
           restaurantName: loginResult.restaurant?.name || "",
+          ...(loginResult.restaurant?.voiceAnnouncementEnabled !== undefined
+            ? { voiceAnnouncementEnabled: loginResult.restaurant.voiceAnnouncementEnabled !== false }
+            : {}),
           categories: nextCategories,
           printers: nextPrinters,
           categoryRoutes: nextRoutes,
@@ -335,10 +333,30 @@ function createUiServer({ store, agent }) {
           patch.autoStartOnBoot = Boolean(body.autoStartOnBoot)
           await applyAutoStartSetting(patch.autoStartOnBoot, electronAppRef)
         }
+        if (body.voiceAnnouncementEnabled !== undefined) {
+          patch.voiceAnnouncementEnabled = Boolean(body.voiceAnnouncementEnabled)
+        }
 
         const { settings, publicSettings, runtimeConfig } = applyAndReload({ ...current, ...patch })
         triggerBackendPrinterSync(runtimeConfig, settings)
+        if (body.voiceAnnouncementEnabled !== undefined) {
+          void updateBackendVoiceSettings(runtimeConfig, patch.voiceAnnouncementEnabled)
+        }
         return { statusCode: 200, payload: { ok: true, settings: publicSettings } }
+      }
+
+      if (method === "POST" && pathname === "/api/test-voice") {
+        const result = announceWaiterCall({
+          id: `local-test-${Date.now()}`,
+          tableName: String(body?.tableName || "B12").trim() || "B12",
+          sectionName: String(body?.sectionName || "Bahçe").trim() || "Bahçe",
+          requestType: body?.requestType === "bill" ? "bill" : "waiter",
+          isTest: true,
+        })
+        return {
+          statusCode: 200,
+          payload: { ok: true, text: result.text || "" },
+        }
       }
 
       if (method === "POST" && pathname === "/api/test-network") {

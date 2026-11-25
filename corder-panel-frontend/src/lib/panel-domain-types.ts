@@ -204,6 +204,7 @@ export interface RestaurantSettings {
   locationRadiusMeters?: number
   autoCloseShiftEnabled?: boolean
   autoCloseShiftTime?: string
+  voiceAnnouncementEnabled?: boolean
   fontSize?: "small" | "medium" | "large"
   tableCardSize?: "compact" | "normal" | "large"
   showProductImages?: boolean

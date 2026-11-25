@@ -12,7 +12,6 @@ import { mapOrder } from "../mappers/orders-tables.mapper"
 import {
   getNotificationPrefs,
   showBrowserNotification,
-  speakWaiterCallAnnouncement,
   syncPanelWebPushSubscription,
 } from "../notification-sound"
 import {
@@ -168,12 +167,16 @@ export function usePanelSocket(params: {
       })
       showPanelToast(title, "info")
       showBrowserNotification(title, message, `waiter-call-${notifId}`)
-      speakWaiterCallAnnouncement({
-        id: notifId,
-        tableName,
-        sectionName,
-        requestType: payload.requestType,
-      })
+    }
+
+    const handleVoiceSettingsUpdated = (payload: {
+      voiceAnnouncementEnabled?: boolean
+    }) => {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("corder:voice-settings-updated", { detail: payload }),
+        )
+      }
     }
 
     const handleFraudAlert = (payload: {
@@ -385,6 +388,7 @@ export function usePanelSocket(params: {
     socket.on("printers:updated", handlePrintersUpdated)
     socket.on("tables:presence", handleTablesPresence)
     socket.on("waiter:called", handleWaiterCalled)
+    socket.on("waiter:voice-settings-updated", handleVoiceSettingsUpdated)
     socket.on("fraud:alert", handleFraudAlert)
     socket.on("platform:notification", handlePlatformNotification)
     socket.on("platform:system_update", handleSystemUpdate)
@@ -401,6 +405,7 @@ export function usePanelSocket(params: {
       socket.off("printers:updated", handlePrintersUpdated)
       socket.off("tables:presence", handleTablesPresence)
       socket.off("waiter:called", handleWaiterCalled)
+      socket.off("waiter:voice-settings-updated", handleVoiceSettingsUpdated)
       socket.off("fraud:alert", handleFraudAlert)
       socket.off("platform:notification", handlePlatformNotification)
       socket.off("platform:system_update", handleSystemUpdate)

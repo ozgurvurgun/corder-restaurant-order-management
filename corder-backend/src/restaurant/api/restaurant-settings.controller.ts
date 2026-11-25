@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Put, UseGuards } from '@nestjs/common';
 import { RestaurantJwtGuard } from '../infrastructure/restaurant-jwt.guard';
 import {
   PanelRootGuard,
@@ -49,5 +49,17 @@ export class RestaurantSettingsController {
     @Body() body: UpdateRestaurantSettingsDto,
   ): Promise<RestaurantSettingsDto> {
     return this.service.update(restaurantId, body);
+  }
+
+  @Post('test-voice-announcement')
+  @RequirePermissions('order.view', 'system.manage_settings', 'catalog.view')
+  testVoiceAnnouncement(
+    @RestaurantId() restaurantId: string,
+    @Body() body?: { requestType?: 'waiter' | 'bill' },
+  ) {
+    return this.service.testVoiceAnnouncement(
+      restaurantId,
+      body?.requestType === 'bill' ? 'bill' : 'waiter',
+    );
   }
 }

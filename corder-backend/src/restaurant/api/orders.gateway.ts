@@ -289,6 +289,23 @@ export class OrdersGateway
     void this.webPushService?.sendWaiterCallPush(restaurantId, payload);
   }
 
+  emitWaiterVoiceTest(restaurantId: string, payload: Record<string, unknown>) {
+    if (this.server) {
+      this.server.to(getPrintAgentRoom(restaurantId)).emit('waiter:voice-test', payload);
+    }
+  }
+
+  emitVoiceSettingsUpdated(
+    restaurantId: string,
+    payload: { voiceAnnouncementEnabled: boolean },
+  ) {
+    if (this.server) {
+      this.server
+        .to(getRestaurantRoom(restaurantId))
+        .emit('waiter:voice-settings-updated', payload);
+    }
+  }
+
   emitNotificationsUpdated(restaurantId: string) {
     if (!this.server) return;
     this.server.to(getRestaurantRoom(restaurantId)).emit('notifications:updated');

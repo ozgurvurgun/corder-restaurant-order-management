@@ -109,6 +109,21 @@ export const restaurantApi = {
       token,
       body: JSON.stringify(body),
     }),
+  testVoiceAnnouncement: (
+    token: string,
+    requestType: "waiter" | "bill" = "waiter",
+  ) =>
+    request<{
+      ok: boolean
+      agentOnline: boolean
+      tableName: string
+      sectionName: string
+      requestType: "waiter" | "bill"
+    }>("/restaurant/settings/test-voice-announcement", {
+      method: "POST",
+      token,
+      body: JSON.stringify({ requestType }),
+    }),
 }
 
 export interface StaffApiItemDto {

@@ -50,10 +50,12 @@ const { loadSettings } = require("../src/settings-store")
 const { applyAutoStartSetting } = require("../src/autostart")
 const { startPrintAgentApp } = require("../src/index")
 const { ensureWarmPrintWorker } = require("../src/windows-raw-print")
+const { setElectronTtsSender } = require("../src/turkish-tts")
 const { info, error } = require("../src/logger")
 
 app.setName("corder-print-agent-v2")
 app.setPath("userData", path.join(getAppDataDir(), "desktop-profile"))
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required")
 app.commandLine.appendSwitch("disable-background-timer-throttling")
 app.commandLine.appendSwitch("disable-renderer-backgrounding")
 app.commandLine.appendSwitch("disable-backgrounding-occluded-windows")
@@ -136,7 +138,14 @@ async function createMainWindow(uiServer) {
   const indexHtmlPath = path.join(__dirname, "..", "public", "index.html")
   await mainWindow.loadFile(indexHtmlPath)
 
+  setElectronTtsSender((audioEvent) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return false
+    mainWindow.webContents.send("corder:play-tts", audioEvent)
+    return true
+  })
+
   mainWindow.on("closed", () => {
+    setElectronTtsSender(null)
     mainWindow = null
   })
 }

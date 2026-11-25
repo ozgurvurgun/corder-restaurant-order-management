@@ -256,6 +256,7 @@ function defaultSettings() {
     printFooterLine: "",
     printUsbDrainMs: baseConfig.printUsbDrainMs,
     autoStartOnBoot: true,
+    voiceAnnouncementEnabled: true,
     kitchenSyncIntervalMs: baseConfig.kitchenSyncIntervalMs,
     queueDrainIntervalMs: baseConfig.queueDrainIntervalMs,
   }
@@ -271,6 +272,7 @@ function normalizeSettings(raw) {
   merged.restaurantName = String(merged.restaurantName || "").trim()
   merged.restaurantSlug = String(merged.restaurantSlug || "").trim()
   merged.autoStartOnBoot = merged.autoStartOnBoot !== false
+  merged.voiceAnnouncementEnabled = merged.voiceAnnouncementEnabled !== false
   const rawPrinters = Array.isArray(merged.printers)
     ? merged.printers.map((p, idx) => ({
         id: String(p.id || `p-${idx + 1}`),
@@ -438,6 +440,7 @@ function buildRuntimeConfig(settingsInput) {
     restaurantId: settings.restaurantId,
     restaurantName: settings.restaurantName,
     autoStartOnBoot: settings.autoStartOnBoot !== false,
+    voiceAnnouncementEnabled: settings.voiceAnnouncementEnabled !== false,
     printerMode: defaultKitchenPrinter?.mode === "network" ? "network_raw" : "system",
     printerName: defaultKitchenPrinter?.systemPrinterName || defaultKitchenPrinter?.name || "",
     printerHost: defaultKitchenPrinter?.host || "127.0.0.1",

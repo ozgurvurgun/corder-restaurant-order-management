@@ -137,6 +137,25 @@ export class PrintAgentController {
     return { ok: true, printers };
   }
 
+  @Patch('voice-settings')
+  @UseGuards(PrintAgentGuard)
+  async updateVoiceSettings(
+    @Req() req: PrintAgentRequest,
+    @Body() body: { voiceAnnouncementEnabled?: boolean },
+  ) {
+    await this.touchHeartbeat(req.printAgentRestaurantId);
+    const updated = await this.settingsService.update(
+      req.printAgentRestaurantId,
+      {
+        voiceAnnouncementEnabled: body?.voiceAnnouncementEnabled !== false,
+      },
+    );
+    return {
+      ok: true,
+      voiceAnnouncementEnabled: updated.voiceAnnouncementEnabled !== false,
+    };
+  }
+
   private async touchHeartbeat(restaurantId: string): Promise<void> {
     const becameOnline =
       await this.printersService.recordAgentHttpHeartbeat(restaurantId);
@@ -157,6 +176,7 @@ export class PrintAgentController {
         name: settings.name,
         address: settings.address ?? null,
         phone: settings.phone ?? null,
+        voiceAnnouncementEnabled: settings.voiceAnnouncementEnabled !== false,
       },
       categories: categories.map((c) => ({
         id: c.id,

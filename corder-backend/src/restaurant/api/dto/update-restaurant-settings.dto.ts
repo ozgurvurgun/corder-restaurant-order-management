@@ -105,4 +105,8 @@ export class UpdateRestaurantSettingsDto {
     message: 'autoCloseShiftTime must be in HH:mm format (00:00 - 23:59)',
   })
   autoCloseShiftTime?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  voiceAnnouncementEnabled?: boolean;
 }

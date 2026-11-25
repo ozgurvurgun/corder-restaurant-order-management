@@ -271,8 +271,16 @@
                     <span>Bilgisayar açıldığında Corder Print Agent otomatik çalışsın (Windows / Linux / macOS)</span>
                   </label>
                 </div>
-                <div class="form-footer">
+                <div class="field-group">
+                  <label class="checkbox-row" for="inputVoiceAnnouncementEnabled">
+                    <input type="checkbox" id="inputVoiceAnnouncementEnabled" checked />
+                    <span>Masa çağrılarında (Garson / Hesap) Türkçe sesli anons okunsun (Merchant Panel ile senkronize)</span>
+                  </label>
+                  <small class="field-hint">Yeni eklenen veya adı değiştirilen tüm masaları ve bölgeleri otomatik olarak doğal Türkçe sesle okur.</small>
+                </div>
+                <div class="form-footer" style="display:flex;gap:10px;align-items:center;">
                   <button type="submit" class="btn btn-primary">Ayarları Kaydet</button>
+                  <button type="button" class="btn btn-secondary" id="btnTestVoiceAnnouncement">Sesli Anonsu Test Et</button>
                 </div>
               </form>
             </section>
@@ -364,6 +372,7 @@
 
   <div id="toastContainer" class="toast-container"></div>
   <script src="./ui-renderers.js"></script>
+  <script src="./voice-player.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

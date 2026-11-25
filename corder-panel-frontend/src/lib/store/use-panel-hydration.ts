@@ -119,9 +119,24 @@ export function usePanelHydration(params: {
           locationRadiusMeters: Number(s.locationRadiusMeters || 150),
           autoCloseShiftEnabled: s.autoCloseShiftEnabled !== false,
           autoCloseShiftTime: s.autoCloseShiftTime || "04:00",
+          voiceAnnouncementEnabled: s.voiceAnnouncementEnabled !== false,
         }))
       })
       .catch(console.error)
+
+    const handleVoiceSettingsEvent = (evt: Event) => {
+      const detail = (evt as CustomEvent<{ voiceAnnouncementEnabled?: boolean }>).detail
+      if (detail && typeof detail.voiceAnnouncementEnabled === "boolean") {
+        setSettings((prev) => ({
+          ...prev,
+          voiceAnnouncementEnabled: detail.voiceAnnouncementEnabled,
+        }))
+      }
+    }
+    window.addEventListener("corder:voice-settings-updated", handleVoiceSettingsEvent)
+    return () => {
+      window.removeEventListener("corder:voice-settings-updated", handleVoiceSettingsEvent)
+    }
   }, [token, restaurantId, setSettings])
 
   useEffect(() => {
